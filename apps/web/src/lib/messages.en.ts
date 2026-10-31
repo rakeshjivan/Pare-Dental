@@ -5326,6 +5326,7 @@ export const MESSAGES_EN = {
   "studio.undersideHint": "Open leaves the hollow open underneath to drain and clean. Honeycomb adds a honeycomb across the bottom to stiffen the base.",
   "studio.underside.open": "Open",
   "studio.underside.honeycomb": "Honeycomb",
+  "studio.deleteSelection": "Delete selection",
   "studio.trimTitle": "Trim and tidy the scans",
   "studio.trimArch": "Choose the arch",
   "studio.resetUpper": "Reset upper",

@@ -46,7 +46,7 @@ function openEdgeCounts(m: Mesh): Uint8Array {
   return open;
 }
 
-export type EdgeSmoothResult = { positions: Float32Array; spikes: number; moved: number };
+export type EdgeSmoothResult = { positions: Float32Array; spikes: number; moved: number; welded?: { ids: number[]; count: number } };
 
 /** The surface (a soup) with its open edges tidied: spikes off, each edge loop smoothed. */
 export function smoothOpenEdges(positions: ArrayLike<number>, rounds = EDGE_SMOOTH_ROUNDS): EdgeSmoothResult {
@@ -97,5 +97,5 @@ export function smoothOpenEdgesOf(m: Mesh, rounds = EDGE_SMOOTH_ROUNDS): EdgeSmo
     for (let r = 0; r < rounds; r += 1) { step(0.5); step(-0.53); }
     moved += n;
   }
-  return { positions: soup(m), spikes, moved };
+  return { positions: soup(m), spikes, moved, welded: { ids: m.f, count: m.v.length / 3 } };
 }

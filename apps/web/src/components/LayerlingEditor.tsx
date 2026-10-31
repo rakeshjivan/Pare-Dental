@@ -10045,6 +10045,7 @@ export function LayerlingEditor({
     if (action === "delete") {
       const removed = count();
       let left: ArrayLike<number>;
+      let trimWelded: { ids: number[]; count: number } | undefined;
       if (target.tool.trim) {
         // Build 106: Trim's copy is already welded - the kept triangles are smoothed on it directly (welding
         // the whole scan again took most of a Delete's wait).
@@ -10052,8 +10053,10 @@ export function LayerlingEditor({
         const kept: number[] = [];
         for (let tri = 0; tri < selection.chosen.length; tri += 1) if (!selection.chosen[tri]) kept.push(triangles[tri * 3], triangles[tri * 3 + 1], triangles[tri * 3 + 2]);
         if (!kept.length) return;
-        left = smoothOpenEdgesOf({ v: Array.from(points), f: kept }).positions;
-        if (!left.length) left = withoutTriangles(soupOf(selection.mesh), selection.chosen);
+        const smoothed = smoothOpenEdgesOf({ v: Array.from(points), f: kept });
+        left = smoothed.positions;
+        trimWelded = smoothed.welded;
+        if (!left.length) { left = withoutTriangles(soupOf(selection.mesh), selection.chosen); trimWelded = undefined; }
       } else left = withoutTriangles(soupOf(selection.mesh), selection.chosen);
       if (!left.length) return;
       // Build 77: a trim leaves no edge three triangles share, no corner where the scan only touches
@@ -10061,7 +10064,7 @@ export function LayerlingEditor({
       let tidied = "";
       if (target.tool.trim) {
         // Build 102: the new edge smoothed (no sawtooth along the cut, above), then tidied.
-        const tidy = tidyOpenSurface(left);
+        const tidy = tidyOpenSurface(left, undefined, trimWelded);
         if (tidy.positions.length) {
           left = tidy.positions;
           const fixed = tidy.broken + tidy.pinched + tidy.specks;
@@ -10110,6 +10113,13 @@ export function LayerlingEditor({
     setSculptTool((current) => current ? { ...current, chosen: 0 } : current);
   }, [sculptTool]); // eslint-disable-line react-hooks/exhaustive-deps
   applySculptSelectionRef.current = applySculptSelection;
+  /** Build 106: Trim's Delete - the panel shows it working at once, then the cut is made (a second on a full arch). */
+  const deleteTrimSelection = () => {
+    setSculptTool((current) => current ? { ...current, busy: true } : current);
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => window.setTimeout(() => {
+      try { applySculptSelectionRef.current("delete"); } finally { setSculptTool((current) => current ? { ...current, busy: false } : current); }
+    }, 0)));
+  };
   // Build 92: Soft Transform - the selection moved, turned or scaled with a soft edge, live on the sculpt copy.
   const softSession = useRef<{ verts: Int32Array; weights: Float32Array; from: Float64Array; pivot: THREE.Vector3; normal: THREE.Vector3; soft: number; core: Int32Array } | null>(null);
   const softMatrix = (session: NonNullable<typeof softSession.current>, params: SoftTransform) => {
@@ -10514,6 +10524,8 @@ export function LayerlingEditor({
   const studioToolSlot = useStudioSlot("tool");
   // Build 106: the Model Builder step open in the frame - the right-click menu follows it.
   const [studioMbStep, setStudioMbStep] = useState<string | null>(null);
+  // Build 106: Trim and tidy's Done moves on - to the lower arch after the upper, then to the next step.
+  const [studioNext, setStudioNext] = useState(0);
   useEffect(() => { setWaxTint(studioWax); }, [studioWax]);
   useEffect(() => { if (!studioShellOn) setStudioHidden([]); }, [studioShellOn]);
   // The 3D view is sized when the window is: the frame coming or going resizes it too.
@@ -10743,9 +10755,19 @@ export function LayerlingEditor({
       const color = !shape.color || [IMPORT_BLUE, "#919191", "#bcbcbc", "#d2d2d2"].includes(shape.color.toLowerCase()) ? DENTAL_SCAN_GREY : shape.color;
       if (fields) out.set(shape.id, canonicalizeShape({ ...shape, ...fields, color }));
     });
+    // Build 106: in occlusion the bite scans are moved exactly as the arches are (the same turn upright and
+    // the same shift, from the same scan coordinates the bite was fitted in), so shown over them in the
+    // studio they sit on the teeth. Still hidden: they are only shown from the case panel.
+    const occlusionMove = mode === "occlusion" && lowerAxes && boxes.length ? new THREE.Matrix4().makeTranslation(shift(boxes[0], "lower")).multiply(standUpright(lowerAxes.up, lowerAxes.front)) : null;
     for (const slot of ["bite", "bite2"] as const) {
       const bite = slots[slot] ? shapeOf(slots[slot]!) : undefined;
-      if (bite && !bite.hidden) out.set(bite.id, { ...bite, hidden: true });
+      if (!bite) continue;
+      // (A case opened again has no map yet for its bite scan: from its file's frame, as the arches' are.)
+      const frame = scanFrameOf(bite.importedMesh);
+      const toInput = dentalLocalToInput.current.get(bite.id) ?? (frame && dentalFileTurn.current ? dentalFileTurn.current.clone().multiply(frame) : undefined);
+      const fields = occlusionMove && toInput ? placementFor(bite, occlusionMove.clone().multiply(toInput)) : null;
+      if (fields) out.set(bite.id, canonicalizeShape({ ...bite, ...fields, hidden: true }));
+      else if (!bite.hidden) out.set(bite.id, { ...bite, hidden: true });
     }
     return out;
   };
@@ -18455,6 +18477,8 @@ export function LayerlingEditor({
           { key: "trimBack", label: mark(sculptTool.reach === "back", t("sculpt.reach.back")), onSelect: reach("back") },
           { key: "trimThrough", label: mark(sculptTool.reach === "through", t("sculpt.reach.through")), onSelect: reach("through") },
         );
+        // Build 106: the selection deleted from the menu too.
+        if (sculptTool.chosen > 0) items.push({ key: "trimDelete", label: t("studio.deleteSelection"), danger: true, separated: true, onSelect: deleteTrimSelection });
       }
       if (biteMap?.on || biteCandidate) items.push({ key: "bite", label: t(biteMap?.on ? "dentalMenu.biteOff" : "dentalChrome.biteContacts"), separated: true, onSelect: () => toggleBiteMap(!biteMap?.on) });
       items.push({ ...handleStyleItem(), separated: true }, freeRotateItem(), basicRenderItem());
@@ -20052,6 +20076,8 @@ export function LayerlingEditor({
           editing={Boolean(dentalStudio.editing?.length)}
           shell={studioShellOn}
           onMbStep={setStudioMbStep}
+          trimSlot={sculptTool?.trim ? (sculptTool.shapeId === dentalStudio.slots.upper ? "upper" : sculptTool.shapeId === dentalStudio.slots.lower ? "lower" : null) : null}
+          nextSignal={studioNext}
         />
       ) : null}
       {meshRoundTool ? (
@@ -20120,7 +20146,7 @@ export function LayerlingEditor({
           onRefine={(refine) => { storeSculptRefine(refine); setSculptTool((current) => current ? { ...current, refine } : current); }}
           onSymmetry={(symmetry) => setSculptTool((current) => current ? { ...current, symmetry } : current)}
           onStrength={(strength) => setSculptTool((current) => current ? { ...current, strength: Math.max(0.01, Math.min(1, Math.round(strength * 100) / 100)) } : current)}
-          onSelection={applySculptSelection}
+          onSelection={(action) => (action === "delete" && sculptTool.trim ? deleteTrimSelection() : applySculptSelection(action))}
           frozen={sculptTool.frozen ?? 0}
           soft={sculptTool.soft ?? null}
           deviation={sculptTool.deviation ?? null}
@@ -20143,6 +20169,16 @@ export function LayerlingEditor({
           onAmount={(amount) => setSculptTool((current) => current && !current.busy ? { ...current, amount: Math.max(current.remeshMode === "thicken" ? 0.2 : -10, Math.min(10, amount)), error: null } : current)}
           onRemesh={applyRemesh}
           onClose={() => { flushSculptRef.current(); setSculptTool(null); }}
+          onDone={studioShellOn && sculptTool.trim && !dentalStudio?.waxStudio && studioMbStep === "prepare" ? () => {
+            flushSculptRef.current();
+            setSculptTool(null);
+            const state = dentalStudioRef.current;
+            const lower = state?.slots.lower ? shapesRef.current.find((shape) => shape.id === state.slots.lower) : undefined;
+            if (state && sculptTool.shapeId === state.slots.upper && lower) {
+              // The upper done: the lower opens for trimming.
+              window.setTimeout(() => { setSelectedIds([lower.id]); openSculpt(lower, true); }, 0);
+            } else setStudioNext((n) => n + 1);
+          } : undefined}
           besideDental={Boolean(dentalStudio)}
           studioTrim={studioShellOn && Boolean(sculptTool.trim)}
         />,
@@ -20167,7 +20203,7 @@ export function LayerlingEditor({
         />
       ) : null}
       {/* Build 96: the bite contacts, one click away in Dental Studio (build 97: there only). */}
-      {!sculptTool && dentalStudio && dentalStudio.stage !== "making" && (biteMap?.on || biteCandidate) ? ((card: React.ReactNode) => (studioShellOn && studioCaseSlot ? (biteMap?.on ? createPortal(card, studioCaseSlot) : null) : card))(
+      {(!sculptTool || (studioShellOn && sculptTool.trim)) && dentalStudio && dentalStudio.stage !== "making" && (biteMap?.on || biteCandidate) ? ((card: React.ReactNode) => (studioShellOn && studioCaseSlot ? (biteMap?.on ? createPortal(card, studioCaseSlot) : null) : card))(
         <BiteContactsCard biteMap={biteMap}
           inBite={dentalStudio.layout === "occlusion"}
           onToggle={toggleBiteMap}

@@ -98,6 +98,7 @@ export function MeshSculptPanel({
   onAmount,
   onRemesh,
   onClose,
+  onDone,
   onSpeed,
   speedShown = false,
   besideDental = false,
@@ -161,6 +162,8 @@ export function MeshSculptPanel({
   onAmount: (value: number) => void;
   onRemesh: () => void;
   onClose: () => void;
+  /** Build 106: Done, when it does more than close (Trim and tidy moves on to the next arch). */
+  onDone?: () => void;
   /** Build 85: shows or hides the speed readout (the ` key too). */
   onSpeed?: () => void;
   speedShown?: boolean;
@@ -718,7 +721,7 @@ export function MeshSculptPanel({
           {busy ? t("sculpt.working") : t(`sculpt.apply.${remeshMode}`)}
         </button>
         </>) : (
-        <button type="button" className="primary" disabled={busy} title={t("sculpt.tip.done")} onClick={onClose}><Check size={17} /> {t("sculpt.done")}</button>
+        <button type="button" className="primary" disabled={busy} title={t("sculpt.tip.done")} onClick={onDone ?? onClose}><Check size={17} /> {t("sculpt.done")}</button>
         )}
       </div>
       </>)}

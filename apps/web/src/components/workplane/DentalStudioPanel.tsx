@@ -159,6 +159,8 @@ export function DentalStudioPanel({
   editing = false,
   shell = false,
   onMbStep,
+  trimSlot = null,
+  nextSignal = 0,
 }: {
   parts: DentalPartChoice[];
   slots: Record<DentalSlot, string | null>;
@@ -227,6 +229,9 @@ export function DentalStudioPanel({
   /** Build 106: a scan nudged by accident put back (the design's own Undo and Redo), under the layout buttons. */
   /** Build 106: the Model Builder step open, for the editor's right-click menu. */
   onMbStep?: (step: ModelStepId | null) => void;
+  /** Build 106: the arch being trimmed (its Trim button shows it), and a count that moves Prepare on to the next step. */
+  trimSlot?: "upper" | "lower" | null;
+  nextSignal?: number;
 }) {
   useLanguage();
   const title = t(waxStudio ? "waxStudio.title" : "dental.title");
@@ -417,6 +422,12 @@ export function DentalStudioPanel({
   const [mbStepId, setMbStepId] = useState<ModelStepId>("scans");
   const mbStep = mbSteps ? (mbSteps.includes(mbStepId) ? mbStepId : "label") : null;
   useEffect(() => { onMbStep?.(mbStep); }, [mbStep, onMbStep]);
+  const nextSeen = useRef(nextSignal);
+  useEffect(() => {
+    if (nextSignal === nextSeen.current) return;
+    nextSeen.current = nextSignal;
+    if (mbSteps && mbStep === "prepare" && mbIndex >= 0 && mbIndex < mbSteps.length - 1) setMbStepId(mbSteps[mbIndex + 1]);
+  }, [nextSignal]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onMbStep?.(null), [onMbStep]);
   const mbIndex = mbSteps && mbStep ? mbSteps.indexOf(mbStep) : -1;
   const mbStepDone = (id: ModelStepId) => (id === "scans" ? scansDone : true);
@@ -632,7 +643,7 @@ export function DentalStudioPanel({
           <p className="blend-hint">{t("dental.trimHint")}</p>
           <div className="dental-trim-buttons" role="group" aria-label={t("dental.trimStep")}>
             {(["upper", "lower"] as const).filter((slot) => slots[slot]).map((slot) => (
-              <button key={slot} type="button" disabled={busy || !analysis || !onSculpt} onClick={() => onSculpt?.(slot, "trim")}>
+              <button key={slot} type="button" className={framed && trimSlot === slot ? "active" : undefined} aria-pressed={framed ? trimSlot === slot : undefined} disabled={busy || !analysis || !onSculpt} onClick={() => onSculpt?.(slot, "trim")}>
                 {t(slot === "upper" ? "dental.trimUpper" : "dental.trimLower")}
               </button>
             ))}

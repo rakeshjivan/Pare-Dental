@@ -565,9 +565,10 @@ export type OpenSurfaceTidy = { positions: Float32Array; broken: number; pinched
  * where the surface only touches itself (a bow-tie, left where a selection met itself at a point),
  * the smaller fans; and loose specks of a few triangles cut free of the scan. Flat triangles go too.
  */
-export function tidyOpenSurface(positions: ArrayLike<number>, speckShare = 0.002): OpenSurfaceTidy {
+export function tidyOpenSurface(positions: ArrayLike<number>, speckShare = 0.002, welded?: { ids: ArrayLike<number>; count: number }): OpenSurfaceTidy {
   const total = Math.floor(positions.length / 9);
-  const { ids, count } = weldCornerIds(positions);
+  // Build 106: a surface already welded (Trim's copy) brings its corner numbers - no second weld.
+  const { ids, count } = welded && welded.ids.length === total * 3 ? welded : weldCornerIds(positions);
   const alive = new Uint8Array(total).fill(1);
   for (let t = 0; t < total; t += 1) {
     const a = ids[t * 3], b = ids[t * 3 + 1], c = ids[t * 3 + 2];
@@ -621,32 +622,45 @@ export function tidyOpenSurface(positions: ArrayLike<number>, speckShare = 0.002
   for (let t = 0; t < total; t += 1) if (alive[t]) for (let k = 0; k < 3; k += 1) fans[fill[ids[t * 3 + k]]++] = t;
   const mark = new Int32Array(total).fill(-1);
   let pinched = 0;
+  // Build 106: one stack and one list of fan sizes for every corner (a new array per corner was most of a
+  // trim's tidy on a full arch).
+  let stack = new Int32Array(64);
+  const fanSizes: number[] = [];
+  // Only a corner on an open edge can be a bow-tie (two fans meeting there have open edges at it).
+  const onEdge = new Uint8Array(count);
+  for (let t = 0; t < total; t += 1) if (alive[t]) for (let k = 0; k < 3; k += 1) if (uses[edgeSlot[t * 3 + k]] === 1) { onEdge[ids[t * 3 + k]] = 1; onEdge[ids[t * 3 + ((k + 1) % 3)]] = 1; }
   for (let v = 0; v < count; v += 1) {
     const from = start[v], to = start[v + 1];
-    if (to - from < 2) continue;
+    if (to - from < 2 || !onEdge[v]) continue;
     let groups = 0;
-    const sizes: number[] = [];
+    fanSizes.length = 0;
     for (let r = from; r < to; r += 1) {
       const seed = fans[r];
       if (mark[seed] >= from) continue;
       // Walk the fan across edges that meet at v.
-      const stack = [seed];
+      let top = 0;
+      stack[top++] = seed;
       mark[seed] = from + groups;
       let size = 0;
-      while (stack.length) {
-        const t = stack.pop()!;
+      while (top) {
+        const t = stack[--top];
         size += 1;
         for (let k = 0; k < 3; k += 1) {
           if (ids[t * 3 + k] !== v && ids[t * 3 + ((k + 1) % 3)] !== v) continue;
           const u = across(t, k);
-          if (u >= 0 && alive[u] && mark[u] < from) { mark[u] = from + groups; stack.push(u); }
+          if (u >= 0 && alive[u] && mark[u] < from) {
+            mark[u] = from + groups;
+            if (top === stack.length) { const grown = new Int32Array(stack.length * 2); grown.set(stack); stack = grown; }
+            stack[top++] = u;
+          }
         }
       }
-      sizes.push(size);
+      fanSizes.push(size);
       groups += 1;
     }
     if (groups < 2) continue;
-    const keep = sizes.indexOf(Math.max(...sizes));
+    let keep = 0;
+    for (let g = 1; g < fanSizes.length; g += 1) if (fanSizes[g] > fanSizes[keep]) keep = g;
     for (let r = from; r < to; r += 1) { const t = fans[r]; if (alive[t] && mark[t] - from !== keep) { alive[t] = 0; pinched += 1; } }
   }
   if (pinched) link();

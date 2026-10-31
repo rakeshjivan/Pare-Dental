@@ -890,3 +890,7 @@
 
 /* Build 106: the moment before a new case's studio opens - a plain cover in the studio's colours. */
 .studio-pending-cover { position: fixed; inset: 0; z-index: 2000; background: #f3f4f6; }
+
+/* Build 106: the arch being trimmed - its Trim button green. */
+.dental-studio-panel.studio-framed .dental-trim-buttons button.active { color: #ffffff; background: var(--studio-teal, #2f7d6d); border-color: var(--studio-teal, #2f7d6d); }
+.dental-studio-panel.studio-framed .dental-trim-buttons button.active:disabled { opacity: 1; }
