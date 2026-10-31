@@ -69,7 +69,7 @@ import { analyseDentalInBackground, biteContactsInBackground, stopMeshJobs, chec
 import { AVERAGE_ARTICULATOR } from "@/lib/waxOcclusion";
 import { BUILT_IN_FINDER, finderBytes, loadStoredFinder, storeFinder } from "@/lib/toothFinderStore";
 import { toothColour, transferLabels, type ScanTeeth } from "@/lib/toothSegment";
-import { smoothOpenEdges } from "@/lib/edgeSmooth";
+import { smoothOpenEdges, smoothOpenEdgesOf } from "@/lib/edgeSmooth";
 import { solidPositions, toManifold, transformSoup, weld, type ManifoldSolid } from "@/lib/dentalMesh";
 import { BUILT_IN_LIBRARIES, loadToothLibrary, loadToothSet, type ToothLibraryManifest } from "@/lib/toothLibrary";
 import { exocadSets } from "@/lib/exocadLibrary";
@@ -10035,15 +10035,23 @@ export function LayerlingEditor({
     }
     if (action === "delete") {
       const removed = count();
-      let left: ArrayLike<number> = withoutTriangles(soupOf(selection.mesh), selection.chosen);
+      let left: ArrayLike<number>;
+      if (target.tool.trim) {
+        // Build 106: Trim's copy is already welded - the kept triangles are smoothed on it directly (welding
+        // the whole scan again took most of a Delete's wait).
+        const { points, triangles } = selection.mesh;
+        const kept: number[] = [];
+        for (let tri = 0; tri < selection.chosen.length; tri += 1) if (!selection.chosen[tri]) kept.push(triangles[tri * 3], triangles[tri * 3 + 1], triangles[tri * 3 + 2]);
+        if (!kept.length) return;
+        left = smoothOpenEdgesOf({ v: Array.from(points), f: kept }).positions;
+        if (!left.length) left = withoutTriangles(soupOf(selection.mesh), selection.chosen);
+      } else left = withoutTriangles(soupOf(selection.mesh), selection.chosen);
       if (!left.length) return;
       // Build 77: a trim leaves no edge three triangles share, no corner where the scan only touches
       // itself and no loose speck - what slicers call non-manifold - the scan staying open.
       let tidied = "";
       if (target.tool.trim) {
-        // Build 102: the new edge smoothed (no sawtooth along the cut), then tidied.
-        const smooth = smoothOpenEdges(left);
-        if (smooth.positions.length) left = smooth.positions;
+        // Build 102: the new edge smoothed (no sawtooth along the cut, above), then tidied.
         const tidy = tidyOpenSurface(left);
         if (tidy.positions.length) {
           left = tidy.positions;
@@ -10474,6 +10482,18 @@ export function LayerlingEditor({
   const [dentalStudio, setDentalStudio] = useState<DentalStudioState | null>(null);
   // Build 106: Wax-up Studio and Model Builder in the studio frame (Dental Studio, test builds).
   const studioShellOn = STUDIO_SHELL && dentalWorkspace && Boolean(dentalStudio);
+  // Build 106: a new case opens its studio a moment after the editor - until then a plain cover, not the
+  // old Dental Studio screen flashing up first.
+  const [studioPending, setStudioPending] = useState(() => {
+    if (!STUDIO_SHELL) return false;
+    try { const wanted = window.sessionStorage.getItem(OPEN_DENTAL_STUDIO_KEY); return wanted === "1" || wanted === "wax"; } catch { return false; }
+  });
+  useEffect(() => { if (studioPending && dentalStudio) setStudioPending(false); }, [studioPending, dentalStudio]);
+  useEffect(() => {
+    if (!studioPending) return;
+    const timer = window.setTimeout(() => setStudioPending(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [studioPending]);
   const studioWax = studioShellOn && Boolean(dentalStudio?.waxStudio);
   // Build 106: the bite map's card goes under the case's objects in the frame.
   const studioCaseSlot = useStudioSlot("case");
@@ -18377,7 +18397,10 @@ export function LayerlingEditor({
     },
   });
   const dentalContextMenuItems = (selectOther: ShapeContextMenuItem[]): ShapeContextMenuItem[] => {
-    const onPart = Boolean(shapeContextMenu?.onShape) && hasSelection;
+    // Build 106: Model Builder's Scans step - the same menu on a scan as off it (the views and checks only).
+    const scansStep = studioShellOn && !dentalStudio?.waxStudio && studioMbStep === "scans";
+    if (scansStep) selectOther = [];
+    const onPart = Boolean(shapeContextMenu?.onShape) && hasSelection && !scansStep;
     const parts = onPart ? selectedShapes : shapes.filter((shape) => !shape.hidden && !shape.hole);
     const ids = parts.map((shape) => shape.id);
     const show = (direction: [number, number, number]) => () => { if (ids.length) window.layerlingShowParts?.(ids, direction); };
@@ -18615,7 +18638,8 @@ export function LayerlingEditor({
   };
 
   return (
-    <div className={`layerling-editor ${historyViewState ? "history-view-active" : ""}${dentalWorkspace ? " studio-dental" : ""}${dentalWorkspace && dentalStudio ? " dental-docked" : ""}${studioShellOn ? " studio-shell-on" : ""}${STUDIO_SHELL && dentalWorkspace ? " studio-new-look" : ""}${studioShellOn && !dentalStudio?.waxStudio ? " studio-mb" : ""}`}>
+    <div className={`layerling-editor ${historyViewState ? "history-view-active" : ""}${dentalWorkspace ? " studio-dental" : ""}${dentalWorkspace && dentalStudio ? " dental-docked" : ""}${studioShellOn ? " studio-shell-on" : ""}${STUDIO_SHELL && dentalWorkspace ? " studio-new-look" : ""}${studioShellOn && !dentalStudio?.waxStudio ? " studio-mb" : ""}${studioPending && !studioShellOn ? " studio-pending" : ""}`}>
+      {studioPending && !studioShellOn ? <div className="studio-pending-cover" aria-hidden="true" /> : null}
       {dentalWorkspace && !studioShellOn ? (
         <DentalChrome
           caseName={projectName}

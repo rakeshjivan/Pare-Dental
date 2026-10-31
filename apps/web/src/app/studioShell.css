@@ -887,3 +887,6 @@
 .studio-mm-choice button { padding: 9px 4px; }
 .dental-studio-panel.studio-framed .dental-group .studio-help { margin-left: 4px; vertical-align: middle; }
 .dental-studio-panel.studio-framed .edge-modifier-check + .dental-group { margin-top: 16px; }
+
+/* Build 106: the moment before a new case's studio opens - a plain cover in the studio's colours. */
+.studio-pending-cover { position: fixed; inset: 0; z-index: 2000; background: #f3f4f6; }
