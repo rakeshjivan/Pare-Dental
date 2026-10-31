@@ -3282,6 +3282,8 @@ export function LayerlingEditor({
   // in a colour of their own over the scans (so the arches can be seen set into the bite).
   const [studioBiteShown, setStudioBiteShown] = useState<string[]>([]);
   const [studioBiteLive, setStudioBiteLive] = useState(false);
+  // Build 106: each object's opacity in the studio frame (shape id -> 0..1).
+  const [studioOpacity, setStudioOpacity] = useState<Record<string, number>>({});
   // Build 106: the studio's dark ground for the 3D view (the panels stay light).
   const [studioDark, setStudioDarkState] = useState(() => readStudioDark());
   const [waxColourful, setWaxColourful] = useState(() => { try { return window.localStorage.getItem("pare3d.waxColourful") === "1"; } catch { return false; } });
@@ -10501,10 +10503,11 @@ export function LayerlingEditor({
   const [dentalStudio, setDentalStudio] = useState<DentalStudioState | null>(null);
   // Build 106: Wax-up Studio and Model Builder in the studio frame (Dental Studio, test builds).
   const studioShellOn = STUDIO_SHELL && dentalWorkspace && Boolean(dentalStudio);
-  const biteLiveNow = studioShellOn && !dentalStudio?.waxStudio && dentalStudio?.layout === "occlusion";
+  const [studioMbStep, setStudioMbStep] = useState<string | null>(null);
+  const biteLiveNow = studioShellOn && !dentalStudio?.waxStudio && dentalStudio?.layout === "occlusion" && studioMbStep === "scans" && dentalStudio?.stage !== "made";
   useEffect(() => { setStudioBiteLive(biteLiveNow); }, [biteLiveNow]);
   // A new case starts with its bite scans off again.
-  useEffect(() => { if (!dentalStudio) setStudioBiteShown([]); }, [dentalStudio]);
+  useEffect(() => { if (!dentalStudio) { setStudioBiteShown([]); setStudioOpacity({}); } }, [dentalStudio]);
   // Build 106: a new case opens its studio a moment after the editor - until then a plain cover, not the
   // old Dental Studio screen flashing up first.
   const [studioPending, setStudioPending] = useState(() => {
@@ -10523,7 +10526,6 @@ export function LayerlingEditor({
   // Build 106: Trim's tools, in the Prepare step's panel instead of over the view.
   const studioToolSlot = useStudioSlot("tool");
   // Build 106: the Model Builder step open in the frame - the right-click menu follows it.
-  const [studioMbStep, setStudioMbStep] = useState<string | null>(null);
   // Build 106: Trim and tidy's Done moves on - to the lower arch after the upper, then to the next step.
   const [studioNext, setStudioNext] = useState(0);
   // Build 106: leaving Trim and tidy (Back, Next or a step clicked) while an arch is being trimmed: the
@@ -11220,9 +11222,14 @@ export function LayerlingEditor({
   // Exocad's viewer does) - put back when the map is off or the arches are laid side by side.
   useEffect(() => {
     const studio = dentalStudio;
-    if (!biteMap?.on || !studio || studio.layout !== "occlusion" || !studio.slots.upper || !studio.slots.lower) { window.layerlingPartOpacity?.(null); return; }
-    window.layerlingPartOpacity?.({ [studio.slots.upper]: biteMap.upperOpacity ?? 1, [studio.slots.lower]: biteMap.lowerOpacity ?? 1 });
-  }, [biteMap?.on, biteMap?.upperOpacity, biteMap?.lowerOpacity, dentalStudio?.layout, dentalStudio?.slots.upper, dentalStudio?.slots.lower]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Build 106: with the studio frame's own opacity sliders (the lower of the two wins).
+    const out: Record<string, number> = studioShellOn ? { ...studioOpacity } : {};
+    if (biteMap?.on && studio && studio.layout === "occlusion" && studio.slots.upper && studio.slots.lower) {
+      out[studio.slots.upper] = Math.min(out[studio.slots.upper] ?? 1, biteMap.upperOpacity ?? 1);
+      out[studio.slots.lower] = Math.min(out[studio.slots.lower] ?? 1, biteMap.lowerOpacity ?? 1);
+    }
+    window.layerlingPartOpacity?.(Object.keys(out).length ? out : null);
+  }, [biteMap?.on, biteMap?.upperOpacity, biteMap?.lowerOpacity, dentalStudio?.layout, dentalStudio?.slots.upper, dentalStudio?.slots.lower, studioShellOn, studioOpacity]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => window.layerlingPartOpacity?.(null), []);
   // The map goes when Dental Studio closes.
   const studioOpen = Boolean(dentalStudio);
@@ -19782,14 +19789,20 @@ export function LayerlingEditor({
         const slotNames: Array<[DentalSlot, string]> = [["upper", t("dental.upper")], ["lower", t("dental.lower")], ["bite", t("dental.bite")], ["bite2", t("dental.bite2")]];
         const waxSlot = waxupRef.current.slot;
         const waxIds = studioWax ? shapes.filter((shape) => shape.dental === "wax" && shape.waxTooth && shape.waxFor === dentalStudio.slots[waxSlot]).map((shape) => shape.id) : [];
-        const objects = slotNames.filter(([slot]) => dentalStudio.slots[slot]).map(([slot, name]) => {
-          const id = dentalStudio.slots[slot]!;
+        // Build 106: Model Builder lists its bite scans on the Scans step only; the arches everywhere - the
+        // models once made (as they stand, in or out of the articulator), else the scans - each with an
+        // opacity slider.
+        const mbScansStep = studioMbStep === "scans" && dentalStudio.stage !== "made";
+        const objects = slotNames.filter(([slot]) => dentalStudio.slots[slot] && (studioWax || (slot !== "bite" && slot !== "bite2") || mbScansStep)).map(([slot, name]) => {
+          const id = (slot === "upper" || slot === "lower") && dentalStudio.stage === "made" && dentalStudio.madeFor?.[slot] ? dentalStudio.madeFor[slot]! : dentalStudio.slots[slot]!;
+          const opacity = studioOpacity[id] ?? 1;
+          const onOpacity = (value: number) => setStudioOpacity((current) => ({ ...current, [id]: value }));
           if (!studioWax && (slot === "bite" || slot === "bite2")) {
             // Build 106: a bite scan - off at first; on, it shows over the scans in occlusion.
             const on = studioBiteShown.includes(id);
-            return { id, name, shown: on, onToggle: () => { setStudioBiteShown((current) => (on ? current.filter((entry) => entry !== id) : [...current, id])); if (!on && dentalStudio.layout !== "occlusion") layOutDentalScans("occlusion"); } };
+            return { id, name, shown: on, opacity, onOpacity, onToggle: () => { setStudioBiteShown((current) => (on ? current.filter((entry) => entry !== id) : [...current, id])); if (!on && dentalStudio.layout !== "occlusion") layOutDentalScans("occlusion"); } };
           }
-          return { id, name, shown: !studioHidden.includes(id), onToggle: () => setStudioHidden((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id])) };
+          return { id, name, shown: !studioHidden.includes(id), ...(slot === "upper" || slot === "lower" ? { opacity, onOpacity } : {}), onToggle: () => setStudioHidden((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id])) };
         });
         if (studioWax && waxIds.length) {
           const shown = !waxIds.every((id) => studioHidden.includes(id));
