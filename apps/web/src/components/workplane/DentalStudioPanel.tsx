@@ -160,6 +160,7 @@ export function DentalStudioPanel({
   shell = false,
   onMbStep,
   trimSlot = null,
+  trimmedDone = null,
   nextSignal = 0,
 }: {
   parts: DentalPartChoice[];
@@ -231,6 +232,8 @@ export function DentalStudioPanel({
   onMbStep?: (step: ModelStepId | null) => void;
   /** Build 106: the arch being trimmed (its Trim button shows it), and a count that moves Prepare on to the next step. */
   trimSlot?: "upper" | "lower" | null;
+  /** Build 106: the arches finished in Trim and tidy (Done pressed) - Next waits for each one there is. */
+  trimmedDone?: Array<"upper" | "lower"> | null;
   nextSignal?: number;
 }) {
   useLanguage();
@@ -430,7 +433,7 @@ export function DentalStudioPanel({
   }, [nextSignal]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onMbStep?.(null), [onMbStep]);
   const mbIndex = mbSteps && mbStep ? mbSteps.indexOf(mbStep) : -1;
-  const mbStepDone = (id: ModelStepId) => (id === "scans" ? scansDone : true);
+  const mbStepDone = (id: ModelStepId) => (id === "scans" ? scansDone : id === "prepare" && framed && trimmedDone ? (["upper", "lower"] as const).every((slot) => !slots[slot] || trimmedDone.includes(slot)) : true);
   const inMb = (id: ModelStepId) => !mbSteps || mbStep === id;
   const mbLast = !mbSteps || mbIndex === mbSteps.length - 1;
   const mbStepper = mbSteps && mbStep ? (

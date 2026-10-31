@@ -721,7 +721,7 @@ export function MeshSculptPanel({
           {busy ? t("sculpt.working") : t(`sculpt.apply.${remeshMode}`)}
         </button>
         </>) : (
-        <button type="button" className="primary" disabled={busy} title={t("sculpt.tip.done")} onClick={onDone ?? onClose}><Check size={17} /> {t("sculpt.done")}</button>
+        <button type="button" className="primary" disabled={busy} title={t("sculpt.tip.done")} onClick={onDone ?? onClose}><Check size={17} /> {t(studioTrim ? "studio.trimAccept" : "sculpt.done")}</button>
         )}
       </div>
       </>)}

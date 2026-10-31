@@ -5327,6 +5327,7 @@ export const MESSAGES_EN = {
   "studio.underside.open": "Open",
   "studio.underside.honeycomb": "Honeycomb",
   "studio.deleteSelection": "Delete selection",
+  "studio.trimAccept": "Accept",
   "studio.trimTitle": "Trim and tidy the scans",
   "studio.trimArch": "Choose the arch",
   "studio.resetUpper": "Reset upper",

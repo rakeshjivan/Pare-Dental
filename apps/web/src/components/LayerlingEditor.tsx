@@ -10507,7 +10507,9 @@ export function LayerlingEditor({
   const biteLiveNow = studioShellOn && !dentalStudio?.waxStudio && dentalStudio?.layout === "occlusion" && studioMbStep === "scans" && dentalStudio?.stage !== "made";
   useEffect(() => { setStudioBiteLive(biteLiveNow); }, [biteLiveNow]);
   // A new case starts with its bite scans off again.
-  useEffect(() => { if (!dentalStudio) { setStudioBiteShown([]); setStudioOpacity({}); } }, [dentalStudio]);
+  useEffect(() => { if (!dentalStudio) { setStudioBiteShown([]); setStudioOpacity({}); setStudioTrimmed([]); } }, [dentalStudio]);
+  // New scans in the case: each arch to be trimmed (or accepted) again.
+  useEffect(() => { setStudioTrimmed([]); }, [dentalStudio?.slots.upper, dentalStudio?.slots.lower]);
   // Build 106: a new case opens its studio a moment after the editor - until then a plain cover, not the
   // old Dental Studio screen flashing up first.
   const [studioPending, setStudioPending] = useState(() => {
@@ -10528,6 +10530,8 @@ export function LayerlingEditor({
   // Build 106: the Model Builder step open in the frame - the right-click menu follows it.
   // Build 106: Trim and tidy's Done moves on - to the lower arch after the upper, then to the next step.
   const [studioNext, setStudioNext] = useState(0);
+  // Build 106: the arches finished in Trim and tidy (its Done pressed) - Next: Model waits for them.
+  const [studioTrimmed, setStudioTrimmed] = useState<Array<"upper" | "lower">>([]);
   // Build 106: leaving Trim and tidy (Back, Next or a step clicked) while an arch is being trimmed: the
   // trim is put in and its tools close - they belong to that step's panel only.
   useEffect(() => {
@@ -20099,6 +20103,7 @@ export function LayerlingEditor({
           onMbStep={setStudioMbStep}
           trimSlot={sculptTool?.trim ? (sculptTool.shapeId === dentalStudio.slots.upper ? "upper" : sculptTool.shapeId === dentalStudio.slots.lower ? "lower" : null) : null}
           nextSignal={studioNext}
+          trimmedDone={dentalStudio.stage === "made" || dentalStudio.editing?.length ? null : studioTrimmed}
         />
       ) : null}
       {meshRoundTool ? (
@@ -20194,11 +20199,14 @@ export function LayerlingEditor({
             flushSculptRef.current();
             setSculptTool(null);
             const state = dentalStudioRef.current;
+            const doneSlot = state?.slots.upper === sculptTool.shapeId ? "upper" : state?.slots.lower === sculptTool.shapeId ? "lower" : null;
+            if (doneSlot) setStudioTrimmed((current) => (current.includes(doneSlot) ? current : [...current, doneSlot]));
             const lower = state?.slots.lower ? shapesRef.current.find((shape) => shape.id === state.slots.lower) : undefined;
-            if (state && sculptTool.shapeId === state.slots.upper && lower) {
-              // The upper done: the lower opens for trimming.
+            if (state && sculptTool.shapeId === state.slots.upper && lower && !studioTrimmed.includes("lower")) {
+              // The upper accepted: the lower opens for trimming. (The last one accepted: Next: Model is
+              // ready - the dentist moves on with it, free to go back into a trim first.)
               window.setTimeout(() => { setSelectedIds([lower.id]); openSculpt(lower, true); }, 0);
-            } else setStudioNext((n) => n + 1);
+            }
           } : undefined}
           besideDental={Boolean(dentalStudio)}
           studioTrim={studioShellOn && Boolean(sculptTool.trim)}
