@@ -159,6 +159,7 @@ export function DentalStudioPanel({
   editing = false,
   shell = false,
   moveUndo,
+  onMbStep,
 }: {
   parts: DentalPartChoice[];
   slots: Record<DentalSlot, string | null>;
@@ -226,6 +227,8 @@ export function DentalStudioPanel({
   shell?: boolean;
   /** Build 106: a scan nudged by accident put back (the design's own Undo and Redo), under the layout buttons. */
   moveUndo?: { canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void };
+  /** Build 106: the Model Builder step open, for the editor's right-click menu. */
+  onMbStep?: (step: ModelStepId | null) => void;
 }) {
   useLanguage();
   const title = t(waxStudio ? "waxStudio.title" : "dental.title");
@@ -415,6 +418,8 @@ export function DentalStudioPanel({
   const mbStepName = (id: ModelStepId) => t(id === "label" && pair ? "modelBuilder.step.finish" : `modelBuilder.step.${id}` as "modelBuilder.step.scans");
   const [mbStepId, setMbStepId] = useState<ModelStepId>("scans");
   const mbStep = mbSteps ? (mbSteps.includes(mbStepId) ? mbStepId : "label") : null;
+  useEffect(() => { onMbStep?.(mbStep); }, [mbStep, onMbStep]);
+  useEffect(() => () => onMbStep?.(null), [onMbStep]);
   const mbIndex = mbSteps && mbStep ? mbSteps.indexOf(mbStep) : -1;
   const mbStepDone = (id: ModelStepId) => (id === "scans" ? scansDone : true);
   const inMb = (id: ModelStepId) => !mbSteps || mbStep === id;

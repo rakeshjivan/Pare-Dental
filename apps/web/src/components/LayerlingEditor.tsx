@@ -10479,6 +10479,8 @@ export function LayerlingEditor({
   const studioCaseSlot = useStudioSlot("case");
   // Build 106: Trim's tools, in the Prepare step's panel instead of over the view.
   const studioToolSlot = useStudioSlot("tool");
+  // Build 106: the Model Builder step open in the frame - the right-click menu follows it.
+  const [studioMbStep, setStudioMbStep] = useState<string | null>(null);
   useEffect(() => { setWaxTint(studioWax); }, [studioWax]);
   useEffect(() => { if (!studioShellOn) setStudioHidden([]); }, [studioShellOn]);
   // The 3D view is sized when the window is: the frame coming or going resizes it too.
@@ -18400,6 +18402,28 @@ export function LayerlingEditor({
       { key: "viewLeft", label: t("dentalMenu.viewLeft"), onSelect: show([1, 0, 0]) },
       { key: "viewLingual", label: t("dentalMenu.viewLingual"), onSelect: show([0, 0, -1]) },
     );
+    // Build 106: Trim and tidy - the menu holds only the views and Trim's own choices (how to select,
+    // and how deep), none of the clean-up tools.
+    const trimming = studioShellOn && Boolean(sculptTool?.trim);
+    // (Off the model the menu stays as it is - the views, the cut, Show everything.)
+    if (shapeContextMenu?.onShape && (trimming || (studioShellOn && !dentalStudio?.waxStudio && studioMbStep === "prepare"))) {
+      if (trimming && sculptTool) {
+        const shape = (value: "brush" | "lasso") => () => { storeSelectShape(value); setSculptTool((current) => current ? { ...current, selectShape: value, tool: current.tool === "select" || current.tool === "unselect" ? current.tool : "select" } : current); };
+        const reach = (value: typeof sculptTool.reach) => () => { storeTrimReach(value); setSculptTool((current) => current ? { ...current, reach: value } : current); };
+        const mark = (on: boolean, label: string) => (on ? `✓  ${label}` : label);
+        const shapeNow = sculptTool.selectShape ?? "brush";
+        items.push(
+          { key: "trimLasso", label: mark(shapeNow === "lasso", t("sculpt.selectShape.lasso")), separated: true, onSelect: shape("lasso") },
+          { key: "trimBrush", label: mark(shapeNow === "brush", t("sculpt.selectShape.brush")), onSelect: shape("brush") },
+          { key: "trimFront", label: mark(sculptTool.reach === "front", t("sculpt.reach.front")), separated: true, onSelect: reach("front") },
+          { key: "trimBack", label: mark(sculptTool.reach === "back", t("sculpt.reach.back")), onSelect: reach("back") },
+          { key: "trimThrough", label: mark(sculptTool.reach === "through", t("sculpt.reach.through")), onSelect: reach("through") },
+        );
+      }
+      if (biteMap?.on || biteCandidate) items.push({ key: "bite", label: t(biteMap?.on ? "dentalMenu.biteOff" : "dentalChrome.biteContacts"), separated: true, onSelect: () => toggleBiteMap(!biteMap?.on) });
+      items.push({ ...handleStyleItem(), separated: true }, freeRotateItem(), basicRenderItem());
+      return items;
+    }
     // Build 104: checking the bite - the selected scan see-through, and a cut through the middle (the
     // incisors' overjet and overbite, side on), or off again.
     const sectionOn = Boolean(window.layerlingSectionView?.({}).settings.enabled);
@@ -19981,6 +20005,7 @@ export function LayerlingEditor({
           onDone={() => setDentalStudio(null)}
           editing={Boolean(dentalStudio.editing?.length)}
           shell={studioShellOn}
+          onMbStep={setStudioMbStep}
           moveUndo={{
             canUndo: !splitSession && !projectInteractionActive && historyViewIndex === null && historyIndex > 0,
             canRedo: !splitSession && !projectInteractionActive && historyViewIndex === null && historyIndex < history.length - 1,

@@ -114,10 +114,7 @@ export function DentalStart({ onStart, onScans, waxupShown }: { onStart: (tool: 
               <Plus size={17} strokeWidth={2.4} aria-hidden="true" />
               {t("home.newCase")}
             </button>
-            <label className="home-secondary" htmlFor={inputId}>
-              <Upload size={16} strokeWidth={2.2} aria-hidden="true" />
-              {t("dentalStart.openScans")}
-            </label>
+            {/* Build 106: New case only - the scans are added inside the case. */}
             <input
               id={inputId}
               type="file"
