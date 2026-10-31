@@ -19811,6 +19811,10 @@ export function LayerlingEditor({
               const current = dentalStudioRef.current;
               if (current?.stage === "making") { stopDentalMaking(); return; }
               if (current?.stage === "trimming") return;
+              // Build 106: the frame's close goes back to the page the case came from (Dental Studio's),
+              // not to the editor's own screen behind the frame - the studio left open, so the case comes
+              // back to the step it was at.
+              if (onHome) { leaveToDashboard(); return; }
               if (current?.editing?.length) leaveDentalEdit(current);
               setDentalStudio(null);
             }}

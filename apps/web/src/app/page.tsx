@@ -95,7 +95,7 @@ import { dentalStudioAvailable, dentalWorkIn, isPareStudio, studioOfShapes, type
 import { HomeTopBar, type HomePlace } from "@/components/home/HomeTopBar";
 import { HomeLauncher } from "@/components/home/HomeLauncher";
 import { DentalStart, StudioHeader } from "@/components/home/StudioPage";
-import { WAXUP_ENABLED } from "@/lib/pareFeatures";
+import { STUDIO_SHELL, WAXUP_ENABLED } from "@/lib/pareFeatures";
 
 type AppView = "dashboard" | "editor";
 type ViewMode = "grid" | "list";
@@ -1632,6 +1632,20 @@ export default function Home() {
       setProjects(storedProjects.map((project) => (project.id === projectId ? { ...project, updatedAt: Date.now() } : project)));
     } else if (projectId) {
       setProjects((current) => current.map((project) => (project.id === projectId ? { ...project, updatedAt: Date.now() } : project)));
+    }
+    // Build 106: a Dental Studio case opens in its studio's frame (test builds), as a new one does -
+    // Wax-up when it has wax teeth.
+    const opening = projectId ? (readProjects().find((project) => project.id === projectId) ?? projects.find((project) => project.id === projectId)) : undefined;
+    // (The same case, its editor still open behind the page, comes back as it was left.)
+    if (STUDIO_SHELL && projectId && projectId !== activeProjectId && opening?.studio === "dental") {
+      try {
+        if (!window.sessionStorage.getItem(OPEN_DENTAL_STUDIO_KEY)) {
+          const wax = (projectShapesById[projectId]?.shapes ?? []).some((shape) => shape.dental === "wax");
+          window.sessionStorage.setItem(OPEN_DENTAL_STUDIO_KEY, wax ? "wax" : "1");
+        }
+      } catch {
+        // The case then opens without the frame.
+      }
     }
     startEditorTransition();
     setActiveProjectId(projectId);
