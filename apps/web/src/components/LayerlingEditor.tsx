@@ -10526,6 +10526,14 @@ export function LayerlingEditor({
   const [studioMbStep, setStudioMbStep] = useState<string | null>(null);
   // Build 106: Trim and tidy's Done moves on - to the lower arch after the upper, then to the next step.
   const [studioNext, setStudioNext] = useState(0);
+  // Build 106: leaving Trim and tidy (Back, Next or a step clicked) while an arch is being trimmed: the
+  // trim is put in and its tools close - they belong to that step's panel only.
+  useEffect(() => {
+    if (!STUDIO_SHELL || !studioMbStep || studioMbStep === "prepare") return;
+    if (!sculptToolRef.current?.trim || dentalStudioRef.current?.waxStudio) return;
+    flushSculptRef.current();
+    setSculptTool(null);
+  }, [studioMbStep]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setWaxTint(studioWax); }, [studioWax]);
   useEffect(() => { if (!studioShellOn) setStudioHidden([]); }, [studioShellOn]);
   // The 3D view is sized when the window is: the frame coming or going resizes it too.
@@ -20112,7 +20120,7 @@ export function LayerlingEditor({
           </div>
         </div>
       ) : null}
-      {sculptTool ? ((panel: React.ReactNode) => (studioShellOn && sculptTool.trim && studioToolSlot ? createPortal(panel, studioToolSlot) : panel))(
+      {sculptTool ? ((panel: React.ReactNode) => (studioShellOn && sculptTool.trim ? (studioToolSlot ? createPortal(panel, studioToolSlot) : null) : panel))(
         <MeshSculptPanel
           onSpeed={() => setSculptSpeedShown((shown) => { try { window.localStorage.setItem("pare3d.sculptSpeed", shown ? "off" : "on"); } catch { /* this visit */ } return !shown; })}
           speedShown={sculptSpeedShown}
