@@ -72,6 +72,33 @@ type ModelStepId = "scans" | "prepare" | "model" | "base" | "articulator" | "lab
 type WaxStepId = "scans" | "trim" | "select" | "teeth" | "find" | "choose" | "set" | "place" | "adjust" | "occlusion" | "sculpt" | "make";
 
 /** Build 106: a step's explanation, kept behind a small (?) - shown on hover or focus. */
+/**
+ * Build 106: small cut-through pictures of the model for the frame's Model options - the shell, what
+ * fills it, and its base. A section through the arch: teeth along the top, the base along the bottom.
+ */
+type BodyPicture = "hollow" | "honeycomb" | "solid" | "open" | "honeycombBase";
+const BODY_OUTER = "M5 31V14Q8 8 12 10Q15 4 19 8Q24 3 29 8Q33 4 36 10Q40 8 43 14V31Z";
+function BodyPictureSvg({ kind }: { kind: BodyPicture }) {
+  const id = `hc-${kind}`;
+  // The hollow inside the shell, open at the bottom (a 3 mm wall all round, drawn 4 units).
+  const inner = "M9 31V16Q12 13 15 14Q19 10 24 12Q29 10 33 14Q36 13 39 16V31Z";
+  return (
+    <svg className="studio-body-pic" viewBox="0 0 48 34" aria-hidden="true">
+      <defs>
+        <pattern id={id} width="6" height="5.2" patternUnits="userSpaceOnUse">
+          <path d="M1.5 0.2L4.5 0.2L6 2.6L4.5 5L1.5 5L0 2.6Z" fill="none" stroke="currentColor" strokeWidth="0.8" />
+        </pattern>
+        <clipPath id={`${id}-in`}><path d={inner} /></clipPath>
+      </defs>
+      <path d={BODY_OUTER} className="studio-body-shell" />
+      {kind !== "solid" ? <path d={inner} className="studio-body-hollow" /> : null}
+      {kind === "honeycomb" ? <rect x="0" y="0" width="48" height="34" fill={`url(#${id})`} clipPath={`url(#${id}-in)`} className="studio-body-cells" /> : null}
+      {kind === "honeycombBase" ? <rect x="0" y="25" width="48" height="6" fill={`url(#${id})`} clipPath={`url(#${id}-in)`} className="studio-body-cells" /> : null}
+      <path d="M2 31H46" className="studio-body-ground" />
+    </svg>
+  );
+}
+
 function HelpTip({ text }: { text: string }) {
   return (
     <span className="studio-help" tabIndex={0} role="note" aria-label={text} onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}>
@@ -720,6 +747,47 @@ export function DentalStudioPanel({
           </>
         ) : null}
 
+        {framed ? (<>
+          {/* Build 106: the frame's Model options - what is inside, the wall, and the base underneath. */}
+          {custom ? <p className="blend-hint dental-custom">{t("dental.customHint")}</p> : null}
+          <h4 className="dental-group">{t("studio.body")} <HelpTip text={t("studio.bodyHint")} /></h4>
+          {(() => {
+            const body = options.inside === "solid" ? "solid" : options.infill === "honeycomb" ? "honeycomb" : "hollow";
+            const pick = (value: "hollow" | "honeycomb" | "solid") => onOptionsChange(value === "solid" ? { inside: "solid" } : { inside: options.inside === "solid" ? "open" : options.inside, infill: value === "honeycomb" ? "honeycomb" : options.infill === "honeycomb" || !options.infill ? "base" : options.infill });
+            return (
+              <div className="studio-pic-choice" role="radiogroup" aria-label={t("studio.body")}>
+                {(["hollow", "honeycomb", "solid"] as const).map((value) => (
+                  <button key={value} type="button" role="radio" aria-checked={body === value} className={body === value ? "active" : ""} disabled={busy} title={t(`studio.body.${value}Hint` as "studio.body.hollowHint")} onClick={() => pick(value)}>
+                    <BodyPictureSvg kind={value} />
+                    <span>{t(`studio.body.${value}` as "studio.body.hollow")}</span>
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
+          {options.inside !== "solid" ? (<>
+            <h4 className="dental-group">{t("dental.wall")}</h4>
+            <div className="studio-mm-choice" role="radiogroup" aria-label={t("dental.wall")}>
+              {[2, 3, 4, 5].map((mm) => (
+                <button key={mm} type="button" role="radio" aria-checked={Math.abs(options.wall - mm) < 0.05} className={Math.abs(options.wall - mm) < 0.05 ? "active" : ""} disabled={busy} onClick={() => onOptionsChange({ wall: mm })}>{`${mm} mm`}</button>
+              ))}
+            </div>
+          </>) : null}
+          {options.inside !== "solid" && options.infill !== "honeycomb" ? (<>
+            <h4 className="dental-group">{t("studio.underside")} <HelpTip text={t("studio.undersideHint")} /></h4>
+            <div className="studio-pic-choice two" role="radiogroup" aria-label={t("studio.underside")}>
+              {([["open", "none"], ["honeycombBase", "base"]] as const).map(([pic, infill]) => {
+                const on = (options.infill ?? "base") === infill;
+                return (
+                  <button key={pic} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} onClick={() => onOptionsChange({ infill })}>
+                    <BodyPictureSvg kind={pic} />
+                    <span>{t(pic === "open" ? "studio.underside.open" : "studio.underside.honeycomb")}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </>) : null}
+        </>) : (<>
         <p className="dental-summary" data-testid="dental-summary">{t("dental.summary", { base: baseName(options.baseStyle), inside: insideName, height: height.toFixed(1) })}</p>
         {custom ? <p className="blend-hint dental-custom">{t("dental.customHint")}</p> : null}
         <h4 className="dental-group">{t("dental.inside")}</h4>
@@ -730,6 +798,7 @@ export function DentalStudioPanel({
             {choice(t("dental.infill"), options.infill ?? "base", [["none", t("dental.infillNone")], ["base", t("dental.infillBase")], ["honeycomb", t("dental.infillFull")]] as Array<[DentalInfill, string]>, (infill) => onOptionsChange({ infill }))}
           </>
         ) : null}
+        </>)}
         {/* Build 104: no note under the choices - the presets already pick solid where accuracy matters. */}
       </>)) : null}
 

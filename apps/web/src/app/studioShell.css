@@ -868,3 +868,22 @@
 /* Build 106: the 3D view's dark-ground switch, in the top bar. */
 .studio-top-icons { align-items: center; }
 .studio-dark-toggle { display: flex; align-items: center; gap: 8px; margin-right: 10px; color: #3d4654; font-size: 14px; white-space: nowrap; }
+
+/* Build 106: Model - choices with a small cut-through picture above each. */
+.studio-pic-choice { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 12px; }
+.studio-pic-choice.two { grid-template-columns: repeat(2, 1fr); }
+.studio-pic-choice button, .studio-mm-choice button {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 6px;
+  color: #1f2937; background: #ffffff; border: 1px solid #d5d9e0; border-radius: 10px; cursor: pointer; font-size: 14px;
+}
+.studio-pic-choice button.active, .studio-mm-choice button.active { background: #e8f2f0; border-color: var(--studio-teal, #2f7d6d); font-weight: 600; }
+.studio-pic-choice button:disabled, .studio-mm-choice button:disabled { opacity: 0.55; cursor: default; }
+.studio-body-pic { width: 56px; height: 40px; color: #6b7a90; }
+.studio-body-shell { fill: #9fb0c8; stroke: #6b7a90; stroke-width: 0.8; }
+.studio-body-hollow { fill: #ffffff; stroke: #6b7a90; stroke-width: 0.6; }
+.studio-pic-choice button.active .studio-body-hollow { fill: #f4faf8; }
+.studio-body-ground { stroke: #6b7a90; stroke-width: 1; }
+.studio-mm-choice { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 6px 0 12px; }
+.studio-mm-choice button { padding: 9px 4px; }
+.dental-studio-panel.studio-framed .dental-group .studio-help { margin-left: 4px; vertical-align: middle; }
+.dental-studio-panel.studio-framed .edge-modifier-check + .dental-group { margin-top: 16px; }
