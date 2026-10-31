@@ -251,6 +251,8 @@ import { displayShapeName, iconTagAsset, qrCodeAsset, libraryShapeAssets, makeSh
 import { PORT_PRESET_ORDER, PORT_PRESETS, type PortPreset } from "@/lib/portGeometry";
 import { importedShapeFromStl, SCAN_GREY } from "@/lib/stlImport";
 import { readStudioDark, setStudioDark, setViewLook, studioLook } from "@/lib/viewLook";
+/** Build 106: the bite scan shown over the scans in Model Builder - a warm amber, see-through. */
+const BITE_OVERLAY_COLOUR = "#e9a23b";
 import { exportMeshesToStl } from "@/lib/stlExport";
 import { THREE_MF_MEDIA_TYPE } from "@/lib/threemfExport";
 import { importedShapeFromSvg, invalidSvgMeshReason } from "@/lib/svgImport";
@@ -3276,6 +3278,10 @@ export function LayerlingEditor({
   // Build 106: the studio frame's case list - scans set aside on screen only - and the wax teeth drawn in
   // one colour or each in its own (on screen only: the parts keep their own colour).
   const [studioHidden, setStudioHidden] = useState<string[]>([]);
+  // Build 106: Model Builder's bite scans - off at first; shown from the case panel, only in occlusion,
+  // in a colour of their own over the scans (so the arches can be seen set into the bite).
+  const [studioBiteShown, setStudioBiteShown] = useState<string[]>([]);
+  const [studioBiteLive, setStudioBiteLive] = useState(false);
   // Build 106: the studio's dark ground for the 3D view (the panels stay light).
   const [studioDark, setStudioDarkState] = useState(() => readStudioDark());
   const [waxColourful, setWaxColourful] = useState(() => { try { return window.localStorage.getItem("pare3d.waxColourful") === "1"; } catch { return false; } });
@@ -3287,6 +3293,9 @@ export function LayerlingEditor({
     let result = baseViewportShapes;
     if (dentalHidden.length) result = result.filter((shape) => !dentalHidden.includes(shape.id));
     if (studioHidden.length) result = result.filter((shape) => !studioHidden.includes(shape.id));
+    if (studioBiteLive && studioBiteShown.length) {
+      result = result.map((shape) => (studioBiteShown.includes(shape.id) ? { ...shape, hidden: false, color: BITE_OVERLAY_COLOUR, drawOnTop: true, locked: true } : shape));
+    }
     if (waxTint || waxSeeThrough) {
       const key = `${waxTint ? (waxColourful ? "colour" : "blue") : "own"}${waxSeeThrough ? ":see" : ""}`;
       if (waxTintCache.current.key !== key) waxTintCache.current = { key, map: new WeakMap() };
@@ -3318,7 +3327,7 @@ export function LayerlingEditor({
       result = [...result.map((shape) => (overlapping.has(shape.id) ? { ...shape, transparent: true } : shape)), ...fitOverlay];
     }
     return result;
-  }, [baseViewportShapes, dentalHidden, studioHidden, waxTint, waxColourful, waxSeeThrough, dragTextGhost, fitCheck, fitOverlay, fitReport, intersectPreviewIds, intersectPreviewShape, surfaceTextTool?.editingId, surfaceTextTool?.preview]);
+  }, [baseViewportShapes, dentalHidden, studioHidden, studioBiteLive, studioBiteShown, waxTint, waxColourful, waxSeeThrough, dragTextGhost, fitCheck, fitOverlay, fitReport, intersectPreviewIds, intersectPreviewShape, surfaceTextTool?.editingId, surfaceTextTool?.preview]);
   // A revolve sketch on the base plate is a side view: the bodies are shown from the front, as the profile is drawn (#525).
   // Opened again to edit a body that stands upright, it is the same side view: that body stands at its height, not on the plate's workplane.
   const editedRevolveShape = sketchActive && sketchOperation === "revolve" && editingSketchShapeId ? shapes.find((shape) => shape.id === editingSketchShapeId) : undefined;
@@ -10482,6 +10491,10 @@ export function LayerlingEditor({
   const [dentalStudio, setDentalStudio] = useState<DentalStudioState | null>(null);
   // Build 106: Wax-up Studio and Model Builder in the studio frame (Dental Studio, test builds).
   const studioShellOn = STUDIO_SHELL && dentalWorkspace && Boolean(dentalStudio);
+  const biteLiveNow = studioShellOn && !dentalStudio?.waxStudio && dentalStudio?.layout === "occlusion";
+  useEffect(() => { setStudioBiteLive(biteLiveNow); }, [biteLiveNow]);
+  // A new case starts with its bite scans off again.
+  useEffect(() => { if (!dentalStudio) setStudioBiteShown([]); }, [dentalStudio]);
   // Build 106: a new case opens its studio a moment after the editor - until then a plain cover, not the
   // old Dental Studio screen flashing up first.
   const [studioPending, setStudioPending] = useState(() => {
@@ -18450,7 +18463,7 @@ export function LayerlingEditor({
     // Build 104: checking the bite - the selected scan see-through, and a cut through the middle (the
     // incisors' overjet and overbite, side on), or off again.
     const sectionOn = Boolean(window.layerlingSectionView?.({}).settings.enabled);
-    items.push(sectionOn
+    if (!scansStep) items.push(sectionOn
       ? { key: "sectionOff", label: t("dentalMenu.sectionOff"), separated: true, onSelect: () => { window.layerlingSectionView?.({ enabled: false }); } }
       : { key: "sectionMid", label: t("dentalMenu.sectionMid"), separated: true, onSelect: () => { window.layerlingSectionView?.({ enabled: true, orientation: "world", axis: "x", center: true, cutFace: "fill" }); } });
     if (onPart) {
@@ -19739,6 +19752,11 @@ export function LayerlingEditor({
         const waxIds = studioWax ? shapes.filter((shape) => shape.dental === "wax" && shape.waxTooth && shape.waxFor === dentalStudio.slots[waxSlot]).map((shape) => shape.id) : [];
         const objects = slotNames.filter(([slot]) => dentalStudio.slots[slot]).map(([slot, name]) => {
           const id = dentalStudio.slots[slot]!;
+          if (!studioWax && (slot === "bite" || slot === "bite2")) {
+            // Build 106: a bite scan - off at first; on, it shows over the scans in occlusion.
+            const on = studioBiteShown.includes(id);
+            return { id, name, shown: on, onToggle: () => { setStudioBiteShown((current) => (on ? current.filter((entry) => entry !== id) : [...current, id])); if (!on && dentalStudio.layout !== "occlusion") layOutDentalScans("occlusion"); } };
+          }
           return { id, name, shown: !studioHidden.includes(id), onToggle: () => setStudioHidden((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id])) };
         });
         if (studioWax && waxIds.length) {
@@ -20030,12 +20048,6 @@ export function LayerlingEditor({
           editing={Boolean(dentalStudio.editing?.length)}
           shell={studioShellOn}
           onMbStep={setStudioMbStep}
-          moveUndo={{
-            canUndo: !splitSession && !projectInteractionActive && historyViewIndex === null && historyIndex > 0,
-            canRedo: !splitSession && !projectInteractionActive && historyViewIndex === null && historyIndex < history.length - 1,
-            onUndo: undo,
-            onRedo: redo,
-          }}
         />
       ) : null}
       {meshRoundTool ? (

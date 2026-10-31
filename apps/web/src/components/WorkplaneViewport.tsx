@@ -15269,6 +15269,7 @@ function sharedShapeMaterial(shape: WorkplaneShape, vertexColors = false) {
     roughness: shapeRoughness(shape),
     depthWrite: !seeThrough,
     side: "double",
+    onTop: Boolean(shape.drawOnTop),
   });
   const cached = sharedShapeMaterialCache.get(key);
   if (cached) {
@@ -15286,6 +15287,7 @@ function sharedShapeMaterial(shape: WorkplaneShape, vertexColors = false) {
     depthWrite: !seeThrough,
     side: THREE.DoubleSide,
   });
+  if (shape.drawOnTop) { material.polygonOffset = true; material.polygonOffsetFactor = -4; material.polygonOffsetUnits = -8; }
   if (!shape.hole) addOverhangTint(material);
   material.userData.cached = true;
   material.userData.sharedShapeMaterialKey = key;

@@ -5576,7 +5576,7 @@ export const MESSAGES_EN = {
   "tips.freeRotate": "In Dental Studio, right-click and choose Free rotate to turn the view right over the top, as Meshmixer does.",
   "dentalMenu.freeRotateOn": "Free rotate (Meshmixer)",
   "dentalMenu.basicRenderOn": "Basic rendering (faster)",
-  "dentalMenu.basicRenderOff": "Full rendering",
+  "dentalMenu.basicRenderOff": "Full rendering (slower)",
   "dentalMenu.sectionMid": "Cut through the middle",
   "dentalMenu.sectionOff": "End the cut view",
   "dentalMenu.seeThrough": "See-through",

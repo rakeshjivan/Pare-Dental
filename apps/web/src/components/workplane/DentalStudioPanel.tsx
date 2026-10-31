@@ -158,7 +158,6 @@ export function DentalStudioPanel({
   onDone,
   editing = false,
   shell = false,
-  moveUndo,
   onMbStep,
 }: {
   parts: DentalPartChoice[];
@@ -226,7 +225,6 @@ export function DentalStudioPanel({
   /** Build 106: shown in the studio frame - the steps along its top, Back and Next along its bottom. */
   shell?: boolean;
   /** Build 106: a scan nudged by accident put back (the design's own Undo and Redo), under the layout buttons. */
-  moveUndo?: { canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void };
   /** Build 106: the Model Builder step open, for the editor's right-click menu. */
   onMbStep?: (step: ModelStepId | null) => void;
 }) {
@@ -612,12 +610,6 @@ export function DentalStudioPanel({
                   {t(value === "side" ? "dental.scanSide" : "dental.scanOcclusion")}
                 </button>
               ))}
-            </div>
-          ) : null}
-          {framed && moveUndo && analysis && (slots.upper || slots.lower) ? (
-            <div className="dental-trim-mode dental-move-undo" role="group" aria-label={t("studio.moveUndo")}>
-              <button type="button" disabled={busy || !moveUndo.canUndo} onClick={moveUndo.onUndo}><Undo2 size={15} aria-hidden="true" /> {t("studio.undoMove")}</button>
-              <button type="button" disabled={busy || !moveUndo.canRedo} onClick={moveUndo.onRedo}><Redo2 size={15} aria-hidden="true" /> {t("studio.redoMove")}</button>
             </div>
           ) : null}
           {/* Build 84: the bite contacts & clearance map, in occlusion. */}

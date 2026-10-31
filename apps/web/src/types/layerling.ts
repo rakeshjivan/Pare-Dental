@@ -1238,6 +1238,8 @@ export type WorkplaneShape = {
   hidden?: boolean;
   /** Drawn see-through in its own colour, like the usual "Transparent". Display only - a solid stays a solid. */
   transparent?: boolean;
+  /** Build 106: drawn just in front of surfaces it lies on (a bite scan over the arches) - view only. */
+  drawOnTop?: boolean;
 };
 
 /**
