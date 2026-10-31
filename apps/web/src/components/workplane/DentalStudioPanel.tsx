@@ -433,7 +433,7 @@ export function DentalStudioPanel({
   }, [nextSignal]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onMbStep?.(null), [onMbStep]);
   const mbIndex = mbSteps && mbStep ? mbSteps.indexOf(mbStep) : -1;
-  const mbStepDone = (id: ModelStepId) => (id === "scans" ? scansDone : id === "prepare" && framed && trimmedDone ? (["upper", "lower"] as const).every((slot) => !slots[slot] || trimmedDone.includes(slot)) : true);
+  const mbStepDone = (id: ModelStepId) => (id === "scans" ? scansDone : id === "prepare" && shell && trimmedDone ? (["upper", "lower"] as const).every((slot) => !slots[slot] || trimmedDone.includes(slot)) : true);
   const inMb = (id: ModelStepId) => !mbSteps || mbStep === id;
   const mbLast = !mbSteps || mbIndex === mbSteps.length - 1;
   const mbStepper = mbSteps && mbStep ? (
@@ -737,13 +737,33 @@ export function DentalStudioPanel({
           ))}
         </div>
         {/* Build 104: the base's options sit with the model type (its picture already shows the base). */}
-        {options.baseStyle !== "articulator" ? (
+        {/* Build 106: in the frame, three buttons that stay pressed while on. */}
+        {framed ? (
+          <div className="studio-toggle-buttons" role="group" aria-label={t("studio.baseOptions")}>
+            {options.baseStyle !== "articulator" ? (
+              <button type="button" aria-pressed={options.bevel !== false} className={options.bevel !== false ? "active" : ""} disabled={busy} title={t("dental.bevelHint")} onClick={() => onOptionsChange({ bevel: options.bevel === false })}>
+                {options.bevel !== false ? <Check size={15} aria-hidden="true" /> : null}{t("studio.bevel")}
+              </button>
+            ) : null}
+            {options.baseStyle === "clean" ? (
+              <button type="button" aria-pressed={options.notches !== false} className={options.notches !== false ? "active" : ""} disabled={busy} title={t("dental.notchesHint")} onClick={() => onOptionsChange({ notches: options.notches === false })}>
+                {options.notches !== false ? <Check size={15} aria-hidden="true" /> : null}{t("studio.notches")}
+              </button>
+            ) : null}
+            {options.baseStyle === "clean" || options.baseStyle === "articulator" ? (
+              <button type="button" aria-pressed={Boolean(options.tieBar)} className={options.tieBar ? "active" : ""} disabled={busy} title={t("dental.tieBarHint")} onClick={() => onOptionsChange({ tieBar: !options.tieBar })}>
+                {options.tieBar ? <Check size={15} aria-hidden="true" /> : null}{t("studio.tieBar")}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {!framed && options.baseStyle !== "articulator" ? (
           <label className="edge-modifier-check" title={t("dental.bevelHint")}>
             <input type="checkbox" checked={options.bevel !== false} disabled={busy} onChange={(event) => onOptionsChange({ bevel: event.currentTarget.checked })} />
             <span>{t("dental.bevel")}</span>
           </label>
         ) : null}
-        {options.baseStyle === "clean" || options.baseStyle === "articulator" ? (
+        {!framed && (options.baseStyle === "clean" || options.baseStyle === "articulator") ? (
           <>
             {options.baseStyle === "clean" ? (
               <label className="edge-modifier-check" title={t("dental.notchesHint")}>

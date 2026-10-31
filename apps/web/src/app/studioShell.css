@@ -895,3 +895,14 @@
 .dental-studio-panel.studio-framed .dental-trim-buttons button.active,
 .dental-studio-panel.studio-framed .dental-trim-buttons button.active:disabled { color: #111827; font-weight: 600; background: #cfe8e1; border-color: var(--studio-teal, #2f7d6d); opacity: 1; }
 .dental-studio-panel.studio-framed .dental-trim-buttons button.active:disabled { opacity: 1; }
+
+/* Build 106: Model - the base options as buttons that stay pressed while on. */
+.studio-toggle-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 4px; }
+.studio-toggle-buttons button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 44px; padding: 6px 8px;
+  color: #1f2937; background: #ffffff; border: 1px solid #d5d9e0; border-radius: 10px; cursor: pointer; font-size: 13.5px; line-height: 1.2; text-align: center;
+}
+.studio-toggle-buttons button.active { background: #e8f2f0; border-color: var(--studio-teal, #2f7d6d); font-weight: 600; }
+.studio-toggle-buttons button.active svg { color: var(--studio-teal, #2f7d6d); flex: none; }
+.studio-toggle-buttons button:disabled { opacity: 0.55; cursor: default; }
+.dental-studio-panel.studio-framed .studio-toggle-buttons + .dental-group { margin-top: 16px; }
