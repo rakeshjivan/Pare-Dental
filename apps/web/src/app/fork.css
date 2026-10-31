@@ -820,9 +820,15 @@ html[data-theme="dark"] .printer-picker { background: rgba(30, 30, 30, 0.92); }
   color: var(--muted-strong);
   background: var(--subbar);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  white-space: nowrap;
+  border-radius: 14px;
+  /* Build 106: wraps inside a narrow menu instead of running off its side (a sideways scroll). */
+  flex-wrap: wrap;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+  line-height: 1.35;
 }
+.pare-version-status svg { flex: none; }
 .pare-version-status.current svg { color: #16a34a; }
 .pare-version-status.ready, .pare-version-status.download { color: var(--foreground); border-color: var(--primary); }
 .pare-version-status button, .pare-version-status a {
