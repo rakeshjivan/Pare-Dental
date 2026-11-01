@@ -81,3 +81,31 @@ describe("build 106: the arch line", () => {
     expect(canineTurn(1)).toBeGreaterThan(canineTurn(0.6));
   });
 });
+
+describe("build 106: the arch line follows the marks, or smooths them", () => {
+  it("follows a canine set out of line, where the smooth curve evens it out", () => {
+    const points = archPoints(0.05);
+    // The patient's right canine 2 mm forward of the curve.
+    points[13] = [points[13][0], points[13][1], points[13][2] + 2];
+    const teeth = teethAt(points);
+    const line = fitArchLine(points, [0, -1, 0], [0, 0, 1])!;
+    const forwardOf = (follow: boolean, fdi: number) => {
+      const m = layOnArchLine(teeth, line, { follow, keepDepth: false });
+      // Forward as the arch line takes it (its frame turns a little with the canine moved).
+      return new THREE.Vector3(...teeth.find((t) => t.fdi === fdi)!.origin).applyMatrix4(m.get(`t${fdi}`)!).dot(new THREE.Vector3(...line.forward));
+    };
+    // Followed, the two sides differ as the marks do; smoothed, they are a mirror of each other.
+    expect(Math.abs(forwardOf(true, 13) - forwardOf(true, 23))).toBeGreaterThan(0.3);
+    expect(Math.abs(forwardOf(false, 13) - forwardOf(false, 23))).toBeLessThan(1e-6);
+  });
+
+  it("runs straight on past the last mark, not curving in", () => {
+    const points = archPoints(0.05);
+    const line = fitArchLine(points, [0, -1, 0], [0, 0, 1])!;
+    // A premolar beyond the canine, with no mark of its own.
+    const teeth = [...teethAt(points), { id: "t24", fdi: 24, width: 7, origin: [24, 10, -20] as V, mesial: [-1, 0, 0] as V, out: [0, 0, 1] as V, up: [0, -1, 0] as V }];
+    const at = (follow: boolean) => new THREE.Vector3(24, 10, -20).applyMatrix4(layOnArchLine(teeth, line, { follow, keepDepth: false }).get("t24")!);
+    // Straight on (follow) keeps the premolar further out across the arch than the parabola, which turns it in behind.
+    expect(Math.abs(at(true).x)).toBeGreaterThan(Math.abs(at(false).x) - 0.5);
+  });
+});

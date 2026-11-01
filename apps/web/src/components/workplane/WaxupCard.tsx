@@ -92,6 +92,8 @@ export type WaxupView = {
   /** Build 106: the teeth laid along the arch line, and its curve (1 = the patient's). */
   archLine?: boolean;
   archCurve?: number;
+  /** Build 106: the curve through the marks themselves (true) or the smooth symmetric one. */
+  archFollow?: boolean;
   /** Build 106: marks moved since the teeth were last fitted to them. */
   marksChanged?: boolean;
   /** Build 105: the wax teeth's contacts with the opposing arch and each other, as a colour map, and Adapt (exocad's static occlusion clearance). */
@@ -159,6 +161,8 @@ export type WaxupActions = {
   onMarkTeeth?: (only?: number[]) => void;
   onUndoMarkPoint?: () => void;
   onSkipTooth?: () => void;
+  /** Build 107: set a tooth's dots from its neighbours (a missing tooth, or wrong dots). */
+  onMarksFromNeighbours?: (fdi: number) => void;
   onStopMarks?: () => void;
   onAutoMarks?: () => void;
   onMarkTeethChoose?: (fdi: number) => void;
@@ -167,6 +171,7 @@ export type WaxupActions = {
   /** Build 106: the teeth fitted to the marks again, now (the marks stay in view). */
   onUpdateFromMarks?: () => void;
   onArchCurve?: (curve: number) => void;
+  onArchFollow?: (follow: boolean) => void;
   /** Build 106: the teeth to wax up, all at once (a quick pick). */
   onMarkTeethSet?: (teeth: number[]) => void;
   onScanSeeThrough?: (on: boolean) => void;
@@ -514,6 +519,14 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
                 )).reduce<React.ReactNode[]>((all, node, i) => (i ? [...all, " ", node] : [node]), [])}
               </p>
             ) : null}
+            {view.markTeeth.length && actions.onMarksFromNeighbours ? (
+              <p className="blend-hint">
+                {t("waxup.fromNeighbours")}{" "}
+                {view.markTeeth.map((fdi) => (
+                  <button key={fdi} type="button" className="link-button" disabled={working} title={t("waxup.fromNeighboursTip", { fdi })} onClick={() => actions.onMarksFromNeighbours?.(fdi)}>{fdi}</button>
+                )).reduce<React.ReactNode[]>((all, node, i) => (i ? [...all, " ", node] : [node]), [])}
+              </p>
+            ) : null}
             {view.autoMarked.some((fdi) => view.markTeeth.includes(fdi)) ? <p className="blend-hint">{t("waxup.markAutoHint")}</p> : null}
             {view.markedTeeth.length ? <p className="blend-hint">{t("waxup.markDragHint")}</p> : null}
           </>
@@ -626,6 +639,13 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
             {view.manual && actions.onArchCurve ? (
               <>
                 <h5 className="waxup-subhead">{t("waxup.archLine")}</h5>
+                {/* Build 106: through the dots as they are, or a smooth curve that evens one out of line. */}
+                {actions.onArchFollow ? (
+                  <div className="studio-mm-choice two" role="radiogroup" aria-label={t("waxup.archLine")}>
+                    <button type="button" role="radio" aria-checked={view.archFollow !== false} className={view.archFollow !== false ? "active" : ""} disabled={working} title={t("waxup.archFollowHint")} onClick={() => actions.onArchFollow?.(true)}>{t("waxup.archFollow")}</button>
+                    <button type="button" role="radio" aria-checked={view.archFollow === false} className={view.archFollow === false ? "active" : ""} disabled={working} title={t("waxup.archSmoothHint")} onClick={() => actions.onArchFollow?.(false)}>{t("waxup.archSmooth")}</button>
+                  </div>
+                ) : null}
                 <EdgeModifierSlider label={t("waxup.archCurve")} title={t("waxup.archCurveHint")} value={Math.round((view.archCurve ?? 1) * 100)} min={50} max={150} step={1} unit="%" workspace={workspace} disabled={working} onChange={(value) => actions.onArchCurve?.(Math.max(0.5, Math.min(1.5, Math.round(value) / 100)))} />
                 <div className="dental-trim-buttons">
                   <button type="button" className={view.archLine ? "active" : "secondary"} disabled={working} onClick={() => actions.onArchLine?.(true)}>{t("waxup.archLineApply")}</button>

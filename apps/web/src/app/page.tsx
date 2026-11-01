@@ -4805,7 +4805,9 @@ function Dashboard({
 /** Build 106: a Dental Studio case's state, in a few words. */
 function dentalCaseStatus(dental: DentalCaseSummary): string {
   if (dental.made) return `${t("case.made")} · ${t(dental.articulated ? "case.articulated" : "case.separate")}`;
-  const step = dental.step && ["scans", "prepare", "model", "base", "label"].includes(dental.step) ? t(`modelBuilder.step.${dental.step}` as "modelBuilder.step.scans") : "";
+  const step = dental.flow === "wax"
+    ? (dental.step && ["scans", "select", "teeth", "set", "place", "adjust", "sculpt", "occlusion", "make"].includes(dental.step) ? t(`waxStudio.step.${dental.step}` as "waxStudio.step.scans") : "")
+    : (dental.step && ["scans", "prepare", "model", "base", "label"].includes(dental.step) ? t(`modelBuilder.step.${dental.step}` as "modelBuilder.step.scans") : "");
   return step ? t("case.inProgressAt", { step }) : t("case.inProgress");
 }
 

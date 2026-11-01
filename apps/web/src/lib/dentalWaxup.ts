@@ -2761,6 +2761,63 @@ export function reductionFor(crown: Float32Array, wax: Float32Array, facing?: [n
 export type ToothMarks = { mesial: Vec3; distal: Vec3; cervical: Vec3; incisal: Vec3 };
 /** The order the marks are clicked in. */
 export const TOOTH_MARK_ORDER = ["mesial", "distal", "cervical", "incisal"] as const;
+/**
+ * Build 107: a tooth's four marks set from the teeth around it - for a missing tooth, or one whose dots
+ * went wrong. Its contacts are its neighbours' contacts (the gap between them is its width); its
+ * incisal and cervical dots sit off the contacts' middle as the same tooth's on the other side does,
+ * mirrored across the midline, or else as its neighbours' do. Null when there is not enough to go on.
+ */
+export function marksFromNeighbours(fdi: number, marks: Record<number, ToothMarks>): ToothMarks | null {
+  const quadrant = Math.floor(fdi / 10);
+  const n = fdi % 10;
+  if (quadrant < 1 || quadrant > 4 || n < 1 || n > 8) return null;
+  const otherQuadrant = quadrant % 2 ? quadrant + 1 : quadrant - 1;
+  const contra = otherQuadrant * 10 + n;
+  const v = (p: Vec3) => new THREE.Vector3(...p);
+  // The midline's sideways direction, from the teeth marked on both sides.
+  const across = new THREE.Vector3();
+  for (const [key, m] of Object.entries(marks)) {
+    const f = Number(key);
+    const q = Math.floor(f / 10);
+    if (q !== quadrant || f === fdi) continue;
+    const pair = marks[otherQuadrant * 10 + (f % 10)];
+    if (pair) across.add(v(m.incisal).sub(v(pair.incisal)));
+  }
+  const mirror = across.lengthSq() > 1e-9 ? across.normalize() : null;
+  const reflect = (d: THREE.Vector3) => (mirror ? d.clone().sub(mirror.clone().multiplyScalar(2 * d.dot(mirror))) : d.clone());
+  const other = marks[contra];
+  const mesialSide = n === 1 ? marks[contra] : marks[quadrant * 10 + n - 1];
+  const distalSide = marks[quadrant * 10 + n + 1];
+  // Contacts: the neighbours' touching contacts; a side with no neighbour takes the width of the tooth on the other side.
+  let mesial = mesialSide ? v(n === 1 ? mesialSide.mesial : mesialSide.distal) : null;
+  let distal = distalSide ? v(distalSide.mesial) : null;
+  const span = other && mirror ? reflect(v(other.distal).sub(v(other.mesial))) : null;
+  if (!mesial && distal && span) mesial = distal.clone().sub(span);
+  if (!distal && mesial && span) distal = mesial.clone().add(span);
+  if (!mesial || !distal || mesial.distanceTo(distal) < 0.5) return null;
+  const mid = mesial.clone().add(distal).multiplyScalar(0.5);
+  let incisal: THREE.Vector3 | null = null;
+  let cervical: THREE.Vector3 | null = null;
+  if (other && mirror) {
+    const otherMid = v(other.mesial).add(v(other.distal)).multiplyScalar(0.5);
+    incisal = mid.clone().add(reflect(v(other.incisal).sub(otherMid)));
+    cervical = mid.clone().add(reflect(v(other.cervical).sub(otherMid)));
+  } else {
+    const near = [mesialSide && n !== 1 ? mesialSide : null, distalSide].filter((m): m is ToothMarks => Boolean(m));
+    if (!near.length) return null;
+    const up = new THREE.Vector3();
+    const down = new THREE.Vector3();
+    for (const m of near) {
+      const c = v(m.mesial).add(v(m.distal)).multiplyScalar(0.5);
+      up.add(v(m.incisal).sub(c));
+      down.add(v(m.cervical).sub(c));
+    }
+    incisal = mid.clone().add(up.divideScalar(near.length));
+    cervical = mid.clone().add(down.divideScalar(near.length));
+  }
+  const out = (p: THREE.Vector3) => p.toArray() as Vec3;
+  return { mesial: out(mesial), distal: out(distal), cervical: out(cervical), incisal: out(incisal) };
+}
 /** The most a long axis from the marks leans from the arch's vertical: past this the marks are taken to be off, degrees. */
 export const MARK_TILT_MAX = 30;
 /** How far a library tooth is scaled to the marks' width, either way. */

@@ -194,6 +194,7 @@ export function DentalStudioPanel({
   editing = false,
   shell = false,
   onMbStep,
+  onWaxStep,
   trimSlot = null,
   trimmedDone = null,
   nextSignal = 0,
@@ -270,6 +271,8 @@ export function DentalStudioPanel({
   /** Build 106: a scan nudged by accident put back (the design's own Undo and Redo), under the layout buttons. */
   /** Build 106: the Model Builder step open, for the editor's right-click menu. */
   onMbStep?: (step: ModelStepId | null) => void;
+  /** Build 106: the Wax-up step open, likewise. */
+  onWaxStep?: (step: string | null) => void;
   /** Build 106: the arch being trimmed (its Trim button shows it), and a count that moves Prepare on to the next step. */
   trimSlot?: "upper" | "lower" | null;
   /** Build 106: the arches finished in Trim and tidy (Done pressed) - Next waits for each one there is. */
@@ -373,7 +376,9 @@ export function DentalStudioPanel({
   const waxStepDone = (id: WaxStepId): boolean => {
     if (!wv) return false;
     switch (id) {
-      case "scans": return scansDone;
+      // Build 106: and, in the frame, each arch trimmed (or accepted as it is) - Next waits for that.
+      // (The arches being waxed only: an opposing arch need not be trimmed for a wax-up.)
+      case "scans": return scansDone && (!shell || !trimmedDone || (["upper", "lower"] as const).every((slot) => !slots[slot] || (waxStudio && waxStudio.arches !== "both" && waxStudio.arches !== slot) || trimmedDone.includes(slot)));
       // Build 105: the teeth to wax up chosen, each with its four marks.
       case "teeth": return wv.markedTeeth.length > 0 && !wv.markPick;
       // Build 106: the teeth to wax up chosen (canine to canine to start with).
@@ -389,6 +394,8 @@ export function DentalStudioPanel({
   };
   const waxIndex = waxSteps && waxStep ? waxSteps.indexOf(waxStep) : -1;
   const goWax = (id: WaxStepId) => setWaxStepId(id);
+  useEffect(() => { onWaxStep?.(waxStep); }, [waxStep, onWaxStep]);
+  useEffect(() => () => onWaxStep?.(null), [onWaxStep]);
   // Build 103: Position shows the whole library teeth; from Adapt on they are fitted to the patient's.
   useEffect(() => {
     if (!waxStep || !waxup) return;
@@ -467,7 +474,7 @@ export function DentalStudioPanel({
   useEffect(() => { onMbStep?.(mbStep); }, [mbStep, onMbStep]);
   // Build 106: in the frame the scan is used as trimmed - no gum line followed, nothing more cut across
   // (aligner models keep their set height for thermoforming).
-  const trimmedAsIs = shell && mbStep === "base";
+  const trimmedAsIs = shell && (mbStep === "base" || waxStep === "make");
   // Build 106: aligner models follow the gum line by default - an even 2 mm of gum below the teeth, the
   // palate and floor of the mouth gone - with the base making the model about 18 mm tall.
   const alignerBase = (gum: number | null) => Math.max(3, Math.round((18 - teethHeight - (gum ?? 0)) * 2) / 2);
@@ -482,7 +489,7 @@ export function DentalStudioPanel({
     if (gumSet || keepSet) onOptionsChange({ gum: null, ...(keepSet ? { keep: null } : {}) });
   }, [trimmedAsIs, options.gum, options.keep, preset]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (shell && mbStep === "label" && options.layout !== "print") onOptionsChange({ layout: "print" });
+    if (shell && (mbStep === "label" || waxStep === "make") && options.layout !== "print") onOptionsChange({ layout: "print" });
   }, [shell, mbStep, options.layout]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (shell && patientDetails === "remove") onPatientDetails?.("keep"); }, [shell, patientDetails]); // eslint-disable-line react-hooks/exhaustive-deps
   const nextSeen = useRef(nextSignal);
@@ -566,7 +573,7 @@ export function DentalStudioPanel({
     <button type="button" className="secondary" disabled={waxIndex <= 0} onClick={() => { setWaxAuto(false); goWax(waxSteps[waxIndex - 1]); }}>{t("waxStudio.back")}</button>
     {waxStep !== "make" ? (
       <button type="button" className="primary" disabled={!waxStepDone(waxStep) || busy || Boolean(wv?.busy)} onClick={() => goWax(waxSteps[waxIndex + 1])}>{t("studio.nextTo", { step: waxName(waxSteps[waxIndex + 1]) })} <ArrowRight size={18} /></button>
-    ) : makeButton}
+    ) : null}
   </>) : mbSteps && mbStep ? (<>
     <button type="button" className="secondary" disabled={mbIndex <= 0} onClick={() => setMbStepId(mbSteps[mbIndex - 1])}>{t("waxStudio.back")}</button>
     {!mbLast ? (
