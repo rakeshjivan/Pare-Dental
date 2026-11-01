@@ -16,7 +16,7 @@
 import * as THREE from "three";
 import { getManifoldRuntime } from "@/lib/editorMeshCore";
 import { alignToBite, archFrame, biteResidual, contacts, vertexNormals, canineWidth, cleanScan, frontOf, isPartialArch, marginUp, pairFrame, palateScore, type CleanArch, type CleanReport } from "@/lib/dentalArch";
-import { blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, bevelCutter, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
+import { ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, bevelCutter, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { articulatorParts, incisalPins, PIN, PIN_BAND, PIN_CLEAR, PIN_HALF, PIN_MAX, PIN_SET, POST_BACK, restAngle, type ArticulatorSides, type PinStyle } from "@/lib/dentalArticulator";
@@ -33,6 +33,13 @@ export const DENTAL_MIN_WALL = 1;
 export const DENTAL_MAX_WALL = 5;
 export const DENTAL_PLATE_THICKNESS = 3;
 export const DENTAL_VENT_RADIUS = 1.5;
+/**
+ * Build 107: drain slots through the outer wall of a hollow or honeycomb model, at its floor - so a
+ * model printed base-down on the build platform is never a sealed cup (Formlabs: holes as close to
+ * the platform as possible, at least 3.5 mm; Photocentric: one at the middle of the arch and one on
+ * each leg). Arch-shaped: flat along the floor so the resin drains out fully, round on top.
+ */
+export const DRAIN_SLOT = { width: 4, height: 3 } as const;
 
 export type DentalRole = "upper" | "lower";
 /** Fork (build 49): "clean" - the scan trimmed to a smooth outline round the teeth on a low block. */
@@ -423,6 +430,113 @@ export function analyseDental(input: DentalStudioInput): DentalAnalysis {
 // ---------------------------------------------------------------------------------------------
 // Building
 
+/**
+ * Build 107: the three drain-slot cutters for a hollow model's outer outline (frame: front at -y,
+ * floor at `bottom`): one at the front in the middle of the arch, one through the back of each heel,
+ * each square to the wall and reaching `wall` + 3 mm in from it (into the cavity, never through the
+ * far wall). `avoidX` 1: the front face on +x carries a label - the front slot moves 5 mm the other way.
+ */
+export function drainSlots(runtime: ManifoldRuntime, outer: Ring, bottom: number, wall: number, avoidX = 0, notchAt: number | null = null, cavity: Ring[] = []): ManifoldSolid[] {
+  if (outer.length < 3) return [];
+  const { width, height } = DRAIN_SLOT;
+  const r = width / 2;
+  const profile: Array<[number, number]> = [[-r, 0], [r, 0], [r, height - r]];
+  for (let k = 1; k < 16; k += 1) { const a = (Math.PI * k) / 16; profile.push([r * Math.cos(a), height - r + r * Math.sin(a)]); }
+  profile.push([-r, height - r]);
+  const outside = 3;
+  // A slot at `at` on the outline, going in along `inward` (unit, horizontal), `reach` mm past the outline.
+  const slot = (at: [number, number], inward: [number, number], reach = wall + 3): ManifoldSolid => {
+    const section = new runtime.CrossSection([profile], "Positive");
+    const bar = section.extrude(outside + reach);
+    section.delete();
+    // Profile x across the wall, y up, extruded along z: turned so z runs inward and y up.
+    const across = new THREE.Vector3(-inward[1], inward[0], 0), up = new THREE.Vector3(0, 0, 1), into = new THREE.Vector3(inward[0], inward[1], 0);
+    const m = new THREE.Matrix4().makeBasis(across, up, into).setPosition(at[0] - inward[0] * outside, at[1] - inward[1] * outside, bottom - 0.01);
+    const placed = transformSolid(bar, m);
+    bar.delete();
+    return placed;
+  };
+  let minX = Infinity, maxX = -Infinity, cx = 0, cy = 0;
+  outer.forEach(([x, y]) => { minX = Math.min(minX, x); maxX = Math.max(maxX, x); cx += x; cy += y; });
+  cx /= outer.length; cy /= outer.length;
+  // Where the outline crosses x = at, nearest the front (least y).
+  const frontAt = (x: number): number | null => {
+    let best: number | null = null;
+    for (let i = 0; i < outer.length; i += 1) {
+      const p = outer[i], q = outer[(i + 1) % outer.length];
+      if ((p[0] - x) * (q[0] - x) > 0 || p[0] === q[0]) continue;
+      const y = p[1] + ((x - p[0]) / (q[0] - p[0])) * (q[1] - p[1]);
+      if (best === null || y < best) best = y;
+    }
+    return best;
+  };
+  // The outline's outward direction near a point, from its neighbours within 3 mm.
+  const inwardAt = (at: [number, number], fallback: [number, number]): [number, number] => {
+    let sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0, n = 0;
+    outer.forEach(([x, y]) => { if (Math.hypot(x - at[0], y - at[1]) <= 3) { sx += x; sy += y; sxx += x * x; syy += y * y; sxy += x * y; n += 1; } });
+    if (n < 2) return fallback;
+    const vx = sxx / n - (sx / n) ** 2, vy = syy / n - (sy / n) ** 2, vxy = sxy / n - (sx / n) * (sy / n);
+    const angle = 0.5 * Math.atan2(2 * vxy, vx - vy);
+    let nx = -Math.sin(angle), ny = Math.cos(angle);
+    if (nx * (cx - at[0]) + ny * (cy - at[1]) < 0) { nx = -nx; ny = -ny; }
+    return [nx, ny];
+  };
+  const cutters: ManifoldSolid[] = [];
+  const middle = (minX + maxX) / 2;
+  let wantX = (minX < 0 && maxX > 0 ? 0 : middle) - avoidX * 5;
+  // Clear of the front locator notch and its collar (notch 1.5 mm, collar a wall more, then the slot's half-width and 1 mm).
+  if (notchAt !== null) { const clear = 1.5 + wall + r + 1; if (Math.abs(wantX - notchAt) < clear) wantX = notchAt + (wantX >= notchAt ? clear : -clear); }
+  const frontX = Math.max(minX + r + 1, Math.min(maxX - r - 1, wantX));
+  // The outline's point nearest a point, and the nearest of the hollow's points to a test.
+  const nearestOnOutline = (p: [number, number]): [number, number] => {
+    let best: [number, number] = outer[0], bestD = Infinity;
+    for (let i = 0; i < outer.length; i += 1) {
+      const a = outer[i], b = outer[(i + 1) % outer.length];
+      const dx = b[0] - a[0], dy = b[1] - a[1], len = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len));
+      const q: [number, number] = [a[0] + t * dx, a[1] + t * dy];
+      const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (d < bestD) { bestD = d; best = q; }
+    }
+    return best;
+  };
+  const hollowPoints = cavity.flat();
+  // Aimed at the hollow: from the outline where it is nearest that point of the hollow, square through the wall, 3 mm into the hollow.
+  const aimed = (target: [number, number], fallbackAt: [number, number] | null, fallbackIn: [number, number]) => {
+    const at = nearestOnOutline(target);
+    const dx = target[0] - at[0], dy = target[1] - at[1], d = Math.hypot(dx, dy);
+    if (d > 1e-3) cutters.push(slot(at, [dx / d, dy / d], d + 3));
+    else if (fallbackAt) cutters.push(slot(fallbackAt, fallbackIn));
+  };
+  if (hollowPoints.length) {
+    // The front of the hollow at the front slot's place (its frontmost point within 4 mm of it), then the back of each side.
+    const near = hollowPoints.filter(([x]) => Math.abs(x - frontX) <= 4);
+    const front = (near.length ? near : hollowPoints).reduce((best, p) => (p[1] < best[1] ? p : best));
+    aimed([near.length ? frontX : front[0], front[1]], null, [0, 1]);
+    for (const side of [-1, 1]) {
+      const these = hollowPoints.filter(([x]) => (x - middle) * side > 0);
+      if (!these.length) continue;
+      const back = these.reduce((best, p) => (p[1] > best[1] ? p : best));
+      aimed([back[0], back[1]], null, [0, -1]);
+    }
+    return cutters;
+  }
+  const frontY = frontAt(frontX);
+  if (frontY !== null) cutters.push(slot([frontX, frontY], inwardAt([frontX, frontY], [0, 1])));
+  // Each heel: the rearmost point either side of the middle, in from its back face.
+  for (const side of [-1, 1]) {
+    let heel: [number, number] | null = null;
+    outer.forEach(([x, y]) => { if ((x - middle) * side > 0 && (!heel || y > heel[1])) heel = [x, y]; });
+    if (!heel) continue;
+    const h = heel as [number, number];
+    let lo = Infinity, hi = -Infinity;
+    outer.forEach(([x, y]) => { if ((x - middle) * side > 0 && y > h[1] - 1.5) { lo = Math.min(lo, x); hi = Math.max(hi, x); } });
+    const at: [number, number] = [(lo + hi) / 2, h[1]];
+    cutters.push(slot(at, inwardAt(at, [0, -1])));
+  }
+  return cutters;
+}
+
 function transformSolid(solid: ManifoldSolid, matrix: THREE.Matrix4): ManifoldSolid {
   return solid.transform(matrix.elements as unknown as Parameters<ManifoldSolid["transform"]>[0]);
 }
@@ -735,6 +849,8 @@ function buildArch(
   let voxel: number | null = null;
   // Build 74: the model before hollowing, and the wall, so cuts made after it keep a wall round them.
   let unhollowed: ManifoldSolid | null = null;
+  // Build 107: the drain slots, cut once everything else on the base is made (so no collar or bar fills one in).
+  let drainCutters: ManifoldSolid[] = [];
   let hollowWall = 0;
   if (options.inside !== "solid" && options.baseStyle !== "articulator") {
     const open = options.inside === "open";
@@ -750,6 +866,19 @@ function buildArch(
       const infill = options.infill ?? "base";
       const taken = infill === "none" ? cavity.solid : keepSolid(honeycombIn(runtime, cavity.solid, floor, open, infill === "base" ? floor + HONEYCOMB_BASE_HEIGHT : Infinity));
       solid = keepSolid(runtime.Manifold.difference(solid, taken.isEmpty() ? cavity.solid : taken));
+      // Build 107: three drain slots through the outer wall at the cavity's floor - the middle of the arch and each heel.
+      const outerRing = footprint.reduce<Ring | null>((best, ring) => (!best || Math.abs(signedRing(ring)) > Math.abs(signedRing(best)) ? ring : best), null);
+      if (outerRing) {
+        const bottom = open ? floor : Math.max(floor, cavity.solid.boundingBox().min[2]);
+        const avoidX = options.baseStyle === "ortho" && labelText(labelLine) ? 1 : 0;
+        // The front locator notch (clean base) sits on the middle of the front with a collar of solid round it: the slot goes beside it.
+        const notchAt = options.baseStyle === "clean" && options.notches !== false ? ringCentroid(outerRing)[0] : null;
+        // The hollow itself just above where the slots sit: each slot is aimed at it, so none ends in solid.
+        const level = cavity.solid.slice(bottom + DRAIN_SLOT.height / 2);
+        const cavityRings = level.toPolygons() as Ring[];
+        level.delete();
+        drainCutters = drainSlots(runtime, outerRing, bottom, wall, avoidX, notchAt, cavityRings).map(keepSolid);
+      }
       if (!open) {
         if (!cavity.vents.length) warnings.push("vents");
         for (const [x, y] of cavity.vents) {
@@ -775,6 +904,9 @@ function buildArch(
       }
       solid = keepSolid(runtime.Manifold.difference(solid, keepSolid(locatorNotches(runtime, outer, floor))));
     }
+  }
+  {
+    for (const cutter of drainCutters) solid = keepSolid(runtime.Manifold.difference(solid, cutter));
   }
   // Build 62: a bevel round the foot, so the model comes off the build plate easily.
   if (options.bevel !== false && options.baseStyle !== "articulator") {

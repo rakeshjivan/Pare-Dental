@@ -966,7 +966,7 @@ export function prismOf(runtime: ManifoldRuntime, rings: Ring[], bottom: number,
 export const NOTCH_RADIUS = 1.5;
 export const NOTCH_HEIGHT = 2;
 
-function ringCentroid(ring: Ring): [number, number] {
+export function ringCentroid(ring: Ring): [number, number] {
   let x = 0, y = 0;
   ring.forEach(([px, py]) => { x += px; y += py; });
   return [x / ring.length, y / ring.length];
@@ -1125,8 +1125,10 @@ export function honeycombIn(runtime: ManifoldRuntime, cavity: ManifoldSolid, flo
   // Build 50: narrow slots close together, so every wall has two or three at its foot.
   for (let x = x0 + stepX / 8; x <= x1; x += stepX / 3) bars.push(runtime.Manifold.cube([0.7, y1 - y0 + 2, HONEYCOMB_SLOT + 0.01]).translate([x, y0 - 1, low]));
   for (let y = y0 + stepY / 5; y <= y1; y += stepY / 2) bars.push(runtime.Manifold.cube([x1 - x0 + 2, 0.7, HONEYCOMB_SLOT + 0.01]).translate([x0 - 1, y, low]));
-  // Open underneath, every cell drains through the bottom already.
-  if (open || !bars.length) { bars.forEach((bar) => bar.delete()); return cells; }
+  // Build 107: open underneath too - printed base-down the platform closes the bottom, so the cells
+  // must reach one another (and the drain slots in the outer wall) through these.
+  void open;
+  if (!bars.length) return cells;
   const slots = runtime.Manifold.union(bars);
   bars.forEach((bar) => bar.delete());
   const slotsInside = runtime.Manifold.intersection(slots, cavity);

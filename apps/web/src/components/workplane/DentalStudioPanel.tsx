@@ -37,7 +37,8 @@ export const DENTAL_GUIDE_FILE = "Pare-3D-Model-Builder-Guide.pdf";
 const DENTAL_GUIDE_PDF = `downloads/${DENTAL_GUIDE_FILE}`;
 
 export function dentalPreset(preset: DentalPreset, depth: number, pair: boolean, above = 0, teeth = 0): DentalStudioOptions {
-  const common = { label: "", hinge: false, layout: "print" as const, wall: 2 };
+  // Build 107: 3 mm walls when hollow (the accuracy of hollow models falls off below 3 mm - Yurdakurban et al. 2024).
+  const common = { label: "", hinge: false, layout: "print" as const, wall: 3 };
   if (preset === "ortho") {
     // The trimmed base is about a third of the model's height (the art portion), the anatomy two thirds.
     // Build 78: records keep the scans whole - no soft tissue trimmed (the ABO counts any change as altered records).
