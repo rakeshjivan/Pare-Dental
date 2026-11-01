@@ -17571,13 +17571,16 @@ export function LayerlingEditor({
         const chosen = await chooseFilesFolder("exports", t("studio.exportWhere"));
         if (!chosen) return;
       }
-      const caseName = (projectName || "").trim() || t("dental.title");
+      // The label (unless the patient's details are removed) first, the date last: "Jane Smith - Upper -
+      // 1 Nov 2026.stl", or "Upper - 1 Nov 2026.stl" with no label.
+      const label = state.patientDetails === "remove" ? "" : state.options.label.trim();
+      const date = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }).replace(/,/g, "");
       const saved: string[] = [];
       for (const part of parts) {
         const { meshes } = await exportBodiesWithLooseHoles([part]);
         if (!meshes.length) continue;
         const which = part.id === state.madeFor?.upper ? t("dental.upper") : part.id === state.madeFor?.lower ? t("dental.lower") : displayShapeName(part);
-        const name = projectExportFileName(`${caseName} - ${which}`, "stl");
+        const name = projectExportFileName([label, which, date].filter(Boolean).join(" - "), "stl");
         const answer = await saveUserFile(name, new Blob([new Uint8Array(exportMeshesToStl(meshes))], { type: "model/stl" }), t("files.saveExport"));
         if (answer === "cancelled") return;
         saved.push(name);
