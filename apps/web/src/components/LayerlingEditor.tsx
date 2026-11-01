@@ -3288,6 +3288,8 @@ export function LayerlingEditor({
   const [studioOccView, setStudioOccView] = useState(false);
   const occViewCache = useRef(new WeakMap<WorkplaneShape, WorkplaneShape>());
   const studioExporting = useRef(false);
+  // Build 106: Save & export at work (its button fills while the folder dialog comes up and the files are written).
+  const [studioExportBusy, setStudioExportBusy] = useState(false);
   // Build 106: the studio's dark ground for the 3D view (the panels stay light).
   const [studioDark, setStudioDarkState] = useState(() => readStudioDark());
   const [waxColourful, setWaxColourful] = useState(() => { try { return window.localStorage.getItem("pare3d.waxColourful") === "1"; } catch { return false; } });
@@ -17567,6 +17569,7 @@ export function LayerlingEditor({
     const parts = (state.made ?? []).map((id) => shapesRef.current.find((shape) => shape.id === id)).filter((shape): shape is WorkplaneShape => Boolean(shape));
     if (!parts.length) return;
     studioExporting.current = true;
+    setStudioExportBusy(true);
     try {
       if (await getFileSettings()) {
         const chosen = await chooseFilesFolder("exports", t("studio.exportWhere"));
@@ -17591,6 +17594,7 @@ export function LayerlingEditor({
       setNotice(error instanceof Error ? localizedError(error.message) : String(error), true);
     } finally {
       studioExporting.current = false;
+      setStudioExportBusy(false);
     }
   };
   const leaveToDashboard = useCallback(() => {
@@ -20189,6 +20193,7 @@ export function LayerlingEditor({
           shell={studioShellOn}
           onMbStep={setStudioMbStep}
           onSaveExport={studioShellOn && !dentalStudio.waxStudio ? () => void saveExportDentalModels() : undefined}
+          exporting={studioExportBusy}
           trimSlot={sculptTool?.trim ? (sculptTool.shapeId === dentalStudio.slots.upper ? "upper" : sculptTool.shapeId === dentalStudio.slots.lower ? "lower" : null) : null}
           nextSignal={studioNext}
           trimmedDone={dentalStudio.stage === "made" || dentalStudio.editing?.length ? null : studioTrimmed}
