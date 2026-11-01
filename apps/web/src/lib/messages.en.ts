@@ -5332,6 +5332,7 @@ export const MESSAGES_EN = {
   "studio.bevel": "Bevelled edge",
   "studio.notches": "Notches",
   "studio.tieBar": "Tie bar",
+  "studio.modelOptions": "Model options",
   "studio.trimTitle": "Trim and tidy the scans",
   "studio.trimArch": "Choose the arch",
   "studio.resetUpper": "Reset upper",

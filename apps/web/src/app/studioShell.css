@@ -906,3 +906,13 @@
 .studio-toggle-buttons button.active svg { color: var(--studio-teal, #2f7d6d); flex: none; }
 .studio-toggle-buttons button:disabled { opacity: 0.55; cursor: default; }
 .dental-studio-panel.studio-framed .studio-toggle-buttons + .dental-group { margin-top: 16px; }
+
+/* Build 106: the subheadings inside a step - the same as the step's own heading (Choose the model). */
+.studio-shell-on .dental-studio-panel.studio-framed .dental-group {
+  margin: 18px 0 8px;
+  color: #3d4654;
+  font: 650 12px var(--mm-font);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.studio-shell-on .dental-studio-panel.studio-framed .dental-presets button { justify-content: center; }

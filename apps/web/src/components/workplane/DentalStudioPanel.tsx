@@ -728,18 +728,20 @@ export function DentalStudioPanel({
             ["aligner", t("dental.aligner"), t("dental.alignerHint")],
             ["crown", t("dental.crown"), t("dental.crownHint")],
           ] as const).map(([value, label, hint]) => (
-            <button key={value} type="button" role="radio" aria-checked={preset === value} className={preset === value ? (custom ? "active custom" : "active") : ""} disabled={busy} onClick={() => onPresetChange(value)}>
+            <button key={value} type="button" role="radio" aria-checked={preset === value} className={preset === value ? (custom ? "active custom" : "active") : ""} disabled={busy} title={framed ? hint : undefined} onClick={() => onPresetChange(value)}>
               {/* Build 66: the base each choice makes, from above. */}
               <BaseStylePicture style={({ study: "clean", ortho: "ortho", aligner: "follow", crown: "plate" } as const)[value]} />
               <strong>{label}</strong>
-              <span>{hint}</span>
+              {/* Build 106: in the frame the line under each is its hover text instead. */}
+              {framed ? null : <span>{hint}</span>}
             </button>
           ))}
         </div>
         {/* Build 104: the base's options sit with the model type (its picture already shows the base). */}
         {/* Build 106: in the frame, three buttons that stay pressed while on. */}
-        {framed ? (
-          <div className="studio-toggle-buttons" role="group" aria-label={t("studio.baseOptions")}>
+        {framed ? (<>
+          <h4 className="dental-group">{t("studio.modelOptions")}</h4>
+          <div className="studio-toggle-buttons" role="group" aria-label={t("studio.modelOptions")}>
             {options.baseStyle !== "articulator" ? (
               <button type="button" aria-pressed={options.bevel !== false} className={options.bevel !== false ? "active" : ""} disabled={busy} title={t("dental.bevelHint")} onClick={() => onOptionsChange({ bevel: options.bevel === false })}>
                 {options.bevel !== false ? <Check size={15} aria-hidden="true" /> : null}{t("studio.bevel")}
@@ -756,7 +758,7 @@ export function DentalStudioPanel({
               </button>
             ) : null}
           </div>
-        ) : null}
+        </>) : null}
         {!framed && options.baseStyle !== "articulator" ? (
           <label className="edge-modifier-check" title={t("dental.bevelHint")}>
             <input type="checkbox" checked={options.bevel !== false} disabled={busy} onChange={(event) => onOptionsChange({ bevel: event.currentTarget.checked })} />
