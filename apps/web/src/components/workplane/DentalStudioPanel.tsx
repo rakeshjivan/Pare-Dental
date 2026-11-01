@@ -366,7 +366,7 @@ export function DentalStudioPanel({
    * first library set for the arch, placed on the teeth): you adjust from there.
    */
   // Build 103: as Meshmixer (manual) - the teeth positioned, then sculpted, then the model made; nothing fitted for you.
-  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "select", "teeth", "set", "place", "sculpt", "make"] : ["scans", "select", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
+  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", "teeth", "set", "place", "sculpt", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
   const [waxStepId, setWaxStepId] = useState<WaxStepId>("scans");
   const waxStep = waxSteps ? (waxSteps.includes(waxStepId) ? waxStepId : "make") : null;
   const wv = waxup?.view;
@@ -378,7 +378,9 @@ export function DentalStudioPanel({
     switch (id) {
       // Build 106: and, in the frame, each arch trimmed (or accepted as it is) - Next waits for that.
       // (The arches being waxed only: an opposing arch need not be trimmed for a wax-up.)
-      case "scans": return scansDone && (!shell || !trimmedDone || (["upper", "lower"] as const).every((slot) => !slots[slot] || (waxStudio && waxStudio.arches !== "both" && waxStudio.arches !== slot) || trimmedDone.includes(slot)));
+      // Build 107: Import is the scans brought in; Trim (its own step now) waits for each waxed arch accepted.
+      case "scans": return scansDone;
+      case "trim": return scansDone && (!shell || !trimmedDone || (["upper", "lower"] as const).every((slot) => !slots[slot] || (waxStudio && waxStudio.arches !== "both" && waxStudio.arches !== slot) || trimmedDone.includes(slot)));
       // Build 105: the teeth to wax up chosen, each with its four marks.
       case "teeth": return wv.markedTeeth.length > 0 && !wv.markPick;
       // Build 106: the teeth to wax up chosen (canine to canine to start with).
@@ -411,7 +413,7 @@ export function DentalStudioPanel({
     if (!waxStep || !wv || !waxup) return;
     // The other arch chosen further on, with nothing placed on it yet: back to Find teeth for it.
     const past = ["set", "place", "adjust", "occlusion", "sculpt", "make"].includes(waxStep);
-    if (past && !wv.placed.length && !waxAutoDone.current.has(wv.slot)) { setWaxStepId("select"); return; }
+    if (past && !wv.placed.length && !waxAutoDone.current.has(wv.slot)) { setWaxStepId("teeth"); return; }
     // Build 107: each step does its own work the first time it is entered (teeth found, marked, a set
     // chosen, the teeth placed) and then waits for Next - as Model Builder, it never moves on by itself.
     const key = `${wv.slot}:${waxStep}`;
@@ -709,7 +711,7 @@ export function DentalStudioPanel({
       </>)) : null}
 
       {/* Build 106: Wax-up Studio's Import step holds the trim too. */}
-      {(inWaxStep("trim") || (Boolean(waxSteps) && inWaxStep("scans"))) && inMb("prepare") ? card(2, t(framed ? "studio.trimTitle" : "dental.step2Prepare"), scansDone, null, prepareSummary, (<>
+      {inWaxStep("trim") && inMb("prepare") ? card(2, t(framed ? "studio.trimTitle" : "dental.step2Prepare"), scansDone, null, prepareSummary, (<>
         <div className="dental-substep">
           <h4 className="dental-substep-title">{t(framed ? "studio.trimArch" : "dental.trimStep")}</h4>
           <p className="blend-hint">{t("dental.trimHint")}</p>

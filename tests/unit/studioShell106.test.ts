@@ -24,11 +24,11 @@ describe("build 106: the studio frame", () => {
     expect(STUDIO_CHART.lower.teeth[41].c[0]).toBeLessThan(STUDIO_CHART.lower.teeth[31].c[0]);
   });
 
-  it("runs Wax-up Studio in seven steps: Import, Select teeth, Landmarks, Library, Position, Sculpt, Export", () => {
+  it("runs Wax-up Studio in seven steps: Import, Trim, Landmarks, Library, Position, Sculpt, Export", () => {
     const panel = src("components/workplane/DentalStudioPanel.tsx");
-    expect(panel).toContain('["scans", "select", "teeth", "set", "place", "sculpt", "make"]');
-    const names = ["scans", "select", "teeth", "set", "place", "sculpt", "make"].map((id) => messages[`waxStudio.step.${id}` as keyof typeof messages]);
-    expect(names).toEqual(["Import", "Select teeth", "Landmarks", "Library", "Position", "Sculpt", "Export"]);
+    expect(panel).toContain('["scans", "trim", "teeth", "set", "place", "sculpt", "make"]');
+    const names = ["scans", "trim", "teeth", "set", "place", "sculpt", "make"].map((id) => messages[`waxStudio.step.${id}` as keyof typeof messages]);
+    expect(names).toEqual(["Import", "Trim", "Landmarks", "Library", "Position", "Sculpt", "Export"]);
   });
 
   it("frames Dental Studio's workflows (live since 1 Nov 2026) and leaves CAD Studio as it was", () => {

@@ -10552,7 +10552,7 @@ export function LayerlingEditor({
   /** The step that shows the scans (and the bite scan): Model Builder's Scans, Wax-up's Import. */
   const studioScansStep = studioWaxOpen ? studioWaxStep === "scans" : studioMbStep === "scans";
   /** The step the scans are trimmed in: Model Builder's Prepare, Wax-up's Import. */
-  const studioTrimStep = studioWaxOpen ? studioWaxStep === "scans" : studioMbStep === "prepare";
+  const studioTrimStep = studioWaxOpen ? studioWaxStep === "trim" : studioMbStep === "prepare";
   const biteLiveNow = studioShellOn && dentalStudio?.layout === "occlusion" && studioScansStep && dentalStudio?.stage !== "made";
   useEffect(() => { setStudioBiteLive(biteLiveNow); }, [biteLiveNow]);
   // A new case starts with its bite scans off again.
@@ -13079,7 +13079,8 @@ export function LayerlingEditor({
   }, [waxReplaceKey, waxup.busy]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 102: the gimbal over the wax tooth selected in Wax-up Studio (its frame in the scene).
   const waxGimbal = (() => {
-    if (!dentalStudio?.waxStudio || selectedIds.length !== 1 || waxup.picking !== null) return null;
+    // Build 107: none on Landmarks - the dots are what is moved there.
+    if (!dentalStudio?.waxStudio || selectedIds.length !== 1 || waxup.picking !== null || (studioShellOn && studioWaxStep === "teeth")) return null;
     const shape = shapes.find((candidate) => candidate.id === selectedIds[0]);
     const toWorld = shape?.dental === "wax" && shape.waxTooth && !shape.hidden ? localToWorld(shape) : null;
     if (!shape?.waxTooth || !toWorld) return null;
@@ -18569,7 +18570,7 @@ export function LayerlingEditor({
   const waxToothSelected = Boolean(dentalStudio?.waxStudio && selectedIds.length === 1 && shapes.some((shape) => shape.id === selectedIds[0] && shape.dental === "wax" && shape.waxTooth && !shape.hidden));
   // Build 106: Model Builder's frame is for looking at the case: no handles, gimbal or guides on a picked scan.
   // Build 107: and Wax-up's Import step the same - the scans are looked at and trimmed there, not moved.
-  const handlesAway = Boolean(sculptTool) || waxToothSelected || (studioShellOn && (!dentalStudio?.waxStudio || studioWaxStep === "scans"));
+  const handlesAway = Boolean(sculptTool) || waxToothSelected || (studioShellOn && (!dentalStudio?.waxStudio || studioWaxStep === "scans" || studioWaxStep === "trim" || studioWaxStep === "teeth"));
   const heldViewportShapes = historyView.shapes ?? viewportShapes;
   useEffect(() => { window.layerlingTransformHandles?.(handlesHidden || handlesAway); }, [handlesHidden, handlesAway]);
   // Build 101: closing Dental Studio puts the view back as it should be - handles as chosen, no drag left held.
