@@ -100,24 +100,33 @@ function BodyPictureSvg({ kind }: { kind: BodyPicture }) {
 }
 
 /**
- * Build 106: the model's height in the frame - a section through it: the teeth on the gum kept by the
- * trim, the base beneath, with brackets for the two heights (in the style of the Model step's pictures).
+ * Build 106: the model's height in the frame - a cut through a molar: the crown, the gum either side and
+ * the base beneath (hatched, as a cut face), the base drawn to its thickness, the heights marked beside.
  */
-function StudioHeightPicture({ scan, base }: { scan: number; base: number }) {
-  const total = Math.max(1, scan + base);
-  const h = 104, top = 6;
-  const scanH = Math.max(34, Math.min(80, (scan / total) * h)), baseH = Math.max(14, h - scanH);
-  const gumTop = top + scanH * 0.52, baseTop = top + scanH;
-  // Three crowns along the section, the middle one taller (a canine between incisor and premolar).
-  const crown = (x: number, w: number, t: number) => `M${x} ${gumTop + 4}V${t + 7}Q${x} ${t} ${x + w / 2} ${t}Q${x + w} ${t} ${x + w} ${t + 7}V${gumTop + 4}Z`;
+function StudioHeightPicture({ scan, base, scanLabel, baseLabel }: { scan: number; base: number; scanLabel: string; baseLabel: string }) {
+  const baseH = Math.max(12, Math.min(48, (base / Math.max(1, scan + base)) * 120));
+  const bottom = 130, baseTop = bottom - baseH;
+  const mid = (10 + baseTop) / 2;
   return (
-    <svg className="studio-height-pic" viewBox="0 0 120 118" aria-hidden="true">
-      <path d={`M14 ${baseTop}V${gumTop + 2}Q20 ${gumTop - 6} 30 ${gumTop}Q40 ${gumTop - 7} 50 ${gumTop - 1}Q60 ${gumTop - 7} 70 ${gumTop}Q80 ${gumTop - 6} 86 ${gumTop + 2}V${baseTop}Z`} className="studio-height-gum" />
-      <path d={crown(15, 23, top + 14)} className="studio-height-tooth" />
-      <path d={crown(38.5, 23, top + 8)} className="studio-height-tooth" />
-      <path d={crown(62, 23, top + 12)} className="studio-height-tooth" />
-      <path d={`M12 ${baseTop}H88V${baseTop + baseH - 4}L84 ${baseTop + baseH}H16L12 ${baseTop + baseH - 4}Z`} className="studio-height-base" />
-      <path d={`M98 ${top}h5V${baseTop - 1}h-5M98 ${baseTop + 1}h5V${baseTop + baseH}h-5`} className="studio-height-bracket" />
+    <svg className="studio-height-pic" viewBox="0 0 280 140" role="img" aria-label={`${scanLabel} ${scan.toFixed(1)} mm, ${baseLabel} ${base.toFixed(1)} mm`}>
+      <defs>
+        <linearGradient id="shp-tooth" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fdfbf5" /><stop offset="1" stopColor="#e4dbc6" /></linearGradient>
+        <linearGradient id="shp-gum" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#f1b8b1" /><stop offset="1" stopColor="#d98d88" /></linearGradient>
+        <pattern id="shp-cut" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V6" stroke="#7489a6" strokeWidth="0.9" /></pattern>
+      </defs>
+      <path d={`M40 ${baseTop}V60Q44 44 60 42Q66 42 68 50V${baseTop}Z`} fill="url(#shp-gum)" stroke="#c7827c" />
+      <path d={`M150 ${baseTop}V50Q152 42 158 42Q174 44 178 60V${baseTop}Z`} fill="url(#shp-gum)" stroke="#c7827c" />
+      <path d={`M68 ${baseTop}V56H150V${baseTop}Z`} fill="#f3cdc8" />
+      <path d="M58 46Q56 22 70 14Q80 9 88 16Q96 25 109 25Q122 25 130 16Q138 9 148 14Q162 22 160 46Q146 60 109 60Q72 60 58 46Z" fill="url(#shp-tooth)" stroke="#b3a68b" />
+      <path d="M70 22Q78 15 86 20" fill="none" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" />
+      <rect x="36" y={baseTop} width="146" height={baseH} rx="2" fill="#a9b9d0" />
+      <rect x="36" y={baseTop} width="146" height={baseH} fill="url(#shp-cut)" opacity="0.5" />
+      <rect x="36" y={baseTop} width="146" height={baseH} rx="2" fill="none" stroke="#6b7a90" />
+      <path d={`M188 10H196M192 10V${baseTop - 2}M188 ${baseTop - 2}H196M188 ${baseTop + 2}H196M192 ${baseTop + 2}V${bottom}M188 ${bottom}H196`} fill="none" stroke="#2f7d6d" strokeWidth="1.4" />
+      <text x="202" y={mid - 4} className="studio-height-lab">{scanLabel}</text>
+      <text x="202" y={mid + 12} className="studio-height-val">{`${scan.toFixed(1)} mm`}</text>
+      <text x="202" y={baseTop + baseH / 2 - 3} className="studio-height-lab">{baseLabel}</text>
+      <text x="202" y={baseTop + baseH / 2 + 12} className="studio-height-val">{`${base.toFixed(1)} mm`}</text>
     </svg>
   );
 }
@@ -886,12 +895,8 @@ export function DentalStudioPanel({
           {/* Build 106: the scan is used as trimmed (no gum height to set, no gum line to follow) - only the
               base's thickness is chosen, from four. */}
           <div className="studio-height-box" role="group" aria-label={t("dental.heightTitle")}>
-            <StudioHeightPicture scan={teethHeight + gumHeight} base={options.base} />
-            <div className="studio-height-rows">
-              <p><span>{t("studio.heightScan")}</span><strong>{`${(teethHeight + gumHeight).toFixed(1)} mm`}</strong></p>
-              <p><span>{t(options.baseStyle === "ortho" ? "dental.orthoHeight" : "studio.heightBase")}</span><strong>{`${options.base.toFixed(1)} mm`}</strong></p>
-              <p className="total"><span>{t("dental.heightTotal")}</span><strong>{`${height.toFixed(1)} mm`}</strong></p>
-            </div>
+            <StudioHeightPicture scan={teethHeight + gumHeight} base={options.base} scanLabel={t("studio.heightScan")} baseLabel={t(options.baseStyle === "ortho" ? "dental.orthoHeight" : "studio.heightBase")} />
+            <p className="studio-height-total"><span>{t(pair ? "studio.heightTotalEach" : "dental.heightTotal")}</span><strong>{`${height.toFixed(1)} mm`}</strong></p>
           </div>
           <h4 className="dental-group">{t("studio.baseThickness")}</h4>
           <div className="studio-mm-choice" role="radiogroup" aria-label={t("studio.baseThickness")}>

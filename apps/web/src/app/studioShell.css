@@ -918,13 +918,9 @@
 .studio-shell-on .dental-studio-panel.studio-framed .dental-presets button { justify-content: center; }
 
 /* Build 106: Base - the model's heights with a section picture, and the base thickness as four buttons. */
-.studio-height-box { display: grid; grid-template-columns: 110px 1fr; gap: 12px; align-items: center; padding: 12px; border: 1px solid #e3e7ee; border-radius: 12px; background: #fbfcfd; }
-.studio-height-pic { width: 110px; height: 108px; }
-.studio-height-tooth { fill: #f3efe4; stroke: #b8b09e; stroke-width: 1; }
-.studio-height-gum { fill: #e8b4b4; stroke: #c98d8d; stroke-width: 1; }
-.studio-height-base { fill: #9fb0c8; stroke: #6b7a90; stroke-width: 1; }
-.studio-height-bracket { fill: none; stroke: #6b7a90; stroke-width: 1.4; }
-.studio-height-rows { display: grid; gap: 8px; min-width: 0; }
-.studio-height-rows p { display: flex; justify-content: space-between; gap: 8px; margin: 0; color: #3d4654; font-size: 13px; }
-.studio-height-rows p strong { color: #111827; white-space: nowrap; }
-.studio-height-rows p.total { padding-top: 8px; border-top: 1px solid #e3e7ee; font-weight: 600; }
+.studio-height-box { padding: 12px; border: 1px solid #e3e7ee; border-radius: 12px; background: #fbfcfd; }
+.studio-height-pic { display: block; width: 100%; height: auto; }
+.studio-height-lab { fill: #56606f; font: 500 11px var(--mm-font, Inter, sans-serif); }
+.studio-height-val { fill: #111827; font: 700 13px var(--mm-font, Inter, sans-serif); }
+.studio-height-total { display: flex; justify-content: space-between; margin: 10px 0 0; padding-top: 10px; border-top: 1px solid #e3e7ee; color: #3d4654; font-size: 13px; font-weight: 600; }
+.studio-height-total strong { color: #111827; }
