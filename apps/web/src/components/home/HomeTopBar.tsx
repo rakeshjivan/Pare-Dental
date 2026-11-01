@@ -66,6 +66,7 @@ export function HomeTopBar({
   notificationCount,
   settings,
   learn,
+  status,
 }: {
   place: HomePlace;
   onPlace: (place: HomePlace) => void;
@@ -78,6 +79,8 @@ export function HomeTopBar({
   notificationCount: number;
   settings: (close: () => void) => ReactNode;
   learn: (close: () => void) => ReactNode;
+  /** Build 107: the update check, between the search and the icons. */
+  status?: ReactNode;
 }) {
   useLanguage();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -135,6 +138,7 @@ export function HomeTopBar({
           <kbd>{isMac ? "⌘K" : "Ctrl K"}</kbd>
         )}
       </label>
+      {status ? <div className="home-bar-status">{status}</div> : null}
       <div className="home-bar-icons">
         {sharedEnabled ? (
           <button

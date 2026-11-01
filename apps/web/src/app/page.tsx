@@ -1339,8 +1339,21 @@ export default function Home() {
     const params = new URLSearchParams(window.location.search);
     if (params.has("codexBooleanCase") || params.get("editor") === "1") {
       const requestedProjectId = params.get("project");
-      if (requestedProjectId && storedProjects.some((project) => project.id === requestedProjectId)) {
-        setActiveProjectId(requestedProjectId);
+      const requested = requestedProjectId ? storedProjects.find((project) => project.id === requestedProjectId) : undefined;
+      if (requested) {
+        setActiveProjectId(requested.id);
+        // Build 107: a Dental Studio case opened from the address (the Mac app reloading the page after
+        // it ran out of memory, or a refresh) comes back in its studio's frame - the studio it was in -
+        // never on the old Dental Studio screen.
+        if (STUDIO_SHELL && requested.studio === "dental") {
+          try {
+            if (!window.sessionStorage.getItem(OPEN_DENTAL_STUDIO_KEY)) {
+              window.sessionStorage.setItem(OPEN_DENTAL_STUDIO_KEY, requested.dental?.flow === "wax" && WAXUP_ENABLED ? "wax" : "1");
+            }
+          } catch {
+            // The case then opens without the frame.
+          }
+        }
       }
       startEditorTransition();
       setEditorStarted(true);
@@ -1645,7 +1658,8 @@ export default function Home() {
     if (STUDIO_SHELL && projectId && projectId !== activeProjectId && opening?.studio === "dental") {
       try {
         if (!window.sessionStorage.getItem(OPEN_DENTAL_STUDIO_KEY)) {
-          const wax = (projectShapesById[projectId]?.shapes ?? []).some((shape) => shape.dental === "wax");
+          // Build 107: or when it was last in Wax-up Studio (still trimming or marking, no wax teeth yet).
+          const wax = opening.dental?.flow === "wax" || (projectShapesById[projectId]?.shapes ?? []).some((shape) => shape.dental === "wax");
           window.sessionStorage.setItem(OPEN_DENTAL_STUDIO_KEY, wax ? "wax" : "1");
         }
       } catch {
@@ -3652,6 +3666,7 @@ function Dashboard({
             </button>
           </div>
         )}
+        status={<PareVersionStatus compact />}
         learn={(close) => (
           <div className="home-menu-list">
             <div className="home-menu-title">{t("home.learn")}</div>
@@ -3667,7 +3682,6 @@ function Dashboard({
             <div className="home-menu-title">{t("home.settings")}</div>
             <div className="home-settings-row"><span>{t("home.appearance")}</span><ThemeSwitch /></div>
             <div className="home-settings-row"><span>{t("home.version")}</span><PareBuildBadge /></div>
-            <div className="home-settings-status"><PareVersionStatus /></div>
           </div>
         )}
       />

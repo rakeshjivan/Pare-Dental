@@ -211,6 +211,42 @@ html[data-theme="dark"] .pare-home {
   cursor: pointer;
 }
 
+/* Build 107: the update check in the bar, between the search and the icons. */
+.home-bar-status {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin: 0 4px 0 10px;
+}
+.home-bar-status .pare-version-status.compact {
+  flex-wrap: nowrap;
+  height: 32px;
+  padding: 0 12px;
+  white-space: nowrap;
+  border-radius: 16px;
+}
+.home-bar-status .pare-version-status.compact:has(.pare-version-again) { padding: 0; }
+.home-bar-status .pare-version-again {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  margin: 0;
+  padding: 0 12px;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 16px;
+  font: inherit;
+  cursor: pointer;
+}
+.home-bar-status .pare-version-again:hover { color: var(--foreground); }
+.home-bar-status .pare-version-status.compact.ready,
+.home-bar-status .pare-version-status.compact.download { padding-right: 4px; }
+@media (max-width: 900px) {
+  .home-bar-status .pare-version-status.compact.current .pare-version-again { font-size: 0; gap: 0; }
+}
+
 .home-bar-icons {
   display: flex;
   align-items: center;

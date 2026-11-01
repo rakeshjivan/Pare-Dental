@@ -24,9 +24,11 @@ type Status =
  * Fork: the home screen's update line. In the app, its own server checks GitHub when it starts and
  * downloads a new build by itself; this shows what it found. In a plain browser it asks GitHub.
  */
-export function PareVersionStatus() {
+export function PareVersionStatus({ compact = false }: { compact?: boolean } = {}) {
   useLanguage();
   const [status, setStatus] = useState<Status>(PARE_BUILD > 0 ? { kind: "checking" } : { kind: "dev" });
+  /** Build 107: a click on "Up to date" (or "couldn't check") checks again. */
+  const [round, setRound] = useState(0);
   useEffect(() => {
     if (PARE_BUILD <= 0) return;
     let stopped = false;
@@ -81,9 +83,41 @@ export function PareVersionStatus() {
       stopped = true;
       window.clearTimeout(timer);
     };
-  }, []);
+  }, [round]);
 
   if (status.kind === "dev") return null;
+  if (compact) {
+    // Build 107: the start pages' top bar - short words, the full line as the tooltip.
+    const build = pareBuildLabel(PARE_BUILD, PARE_PREVIEW);
+    const full = status.kind === "checking" ? t("version.checking") : status.kind === "current" ? t("version.current", { build }) : status.kind === "offline" ? t("version.offline", { build })
+      : status.kind === "ready" ? t("version.ready", { build: status.build }) : t("version.download", { build: status.build });
+    const again = status.kind === "current" || status.kind === "offline" ? () => { setStatus({ kind: "checking" }); setRound((n) => n + 1); } : undefined;
+    return (
+      <div className={`pare-version-status compact ${status.kind}`} role="status" title={again ? `${full} - ${t("version.checkAgain")}` : full}>
+        {again ? (
+          <button type="button" className="pare-version-again" onClick={again} aria-label={`${full} - ${t("version.checkAgain")}`}>
+            {status.kind === "current" ? <CheckCircle2 size={15} aria-hidden="true" /> : <WifiOff size={15} aria-hidden="true" />}
+            {t(status.kind === "current" ? "version.upToDate" : "version.notChecked")}
+          </button>
+        ) : null}
+        {status.kind === "checking" ? <><LoaderCircle size={15} className="spin" aria-hidden="true" />{t("version.checkingShort")}</> : null}
+        {status.kind === "ready" ? (
+          <>
+            <RefreshCw size={15} aria-hidden="true" />
+            {t("version.readyShort", { build: status.build })}
+            <button type="button" onClick={() => window.location.reload()}>{t("version.reload")}</button>
+          </>
+        ) : null}
+        {status.kind === "download" ? (
+          <>
+            <Download size={15} aria-hidden="true" />
+            {t("version.downloadShort", { build: status.build })}
+            <a href={RELEASES_PAGE} target="_blank" rel="noreferrer">{t("version.getIt")}</a>
+          </>
+        ) : null}
+      </div>
+    );
+  }
   return (
     <div className={`pare-version-status ${status.kind}`} role="status">
       {status.kind === "checking" ? <><LoaderCircle size={15} className="spin" aria-hidden="true" />{t("version.checking")}</> : null}
