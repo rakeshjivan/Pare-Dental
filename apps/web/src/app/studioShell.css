@@ -1033,3 +1033,11 @@
 .wax-landmarks-count { margin: 0; }
 .wax-landmarks-nav { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .wax-landmarks-nav.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* Build 107: Wax-up Studio's Library - every set on show (no inner scroll), pictures that cannot be
+   dragged away, and the set chosen in a clear green frame. */
+.layerling-editor.studio-shell-on .waxup-sets { max-height: none; overflow: visible; }
+.layerling-editor.studio-shell-on .waxup-set { border: 2px solid transparent; user-select: none; -webkit-user-drag: none; }
+.layerling-editor.studio-shell-on .waxup-set img { -webkit-user-drag: none; pointer-events: none; }
+.layerling-editor.studio-shell-on .waxup-set:hover:not(:disabled) { border-color: #7fc79a; }
+.layerling-editor.studio-shell-on .waxup-set.active { outline: none; border-color: #22a35a; box-shadow: 0 0 0 2px #22a35a; }

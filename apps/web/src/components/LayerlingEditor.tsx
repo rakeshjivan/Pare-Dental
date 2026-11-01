@@ -18011,6 +18011,8 @@ export function LayerlingEditor({
   const [fileDragging, setFileDragging] = useState(false);
   const fileDropBlockedRef = useRef(false);
   fileDropBlockedRef.current = Boolean(historyViewState);
+  const studioShellDropRef = useRef(false);
+  studioShellDropRef.current = studioShellOn;
   useEffect(() => {
     const carriesFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes("Files");
     let depth = 0;
@@ -18035,8 +18037,14 @@ export function LayerlingEditor({
       setFileDragging(false);
       if (!carriesFiles(event)) return;
       event.preventDefault();
-      const files = Array.from(event.dataTransfer?.files ?? []);
+      let files = Array.from(event.dataTransfer?.files ?? []);
       if (!files.length || fileDropBlockedRef.current) return;
+      // Build 107: in Model Builder and Wax-up Studio only scans are brought in by a drop - a picture
+      // (a library set's preview dragged from the panel, say) made a relief model that broke the workflow.
+      if (studioShellDropRef.current) {
+        files = files.filter((file) => /\.(stl|obj|ply|3mf|off|zip)$/i.test(file.name));
+        if (!files.length) { setNotice(t("studio.dropScansOnly")); return; }
+      }
       selectFiles(files);
     };
     window.addEventListener("dragenter", enter);

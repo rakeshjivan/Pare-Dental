@@ -430,7 +430,8 @@ export function DentalStudioPanel({
     if (waxStep === "select") { if (waxStepDone("select")) next(); else setWaxAuto(false); return; }
     // Build 107: nothing marked for the dentist - marking starts, tooth by tooth, from the patient's right.
     if (waxStep === "teeth") { if (!wv.markPick && wv.markedTeeth.length < wv.markTeeth.length) once("guide", () => waxup.actions.onMarkTeeth?.()); setWaxAuto(false); return; }
-    if (waxStep === "set") { if (waxStepDone("set")) next(); else if (!waxSetsHere.length || !once("set", () => waxup.actions.onBuiltIn(waxSetsHere[0].id))) setWaxAuto(false); return; }
+    // Build 107: in Wax-up Studio the dentist picks the set - nothing is chosen for them.
+    if (waxStep === "set") { if (waxStepDone("set") || wv.manual) next(); else if (!waxSetsHere.length || !once("set", () => waxup.actions.onBuiltIn(waxSetsHere[0].id))) setWaxAuto(false); return; }
     // Build 103: the run stops at Position - the dentist confirms the teeth before they are fitted.
     if (waxStep === "place") { if (waxStepDone("place")) setWaxAuto(false); else if (!waxPlaceable || !once("place", waxup.actions.onPlace)) setWaxAuto(false); return; }
     setWaxAuto(false);

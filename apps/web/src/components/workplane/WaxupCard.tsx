@@ -622,8 +622,8 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
                 {library ? <span className="waxup-set-library-name">{library === "own" ? t("waxup.ownLibrary") : library}</span> : null}
                 <div className="waxup-set-grid">
                   {sets.filter((set) => (set.library ?? "") === library).map((set) => (
-                    <button key={set.id} type="button" role="radio" aria-checked={view.setId === set.id} className={`waxup-set${view.setId === set.id ? " active" : ""}`} disabled={working} title={set.name} onClick={() => actions.onBuiltIn(set.id)}>
-                      {set.preview ? <img src={set.preview} alt="" loading="lazy" /> : <span className="waxup-set-blank" aria-hidden="true" />}
+                    <button key={set.id} type="button" role="radio" aria-checked={view.setId === set.id} className={`waxup-set${view.setId === set.id ? " active" : ""}`} disabled={working} title={set.name} draggable={false} onDragStart={(event) => event.preventDefault()} onClick={() => actions.onBuiltIn(set.id)}>
+                      {set.preview ? <img src={set.preview} alt="" loading="lazy" draggable={false} /> : <span className="waxup-set-blank" aria-hidden="true" />}
                       <span>{set.name}</span>
                     </button>
                   ))}
