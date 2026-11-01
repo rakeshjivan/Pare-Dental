@@ -18545,8 +18545,11 @@ export function LayerlingEditor({
   const dentalContextMenuItems = (selectOther: ShapeContextMenuItem[]): ShapeContextMenuItem[] => {
     // Build 106: Model Builder's Scans step - the same menu on a scan as off it (the views and checks only).
     const scansStep = studioShellOn && !dentalStudio?.waxStudio && studioMbStep === "scans";
-    if (scansStep) selectOther = [];
-    const onPart = Boolean(shapeContextMenu?.onShape) && hasSelection && !scansStep;
+    // Build 106: Model, Base, Articulator & label and the made models - the views and the view's own
+    // settings only (and Print view / Occlusion once made), the same on a model as beside it.
+    const viewStep = studioShellOn && !dentalStudio?.waxStudio && (dentalStudio?.stage === "made" || studioMbStep === "model" || studioMbStep === "base" || studioMbStep === "label");
+    if (scansStep || viewStep) selectOther = [];
+    const onPart = Boolean(shapeContextMenu?.onShape) && hasSelection && !scansStep && !viewStep;
     const parts = onPart ? selectedShapes : shapes.filter((shape) => !shape.hidden && !shape.hole);
     const ids = parts.map((shape) => shape.id);
     const show = (direction: [number, number, number]) => () => { if (ids.length) window.layerlingShowParts?.(ids, direction); };
@@ -18571,6 +18574,16 @@ export function LayerlingEditor({
       { key: "viewLeft", label: t("dentalMenu.viewLeft"), onSelect: show([1, 0, 0]) },
       { key: "viewLingual", label: t("dentalMenu.viewLingual"), onSelect: show([0, 0, -1]) },
     );
+    if (viewStep) {
+      if (dentalStudio?.stage === "made" && shapes.some((shape) => shape.dentalBite && dentalStudio.made?.includes(shape.id))) {
+        items.push(studioOccView
+          ? { key: "printView", label: t("studio.printView"), separated: true, onSelect: () => setStudioOccView(false) }
+          : { key: "occlusionView", label: t("studio.occlusionViewMenu"), separated: true, onSelect: () => setStudioOccView(true) });
+      }
+      if (biteMap?.on || biteCandidate) items.push({ key: "bite", label: t(biteMap?.on ? "dentalMenu.biteOff" : "dentalChrome.biteContacts"), separated: true, onSelect: () => toggleBiteMap(!biteMap?.on) });
+      items.push({ ...handleStyleItem(), separated: true }, freeRotateItem(), basicRenderItem());
+      return items;
+    }
     // Build 106: Trim and tidy - the menu holds only the views and Trim's own choices (how to select,
     // and how deep), none of the clean-up tools.
     const trimming = studioShellOn && Boolean(sculptTool?.trim);

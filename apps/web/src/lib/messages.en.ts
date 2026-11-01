@@ -5356,6 +5356,7 @@ export const MESSAGES_EN = {
   "studio.exporting": "Saving…",
   "studio.exit": "Exit",
   "studio.labelPlaceholder": "Patient name or code",
+  "studio.occlusionViewMenu": "Occlusion view",
   "studio.trimTitle": "Trim and tidy the scans",
   "studio.trimArch": "Choose the arch",
   "studio.resetUpper": "Reset upper",
