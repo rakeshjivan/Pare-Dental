@@ -11514,15 +11514,16 @@ export function LayerlingEditor({
           // Build 106: and the move that takes it there, kept with the model - the studio's Occlusion view
           // shows the pair in the bite at any time (also when the case is opened again).
           if (part.toBite) {
-            const toBite = new THREE.Matrix4().fromArray(part.toBite);
-            const step = Math.max(3, Math.floor(part.positions.length / 3 / 40) * 3);
-            const sample: number[] = [];
-            for (let i = 0; i + 2 < part.positions.length && sample.length < 120; i += step) sample.push(part.positions[i], part.positions[i + 1], part.positions[i + 2]);
-            const here = fromZUp(Float32Array.from(sample), offset);
-            if (lift) for (let i = 1; i < here.length; i += 3) here[i] += lift;
-            const there = fromZUp(transformSoup(Float32Array.from(sample), toBite), offset);
-            const move = rigidMoveBetween(here, there);
-            if (move) made.set(part.id, { ...made.get(part.id)!, dentalBite: move.toArray() });
+            // Worked out exactly (a fit from sample corners failed when they fell in a line): the model in the
+            // scene is Z p + o + lift, in the bite Z (toBite p) + o, so the move is o Z toBite Z^-1 (-o - lift).
+            const axis = (v: [number, number, number]) => new THREE.Vector3(...(zUpToLayerling(v) as [number, number, number]));
+            const toScene = new THREE.Matrix4().makeBasis(axis([1, 0, 0]), axis([0, 1, 0]), axis([0, 0, 1]));
+            const move = new THREE.Matrix4().makeTranslation(offset.x, 0, offset.z)
+              .multiply(toScene)
+              .multiply(new THREE.Matrix4().fromArray(part.toBite))
+              .multiply(toScene.clone().invert())
+              .multiply(new THREE.Matrix4().makeTranslation(-offset.x, -lift, -offset.z));
+            made.set(part.id, { ...made.get(part.id)!, dentalBite: move.toArray() });
           }
         });
         // Build 79: the wax-up is in the model now - its teeth are kept, hidden, as used.
