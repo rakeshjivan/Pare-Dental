@@ -965,3 +965,38 @@
 /* Build 106: the models made - no panel on the right; the 3D view takes the width. */
 .layerling-editor.studio-shell-on.studio-made { --studio-right-w: calc(-1 * var(--studio-gap)); }
 .studio-shell-on.studio-made .dental-studio-panel.studio-framed { display: none !important; }
+
+/* Build 106: the sliders in the studio frame - one clean value pill riding the track (the number's own box
+   inside the pill made it look doubled), the frame's green for the track and the pill. */
+.studio-shell-on .range-property.compact { --accent: var(--studio-teal, #2f7d6d); --bubble-w: 74px; --bubble-h: 28px; }
+.studio-shell-on .range-property.compact .range-property-name { color: #3d4654; font-size: 12.5px; font-weight: 600; }
+.studio-shell-on .range-property.compact .range-bubble {
+  padding: 0 10px;
+  background: #ffffff;
+  border: 1.5px solid var(--studio-teal, #2f7d6d);
+  box-shadow: 0 1px 3px rgba(20, 30, 45, 0.16);
+}
+.studio-shell-on .range-property.compact .range-bubble input {
+  min-width: 0;
+  height: 100% !important;
+  padding: 0;
+  color: #111827;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0;
+  box-shadow: none !important;
+  outline: none;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.studio-shell-on .range-property.compact .range-bubble .range-value-unit { color: #6b7380; font-size: 11px; font-weight: 500; }
+.studio-shell-on .range-property.compact.editing .range-bubble { box-shadow: 0 0 0 3px rgba(47, 125, 109, 0.2); }
+.studio-shell-on .range-property.compact .range-control input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: linear-gradient(to right, var(--studio-teal, #2f7d6d) 0 var(--slider-pos), #dfe3e8 var(--slider-pos) 100%) !important;
+  border-radius: 2px;
+}
+.studio-shell-on .range-property.compact .range-control input[type="range"]::-moz-range-track { height: 4px; background: #dfe3e8; border-radius: 2px; }
+.studio-shell-on .range-property.compact .range-control input[type="range"]::-moz-range-progress { height: 4px; background: var(--studio-teal, #2f7d6d); border-radius: 2px; }
