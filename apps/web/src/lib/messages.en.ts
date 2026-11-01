@@ -5354,6 +5354,7 @@ export const MESSAGES_EN = {
   "studio.printView": "Print view",
   "studio.occlusionView": "Occlusion",
   "studio.exporting": "Saving…",
+  "studio.exit": "Exit",
   "studio.trimTitle": "Trim and tidy the scans",
   "studio.trimArch": "Choose the arch",
   "studio.resetUpper": "Reset upper",

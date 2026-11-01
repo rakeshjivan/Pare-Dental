@@ -190,6 +190,7 @@ export function DentalStudioPanel({
   onDone,
   onSaveExport,
   exporting = false,
+  onExit,
   editing = false,
   shell = false,
   onMbStep,
@@ -206,6 +207,8 @@ export function DentalStudioPanel({
   /** Build 106: the frame's Save & export (in place of Done once the models are made). */
   onSaveExport?: () => void;
   exporting?: boolean;
+  /** Build 106: after Save & export - back to Dental Studio's page. */
+  onExit?: () => void;
   /** Build 79: a design opened again: Make makes the models anew, in place of the ones made before. */
   editing?: boolean;
   trimming: { slot: "upper" | "lower"; mode: "keep" | "remove" } | null;
@@ -554,7 +557,7 @@ export function DentalStudioPanel({
   );
   const frameNav = !framed ? null : stage === "made" ? (<>
     <button type="button" className="secondary" onClick={onEditDesign}>{t("dental.editDesign")}</button>
-    {onSaveExport ? <button type="button" className={`primary${exporting ? " studio-filling" : ""}`} disabled={exporting} aria-busy={exporting} onClick={onSaveExport}><FileDown size={17} /> {t(exporting ? "studio.exporting" : "studio.saveExport")}</button> : <button type="button" className="primary" onClick={onDone}><Check size={17} /> {t("dental.doneButton")}</button>}
+    {onExit && !exporting ? <button type="button" className="primary" onClick={onExit}>{t("studio.exit")} <ArrowRight size={18} /></button> : onSaveExport ? <button type="button" className={`primary${exporting ? " studio-filling" : ""}`} disabled={exporting} aria-busy={exporting} onClick={onSaveExport}><FileDown size={17} /> {t(exporting ? "studio.exporting" : "studio.saveExport")}</button> : <button type="button" className="primary" onClick={onDone}><Check size={17} /> {t("dental.doneButton")}</button>}
   </>) : stage === "making" ? (<>
     <button type="button" className="secondary" onClick={onCancel}>{t("dental.stopMaking")}</button>
     {makeButton}

@@ -3290,6 +3290,8 @@ export function LayerlingEditor({
   const studioExporting = useRef(false);
   // Build 106: Save & export at work (its button fills while the folder dialog comes up and the files are written).
   const [studioExportBusy, setStudioExportBusy] = useState(false);
+  // Build 106: the made models saved - the button becomes Exit (back to Dental Studio's page).
+  const [studioExported, setStudioExported] = useState(false);
   // Build 106: the studio's dark ground for the 3D view (the panels stay light).
   const [studioDark, setStudioDarkState] = useState(() => readStudioDark());
   const [waxColourful, setWaxColourful] = useState(() => { try { return window.localStorage.getItem("pare3d.waxColourful") === "1"; } catch { return false; } });
@@ -10542,7 +10544,7 @@ export function LayerlingEditor({
   // A new case starts with its bite scans off again.
   useEffect(() => { if (!dentalStudio) { setStudioBiteShown([]); setStudioOpacity({}); setStudioTrimmed([]); } }, [dentalStudio]);
   // Laid out to print again whenever the models are not on show (being made again, edited, closed).
-  useEffect(() => { if (dentalStudio?.stage !== "made") setStudioOccView(false); }, [dentalStudio?.stage]);
+  useEffect(() => { if (dentalStudio?.stage !== "made") { setStudioOccView(false); setStudioExported(false); } }, [dentalStudio?.stage]);
   // New scans in the case: each arch to be trimmed (or accepted) again.
   useEffect(() => { setStudioTrimmed([]); }, [dentalStudio?.slots.upper, dentalStudio?.slots.lower]);
   // Build 106: a new case opens its studio a moment after the editor - until then a plain cover, not the
@@ -17589,7 +17591,7 @@ export function LayerlingEditor({
         if (answer === "cancelled") return;
         saved.push(name);
       }
-      if (saved.length) setNotice(t("studio.exported", { files: saved.join(", ") }));
+      if (saved.length) { setNotice(t("studio.exported", { files: saved.join(", ") })); setStudioExported(true); }
     } catch (error) {
       setNotice(error instanceof Error ? localizedError(error.message) : String(error), true);
     } finally {
@@ -20194,6 +20196,7 @@ export function LayerlingEditor({
           onMbStep={setStudioMbStep}
           onSaveExport={studioShellOn && !dentalStudio.waxStudio ? () => void saveExportDentalModels() : undefined}
           exporting={studioExportBusy}
+          onExit={studioExported && onHome ? () => leaveToDashboard() : undefined}
           trimSlot={sculptTool?.trim ? (sculptTool.shapeId === dentalStudio.slots.upper ? "upper" : sculptTool.shapeId === dentalStudio.slots.lower ? "lower" : null) : null}
           nextSignal={studioNext}
           trimmedDone={dentalStudio.stage === "made" || dentalStudio.editing?.length ? null : studioTrimmed}
