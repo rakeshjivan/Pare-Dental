@@ -15297,6 +15297,8 @@ function holeOpacity(shape: WorkplaneShape) {
 
 /** Build 85: an imported mesh (a scan) a little glossy, as Meshmixer draws one, so its surface reads. */
 function shapeRoughness(shape: WorkplaneShape) {
+  // Build 107: wax-up teeth with Meshmixer's shine on a part - a clear, soft highlight.
+  if (shape.dental === "wax" && !shape.hole) return 0.22;
   return shape.hole ? 0.88 : shape.importedMesh ? 0.35 : 0.57;
 }
 

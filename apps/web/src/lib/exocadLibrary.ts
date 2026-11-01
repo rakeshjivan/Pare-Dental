@@ -20,7 +20,7 @@ import { boundaryLoops, fillLoop, soup, weld } from "@/lib/dentalMesh";
 
 export type IndexedMesh ={ vertices: Float32Array; triangles: Uint32Array };
 export type BowTooth = { fdi: number; position: [number, number, number]; occlusal: [number, number, number]; mesial: [number, number, number] };
-export type ExocadSet = { form: string; jaw: "upper" | "lower"; pontic: boolean; teeth: Array<{ fdi: number; positions: Float32Array }> };
+export type ExocadSet = { form: string; jaw: "upper" | "lower"; pontic: boolean; teeth: Array<{ fdi: number; positions: Float32Array; /** Build 107: towards the midline along the arch, from the bow. */ mesial?: [number, number, number] }> };
 
 const HEADER = "OFF BINARY";
 
@@ -88,6 +88,61 @@ export function readToothBow(xml: string): BowTooth[] {
 
 const unit = (v: [number, number, number]): [number, number, number] => { const l = Math.hypot(...v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
 const cross = (a: number[], b: number[]): [number, number, number] => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+
+/** The bow's mesial axis for a tooth, square to its occlusal axis (towards the midline on both sides). */
+function bowMesial(tooth: BowTooth): [number, number, number] {
+  const z = unit(tooth.occlusal), m = tooth.mesial, d = m[0] * z[0] + m[1] * z[1] + m[2] * z[2];
+  return unit([m[0] - d * z[0], m[1] - d * z[1], m[2] - d * z[2]]);
+}
+
+/** The least distance between two point clouds (soups), looked for within `reach` mm; Infinity beyond it. */
+function nearest(a: Float32Array, b: Float32Array, reach = 1): number {
+  const cell = reach, grid = new Map<string, number[]>();
+  const key = (x: number, y: number, z: number) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
+  for (let i = 0; i < a.length; i += 3) { const k = key(a[i], a[i + 1], a[i + 2]); const list = grid.get(k); if (list) list.push(i); else grid.set(k, [i]); }
+  let best = Infinity;
+  for (let j = 0; j < b.length; j += 3) {
+    const cx = Math.floor(b[j] / cell), cy = Math.floor(b[j + 1] / cell), cz = Math.floor(b[j + 2] / cell);
+    for (let dx = -1; dx <= 1; dx += 1) for (let dy = -1; dy <= 1; dy += 1) for (let dz = -1; dz <= 1; dz += 1) {
+      const list = grid.get(`${cx + dx},${cy + dy},${cz + dz}`);
+      if (!list) continue;
+      for (const i of list) { const d = Math.hypot(a[i] - b[j], a[i + 1] - b[j + 1], a[i + 2] - b[j + 2]); if (d < best) best = d; }
+    }
+  }
+  return best <= reach ? best : Infinity;
+}
+const shifted = (p: Float32Array, dir: [number, number, number], by: number) => { const out = new Float32Array(p.length); for (let i = 0; i < p.length; i += 3) { out[i] = p[i] + dir[0] * by; out[i + 1] = p[i + 1] + dir[1] * by; out[i + 2] = p[i + 2] + dir[2] * by; } return out; };
+
+/**
+ * Build 107: a front set brought into contact, as a ready-made anterior part comes (a Meshmixer part):
+ * exocad's bow is an arch the software sizes the teeth to, so its teeth stand 1.5-2.5 mm apart. Each
+ * tooth keeps its angles and slides along its mesial axis to `gap` mm from its neighbour: the centrals
+ * to each other at the midline, then each tooth to the one mesial to it. `order` from the patient's
+ * right to left (e.g. 13 12 11 21 22 23); teeth without a mesial axis are left where they are.
+ */
+export function contactFront(teeth: ExocadSet["teeth"], order: number[], gap = 0.05): ExocadSet["teeth"] {
+  const byFdi = new Map(teeth.map((tooth) => [tooth.fdi, { ...tooth }]));
+  const close = (moving: number, still: number, both: boolean) => {
+    const a = byFdi.get(moving), b = byFdi.get(still);
+    if (!a?.mesial || !b?.mesial) return;
+    for (let round = 0; round < 40; round += 1) {
+      let d = nearest(a.positions, b.positions);
+      if (!Number.isFinite(d)) d = 1.5;
+      const step = d - gap;
+      if (Math.abs(step) < 0.01) break;
+      if (both) { a.positions = shifted(a.positions, a.mesial, step / 2); b.positions = shifted(b.positions, b.mesial, step / 2); }
+      else a.positions = shifted(a.positions, a.mesial, step);
+    }
+  };
+  const mid = order.length / 2;
+  const right = order.slice(0, mid).reverse(), left = order.slice(mid);
+  if (right.length && left.length) close(right[0], left[0], true);
+  for (let i = 1; i < Math.max(right.length, left.length); i += 1) {
+    if (right[i] !== undefined) close(right[i], right[i - 1], false);
+    if (left[i] !== undefined) close(left[i], left[i - 1], false);
+  }
+  return teeth.map((tooth) => byFdi.get(tooth.fdi) ?? tooth);
+}
 
 /** A library tooth set in its place on the bow, as a soup; `mirror` for the other side's tooth. */
 export function placeBowTooth(mesh: IndexedMesh, tooth: BowTooth, mirror: boolean): Float32Array {
@@ -157,7 +212,7 @@ export function exocadSets(files: Map<string, Uint8Array>, decodeText: (bytes: U
           mirror = quadrant !== FILE_QUADRANT[jaw];
         }
         if (!file) continue;
-        teeth.push({ fdi: tooth.fdi, positions: closeOpenings(placeBowTooth(readEoff(file), tooth, mirror)) });
+        teeth.push({ fdi: tooth.fdi, positions: closeOpenings(placeBowTooth(readEoff(file), tooth, mirror)), mesial: bowMesial(tooth) });
       }
       if (teeth.length >= 2) sets.push({ form, jaw, pontic, teeth });
     }

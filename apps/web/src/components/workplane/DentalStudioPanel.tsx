@@ -367,13 +367,14 @@ export function DentalStudioPanel({
    * first library set for the arch, placed on the teeth): you adjust from there.
    */
   // Build 103: as Meshmixer (manual) - the teeth positioned, then sculpted, then the model made; nothing fitted for you.
-  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", "teeth", "set", "place", "sculpt", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
+  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", "set", "place", "sculpt", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
   const [waxStepId, setWaxStepId] = useState<WaxStepId>("scans");
   const waxStep = waxSteps ? (waxSteps.includes(waxStepId) ? waxStepId : "make") : null;
   const wv = waxup?.view;
   const waxSetsHere = wv ? wv.builtIn.filter((set) => !set.arch || set.arch === wv.slot) : [];
   // Build 105: Wax-up Studio fits the library teeth to the four marks on each tooth.
-  const waxPlaceable = Boolean(wv?.setName) && (wv?.markedTeeth.length ?? 0) > 0;
+  // Build 107: as Meshmixer, the set is dropped whole on the arch - no marks needed first.
+  const waxPlaceable = Boolean(wv?.setName) && (Boolean(wv?.manual) || (wv?.markedTeeth.length ?? 0) > 0);
   const waxStepDone = (id: WaxStepId): boolean => {
     if (!wv) return false;
     switch (id) {
@@ -413,8 +414,9 @@ export function DentalStudioPanel({
   useEffect(() => {
     if (!waxStep || !wv || !waxup) return;
     // The other arch chosen further on, with nothing placed on it yet: back to Find teeth for it.
-    const past = ["set", "place", "adjust", "occlusion", "sculpt", "make"].includes(waxStep);
-    if (past && !wv.placed.length && !waxAutoDone.current.has(wv.slot)) { setWaxStepId("teeth"); return; }
+    // Build 107: in Wax-up Studio (as Meshmixer) back to Library - and Library itself is never "past" it.
+    const past = (wv.manual ? ["place", "adjust", "occlusion", "sculpt", "make"] : ["set", "place", "adjust", "occlusion", "sculpt", "make"]).includes(waxStep);
+    if (past && !wv.placed.length && !waxAutoDone.current.has(wv.slot)) { setWaxStepId(wv.manual ? "set" : "teeth"); return; }
     // Build 107: each step does its own work the first time it is entered (teeth found, marked, a set
     // chosen, the teeth placed) and then waits for Next - as Model Builder, it never moves on by itself.
     const key = `${wv.slot}:${waxStep}`;

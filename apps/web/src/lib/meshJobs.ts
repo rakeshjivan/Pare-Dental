@@ -438,7 +438,8 @@ export function waxupInBackground(scan: Float32Array, shells: Float32Array[], la
 export function waxupInBackground(scan: Float32Array, shells: null): Promise<WaxLandmarks | null>;
 export async function waxupInBackground(scan: Float32Array, shells: Float32Array[] | null, landmarks: WaxLandmarks | null = null, options: Omit<WaxupOptions, "landmarks"> = {}, teeth?: WaxTeethFit): Promise<WaxupPlan | WaxLandmarks | null> {
   const here = async () => {
-    const { guessLandmarks, planWaxup, planWaxupOnTeeth, planWaxupOnMarks } = await import("@/lib/dentalWaxup");
+    const { guessLandmarks, planWaxup, planWaxupOnTeeth, planWaxupOnMarks, dropSet } = await import("@/lib/dentalWaxup");
+    if (shells && options.drop) return dropSet(scan, shells);
     if (shells && teeth?.marks) return planWaxupOnMarks(scan, shells, teeth.marks, teeth.arch, { exact: teeth.exact, lengthen: options.lengthen, centralRatio: teeth.centralRatio, arcDepth: teeth.arcDepth, adjust: teeth.adjust, blend: teeth.blend });
     if (shells && teeth) return planWaxupOnTeeth(scan, shells, teeth.fdi, teeth.chosen, teeth.arch, { lengthen: options.lengthen, ideal: teeth.ideal, red: teeth.red, centralRatio: teeth.centralRatio, arcDepth: teeth.arcDepth, adjust: teeth.adjust, blend: teeth.blend });
     return shells ? planWaxup(scan, shells, landmarks, options) : guessLandmarks(scan);

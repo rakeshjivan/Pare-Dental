@@ -4,9 +4,10 @@ The tooth sets in this folder are made from Christian Brenes's tooth libraries, 
 with his permission. Credit: Christian Brenes.
 
 - **Elchi library** (exocad): the Square, Round and Square Round forms (upper teeth and pontics) and
-  the lower teeth and pontics, each set on its own ideal arch. In Pare 3D: Pare Square, Pare Oval,
+  the lower teeth and pontics, each set on its own ideal arch (the six front teeth brought into contact, as a ready-made anterior part). In Pare 3D: Pare Square, Pare Oval,
   Pare Square-Oval and Pare Lower.
-- **3D Smile Overlay**: two of its anterior designs. In Pare 3D: Pare Tapered and Pare Youthful.
+- **3D Smile Overlay**: its three six-tooth anterior parts (Round, Square-Round and Square). In Pare 3D:
+  Pare Smile Round, Pare Smile Square-Round and Pare Smile Square.
 
 They are converted to Pare 3D's compact tooth-set format (src/lib/toothLibrary.ts) by
 tests/tools/buildPareLibrary.tool.ts, the Elchi files read by Pare 3D's own exocad reader

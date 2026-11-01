@@ -13,10 +13,11 @@ import type { WaxRestrict } from "@/components/workplane/WaxToothDrag";
 /** Build 105: each library tooth in its own colour while it is being positioned (light; a confirmed tooth takes the stronger colour below). */
 /** Build 106: the wax teeth in one colour (the studio's default; each tooth in its own colour is a switch). */
 export const WAX_BLUE = "#a8c3ea";
+/** Build 107: Meshmixer's colours for a six-tooth part, tooth by tooth (sampled from its screen): salmon, purple, blue | green, tan, white. */
 export const WAX_TOOTH_COLOURS: Record<number, string> = {
-  13: "#9ad8a8", 12: "#9cc8ef", 11: "#f2aaa4", 21: "#f3cf86", 22: "#c8b0ec", 23: "#8fd8d0",
+  13: "#e09a88", 12: "#c486d0", 11: "#8fb8d5", 21: "#7ec479", 22: "#c39c70", 23: "#eeeaea",
   14: "#e6b3d9", 15: "#d7d38e", 24: "#a9b8f0", 25: "#f0bb90",
-  43: "#9ad8a8", 42: "#9cc8ef", 41: "#f2aaa4", 31: "#f3cf86", 32: "#c8b0ec", 33: "#8fd8d0",
+  43: "#e09a88", 42: "#c486d0", 41: "#8fb8d5", 31: "#7ec479", 32: "#c39c70", 33: "#eeeaea",
   44: "#e6b3d9", 45: "#d7d38e", 34: "#a9b8f0", 35: "#f0bb90",
 };
 /** Build 105: the teeth marked and waxed up unless the dentist chooses others: canine to canine. */
@@ -36,6 +37,12 @@ export const WAX_THIN = 0.2;
 
 export type WaxupView = {
   slot: "upper" | "lower";
+  /** Build 107: the dropped set's size, as a share of the library's own (1 = as made). */
+  setScale?: number;
+  /** Build 107: how much further back (+) or forward (-) the canines stand than as dropped, mm. */
+  setCurve?: number;
+  /** Build 107: every tooth of the set selected (it moves as one). */
+  selectedAll?: boolean;
   /** The tooth set loaded, and how many teeth it has. */
   setName: string | null;
   /** Build 79: the sets that ship with Pare 3D, and the one chosen (null = none, or one loaded from a file). */
@@ -125,6 +132,14 @@ export type WaxupView = {
 };
 
 export type WaxupActions = {
+  /** Build 107: the whole dropped set larger or smaller, about its middle (1 = the library's own size). */
+  onSetScale?: (scale: number) => void;
+  /** Build 107: the set's curve opened (+) or closed (-), mm at the canines. */
+  onSetCurve?: (curve: number) => void;
+  /** Build 107: the whole set selected, so the gimbal moves and turns it as one. */
+  onSelectSet?: () => void;
+  /** Build 107: the set dropped on the arch again, as it first came in. */
+  onDropAgain?: () => void;
   onSet: (files: File[]) => void;
   onBuiltIn: (id: string) => void;
   onSlot: (slot: "upper" | "lower") => void;
@@ -405,6 +420,8 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
   // Build 107: Landmarks - the tooth buttons add or take out teeth while this is on.
   const [choosing, setChoosing] = useState(false);
   const working = busy || view.busy;
+  /** Build 107: Wax-up Studio's Position as Meshmixer - the set dropped whole, moved, turned and sized. */
+  const dropMode = part === "place" && view.manual && Boolean(actions.onSetScale) && view.placed.length > 0;
   // Build 94: the sets for the arch being waxed (and any whose arch is not known).
   const sets = view.builtIn.filter((set) => !set.arch || set.arch === view.slot);
   // Build 94: fitted to the teeth found needs teeth chosen; set out by smile design, the three landmarks.
@@ -633,7 +650,39 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
       {show("place") || show("adjust") ? (
       <div className="dental-substep">
         {part ? null : <h4 className="dental-substep-title">{t("waxup.placeStep")}</h4>}
-        {show("place") ? (<>
+        {dropMode ? (
+          <>
+            {/* Build 107: as Meshmixer - the set dropped whole; the gimbal moves and turns it, the slider sizes it. */}
+            <div className="wax-guide">
+              <strong>{t("waxup.dropTitle")}</strong>
+              <span>{t("waxup.dropHint")}</span>
+            </div>
+            <div className="studio-mm-choice two" role="radiogroup" aria-label={t("waxup.dropMove")}>
+              <button type="button" role="radio" aria-checked={!view.selected || view.selectedAll === true} className={!view.selected || view.selectedAll ? "active" : ""} disabled={working} onClick={() => actions.onSelectSet?.()}>{t("waxup.dropWholeSet")}</button>
+              <button type="button" role="radio" aria-checked={Boolean(view.selected) && !view.selectedAll} className={view.selected && !view.selectedAll ? "active" : ""} disabled={working} onClick={() => { const first = [...view.placed].sort((a, b) => a.fdi - b.fdi)[0]; if (first) actions.onSelect(first.id); }}>{t("waxup.dropOneTooth")}</button>
+            </div>
+            {view.selected && !view.selectedAll ? (
+              <div className="waxup-teeth" role="group" aria-label={t("waxup.teeth")}>
+                {[...view.placed].sort((a, b) => a.fdi - b.fdi).map((tooth) => (
+                  <button key={tooth.id} type="button" className={`waxup-tooth${view.selected === tooth.id ? " active" : ""}`} onClick={() => actions.onSelect(tooth.id)}>{tooth.fdi}</button>
+                ))}
+              </div>
+            ) : null}
+            <EdgeModifierSlider label={t("waxup.dropSize")} title={t("waxup.dropSizeHint")} value={Math.round((view.setScale ?? 1) * 100)} min={80} max={125} step={1} unit="%" workspace={workspace} disabled={working} onChange={(value) => actions.onSetScale?.(Math.max(0.8, Math.min(1.25, Math.round(value) / 100)))} />
+            {actions.onSetCurve ? <EdgeModifierSlider label={t("waxup.dropCurve")} title={t("waxup.dropCurveHint")} value={view.setCurve ?? 0} min={-4} max={4} step={0.1} workspace={workspace} length disabled={working} onChange={(value) => actions.onSetCurve?.(Math.max(-4, Math.min(4, Math.round(value * 10) / 10)))} /> : null}
+            <p className="blend-hint">{t("waxup.dropCurveHint")}</p>
+            <label className="edge-modifier-check">
+              <input type="checkbox" checked={view.scanSeeThrough} onChange={(event) => actions.onScanSeeThrough?.(event.currentTarget.checked)} />
+              <span>{t("waxup.seeThrough")}</span>
+            </label>
+            {actions.onDropAgain ? (
+              <div className="dental-trim-buttons">
+                <button type="button" className="secondary" disabled={working} onClick={() => actions.onDropAgain?.()}>{t("waxup.dropAgain")}</button>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+        {show("place") && !dropMode ? (<>
         {view.found?.length && !byMarks ? (
           <div className="dental-trim-mode" role="radiogroup" aria-label={t("waxup.fit")}>
             {(["teeth", "smile"] as const).map((value) => (
@@ -679,8 +728,8 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
           </button>
           {view.placed.length ? <button type="button" className="secondary" disabled={working} onClick={actions.onRemove}>{t("waxup.remove")}</button> : null}
         </div>
-        {view.placed.length && part === "place" ? <p className="blend-hint">{t("waxup.placedLive", { count: view.placed.length })}</p> : null}
-        {view.placed.length && part === "place" ? (
+        {view.placed.length && part === "place" && !dropMode ? <p className="blend-hint">{t("waxup.placedLive", { count: view.placed.length })}</p> : null}
+        {view.placed.length && part === "place" && !dropMode ? (
           <>
             {/* Build 106: the arch line - the teeth set along the curve through the incisal edges to the canine tips. */}
             {view.manual && actions.onArchCurve && !byDots ? (

@@ -313,6 +313,8 @@ type Vec3 = [number, number, number];
  */
 export type WaxLandmarks = { midline: Vec3; canines: [Vec3, Vec3] };
 export type WaxupOptions = {
+  /** Build 107: drop the set whole on the front of the arch, as Meshmixer drops a part (dropSet) - nothing fitted. */
+  drop?: boolean;
   /** The least wax over the labial surface of the patient's tooth, mm. */
   minWax?: number;
   /** Where the set goes; estimated when left out. */
@@ -960,6 +962,50 @@ export function planWaxup(scan: ArrayLike<number>, shells: Float32Array[], landm
     centralWidth,
     teeth: placed.map(({ tooth, positions, clearance, width, length, lengthening, extension, frame }) => ({ kind: tooth.kind, side: tooth.side, positions: transformSoup(positions, back), clearance, width, length, lengthening, extension, frame: moveFrame(frame, back) })),
   };
+}
+
+/**
+ * Build 107: the set dropped on the scan as Meshmixer drops a part - all its teeth at once, as the set
+ * was made (its own size, shape and arrangement, nothing fitted), centred on the front of the arch: the
+ * set's midline on the patient's midline, its labial face at the front of the arch, the centrals'
+ * incisal edges level with the patient's, square to the line between the canines. The dentist then
+ * moves, turns and sizes the whole set. Teeth and frames in the scan's own coordinates.
+ */
+export function dropSet(scan: ArrayLike<number>, shells: Float32Array[]): WaxupPlan {
+  const set = librarySet("set", shells);
+  const { mesh, frame } = scanInArchFrame(scan);
+  const back = frame.clone().invert();
+  const marks = estimateLandmarks(mesh.v);
+  let place: THREE.Matrix4;
+  if (marks) {
+    const lm = marks.canines[0][0] > marks.canines[1][0] ? { ...marks, canines: [marks.canines[1], marks.canines[0]] as [Vec3, Vec3] } : marks;
+    // Set frame -> landmark frame (midline at the origin, canine line along x) -> arch frame.
+    const toLandmarks = landmarkFrame(lm);
+    place = toLandmarks.clone().invert().multiply(new THREE.Matrix4().makeTranslation(0, 0, lm.midline[2]));
+  } else {
+    const target = measureAnterior(mesh.v);
+    let front = Infinity;
+    for (const y of target.labial.y) front = Math.min(front, y);
+    if (!Number.isFinite(front)) front = 0;
+    place = new THREE.Matrix4().makeTranslation(target.midline, front, target.incisal);
+  }
+  const toScan = back.clone().multiply(place);
+  const teeth = set.teeth.map((tooth) => {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (let i = 0; i + 2 < tooth.positions.length; i += 3) {
+      minX = Math.min(minX, tooth.positions[i]); maxX = Math.max(maxX, tooth.positions[i]);
+      minY = Math.min(minY, tooth.positions[i + 1]);
+      minZ = Math.min(minZ, tooth.positions[i + 2]); maxZ = Math.max(maxZ, tooth.positions[i + 2]);
+    }
+    // Its own frame in the set: at its incisal edge on its labial face, out to the front, mesial to the midline.
+    const local: ToothFrame = { origin: [(minX + maxX) / 2, minY, maxZ], out: [0, -1, 0], mesial: [tooth.side < 0 ? 1 : -1, 0, 0], up: [0, 0, 1] };
+    return {
+      kind: tooth.kind, side: tooth.side, positions: transformSoup(tooth.positions, toScan),
+      clearance: null, width: maxX - minX, length: maxZ - minZ, lengthening: 0, extension: 0,
+      frame: moveFrame(local, toScan),
+    };
+  });
+  return { landmarks: marks ? moveLandmarks(marks, back) : null, scale: 1, arcDepth: 0, centralWidth: teeth.find((tooth) => tooth.kind === "central")?.width ?? 0, teeth };
 }
 
 /** A tooth frame moved by `m` (a rigid move: directions turned, kept unit length). */

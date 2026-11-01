@@ -107,7 +107,8 @@ describe("Build 102: the Pare library - Christian Brenes's Elchi and Smile Overl
       expect(set.name).not.toMatch(/brenes|elchi|nulty|teethy/i);
     }
     const names = new Set(manifest.sets.map((s) => s.name.replace(/ pontics| full arch/g, "")));
-    expect([...names].sort()).toEqual(["Pare Lower", "Pare Oval", "Pare Square", "Pare Square-Oval", "Pare Tapered", "Pare Youthful"]);
+    // Build 107: the Smile Overlay's three six-tooth parts, by Meshmixer's labels.
+    expect([...names].sort()).toEqual(["Pare Lower", "Pare Oval", "Pare Smile Round", "Pare Smile Square", "Pare Smile Square-Round", "Pare Square", "Pare Square-Oval"]);
   });
 
   it("each set is closed teeth in arch order, with a picture", () => {
@@ -120,4 +121,21 @@ describe("Build 102: the Pare library - Christian Brenes's Elchi and Smile Overl
       for (const shell of shells) toManifold(runtime as never, weld(shell, 1e-6)).delete();
     }
   }, 240000);
+});
+
+describe("Build 107: the six-tooth sets come in contact, as a Meshmixer part", () => {
+  const manifest = JSON.parse(readFileSync("apps/web/public/libraries/pare/manifest.json", "utf8")) as ToothLibraryManifest;
+  it("neighbouring teeth of every front set are within half a millimetre", () => {
+    for (const set of manifest.sets.filter((s) => s.kind === "anterior")) {
+      const shells = decodeToothSet(readFileSync(`apps/web/public/libraries/pare/${set.file}`));
+      const centre = (p: Float32Array) => { let x = 0; for (let i = 0; i < p.length; i += 3) x += p[i]; return x / (p.length / 3); };
+      const order = shells.map((p, i) => ({ p, x: centre(p), i })).sort((a, b) => a.x - b.x);
+      for (let k = 1; k < order.length; k += 1) {
+        const a = order[k - 1].p, b = order[k].p;
+        let best = Infinity;
+        for (let i = 0; i < a.length; i += 9) for (let j = 0; j < b.length; j += 9) { const d = (a[i] - b[j]) ** 2 + (a[i + 1] - b[j + 1]) ** 2 + (a[i + 2] - b[j + 2]) ** 2; if (d < best) best = d; }
+        expect(Math.sqrt(best), `${set.name} ${k}`).toBeLessThan(0.5);
+      }
+    }
+  });
 });

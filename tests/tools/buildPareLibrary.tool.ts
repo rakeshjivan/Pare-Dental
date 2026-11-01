@@ -4,7 +4,7 @@ import { MeshoptSimplifier } from "meshoptimizer/simplifier";
 import { it } from "vitest";
 import { weld } from "@/lib/dentalMesh";
 import { librarySet, parseObj, splitShells } from "@/lib/dentalWaxup";
-import { exocadSets } from "@/lib/exocadLibrary";
+import { contactFront, exocadSets } from "@/lib/exocadLibrary";
 import { decodeToothSet, encodeToothSet, type ToothLibraryManifest, type ToothSetEntry } from "@/lib/toothLibrary";
 import { capOpenings } from "./buildNultyLibrary.tool";
 import { renderSetPreview } from "./toothPreview";
@@ -29,9 +29,11 @@ const FORMS: Record<string, { key: string; name: string }> = {
   "Brenes-Elchi Square Round": { key: "square-oval", name: "Pare Square-Oval" },
 };
 /** The Smile Overlay designs shipped: the file with the design's six teeth in place, and its Pare name. */
+// Build 107: all three of its six-tooth parts (Round, Square-Round, Square), named as Meshmixer labels them.
 const OVERLAYS = [
-  { file: "007.obj", key: "tapered", name: "Pare Tapered" },
-  { file: "021.obj", key: "youthful", name: "Pare Youthful" },
+  { file: "007.obj", key: "tapered", name: "Pare Smile Round" },
+  { file: "014.obj", key: "smile-square-round", name: "Pare Smile Square-Round" },
+  { file: "021.obj", key: "youthful", name: "Pare Smile Square" },
 ];
 
 function pack(soup: Float32Array) {
@@ -88,12 +90,14 @@ it("packs the Pare tooth library, with a picture of every set", async () => {
     for (const set of sets.filter((s) => s.form === form).sort((a, b) => (a.jaw === b.jaw ? 0 : a.jaw === "upper" ? -1 : 1))) {
       if (set.jaw === "lower" && lowerDone.has(set.pontic)) continue; // one lower set, the same in every form
       const byFdi = new Map(set.teeth.map((tooth) => [tooth.fdi, tooth.positions]));
+      // Build 107: the six front teeth in contact, as a ready-made anterior part (the bow leaves 1.5-2.5 mm gaps).
+      const front = new Map(contactFront(set.teeth.filter((tooth) => FRONT[set.jaw].includes(tooth.fdi)), FRONT[set.jaw]).map((tooth) => [tooth.fdi, tooth.positions]));
       const base = set.jaw === "lower" ? { key: "", name: "Pare Lower" } : FORMS[form];
       const key = `${base.key ? `${base.key}-` : ""}${set.pontic ? "pontic-" : ""}${set.jaw}`;
       const name = `${base.name}${set.pontic ? " pontics" : ""}`;
       for (const [part, numbers, kind, suffix] of [["front", FRONT[set.jaw], "anterior", ""], ["arch", ARCH[set.jaw], "arch", " full arch"]] as const) {
         if (!numbers.every((n) => byFdi.has(n))) throw new Error(`${form} ${set.jaw}: missing teeth`);
-        write(`${key}-${part}`, `${name}${suffix}`, kind, [...numbers], numbers.map((n) => pack(byFdi.get(n)!)));
+        write(`${key}-${part}`, `${name}${suffix}`, kind, [...numbers], numbers.map((n) => pack((part === "front" ? front.get(n) : undefined) ?? byFdi.get(n)!)));
       }
       if (set.jaw === "lower") lowerDone.add(set.pontic);
     }
