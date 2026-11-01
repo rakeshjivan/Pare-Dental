@@ -39,6 +39,7 @@ import { SelectionInspector, ShapeInspector, SnapGridControl, type IconTagContro
 import type { NameTagStack } from "@/lib/nameTag";
 import { WorkspaceSettingsModal } from "@/components/workplane/WorkspaceSettingsModal";
 import { PrinterPicker } from "@/components/PrinterPicker";
+import { useStudioLook } from "@/lib/useStudioLook";
 import { appThemePalette, type AppThemePalette, type AppThemePreference, type ResolvedAppTheme } from "@/lib/appTheme";
 import { cadModifierPrimitiveForBakedShape, cadTransformFromMatrix, cadTransformToMatrix } from "@/lib/cadBakeMetadata";
 import { t } from "@/lib/i18n";
@@ -4147,6 +4148,7 @@ export function WorkplaneViewport({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hoverModifierEdgeId]);
 
+  const studioLook = useStudioLook();
   const resolvedThemeRef = useRef(resolvedTheme);
   resolvedThemeRef.current = resolvedTheme;
   const themePaletteRef = useRef(appThemePalette(themePreference));
@@ -4876,7 +4878,7 @@ export function WorkplaneViewport({
       syncMoveDimensionWorldLines(threeRef.current, moveDimensionSessionRef.current, resolvedTheme);
       threeRef.current.needsRender = true;
     }
-  }, [language, placementWorkplane, projectName, resolvedTheme, themePreference, workplaneHidden, workspace]);
+  }, [language, placementWorkplane, projectName, resolvedTheme, studioLook, themePreference, workplaneHidden, workspace]);
 
   useEffect(() => {
     const state = threeRef.current;

@@ -1,0 +1,344 @@
+/*
+ * Build 107: CAD Studio's fresh look (lib/studioLook.ts) - the mock-ups' clean, light style, matching
+ * the studio frame: white bars with hairlines, quiet grey group names, one teal accent, floating white
+ * cards. Style only: every tool, panel and shortcut stays where it is. On when <html data-look="studio">;
+ * Dental Studio keeps its own frame (studioShell.css), so it is left out.
+ */
+html[data-look="studio"] .layerling-editor:not(.studio-dental) {
+  --sl-page: #f3f4f6;
+  --sl-bar: #ffffff;
+  --sl-line: #e3e6ea;
+  --sl-line-soft: #eef0f3;
+  --sl-text: #111827;
+  --sl-muted: #6b7280;
+  --sl-icon: #374151;
+  --sl-disabled: #c9ced5;
+  --sl-tile: #f4f6f8;
+  --sl-accent: #0a786c;
+  --sl-accent-hover: #08665c;
+  --sl-accent-soft: #e5f3f1;
+  --sl-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --sl-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --primary: var(--sl-accent);
+  --font-ui: var(--sl-font);
+  --icon-ink: var(--sl-icon);
+  --icon-fill: #e3e7eb;
+  --icon-fill-strong: #b9c0c8;
+  --tile-top: transparent;
+  --tile-bottom: transparent;
+  font-family: var(--sl-font);
+}
+
+/* ---- The top bar: white, a hairline below, the studio name and a segmented 3D editor / Sketch. ---- */
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .secondary-toolbar {
+  background: var(--sl-bar) !important;
+  border-bottom: 1px solid var(--sl-line) !important;
+  box-shadow: none !important;
+  font-family: var(--sl-font);
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-title-row {
+  background: var(--sl-bar) !important;
+  border-bottom: 1px solid var(--sl-line-soft) !important;
+  box-shadow: none !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-brand-name {
+  color: var(--sl-text) !important;
+  letter-spacing: -0.01em;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-workspace-tabs {
+  align-self: center;
+  gap: 2px;
+  height: auto !important;
+  padding: 3px !important;
+  background: var(--sl-tile) !important;
+  border: 0 !important;
+  border-radius: 9px !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-workspace-tabs button {
+  height: 30px !important;
+  padding: 0 14px !important;
+  color: var(--sl-muted) !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 7px !important;
+  box-shadow: none !important;
+  font: 500 13px var(--sl-font) !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-workspace-tabs button::after { display: none !important; }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-workspace-tabs button:hover { color: var(--sl-text) !important; }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-workspace-tabs button.active {
+  color: var(--sl-text) !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+  font-weight: 600 !important;
+}
+
+/* The design name: a quiet field, the pencil and "Saved" beside it. */
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-project-name-field {
+  background: transparent !important;
+  border-color: transparent !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-project-name-field:hover,
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-project-name-field:focus-within {
+  background: var(--sl-tile) !important;
+  border-color: var(--sl-line) !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-project-name-field input {
+  color: var(--sl-text) !important;
+  font: 600 14px var(--sl-font) !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .save-status.saved svg { color: var(--sl-accent); }
+
+/* Export is the one teal button; Send to Dental Studio a white secondary one. */
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .export-button .bambu-send-main,
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .bambu-send.export-button button {
+  color: #ffffff !important;
+  background: var(--sl-accent) !important;
+  border-color: var(--sl-accent) !important;
+  box-shadow: none !important;
+  font-family: var(--sl-font) !important;
+  font-weight: 600 !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .export-button .bambu-send-main:hover,
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .bambu-send.export-button button:hover {
+  background: var(--sl-accent-hover) !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .send-to-dental-button {
+  color: var(--sl-text);
+  background: #ffffff;
+  border-color: var(--sl-line);
+  font-weight: 500;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .send-to-dental-button svg { color: var(--sl-accent); }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .send-to-dental-button:hover { background: var(--sl-tile); border-color: #cfd5dc; }
+
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-mode-content .tool-group:first-child > .toolbar-section:first-child::before { display: none; }
+
+/* The small actions (comments, save, parameters, settings, search, help): plain ghost icons, no box. */
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-title-row .action-buttons,
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-title-row-actions .toolbar-section .action-buttons {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-title-row-actions .action-buttons::after { display: none !important; }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-title-row .action-icon-button {
+  color: var(--sl-icon) !important;
+  border-radius: 8px !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-title-row .action-icon-button:hover:not(:disabled) {
+  background: var(--sl-tile) !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .help-menu > button {
+  color: var(--sl-icon) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .help-menu > button:hover { background: var(--sl-tile) !important; }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .simple-mode-switch { color: var(--sl-muted) !important; font-family: var(--sl-font) !important; }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .simple-mode-track { background: var(--sl-disabled) !important; }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .simple-mode-switch[aria-checked="true"] .simple-mode-track,
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .simple-mode-switch.on .simple-mode-track { background: var(--sl-accent) !important; }
+
+/* ---- The ribbon: white, groups split by thin lines, small grey capitals for their names. ---- */
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-mode-content {
+  background: var(--sl-bar) !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-section {
+  --group-color: var(--sl-accent);
+  --fork-accent: var(--sl-icon);
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .toolbar-mode-content .toolbar-section::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 14%;
+  width: 1px;
+  background: var(--sl-line);
+  pointer-events: none;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .secondary-toolbar .toolbar-mode-content .toolbar-section-tools,
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .secondary-toolbar .toolbar-mode-content .toolbar-section .action-buttons {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .secondary-toolbar .toolbar-section-tools::after,
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .secondary-toolbar .toolbar-section .action-buttons::after { display: none !important; }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .secondary-toolbar .toolbar-section-label {
+  color: var(--sl-muted) !important;
+  font: 600 10px/16px var(--sl-font) !important;
+  letter-spacing: 0.07em !important;
+  text-transform: uppercase !important;
+  text-shadow: none !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .secondary-toolbar .toolbar-icon:not(:disabled):not(.disabled),
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .secondary-toolbar .toolbar-section[data-group] .toolbar-icon:not(:disabled):not(.disabled) {
+  color: var(--sl-icon) !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .secondary-toolbar .toolbar-icon:disabled,
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .secondary-toolbar .toolbar-icon.disabled { opacity: 0.32; }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .secondary-toolbar .toolbar-icon:not(:disabled):not(.disabled):hover {
+  background: var(--sl-tile) !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .secondary-toolbar .toolbar-icon.active,
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .secondary-toolbar .toolbar-icon[aria-pressed="true"],
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .secondary-toolbar .shape-menu-trigger.active {
+  background: var(--sl-accent-soft) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sl-accent) 35%, transparent) !important;
+  color: var(--sl-accent) !important;
+}
+
+/* ---- The view: the cube and the camera bar as white floating cards. ---- */
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .camera-controls {
+  background: #ffffff !important;
+  border: 1px solid var(--sl-line) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06) !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .camera-controls button {
+  color: var(--sl-icon) !important;
+  border-radius: 8px !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .camera-controls button:hover:not(:disabled) { background: var(--sl-tile) !important; }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .camera-controls button.active,
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .camera-controls button[aria-pressed="true"] {
+  color: var(--sl-accent) !important;
+  background: var(--sl-accent-soft) !important;
+}
+
+/* The room around the plate: the same quiet grey as the 3D view (lib/workplaneGrid.ts). */
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .workplane-stage,
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .workplane-plane {
+  background: #e8ebef !important;
+}
+
+/* The printer: a pill on the plate. */
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .printer-picker {
+  padding: 6px 16px 6px 12px;
+  background: #ffffff;
+  border-color: var(--sl-line);
+  border-radius: 22px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .printer-picker > svg { color: var(--sl-accent); }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .printer-picker:hover { border-color: #cfd5dc; }
+
+/* ---- The shape's card: white, rounded, a soft shadow; Solid and Hole as two clear buttons. ---- */
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-inspector {
+  color: var(--sl-text);
+  background: #ffffff !important;
+  border: 1px solid var(--sl-line) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--sl-shadow) !important;
+  font-family: var(--sl-font);
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-inspector-header {
+  background: transparent !important;
+  border-bottom: 1px solid var(--sl-line-soft) !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .inspector-name { color: var(--sl-text) !important; font-weight: 600 !important; }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-state-card {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-state-card .solid-choice,
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-state-card .hole-choice {
+  color: var(--sl-text) !important;
+  background: #ffffff !important;
+  border: 1px solid var(--sl-line) !important;
+  border-radius: 9px !important;
+  box-shadow: none !important;
+  font-family: var(--sl-font) !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-state-card .solid-choice:hover,
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-state-card .hole-choice:hover { border-color: #cfd5dc !important; }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-state-card .solid-choice.active,
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-state-card .hole-choice.active {
+  background: var(--sl-accent-soft) !important;
+  border-color: var(--sl-accent) !important;
+  font-weight: 600 !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-state-card .check-property input[type="checkbox"] { accent-color: var(--sl-accent); }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .inspector-size-line { color: var(--sl-muted) !important; }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-inspector .property-card {
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--sl-line-soft) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-inspector .property-card-header {
+  color: var(--sl-text) !important;
+  background: transparent !important;
+  font: 500 14px var(--sl-font) !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-inspector .property-card-header:hover { color: var(--sl-accent) !important; }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-inspector input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-inspector select {
+  background: var(--sl-tile);
+  border-color: var(--sl-line);
+  border-radius: 8px;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-inspector input:focus,
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-inspector select:focus {
+  border-color: var(--sl-accent);
+  outline: 2px solid color-mix(in srgb, var(--sl-accent) 22%, transparent);
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-inspector input[type="range"] { accent-color: var(--sl-accent); }
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .inspector-snap-dock {
+  background: transparent !important;
+  border-top: 1px solid var(--sl-line-soft) !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .snap-units {
+  background: var(--sl-tile) !important;
+  border-color: transparent !important;
+  border-radius: 8px !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .snap-units button.active,
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .snap-units button[aria-pressed="true"] {
+  color: var(--sl-text) !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* ---- The Shapes panel: white, soft rounded tiles. ---- */
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-menu-dropdown.shape-menu-docked {
+  background: var(--sl-bar) !important;
+  border-color: var(--sl-line) !important;
+  box-shadow: none !important;
+  font-family: var(--sl-font);
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-menu-dropdown.shape-menu-docked .shape-menu-list {
+  gap: 8px;
+  padding: 4px 12px 12px;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-menu-dropdown.shape-menu-docked .shape-menu-item {
+  padding: 8px 2px 7px !important;
+  color: var(--sl-text) !important;
+  background: var(--sl-tile) !important;
+  border: 1px solid var(--sl-line) !important;
+  border-radius: 11px !important;
+  box-shadow: none !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-menu-dropdown.shape-menu-docked .shape-menu-item:hover {
+  background: #ffffff !important;
+  border-color: color-mix(in srgb, var(--sl-accent) 45%, var(--sl-line)) !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-menu-dropdown.shape-menu-docked .shape-menu-item span:not(.shape-menu-thumb) {
+  font-weight: 500 !important;
+  font-size: 11px !important;
+}
+html[data-look="studio"] .layerling-editor:not(.studio-dental) .shape-menu-dropdown .shape-menu-subtitle {
+  color: var(--sl-muted) !important;
+  font: 600 11px var(--sl-font) !important;
+  letter-spacing: 0.07em !important;
+  text-transform: uppercase !important;
+}

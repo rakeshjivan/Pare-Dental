@@ -8,6 +8,8 @@ import "./shortcuts.css";
 import "./home.css";
 import "./dentalStudio.css";
 import "./studioShell.css";
+import "./studioLook.css";
+import { STUDIO_LOOK_BOOT_SCRIPT } from "@/lib/studioLook";
 import { DiagnoseStrip } from "@/components/DiagnoseStrip";
 import { NewVersionNotice } from "@/components/NewVersionNotice";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
@@ -106,6 +108,7 @@ export default function RootLayout({
         {/* Before any of React's scripts: a page rearranged by Translate must not crash it (#186). */}
         <script dangerouslySetInnerHTML={{ __html: DOM_MUTATION_GUARD_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: TOOLBAR_SIZE_BOOT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: STUDIO_LOOK_BOOT_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: SHAPE_COLORS_BOOT_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: VIEW_CUBE_POSITION_BOOT_SCRIPT }} />
       </head>

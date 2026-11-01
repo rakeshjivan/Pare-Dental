@@ -4879,6 +4879,8 @@ export const MESSAGES_EN = {
   "workspace.simpleModeHint": "For children and beginners: fewer tools, a short list of shapes, larger buttons, and a start page without links out of Pare 3D.",
   "workspace.simpleModeOff": "Hold to switch off simple mode",
   "workspace.shapeColors": "Shapes in colour",
+  "workspace.studioLook": "Fresh look",
+  "workspace.studioLookHint": "CAD Studio in the new clean style: white bars, quiet labels and floating panels. Switch off for the previous look.",
   "workspace.shapeColorsHint": "The pictures of the shape library show the colour a new shape starts with. Switch off for grey pictures.",
   "sketch.sweepAnchorHint": "Which part of the section runs along the path: its middle, or its left or right edge as seen along the path",
   "sketch.sweepAnchorCenter": "On the path: middle",

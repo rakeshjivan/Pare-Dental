@@ -1,4 +1,5 @@
 import type { AppThemePalette, ResolvedAppTheme } from "@/lib/appTheme";
+import { studioLookActive } from "@/lib/studioLook";
 
 const WORKPLANE_BOUNDARY_EPSILON = 0.0001;
 
@@ -25,6 +26,15 @@ export const CLASSIC_WORKPLANE = {
   major: "#8fcbe1",
   axis: "#5aa9d6",
   border: "#5aa9d6",
+} as const;
+/** Build 107: the fresh look's plate - a quiet grey room, a pale plate and soft grey-blue lines. */
+export const STUDIO_LOOK_WORKPLANE = {
+  background: "#e8ebef",
+  surface: "#ffffff",
+  minor: "#cfdbe3",
+  major: "#a9c0cf",
+  axis: "#7d9db2",
+  border: "#a9c0cf",
 } as const;
 /** Edge lines on every body, when switched on: black like in similar tools. */
 export const DEFAULT_EDGE_LINE_COLOR = "#000000";
@@ -152,6 +162,14 @@ function baseWorkplaneGridPalette(theme: ResolvedAppTheme, configuredColor: stri
       border: { color: "#b08f2f", opacity: 0.88 },
     };
   }
+  if (palette === "classic" && studioLookActive()) {
+    return {
+      minor: { color: STUDIO_LOOK_WORKPLANE.minor, opacity: 0.9 },
+      major: { color: STUDIO_LOOK_WORKPLANE.major, opacity: 0.95 },
+      axis: { color: STUDIO_LOOK_WORKPLANE.axis, opacity: 0.95 },
+      border: { color: STUDIO_LOOK_WORKPLANE.border, opacity: 0.95 },
+    };
+  }
   if (palette === "classic") {
     return {
       minor: { color: CLASSIC_WORKPLANE.minor, opacity: 0.9 },
@@ -193,9 +211,9 @@ export function workplaneThemePalette(
       }
     : palette === "classic"
       ? {
-          sceneBackground: configuredBackground.toLowerCase() === DEFAULT_WORKPLANE_BACKGROUND ? CLASSIC_WORKPLANE.background : configuredBackground,
+          sceneBackground: configuredBackground.toLowerCase() === DEFAULT_WORKPLANE_BACKGROUND ? (studioLookActive() ? STUDIO_LOOK_WORKPLANE : CLASSIC_WORKPLANE).background : configuredBackground,
           surface: {
-            color: configuredSurface.toLowerCase() === DEFAULT_WORKPLANE_SURFACE_COLOR ? CLASSIC_WORKPLANE.surface : configuredSurface,
+            color: configuredSurface.toLowerCase() === DEFAULT_WORKPLANE_SURFACE_COLOR ? (studioLookActive() ? STUDIO_LOOK_WORKPLANE : CLASSIC_WORKPLANE).surface : configuredSurface,
             opacity: 0.9,
           },
           grid: workplaneGridPalette("light", configuredGridColor, "classic", configuredMajorColor),
