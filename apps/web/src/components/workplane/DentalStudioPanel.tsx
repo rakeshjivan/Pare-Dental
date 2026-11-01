@@ -978,17 +978,19 @@ export function DentalStudioPanel({
           </div>
         );
         return (<>
-          {two(t("dental.step4"), options.hinge ? "artic" : "separate", [["separate", t("studio.separateModels")], ["artic", t("studio.articulatedModels"), t("dental.hingeHint")]], (v) => onOptionsChange({ hinge: v === "artic" }))}
+          {two(t("dental.step4"), options.hinge ? "artic" : "separate", [["separate", t("studio.separateModels")], ["artic", t("studio.articulatedModels"), t("dental.hingeHint")]], (v) => onOptionsChange(v === "artic" ? { hinge: true, ...(options.hinge ? {} : articulatorPinPatch({ incisalPin: false })) } : { hinge: false }))}
           {options.hinge ? (<>
-            <div className="studio-artic-picture">
-              {pinOn && place === "sides"
-                ? <ArticulatorSidesPicture pinGap={options.pinGap ?? PIN_CLEAR} />
-                : <ArticulatorPicture pinRaise={pinOn ? options.pinRaise ?? 0 : 0} pin={pinOn} pinGap={options.pinGap ?? PIN_CLEAR} />}
-            </div>
+            {/* Build 106: the picture leads; with a pin it moves down to the Increase OVD slider (below). */}
+            {pinOn ? null : (
+              <div className="studio-artic-picture"><ArticulatorPicture pinRaise={0} pin={false} pinGap={options.pinGap ?? PIN_CLEAR} /></div>
+            )}
             {two(t("dental.incisalPin"), pinOn ? "pin" : "none", [["none", t("studio.noPin"), t("dental.incisalPinOffHint")], ["pin", t("studio.pin"), t("dental.incisalPinHint")]], (v) => onOptionsChange(articulatorPinPatch({ incisalPin: v === "pin" })))}
             {pinOn ? (<>
               {two(t("dental.pinPlace"), place, [["midline", t("studio.pinFront"), t("dental.pinMidlineHint")], ["sides", t("studio.pinSides"), t("dental.pinSidesHint")]], (pinPlace) => onOptionsChange({ pinPlace }))}
+              {place === "sides" ? <div className="studio-artic-picture"><ArticulatorSidesPicture pinGap={options.pinGap ?? PIN_CLEAR} /></div> : null}
               <EdgeModifierSlider label={t("dental.pinGap")} value={options.pinGap ?? PIN_CLEAR} min={PIN_CLEAR} max={PIN_GAP_MAX} step={0.5} workspace={workspace} length disabled={busy} onChange={(value) => onOptionsChange({ pinGap: Math.max(PIN_CLEAR, Math.min(PIN_GAP_MAX, Math.round(value * 2) / 2)) })} />
+              {/* Build 106: the models from the side, opening on the condyles as Increase OVD moves. */}
+              <div className="studio-artic-picture"><ArticulatorPicture pinRaise={options.pinRaise ?? 0} pin={place !== "sides"} pinGap={options.pinGap ?? PIN_CLEAR} /></div>
               <EdgeModifierSlider label={t("studio.increaseOvd")} title={t("studio.increaseOvdHint")} value={options.pinRaise ?? 0} min={0} max={PIN_MAX} step={PIN_STEP} workspace={workspace} length disabled={busy} onChange={(value) => onOptionsChange(articulatorPinPatch({ pinRaise: Math.max(0, Math.min(PIN_MAX, Math.round(value / PIN_STEP) * PIN_STEP)) }))} />
               {(options.pinRaise ?? 0) > PIN_WARN ? <p className="blend-hint warn">{t("dental.pinRaiseWarn", { max: PIN_WARN })}</p> : null}
             </>) : null}
