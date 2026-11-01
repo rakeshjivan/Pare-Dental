@@ -862,6 +862,11 @@
 .studio-tool-slot .blend-hint:not([role=status]),
 .studio-tool-slot .sculpt-keys,
 .studio-tool-slot .sculpt-help-list { display: none; }
+/* Build 107: no icons beside "Trim the scan", and room between the heading and the first row of tools. */
+.studio-tool-slot .panel-header-actions[hidden] { display: none !important; }
+.studio-tool-slot .mesh-sculpt-panel .edge-modifier-header,
+.studio-dental .dental-studio-panel .studio-tool-slot .edge-modifier-header { position: static; margin: 0 0 14px; padding: 0 0 10px; }
+.studio-tool-slot .sculpt-tools { margin-top: 0; }
 .studio-shell-on .dental-trim-hint { display: none; }
 .studio-framed .dental-fix-link { display: none; }
 

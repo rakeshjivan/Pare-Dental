@@ -602,7 +602,8 @@ export function MeshSculptPanel({
           <strong>{title}</strong>
           {studioTrim ? null : <span>{targetName}</span>}
         </div>
-        <div className="panel-header-actions">
+        {/* Build 107: in the studio frame no icons beside the heading - Accept closes it. */}
+        <div className="panel-header-actions" hidden={studioTrim}>
           <GuideHelpLink section="meshSculpt" />
           <button type="button" className={helpOpen ? "active" : undefined} aria-pressed={helpOpen} aria-label={t("sculpt.help.toggle")} title={t("sculpt.help.toggle")} onClick={() => setHelpOpen((open) => !open)}><ListChecks size={18} /></button>
           {onSpeed ? <button type="button" className={speedShown ? "active" : undefined} aria-pressed={speedShown} aria-label={t("sculpt.speed.toggle")} title={t("sculpt.speed.toggle")} onClick={onSpeed}><Gauge size={18} /></button> : null}
