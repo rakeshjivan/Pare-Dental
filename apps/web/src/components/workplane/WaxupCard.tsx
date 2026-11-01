@@ -161,6 +161,9 @@ export type WaxupActions = {
   onMarkTeeth?: (only?: number[]) => void;
   onUndoMarkPoint?: () => void;
   onSkipTooth?: () => void;
+  /** Build 107: guided marking - start (or jump) at this tooth; back to the tooth before. */
+  onMarkGo?: (fdi: number) => void;
+  onMarkPrev?: () => void;
   /** Build 107: set a tooth's dots from its neighbours (a missing tooth, or wrong dots). */
   onMarksFromNeighbours?: (fdi: number) => void;
   onStopMarks?: () => void;
@@ -483,8 +486,10 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
             const on = view.markTeeth.includes(fdi);
             const marked = view.markedTeeth.includes(fdi);
             const auto = view.autoMarked.includes(fdi);
+            // Build 107: a tooth's chip fills with its colour once its four dots are in; the one being marked is ringed.
+            const current = marking && view.markPick!.fdi === fdi;
             return (
-              <button key={fdi} type="button" aria-pressed={on} className={`waxup-tooth${on ? " active" : ""}${auto ? " unsure" : ""}`} style={on ? { background: view.colourful === false ? WAX_BLUE : WAX_TOOTH_COLOURS[fdi], color: "#1d1d1f" } : undefined} title={t(marked ? (auto ? "waxup.markAuto" : "waxup.markDone") : "waxup.markNone", { fdi })} disabled={working || marking} onClick={() => actions.onMarkTeethChoose?.(fdi)}>
+              <button key={fdi} type="button" aria-pressed={on} aria-current={current ? "step" : undefined} className={`waxup-tooth${on ? " active" : ""}${auto ? " unsure" : ""}${current ? " current" : ""}`} style={on && marked ? { background: view.colourful === false ? WAX_BLUE : WAX_TOOTH_COLOURS[fdi], color: "#1d1d1f" } : undefined} title={t(marked ? (auto ? "waxup.markAuto" : "waxup.markDone") : "waxup.markNone", { fdi })} disabled={working || (marking && !on)} onClick={() => (marking || (on && actions.onMarkGo && !marked) ? actions.onMarkGo?.(fdi) : actions.onMarkTeethChoose?.(fdi))}>
                 {marked ? <Check size={12} aria-hidden="true" /> : null}{fdi}
               </button>
             );
@@ -493,8 +498,11 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
         {marking ? (
           <>
             <div className="dental-trim-buttons">
+              <button type="button" className="secondary" disabled={view.markTeeth.indexOf(view.markPick!.fdi) <= 0} onClick={() => actions.onMarkPrev?.()}>{t("waxup.markPrev")}</button>
               <button type="button" className="secondary" disabled={view.markPick!.point === 0} onClick={() => actions.onUndoMarkPoint?.()}>{t("waxup.markUndo")}</button>
-              <button type="button" className="secondary" onClick={() => actions.onSkipTooth?.()}>{t("waxup.markSkip")}</button>
+              <button type="button" className="secondary" onClick={() => actions.onSkipTooth?.()}>{t("waxup.markNext")}</button>
+            </div>
+            <div className="dental-trim-buttons">
               <button type="button" className="secondary" onClick={() => actions.onStopMarks?.()}>{t("waxup.markStop")}</button>
             </div>
           </>
@@ -504,7 +512,7 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
               <button type="button" className={view.markedTeeth.length < view.markTeeth.length || view.autoMarked.length ? "active" : ""} disabled={working || !view.markTeeth.length} onClick={() => actions.onMarkTeeth?.()}>
                 {t(view.autoMarked.some((fdi) => view.markTeeth.includes(fdi)) ? "waxup.markCheck" : view.markedTeeth.length >= view.markTeeth.length ? "waxup.markAllAgain" : "waxup.markTeeth")}
               </button>
-              {view.finder.name ? (
+              {view.finder.name && !actions.onMarkGo ? (
                 <button type="button" className="secondary" disabled={working || view.finder.busy} onClick={() => (view.found ? actions.onAutoMarks?.() : actions.onFindTeeth())}>
                   {view.finder.busy ? <LoaderCircle className="edge-modifier-spinner" size={15} /> : null} {t("waxup.markForMe")}
                 </button>

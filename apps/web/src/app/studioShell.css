@@ -1005,3 +1005,6 @@
 }
 .studio-shell-on .range-property.compact .range-control input[type="range"]::-moz-range-track { height: 4px; background: #dfe3e8; border-radius: 2px; }
 .studio-shell-on .range-property.compact .range-control input[type="range"]::-moz-range-progress { height: 4px; background: var(--studio-teal, #2f7d6d); border-radius: 2px; }
+
+/* Build 107: Landmarks - the tooth being marked, ringed. */
+.waxup-tooth.current { outline: 3px solid var(--studio-teal, #2f7d6d); outline-offset: 1px; font-weight: 700; }

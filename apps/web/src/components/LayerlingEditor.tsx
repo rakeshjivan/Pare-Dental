@@ -11815,6 +11815,17 @@ export function LayerlingEditor({
     if (!shape || !scan || !toInput || !world) return null;
     return { slot, shape, scan: Float32Array.from(scan.positions), sceneToInput: toInput.clone().multiply(world.clone().invert()) };
   }, [dentalInput]);
+  // Build 107: for checks - how far each wax-up dot is from the arch's scan (in the studio's coordinates), and where the placed teeth sit.
+  useEffect(() => {
+    (window as unknown as { layerlingWaxCheck?: () => unknown }).layerlingWaxCheck = () => {
+      const arch = waxArch();
+      const current = waxupRef.current;
+      if (!arch) return null;
+      const near = (p: number[]) => { let best = Infinity; for (let i = 0; i + 2 < arch.scan.length; i += 3) best = Math.min(best, (arch.scan[i] - p[0]) ** 2 + (arch.scan[i + 1] - p[1]) ** 2 + (arch.scan[i + 2] - p[2]) ** 2); return Math.sqrt(best); };
+      return { marks: Object.fromEntries(Object.entries(current.toothMarks).map(([fdi, m]) => [fdi, { off: TOOTH_MARK_ORDER.map((k) => +near(m[k]).toFixed(2)), incisal: m.incisal.map((v) => +v.toFixed(1)) }])), placed: current.placed.length };
+    };
+    return () => { delete (window as unknown as { layerlingWaxCheck?: unknown }).layerlingWaxCheck; };
+  }, [waxArch]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Build 94: the move from the scene into the studio's coordinates, for a scan. */
   const waxArchInput = (shape: WorkplaneShape) => {
     const toInput = dentalLocalToInput.current.get(shape.id), world = localToWorld(shape);
@@ -12003,6 +12014,30 @@ export function LayerlingEditor({
     setWaxup(next);
     showToothMarks(next, points);
   }, [showToothMarks]);
+  // Build 107: tooth by tooth - marking from a given tooth on (it, then each one after it not marked yet).
+  const goToothMarks = (fdi: number) => {
+    const current = waxupRef.current;
+    const arch = waxArch();
+    if (!arch) return;
+    const teeth = markTeethFor({ ...current, slot: arch.slot });
+    const at = teeth.indexOf(fdi);
+    if (at < 0) return;
+    const queue = teeth.slice(at).filter((n, i) => i === 0 || !current.toothMarks[n] || current.autoMarked.includes(n));
+    if (current.toothPick) {
+      const next: WaxupState = { ...current, toothPick: { queue, points: [] } };
+      setWaxup(next);
+      showToothMarks(next);
+    } else startToothMarks(queue);
+  };
+  const prevToothMarks = () => {
+    const current = waxupRef.current;
+    const arch = waxArch();
+    const now = current.toothPick?.queue[0];
+    if (!arch || now === undefined) return;
+    const teeth = markTeethFor({ ...current, slot: arch.slot });
+    const at = teeth.indexOf(now);
+    if (at > 0) goToothMarks(teeth[at - 1]);
+  };
   const skipToothMarks = useCallback(() => {
     const current = waxupRef.current;
     if (current.toothPick) advanceToothMarks(current, current.toothMarks, current.autoMarked);
@@ -20158,6 +20193,8 @@ export function LayerlingEditor({
               onMark: startWaxPicking,
               onMarkTeeth: (only?: number[]) => startToothMarks(only),
               onSkipTooth: skipToothMarks,
+              onMarkGo: goToothMarks,
+              onMarkPrev: prevToothMarks,
               onMarksFromNeighbours: marksFromNeighboursFor,
               onUndoMarkPoint: undoToothPoint,
               onStopMarks: stopToothMarks,

@@ -425,7 +425,8 @@ export function DentalStudioPanel({
     const next = () => setWaxAuto(false);
     // Build 105: the teeth found and marked for the dentist; without the finder (or nothing found) the dentist marks them.
     if (waxStep === "select") { if (waxStepDone("select")) next(); else setWaxAuto(false); return; }
-    if (waxStep === "teeth") { if (waxStepDone("teeth")) next(); else if (wv.found && !once("marks", () => waxup.actions.onAutoMarks?.())) setWaxAuto(false); else if (!wv.found && (!wv.finder.name || !once("find", waxup.actions.onFindTeeth))) setWaxAuto(false); return; }
+    // Build 107: nothing marked for the dentist - marking starts, tooth by tooth, from the patient's right.
+    if (waxStep === "teeth") { if (!wv.markPick && wv.markedTeeth.length < wv.markTeeth.length) once("guide", () => waxup.actions.onMarkTeeth?.()); setWaxAuto(false); return; }
     if (waxStep === "set") { if (waxStepDone("set")) next(); else if (!waxSetsHere.length || !once("set", () => waxup.actions.onBuiltIn(waxSetsHere[0].id))) setWaxAuto(false); return; }
     // Build 103: the run stops at Position - the dentist confirms the teeth before they are fitted.
     if (waxStep === "place") { if (waxStepDone("place")) setWaxAuto(false); else if (!waxPlaceable || !once("place", waxup.actions.onPlace)) setWaxAuto(false); return; }
