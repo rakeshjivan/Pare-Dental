@@ -3287,6 +3287,8 @@ export function LayerlingEditor({
   // Build 106: the made models shown in the bite instead of laid out to print (the view only).
   const [studioOccView, setStudioOccView] = useState(false);
   const occViewCache = useRef(new WeakMap<WorkplaneShape, WorkplaneShape>());
+  const studioOccViewRef = useRef(studioOccView);
+  studioOccViewRef.current = studioOccView;
   const studioExporting = useRef(false);
   // Build 106: Save & export at work (its button fills while the folder dialog comes up and the files are written).
   const [studioExportBusy, setStudioExportBusy] = useState(false);
@@ -11186,12 +11188,22 @@ export function LayerlingEditor({
     return upper && lower && dentalStudio.analysis ? { ids: [upper, lower], studio: true } : null;
   }, [dentalStudio]);
   /** Build 97: the map's colours drawn on the arches where they stand now (in occlusion or side by side). */
+  // Build 106: the contacts follow the models between Print view and Occlusion (drawn again once the view
+  // has the models where they now stand).
+  useEffect(() => {
+    if (!biteMapRef.current?.on || biteMapRef.current.busy) return;
+    let second = 0;
+    const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => drawBiteMap(Boolean(biteMapRef.current?.contactOnly), biteMapRef.current?.range ?? 2)); });
+    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+  }, [studioOccView]); // eslint-disable-line react-hooks/exhaustive-deps
   const drawBiteMap = (only: boolean, range = biteMapRef.current?.range ?? 2) => {
     const last = biteMapLast.current;
     const upper = last ? shapesRef.current.find((shape) => shape.id === last.upperId) : undefined;
     const lower = last ? shapesRef.current.find((shape) => shape.id === last.lowerId) : undefined;
     if (!last || !upper || !lower) return;
-    const up = Float32Array.from(worldTriangles(upper)), low = Float32Array.from(worldTriangles(lower));
+    // Build 106: drawn where the models are shown - in the bite when the studio's Occlusion view is on.
+    const placed = (shape: WorkplaneShape) => (studioOccViewRef.current ? occViewCache.current.get(shape) ?? shape : shape);
+    const up = Float32Array.from(worldTriangles(placed(upper))), low = Float32Array.from(worldTriangles(placed(lower)));
     // The same triangles in the same order, wherever the arch stands; a part changed since is left plain.
     // Build 101: a hidden part is never drawn over (after Make the scans are hidden behind the models).
     const shown = (shape: WorkplaneShape) => !shape.hidden && !dentalHiddenRef.current.includes(shape.id);
