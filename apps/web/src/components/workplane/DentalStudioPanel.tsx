@@ -188,6 +188,7 @@ export function DentalStudioPanel({
   waxStudio,
   onEditDesign,
   onDone,
+  onSaveExport,
   editing = false,
   shell = false,
   onMbStep,
@@ -201,6 +202,8 @@ export function DentalStudioPanel({
   /** Build 79: after Make - open the design again, or finish. */
   onEditDesign?: () => void;
   onDone?: () => void;
+  /** Build 106: the frame's Save & export (in place of Done once the models are made). */
+  onSaveExport?: () => void;
   /** Build 79: a design opened again: Make makes the models anew, in place of the ones made before. */
   editing?: boolean;
   trimming: { slot: "upper" | "lower"; mode: "keep" | "remove" } | null;
@@ -473,6 +476,9 @@ export function DentalStudioPanel({
     const keepSet = options.keep !== null && preset !== "aligner";
     if (gumSet || keepSet) onOptionsChange({ gum: null, ...(keepSet ? { keep: null } : {}) });
   }, [trimmedAsIs, options.gum, options.keep, preset]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (shell && mbStep === "label" && options.layout !== "print") onOptionsChange({ layout: "print" });
+  }, [shell, mbStep, options.layout]); // eslint-disable-line react-hooks/exhaustive-deps
   const nextSeen = useRef(nextSignal);
   useEffect(() => {
     if (nextSignal === nextSeen.current) return;
@@ -546,7 +552,7 @@ export function DentalStudioPanel({
   );
   const frameNav = !framed ? null : stage === "made" ? (<>
     <button type="button" className="secondary" onClick={onEditDesign}>{t("dental.editDesign")}</button>
-    <button type="button" className="primary" onClick={onDone}><Check size={17} /> {t("dental.doneButton")}</button>
+    {onSaveExport ? <button type="button" className="primary" onClick={onSaveExport}><FileDown size={17} /> {t("studio.saveExport")}</button> : <button type="button" className="primary" onClick={onDone}><Check size={17} /> {t("dental.doneButton")}</button>}
   </>) : stage === "making" ? (<>
     <button type="button" className="secondary" onClick={onCancel}>{t("dental.stopMaking")}</button>
     {makeButton}
@@ -559,7 +565,7 @@ export function DentalStudioPanel({
     <button type="button" className="secondary" disabled={mbIndex <= 0} onClick={() => setMbStepId(mbSteps[mbIndex - 1])}>{t("waxStudio.back")}</button>
     {!mbLast ? (
       <button type="button" className="primary" disabled={!mbStepDone(mbStep) || busy} onClick={() => setMbStepId(mbSteps[mbIndex + 1])}>{t("studio.nextTo", { step: mbStepName(mbSteps[mbIndex + 1]) })} <ArrowRight size={18} /></button>
-    ) : makeButton}
+    ) : null}
   </>) : null;
   const frameHead = framed && stage !== "made" ? (
     <div className="studio-panel-head">
@@ -626,9 +632,9 @@ export function DentalStudioPanel({
       {/* Build 79: the models made - the studio stays open on them: open the design again, or finish. */}
       {stage === "made" ? (
         <div className="dental-made">
-          <p className="dental-status" role="status"><Check size={15} /> {t("dental.madeHere")}</p>
-          <p className="blend-hint">{t("dental.madeHint")}</p>
-          <p className="dental-status warn" role="note">{t("export.dentalLayers")}</p>
+          <p className="dental-status" role="status"><Check size={15} /> {t("dental.madeHere")}{framed ? <HelpTip text={`${t("dental.madeHint")} ${t("export.dentalLayers")}`} /> : null}</p>
+          {framed ? null : <p className="blend-hint">{t("dental.madeHint")}</p>}
+          {framed ? null : <p className="dental-status warn" role="note">{t("export.dentalLayers")}</p>}
           <div className="edge-modifier-footer">
             <button type="button" className="secondary" onClick={onEditDesign}>{t("dental.editDesign")}</button>
             <button type="button" className="primary" onClick={onDone}><Check size={17} /> {t("dental.doneButton")}</button>
@@ -961,7 +967,34 @@ export function DentalStudioPanel({
         </>) : null}
       </>)) : null}
 
-      {pair && inMb("label") ? card(n(6), t("dental.step4"), options.hinge, t("dental.step4Hint"), articSummary, (<>
+      {pair && inMb("label") ? card(n(6), t("dental.step4"), options.hinge, t("dental.step4Hint"), articSummary, framed ? (() => {
+        // Build 106: separate or articulated; articulated - the picture, then pin or no pin; with a pin,
+        // where it stands, how far from the teeth, and how much it opens the bite (OVD).
+        const pinOn = options.incisalPin !== false;
+        const place = options.pinPlace ?? (waxup?.view.placed.length ? "sides" : "midline");
+        const two = <T extends string>(label: string, value: T, pairs: Array<[T, string, string?]>, onPick: (value: T) => void) => (
+          <div className="studio-mm-choice two" role="radiogroup" aria-label={label}>
+            {pairs.map(([v, text, tip]) => <button key={v} type="button" role="radio" aria-checked={value === v} className={value === v ? "active" : ""} disabled={busy} title={tip} onClick={() => onPick(v)}>{text}</button>)}
+          </div>
+        );
+        return (<>
+          {two(t("dental.step4"), options.hinge ? "artic" : "separate", [["separate", t("studio.separateModels")], ["artic", t("studio.articulatedModels"), t("dental.hingeHint")]], (v) => onOptionsChange({ hinge: v === "artic" }))}
+          {options.hinge ? (<>
+            <div className="studio-artic-picture">
+              {pinOn && place === "sides"
+                ? <ArticulatorSidesPicture pinGap={options.pinGap ?? PIN_CLEAR} />
+                : <ArticulatorPicture pinRaise={pinOn ? options.pinRaise ?? 0 : 0} pin={pinOn} pinGap={options.pinGap ?? PIN_CLEAR} />}
+            </div>
+            {two(t("dental.incisalPin"), pinOn ? "pin" : "none", [["none", t("studio.noPin"), t("dental.incisalPinOffHint")], ["pin", t("studio.pin"), t("dental.incisalPinHint")]], (v) => onOptionsChange(articulatorPinPatch({ incisalPin: v === "pin" })))}
+            {pinOn ? (<>
+              {two(t("dental.pinPlace"), place, [["midline", t("studio.pinFront"), t("dental.pinMidlineHint")], ["sides", t("studio.pinSides"), t("dental.pinSidesHint")]], (pinPlace) => onOptionsChange({ pinPlace }))}
+              <EdgeModifierSlider label={t("dental.pinGap")} value={options.pinGap ?? PIN_CLEAR} min={PIN_CLEAR} max={PIN_GAP_MAX} step={0.5} workspace={workspace} length disabled={busy} onChange={(value) => onOptionsChange({ pinGap: Math.max(PIN_CLEAR, Math.min(PIN_GAP_MAX, Math.round(value * 2) / 2)) })} />
+              <EdgeModifierSlider label={t("studio.increaseOvd")} title={t("studio.increaseOvdHint")} value={options.pinRaise ?? 0} min={0} max={PIN_MAX} step={PIN_STEP} workspace={workspace} length disabled={busy} onChange={(value) => onOptionsChange(articulatorPinPatch({ pinRaise: Math.max(0, Math.min(PIN_MAX, Math.round(value / PIN_STEP) * PIN_STEP)) }))} />
+              {(options.pinRaise ?? 0) > PIN_WARN ? <p className="blend-hint warn">{t("dental.pinRaiseWarn", { max: PIN_WARN })}</p> : null}
+            </>) : null}
+          </>) : null}
+        </>);
+      })() : (<>
             <label className="edge-modifier-check dental-hinge-check" title={t("dental.hingeHint")}>
               <input type="checkbox" checked={options.hinge} disabled={busy} onChange={(event) => onOptionsChange({ hinge: event.currentTarget.checked })} />
               <span>{t("dental.hinge")}</span>
@@ -997,14 +1030,14 @@ export function DentalStudioPanel({
             {choice(t("dental.layout"), options.layout, [["print", t("dental.layoutPrint")], ["occlusion", t("dental.layoutOcclusion")]], (layout) => onOptionsChange({ layout }))}
       </>)) : null}
       {/* Build 104: the plate base for a metal articulator, here beside the printed one (it was a base picture). */}
-      {inMb("label") ? (
+      {inMb("label") && !framed ? (
         <label className="edge-modifier-check" title={t("dental.articulatorHint")}>
           <input type="checkbox" checked={options.baseStyle === "articulator"} disabled={busy} onChange={(event) => onOptionsChange({ baseStyle: event.currentTarget.checked ? "articulator" : presetBase })} />
           <span>{t("dental.articulatorBase")}</span>
         </label>
       ) : null}
 
-      {inMb("label") ? card(n(pair ? 7 : 6), t("dental.stepName"), Boolean(options.label.trim()) || patientDetails === "remove", t("dental.stepNameHint"), nameSummary, (<>
+      {inMb("label") ? card(n(pair ? 7 : 6), t(framed ? "studio.nameLabel" : "dental.stepName"), Boolean(options.label.trim()) || patientDetails === "remove", t("dental.stepNameHint"), nameSummary, (<>
         {onPatientDetails ? choice(t("dental.patientDetails"), patientDetails, [["keep", t("dental.patientKeep")], ["remove", t("dental.patientRemove")]], onPatientDetails, t("dental.patientDetailsHint")) : null}
         {patientDetails === "remove" ? <p className="blend-hint">{t("dental.patientRemoveHint")}</p> : (<>
         <label className="dental-label-field">
@@ -1013,6 +1046,8 @@ export function DentalStudioPanel({
         </label>
         {options.label.trim() ? <p className="blend-hint">{t(options.baseStyle === "ortho" || options.baseStyle === "articulator" ? "dental.labelOrtho" : options.inside === "open" ? "dental.labelClosed" : "dental.labelPlate")}</p> : null}
         </>)}
+        {/* Build 106: in the frame, Make models closes the step's panel (not the bar below). */}
+        {framed && stage !== "making" ? <div className="studio-make">{makeButton}</div> : null}
       </>)) : null}
       </>) : null}
 

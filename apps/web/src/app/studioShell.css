@@ -924,3 +924,12 @@
 .studio-height-val { fill: #111827; font: 700 13px var(--mm-font, Inter, sans-serif); }
 .studio-height-total { display: flex; justify-content: space-between; margin: 10px 0 0; padding-top: 10px; border-top: 1px solid #e3e7ee; color: #3d4654; font-size: 13px; font-weight: 600; }
 .studio-height-total strong { color: #111827; }
+
+/* Build 106: Articulator & label. */
+.studio-mm-choice.two { grid-template-columns: repeat(2, 1fr); }
+.studio-mm-choice.two + .studio-mm-choice.two { margin-top: -2px; }
+.studio-artic-picture { margin: 4px 0 10px; padding: 8px; border: 1px solid #e3e7ee; border-radius: 12px; background: #fbfcfd; }
+.studio-artic-picture svg { display: block; width: 100%; height: auto; }
+.studio-make { margin-top: 16px; }
+.studio-make button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 46px; color: #ffffff; background: var(--studio-teal, #2f7d6d); border: 0; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; }
+.studio-make button:disabled { opacity: 0.5; cursor: default; }
