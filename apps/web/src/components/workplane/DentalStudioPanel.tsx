@@ -484,6 +484,7 @@ export function DentalStudioPanel({
   useEffect(() => {
     if (shell && mbStep === "label" && options.layout !== "print") onOptionsChange({ layout: "print" });
   }, [shell, mbStep, options.layout]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (shell && patientDetails === "remove") onPatientDetails?.("keep"); }, [shell, patientDetails]); // eslint-disable-line react-hooks/exhaustive-deps
   const nextSeen = useRef(nextSignal);
   useEffect(() => {
     if (nextSignal === nextSeen.current) return;
@@ -1047,8 +1048,15 @@ export function DentalStudioPanel({
       ) : null}
 
       {inMb("label") ? card(n(pair ? 7 : 6), t(framed ? "studio.nameLabel" : "dental.stepName"), Boolean(options.label.trim()) || patientDetails === "remove", t("dental.stepNameHint"), nameSummary, (<>
-        {onPatientDetails ? choice(t("dental.patientDetails"), patientDetails, [["keep", t("dental.patientKeep")], ["remove", t("dental.patientRemove")]], onPatientDetails, t("dental.patientDetailsHint")) : null}
-        {patientDetails === "remove" ? <p className="blend-hint">{t("dental.patientRemoveHint")}</p> : (<>
+        {/* Build 106: in the frame, just the patient's details for the label (and the files) - always kept. */}
+        {framed ? (
+          <label className="studio-label-field">
+            <span>{t("dental.patientDetails")}</span>
+            <input type="text" maxLength={24} value={options.label} placeholder={t("studio.labelPlaceholder")} disabled={busy} onChange={(event) => onOptionsChange({ label: event.currentTarget.value })} />
+          </label>
+        ) : null}
+        {!framed && onPatientDetails ? choice(t("dental.patientDetails"), patientDetails, [["keep", t("dental.patientKeep")], ["remove", t("dental.patientRemove")]], onPatientDetails, t("dental.patientDetailsHint")) : null}
+        {framed ? null : patientDetails === "remove" ? <p className="blend-hint">{t("dental.patientRemoveHint")}</p> : (<>
         <label className="dental-label-field">
           <span>{t("dental.label")}</span>
           <input type="text" maxLength={24} value={options.label} placeholder={t("dental.labelPlaceholder")} disabled={busy} onChange={(event) => onOptionsChange({ label: event.currentTarget.value })} />

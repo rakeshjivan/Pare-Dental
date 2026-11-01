@@ -957,3 +957,7 @@
   animation: studio-fill 9s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
 }
 @keyframes studio-fill { from { width: 0; } to { width: 96%; } }
+.studio-label-field { display: grid; gap: 6px; margin: 4px 0 0; }
+.studio-label-field span { color: #3d4654; font-size: 13px; font-weight: 600; }
+.studio-label-field input { width: 100%; box-sizing: border-box; min-height: 42px; padding: 8px 12px; color: #111827; background: #ffffff; border: 1px solid #c9ced6; border-radius: 10px; font-size: 14px; }
+.studio-label-field input:focus { outline: none; border-color: var(--studio-teal, #2f7d6d); box-shadow: 0 0 0 3px rgba(47, 125, 109, 0.15); }
