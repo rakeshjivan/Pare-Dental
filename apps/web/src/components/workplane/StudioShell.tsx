@@ -8,7 +8,7 @@
  * panel fills the step bar, Back and Next and the guidance through slots (lib/studioSlots), and every
  * control here calls the same action the studio already has.
  */
-import { ChevronDown, ChevronUp, Eye, EyeOff, Moon, Redo2, Undo2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Eye, EyeOff, Home, Moon, Redo2, Undo2, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { GuideHelpLink } from "@/components/GuideHelpLink";
 import { t } from "@/lib/i18n";
@@ -67,6 +67,7 @@ export function StudioShell({
   onUndo,
   onRedo,
   onClose,
+  onHome,
   helpSection,
 }: {
   title: string;
@@ -86,6 +87,8 @@ export function StudioShell({
   onUndo: () => void;
   onRedo: () => void;
   onClose: () => void;
+  /** Back to Dental Studio's home page; the close button's way out when not given. */
+  onHome?: () => void;
   helpSection?: Parameters<typeof GuideHelpLink>[0]["section"];
 }) {
   useLanguage();
@@ -97,6 +100,10 @@ export function StudioShell({
         <div className="studio-brand">
           <b>Pare<span>3D</span></b>
           <i aria-hidden="true" />
+          {/* Build 107: one click back to Dental Studio's home page, on every step. */}
+          <button type="button" className="studio-icon studio-home" onClick={onHome ?? onClose} aria-label={t("studio.home")} title={t("studio.home")}>
+            <Home size={19} strokeWidth={1.8} aria-hidden="true" />
+          </button>
           <em>{title}</em>
         </div>
         <nav className="studio-steps" aria-label={t("studio.steps")} ref={stepsSlot} />

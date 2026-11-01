@@ -109,6 +109,18 @@
   background: #d5dae1;
 }
 
+.studio-brand .studio-home {
+  width: 36px;
+  height: 36px;
+  margin-right: -6px;
+  background: #f1f3f5;
+}
+
+.studio-brand .studio-home:hover {
+  color: var(--studio-teal);
+  background: #e5f3f1;
+}
+
 .studio-brand em {
   font-size: 15.5px;
   font-style: normal;

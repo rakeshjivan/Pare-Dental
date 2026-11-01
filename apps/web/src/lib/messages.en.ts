@@ -5454,6 +5454,7 @@ export const MESSAGES_EN = {
   "studio.hint.mb.base": "Set the gum and base height.",
   "studio.hint.mb.articulator": "Add the articulator if you want one.",
   "studio.hint.mb.label": "Name the models, then make them.",
+  "studio.home": "Dental Studio home",
   "studio.close": "Close the studio",
   "studio.case": "Case",
   "studio.caseObjects": "Case objects",

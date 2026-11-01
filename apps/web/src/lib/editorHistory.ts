@@ -409,12 +409,65 @@ export function boundedEditorHistoryState(
     ? MAX_EDITOR_HISTORY_ENTRIES - 1
     : Math.min(MAX_EDITOR_HISTORY_ENTRIES - 1, Math.max(1, Math.round(limit)));
   const maxEntries = retainedActions + 1;
-  if (entries.length <= maxEntries) return { entries, index };
-  let start = Math.max(0, index - retainedActions);
-  const end = Math.min(entries.length, start + maxEntries);
-  if (end - start < maxEntries) start = Math.max(0, end - maxEntries);
-  const bounded = entries.slice(start, end);
-  return { entries: bounded, index: index - start };
+  let bounded = entries;
+  let at = index;
+  if (entries.length > maxEntries) {
+    let start = Math.max(0, index - retainedActions);
+    const end = Math.min(entries.length, start + maxEntries);
+    if (end - start < maxEntries) start = Math.max(0, end - maxEntries);
+    bounded = entries.slice(start, end);
+    at = index - start;
+  }
+  const first = firstEntryWithinMeshBudget(bounded, at);
+  return first > 0 ? { entries: bounded.slice(first), index: at - first } : { entries: bounded, index: at };
+}
+
+/**
+ * Build 107: how much scan data the undo history may hold. Every edit of a scanned arch (a trim's
+ * Delete, a sculpt) keeps a whole copy of it - some 50 MB for a full-arch scan - and the history
+ * kept up to 100 of them, all saved with the design after each step: a run of trims filled the
+ * Mac's memory until it closed the page. Past this much, the oldest steps are let go.
+ */
+export const EDITOR_HISTORY_MESH_BUDGET_BYTES = 300 * 1024 * 1024;
+/**
+ * A step's mesh costs far more than its own numbers: every version the history holds keeps the copies
+ * made from it while it was on screen (the corner-by-corner mesh, the drawn geometry, its picking tree -
+ * caches keyed on the version). Measured on a full-arch scan: about 24 bytes for each number.
+ */
+const BYTES_PER_MESH_NUMBER = 24;
+/** However big the steps, at least this many can be undone. */
+const MIN_UNDO_STEPS = 3;
+
+function meshArraysOf(shape: WorkplaneShape, out: unknown[]) {
+  const mesh = shape.importedMesh;
+  if (mesh) {
+    if (mesh.positions) out.push(mesh.positions);
+    if (mesh.normals) out.push(mesh.normals);
+  }
+  shape.groupedShapes?.forEach((child) => meshArraysOf(child, out));
+}
+
+/** The first entry to keep so that the mesh data held (each array counted once) fits the budget. */
+export function firstEntryWithinMeshBudget(entries: EditorHistoryEntry[], index: number, budget = EDITOR_HISTORY_MESH_BUDGET_BYTES): number {
+  if (entries.length <= MIN_UNDO_STEPS + 1) return 0;
+  const seen = new Set<unknown>();
+  let bytes = 0;
+  const add = (entry: EditorHistoryEntry) => {
+    const arrays: unknown[] = [];
+    entry.shapes.forEach((shape) => meshArraysOf(shape, arrays));
+    for (const array of arrays) {
+      if (seen.has(array)) continue;
+      seen.add(array);
+      bytes += ((array as { length?: number }).length ?? 0) * BYTES_PER_MESH_NUMBER;
+    }
+  };
+  // The current step and every redo step after it are always kept.
+  for (let i = entries.length - 1; i >= index; i -= 1) add(entries[i]);
+  for (let i = index - 1; i >= 0; i -= 1) {
+    add(entries[i]);
+    if (bytes > budget && index - i > MIN_UNDO_STEPS) return i + 1;
+  }
+  return 0;
 }
 
 /** How long a pause between two arrow-key presses may be and still count as one run (#370). */

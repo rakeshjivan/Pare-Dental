@@ -20146,6 +20146,13 @@ export function LayerlingEditor({
               if (current?.editing?.length) leaveDentalEdit(current);
               setDentalStudio(null);
             }}
+            onHome={onHome ? () => {
+              // Build 107: the home button leaves from any step - a trim or a make in progress is stopped first.
+              stopDentalTrim();
+              stopWaxPicking();
+              if (dentalStudioRef.current?.stage === "making") stopDentalMaking();
+              leaveToDashboard();
+            } : undefined}
             helpSection="dentalModel"
           />
         );
