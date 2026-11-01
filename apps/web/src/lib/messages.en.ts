@@ -5336,6 +5336,8 @@ export const MESSAGES_EN = {
   "studio.heightScan": "Teeth and gum, as trimmed",
   "studio.heightBase": "Base",
   "studio.baseThickness": "Base thickness",
+  "studio.followGum": "Follow gum line",
+  "studio.followGumHint": "Keeps an even band of gum below the teeth all round and removes the palate and floor of the mouth. Best for thermoforming.",
   "studio.trimTitle": "Trim and tidy the scans",
   "studio.trimArch": "Choose the arch",
   "studio.resetUpper": "Reset upper",

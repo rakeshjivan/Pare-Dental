@@ -451,9 +451,16 @@ export function DentalStudioPanel({
   // Build 106: in the frame the scan is used as trimmed - no gum line followed, nothing more cut across
   // (aligner models keep their set height for thermoforming).
   const trimmedAsIs = shell && mbStep === "base";
+  // Build 106: aligner models follow the gum line by default - an even 2 mm of gum below the teeth, the
+  // palate and floor of the mouth gone - with the base making the model about 18 mm tall.
+  const alignerBase = (gum: number | null) => Math.max(3, Math.round((18 - teethHeight - (gum ?? 0)) * 2) / 2);
+  useEffect(() => {
+    if (!shell || preset !== "aligner" || options.gum !== undefined || !analysis) return;
+    onOptionsChange({ gum: 2, base: alignerBase(2) });
+  }, [shell, preset, options.gum, Boolean(analysis)]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!trimmedAsIs) return;
-    const gumSet = options.gum !== null && options.gum !== undefined;
+    const gumSet = options.gum !== null && options.gum !== undefined && preset !== "aligner";
     const keepSet = options.keep !== null && preset !== "aligner";
     if (gumSet || keepSet) onOptionsChange({ gum: null, ...(keepSet ? { keep: null } : {}) });
   }, [trimmedAsIs, options.gum, options.keep, preset]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -782,6 +789,11 @@ export function DentalStudioPanel({
             {options.baseStyle === "clean" ? (
               <button type="button" aria-pressed={options.notches !== false} className={options.notches !== false ? "active" : ""} disabled={busy} title={t("dental.notchesHint")} onClick={() => onOptionsChange({ notches: options.notches === false })}>
                 {options.notches !== false ? <Check size={15} aria-hidden="true" /> : null}{t("studio.notches")}
+              </button>
+            ) : null}
+            {preset === "aligner" ? (
+              <button type="button" aria-pressed={following} className={following ? "active" : ""} disabled={busy} title={t("studio.followGumHint")} onClick={() => onOptionsChange(following ? { gum: null, base: alignerBase(null) } : { gum: 2, base: alignerBase(2) })}>
+                {following ? <Check size={15} aria-hidden="true" /> : null}{t("studio.followGum")}
               </button>
             ) : null}
             {options.baseStyle === "clean" || options.baseStyle === "articulator" ? (
