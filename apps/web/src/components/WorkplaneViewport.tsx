@@ -4149,6 +4149,8 @@ export function WorkplaneViewport({
   }, [hoverModifierEdgeId]);
 
   const studioLook = useStudioLook();
+  /** Build 107: what the plate was last drawn from (see the layout effect that draws it). */
+  const plateKeyRef = useRef("");
   const resolvedThemeRef = useRef(resolvedTheme);
   resolvedThemeRef.current = resolvedTheme;
   const themePaletteRef = useRef(appThemePalette(themePreference));
@@ -4349,6 +4351,7 @@ export function WorkplaneViewport({
     setMeasureUnit(nextWorkspace);
     if (threeRef.current) {
       rebuildWorkplane(threeRef.current, nextWorkspace, resolvedThemeRef.current, drawnWorkplane(), projectNameRef.current);
+      plateKeyRef.current = "";
       constrainCamera(threeRef.current, nextWorkspace);
       threeRef.current.needsRender = true;
     }
@@ -4855,7 +4858,15 @@ export function WorkplaneViewport({
     if (setEdgeLineStyle(effectiveViewSettings(workspace).edgeLines, workspace.edgeColor) || holesChanged) {
       rebuildShapes(threeRef.current, shapesRef.current, shapeOutlineIds(), modifierActiveRef.current, placementWorkplaneRef.current);
     }
-    rebuildWorkplane(threeRef.current, workspace, resolvedTheme, workplaneHidden ? horizontalPlacementWorkplane() : placementWorkplane, projectName);
+    // Build 107: the plate drawn again only when something it shows changed. Undo and redo hand back an
+    // equal workplane as a new object, and rebuilding threw away the plate's materials - six shader
+    // programs compiled again on every step (most of an undo's time).
+    const drawn = workplaneHidden ? horizontalPlacementWorkplane() : placementWorkplane;
+    const plateKey = JSON.stringify([workspace, resolvedTheme, drawn, projectName, language, studioLook, themePreference]);
+    if (!threeRef.current || plateKey !== plateKeyRef.current) {
+      rebuildWorkplane(threeRef.current, workspace, resolvedTheme, drawn, projectName);
+      if (threeRef.current) plateKeyRef.current = plateKey;
+    }
     rebuildSelectionHelpers(threeRef.current, shapesRef.current, renderSelectionIds(), placementWorkplane);
     if (threeRef.current) {
       syncTransformOverlay(
@@ -4918,6 +4929,7 @@ export function WorkplaneViewport({
     threeRef.current = state;
     rebuildWorkplane(state, workspaceRef.current, resolvedThemeRef.current, drawnWorkplane(), projectNameRef.current);
     state.workplaneLayer.visible = !workplaneLayerHiddenRef.current && !dentalViewRef.current;
+    plateKeyRef.current = "";
     window.layerlingCaptureCanvas = () => {
       state.camera.updateMatrixWorld();
       renderFrame(state);
@@ -5365,6 +5377,10 @@ export function WorkplaneViewport({
           points: info?.points ?? 0,
           lines: info?.lines ?? 0,
           shapeCount: shapesRef.current.filter((shape) => !shape.hidden).length,
+          // Build 107: the GPU's own counts - shader programs compiled, and geometry/textures held.
+          programs: state?.renderer.info.programs?.length ?? 0,
+          geometries: state?.renderer.info.memory.geometries ?? 0,
+          textures: state?.renderer.info.memory.textures ?? 0,
         };
       },
     };
