@@ -992,7 +992,9 @@ export function DentalStudioPanel({
             {two(t("dental.incisalPin"), pinOn ? "pin" : "none", [["none", t("studio.noPin"), t("dental.incisalPinOffHint")], ["pin", t("studio.pin"), t("dental.incisalPinHint")]], (v) => onOptionsChange(articulatorPinPatch({ incisalPin: v === "pin" })))}
             {pinOn ? (<>
               {two(t("dental.pinPlace"), place, [["midline", t("studio.pinFront"), t("dental.pinMidlineHint")], ["sides", t("studio.pinSides"), t("dental.pinSidesHint")]], (pinPlace) => onOptionsChange({ pinPlace }))}
-              {place === "sides" ? <div className="studio-artic-picture"><ArticulatorSidesPicture pinGap={options.pinGap ?? PIN_CLEAR} /></div> : null}
+              {/* Build 106: as with the pins at the sides - a picture of where the pin stands above its distance,
+                  then the side view that opens above Increase OVD. */}
+              <div className="studio-artic-picture">{place === "sides" ? <ArticulatorSidesPicture pinGap={options.pinGap ?? PIN_CLEAR} /> : <ArticulatorPicture pinRaise={0} pin pinGap={options.pinGap ?? PIN_CLEAR} />}</div>
               <EdgeModifierSlider label={t("dental.pinGap")} value={options.pinGap ?? PIN_CLEAR} min={PIN_CLEAR} max={PIN_GAP_MAX} step={0.5} workspace={workspace} length disabled={busy} onChange={(value) => onOptionsChange({ pinGap: Math.max(PIN_CLEAR, Math.min(PIN_GAP_MAX, Math.round(value * 2) / 2)) })} />
               {/* Build 106: the models from the side, opening on the condyles as Increase OVD moves. */}
               <div className="studio-artic-picture"><ArticulatorPicture pinRaise={options.pinRaise ?? 0} pin={place !== "sides"} pinGap={options.pinGap ?? PIN_CLEAR} /></div>
