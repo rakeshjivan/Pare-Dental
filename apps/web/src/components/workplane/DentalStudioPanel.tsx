@@ -99,6 +99,29 @@ function BodyPictureSvg({ kind }: { kind: BodyPicture }) {
   );
 }
 
+/**
+ * Build 106: the model's height in the frame - a section through it: the teeth on the gum kept by the
+ * trim, the base beneath, with brackets for the two heights (in the style of the Model step's pictures).
+ */
+function StudioHeightPicture({ scan, base }: { scan: number; base: number }) {
+  const total = Math.max(1, scan + base);
+  const h = 104, top = 6;
+  const scanH = Math.max(34, Math.min(80, (scan / total) * h)), baseH = Math.max(14, h - scanH);
+  const gumTop = top + scanH * 0.52, baseTop = top + scanH;
+  // Three crowns along the section, the middle one taller (a canine between incisor and premolar).
+  const crown = (x: number, w: number, t: number) => `M${x} ${gumTop + 4}V${t + 7}Q${x} ${t} ${x + w / 2} ${t}Q${x + w} ${t} ${x + w} ${t + 7}V${gumTop + 4}Z`;
+  return (
+    <svg className="studio-height-pic" viewBox="0 0 120 118" aria-hidden="true">
+      <path d={`M14 ${baseTop}V${gumTop + 2}Q20 ${gumTop - 6} 30 ${gumTop}Q40 ${gumTop - 7} 50 ${gumTop - 1}Q60 ${gumTop - 7} 70 ${gumTop}Q80 ${gumTop - 6} 86 ${gumTop + 2}V${baseTop}Z`} className="studio-height-gum" />
+      <path d={crown(15, 23, top + 14)} className="studio-height-tooth" />
+      <path d={crown(38.5, 23, top + 8)} className="studio-height-tooth" />
+      <path d={crown(62, 23, top + 12)} className="studio-height-tooth" />
+      <path d={`M12 ${baseTop}H88V${baseTop + baseH - 4}L84 ${baseTop + baseH}H16L12 ${baseTop + baseH - 4}Z`} className="studio-height-base" />
+      <path d={`M98 ${top}h5V${baseTop - 1}h-5M98 ${baseTop + 1}h5V${baseTop + baseH}h-5`} className="studio-height-bracket" />
+    </svg>
+  );
+}
+
 function HelpTip({ text }: { text: string }) {
   return (
     <span className="studio-help" tabIndex={0} role="note" aria-label={text} onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}>
@@ -425,6 +448,15 @@ export function DentalStudioPanel({
   const [mbStepId, setMbStepId] = useState<ModelStepId>("scans");
   const mbStep = mbSteps ? (mbSteps.includes(mbStepId) ? mbStepId : "label") : null;
   useEffect(() => { onMbStep?.(mbStep); }, [mbStep, onMbStep]);
+  // Build 106: in the frame the scan is used as trimmed - no gum line followed, nothing more cut across
+  // (aligner models keep their set height for thermoforming).
+  const trimmedAsIs = shell && mbStep === "base";
+  useEffect(() => {
+    if (!trimmedAsIs) return;
+    const gumSet = options.gum !== null && options.gum !== undefined;
+    const keepSet = options.keep !== null && preset !== "aligner";
+    if (gumSet || keepSet) onOptionsChange({ gum: null, ...(keepSet ? { keep: null } : {}) });
+  }, [trimmedAsIs, options.gum, options.keep, preset]); // eslint-disable-line react-hooks/exhaustive-deps
   const nextSeen = useRef(nextSignal);
   useEffect(() => {
     if (nextSignal === nextSeen.current) return;
@@ -838,6 +870,25 @@ export function DentalStudioPanel({
       {inMb("base") ? card(n(5), t("dental.stepBase"), scansDone, t("dental.stepBaseHint"), baseSummary, (<>
         {/* Build 64: the model's height in one place, as it stacks up - the teeth (never cut), the gum
             kept below them, and the base - with a picture of the three and their sizes. Both arches. */}
+        {framed ? (<>
+          {/* Build 106: the scan is used as trimmed (no gum height to set, no gum line to follow) - only the
+              base's thickness is chosen, from four. */}
+          <div className="studio-height-box" role="group" aria-label={t("dental.heightTitle")}>
+            <StudioHeightPicture scan={teethHeight + gumHeight} base={options.base} />
+            <div className="studio-height-rows">
+              <p><span>{t("studio.heightScan")}</span><strong>{`${(teethHeight + gumHeight).toFixed(1)} mm`}</strong></p>
+              <p><span>{t(options.baseStyle === "ortho" ? "dental.orthoHeight" : "studio.heightBase")}</span><strong>{`${options.base.toFixed(1)} mm`}</strong></p>
+              <p className="total"><span>{t("dental.heightTotal")}</span><strong>{`${height.toFixed(1)} mm`}</strong></p>
+            </div>
+          </div>
+          <h4 className="dental-group">{t("studio.baseThickness")}</h4>
+          <div className="studio-mm-choice" role="radiogroup" aria-label={t("studio.baseThickness")}>
+            {[3, 5, 10, 15].map((mm) => (
+              <button key={mm} type="button" role="radio" aria-checked={Math.abs(options.base - mm) < 1e-6} className={Math.abs(options.base - mm) < 1e-6 ? "active" : ""} disabled={busy} onClick={() => onOptionsChange({ base: mm })}>{`${mm} mm`}</button>
+            ))}
+          </div>
+        </>) : null}
+        {!framed ? (<>
         <div className="dental-height-box" role="group" aria-label={t("dental.heightTitle")}>
           <ModelHeightPicture teeth={teethHeight} gum={gumHeight} base={options.base} />
           <div className="dental-height-rows">
@@ -890,6 +941,7 @@ export function DentalStudioPanel({
 
           </div>
         ) : null}
+        </>) : null}
       </>)) : null}
 
       {pair && inMb("label") ? card(n(6), t("dental.step4"), options.hinge, t("dental.step4Hint"), articSummary, (<>
