@@ -709,12 +709,12 @@ declare global {
      */
     layerlingProjectPoints?: (points: ArrayLike<number>) => Float32Array;
     /** Fork (build 48): turns the view to look along -direction (scene axes) and frames these parts. */
-    layerlingShowParts?: (ids: string[], direction: [number, number, number]) => boolean;
+    layerlingShowParts?: (ids: string[], direction: [number, number, number], margin?: number) => boolean;
     /** Fork (build 53): draws triangles (world, a soup) over the scene as a tinted highlight; null clears it. */
     /** `owners` (build 74): which part each run of triangles belongs to, in order - each run then moves with its part. */
     layerlingHighlight?: (triangles: Float32Array | null, owners?: Array<{ shapeId: string; triangles: number }>) => void;
     /** Build 107: Wax-up's landmark dots - small red balls, moved in place (no new geometry) while one is dragged; null clears them. */
-    layerlingMarkDots?: (points: Array<[number, number, number]> | null, radius?: number) => void;
+    layerlingMarkDots?: (points: Array<[number, number, number]> | null, radius?: number, look?: { colors?: number[]; sizes?: number[] }) => void;
     /** Build 69: Sculpt's working copy of a part (world soup) drawn in its place while it is worked on; null puts the part back. */
     layerlingSculptPreview?: (shapeId: string, triangles: Float32Array | null, color?: string) => void;
     /** Build 73: live Sculpt - the engine's own geometry drawn in the part's place (it updates the buffers itself); null puts the part back. */
@@ -9620,7 +9620,7 @@ export function WorkplaneViewport({
   }, []);
   // Fork (build 48): Dental Studio's named views - look at these parts from a direction, framed.
   useEffect(() => {
-    window.layerlingShowParts = (ids, direction) => {
+    window.layerlingShowParts = (ids, direction, margin = 1.15) => {
       const state = threeRef.current;
       if (!state) return false;
       const along = new THREE.Vector3(...direction);
@@ -9630,7 +9630,7 @@ export function WorkplaneViewport({
       if (Math.abs(along.y) > 0.999) along.z += along.y > 0 ? 0.002 : -0.002;
       setCameraToViewDirection(state, along.normalize(), false);
       syncViewCube(state, viewCubeRef.current);
-      return focusSelection(ids, 1.15);
+      return focusSelection(ids, margin);
     };
     return () => { delete window.layerlingShowParts; };
   }, [focusSelection]);
@@ -9816,20 +9816,28 @@ export function WorkplaneViewport({
       dots = null;
       if (state) state.needsRender = true;
     };
-    window.layerlingMarkDots = (points, radius = 0.45) => {
+    window.layerlingMarkDots = (points, radius = 0.45, look) => {
       const state = threeRef.current;
       if (!state || !points || !points.length) { clear(); return; }
       if (!dots || dots.count !== points.length || dots.userData.radius !== radius) {
         clear();
-        const material = new THREE.MeshBasicMaterial({ color: 0xe0322f });
+        const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
         dots = new THREE.InstancedMesh(new THREE.SphereGeometry(radius, 16, 12), material, points.length);
         dots.userData.radius = radius;
         dots.renderOrder = 12;
         dots.frustumCulled = false;
         state.scene.add(dots);
       }
-      points.forEach((point, i) => { dummy.position.set(point[0], point[1], point[2]); dummy.updateMatrix(); dots!.setMatrixAt(i, dummy.matrix); });
+      const colour = new THREE.Color();
+      points.forEach((point, i) => {
+        dummy.position.set(point[0], point[1], point[2]);
+        dummy.scale.setScalar(look?.sizes?.[i] ?? 1);
+        dummy.updateMatrix();
+        dots!.setMatrixAt(i, dummy.matrix);
+        dots!.setColorAt(i, colour.setHex(look?.colors?.[i] ?? 0xe0322f));
+      });
       dots.instanceMatrix.needsUpdate = true;
+      if (dots.instanceColor) dots.instanceColor.needsUpdate = true;
       state.needsRender = true;
     };
     return () => { clear(); delete window.layerlingMarkDots; };

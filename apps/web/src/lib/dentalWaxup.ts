@@ -1390,7 +1390,7 @@ function placeWholeArch(lib: LibEntry[], libMesial: Map<number, THREE.Vector3>, 
  * The patient's arch form, widths and positions are kept - the wax restores shape and contour, as a
  * wax-up for worn or broken teeth (and IMT) wants. `all` gives the neighbours for the arch's line.
  */
-export type FitOptions = { minWax?: number; lengthen?: number; blend?: boolean; ideal?: number; red?: number; centralRatio?: number; arcDepth?: number; /** Build 102: each tooth's own adjustment (by FDI number), applied before the contacts and the margin. */ adjust?: Record<number, ToothAdjust>; /** Build 103: tilt each tooth about its edge so its cervical third stands over the patient's (default on). */ alignCervical?: boolean; /** Build 103: the set placed as one arch, keeping its own arch form (default on); false: each tooth fitted to its own. */ wholeArch?: boolean };
+export type FitOptions = { /** Build 107: each tooth from its zenith to its incisal mark exactly (the dots as the dentist placed them), no smile-design heights. */ exact?: boolean; minWax?: number; lengthen?: number; blend?: boolean; ideal?: number; red?: number; centralRatio?: number; arcDepth?: number; /** Build 102: each tooth's own adjustment (by FDI number), applied before the contacts and the margin. */ adjust?: Record<number, ToothAdjust>; /** Build 103: tilt each tooth about its edge so its cervical third stands over the patient's (default on). */ alignCervical?: boolean; /** Build 103: the set placed as one arch, keeping its own arch form (default on); false: each tooth fitted to its own. */ wholeArch?: boolean };
 export function placeOnTeeth(set: LibrarySet, scan: Mesh, normals: ArrayLike<number>, crowns: PatientCrown[], all: PatientCrown[], arch: "upper" | "lower", options: FitOptions = {}): PlacedTooth[] {
   const minWax = options.minWax ?? MIN_WAX;
   // Build 94: the smile designed on the anterior teeth, and how far towards it the teeth go (0 = the patient's teeth, 1 = the design).
@@ -2900,16 +2900,18 @@ export function placeOnMarks(set: LibrarySet, scan: Mesh, normals: ArrayLike<num
     const libWidth = hi - lo;
     const f = me.f;
     // Heights: the edge by the smile arc; the cervical end at the plan, or at the patient's zenith where that lies apical.
-    const edge = edgeOf(me.kind);
-    let cervical = zenith + (me.kind === "lateral" ? LATERAL_ZENITH : 0);
+    // Build 107 (exact): the edge at the tooth's incisal mark and the cervical end at its zenith, as the dots say.
+    const exact = options.exact === true;
+    const edge = exact ? f.i.z + (options.lengthen ?? 0) : edgeOf(me.kind);
+    let cervical = exact ? f.c.z : zenith + (me.kind === "lateral" ? LATERAL_ZENITH : 0);
     let lengthening = 0;
-    if (f.c.z > cervical + LENGTHENING_SHOWN) lengthening = f.c.z - cervical;
+    if (exact) { /* as marked */ } else if (f.c.z > cervical + LENGTHENING_SHOWN) lengthening = f.c.z - cervical;
     else if (f.c.z < cervical) cervical = f.c.z;
     const s = libWidth > 0 ? Math.max(MARK_WIDTH_SCALE[0], Math.min(MARK_WIDTH_SCALE[1], f.width / libWidth)) : 1;
     const k = Math.max(0.3, (edge - cervical) / Math.max(1, (match.top - match.bottom) * f.up.z));
     const lMid = [lc[0] + mMes.x * (lo + hi) / 2, lc[1] + mMes.y * (lo + hi) / 2];
     // The middle of its edge: on the long axis through the contacts' middle, at the edge's height.
-    const at = f.mid.clone().add(f.up.clone().multiplyScalar((edge - f.mid.z) / f.up.z));
+    const at = exact ? f.i.clone().add(f.up.clone().multiplyScalar((edge - f.i.z) / f.up.z)) : f.mid.clone().add(f.up.clone().multiplyScalar((edge - f.mid.z) / f.up.z));
     const fromLib = new THREE.Matrix4().makeBasis(mMes, mOut, new THREE.Vector3(0, 0, 1)).invert().multiply(new THREE.Matrix4().makeTranslation(-lMid[0], -lMid[1], -match.top));
     const toPatient = new THREE.Matrix4().makeTranslation(at.x, at.y, at.z).multiply(new THREE.Matrix4().makeBasis(f.mes, f.out, f.up));
     const base = toPatient.multiply(new THREE.Matrix4().makeScale(s, s, k)).multiply(fromLib);

@@ -1008,3 +1008,16 @@
 
 /* Build 107: Landmarks - the tooth being marked, ringed. */
 .waxup-tooth.current { outline: 3px solid var(--studio-teal, #2f7d6d); outline-offset: 1px; font-weight: 700; }
+
+/* Build 107: Landmarks - the guide box, its picture, the teeth and the steps. */
+.wax-landmarks { display: flex; flex-direction: column; gap: 12px; }
+.wax-guide { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; background: #f4faf8; border: 1px solid #cfe8e1; border-radius: 10px; }
+.wax-guide span { font-size: 13px; color: #4b5563; }
+.wax-guide strong { font-size: 17px; color: #111827; }
+.wax-guide-picture { width: 100%; max-width: 300px; height: auto; align-self: center; }
+.wax-landmarks-label { font-size: 13px; font-weight: 600; color: #374151; }
+.wax-landmark-teeth { display: grid !important; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.wax-landmark-teeth .waxup-tooth { height: 40px; justify-content: center; }
+.wax-landmarks-count { margin: 0; }
+.wax-landmarks-nav { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.wax-landmarks-nav.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
