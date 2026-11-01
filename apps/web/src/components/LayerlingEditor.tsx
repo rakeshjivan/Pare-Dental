@@ -10583,7 +10583,7 @@ export function LayerlingEditor({
   useEffect(() => {
     const frame = requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
     return () => cancelAnimationFrame(frame);
-  }, [studioShellOn]);
+  }, [studioShellOn, studioShellOn && dentalStudio?.stage === "made"]);
   useEffect(() => { try { window.localStorage.setItem("pare3d.waxColourful", waxColourful ? "1" : "0"); } catch { /* this visit only */ } }, [waxColourful]);
   // Build 84: the bite contacts & clearance map - on, being worked out, its summary.
   const [biteMap, setBiteMap] = useState<{ on: boolean; busy: boolean; key: string; upper?: BiteContactStats; lower?: BiteContactStats; error?: string; /** Build 96: the two parts (upper first), and whether they are the studio's. */ ids: [string, string]; studio: boolean; /** Build 96: the contacts and overlaps only. */ contactOnly?: boolean; /** Build 97: each arch's opacity in occlusion, 0..1. */ upperOpacity?: number; lowerOpacity?: number; /** Build 97: how far the colours reach, mm. */ range?: number } | null>(null);
@@ -18799,7 +18799,7 @@ export function LayerlingEditor({
   };
 
   return (
-    <div className={`layerling-editor ${historyViewState ? "history-view-active" : ""}${dentalWorkspace ? " studio-dental" : ""}${dentalWorkspace && dentalStudio ? " dental-docked" : ""}${studioShellOn ? " studio-shell-on" : ""}${STUDIO_SHELL && dentalWorkspace ? " studio-new-look" : ""}${studioShellOn && !dentalStudio?.waxStudio ? " studio-mb" : ""}${studioPending && !studioShellOn ? " studio-pending" : ""}`}>
+    <div className={`layerling-editor ${historyViewState ? "history-view-active" : ""}${dentalWorkspace ? " studio-dental" : ""}${dentalWorkspace && dentalStudio ? " dental-docked" : ""}${studioShellOn ? " studio-shell-on" : ""}${STUDIO_SHELL && dentalWorkspace ? " studio-new-look" : ""}${studioShellOn && !dentalStudio?.waxStudio ? " studio-mb" : ""}${studioPending && !studioShellOn ? " studio-pending" : ""}${studioShellOn && dentalStudio?.stage === "made" ? " studio-made" : ""}`}>
       {studioPending && !studioShellOn ? <div className="studio-pending-cover" aria-hidden="true" /> : null}
       {dentalWorkspace && !studioShellOn ? (
         <DentalChrome
