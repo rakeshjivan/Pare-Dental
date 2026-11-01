@@ -58,6 +58,7 @@ export function StudioShell({
   objects,
   colour,
   dark,
+  layoutView,
   chart,
   onView,
   contacts,
@@ -74,6 +75,8 @@ export function StudioShell({
   colour?: { on: boolean; onChange: (on: boolean) => void } | null;
   /** The 3D view's dark ground (the panels stay light). */
   dark?: { on: boolean; onChange: (on: boolean) => void } | null;
+  /** Build 106: the made models laid out to print, or in the bite. */
+  layoutView?: { occlusion: boolean; onChange: (occlusion: boolean) => void } | null;
   chart?: StudioChart | null;
   onView?: (view: DentalView) => void;
   /** legend false: the studio shows its own key (the bite map's, in the case panel). */
@@ -149,8 +152,15 @@ export function StudioShell({
 
       <div className="studio-hint" role="status" ref={hintSlot} />
 
-      {onView || contacts ? (
+      {onView || contacts || layoutView ? (
         <div className="studio-viewbar" role="toolbar" aria-label={t("studio.viewChecks")}>
+          {layoutView ? (<>
+            <div className="studio-layout-toggle" role="radiogroup" aria-label={t("studio.printView")}>
+              <button type="button" role="radio" aria-checked={!layoutView.occlusion} className={!layoutView.occlusion ? "on" : ""} onClick={() => layoutView.onChange(false)}>{t("studio.printView")}</button>
+              <button type="button" role="radio" aria-checked={layoutView.occlusion} className={layoutView.occlusion ? "on" : ""} onClick={() => layoutView.onChange(true)}>{t("studio.occlusionView")}</button>
+            </div>
+            <span className="studio-vsep" aria-hidden="true" />
+          </>) : null}
           {onView ? VIEWS.map((entry) => (
             <button key={entry.view} type="button" className={`studio-vb${view === entry.view ? " on" : ""}`} aria-label={t(entry.label as "studio.viewFront")} title={t(entry.label as "studio.viewFront")} onClick={() => { setView(entry.view); onView(entry.view); }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={entry.icon} /></svg>

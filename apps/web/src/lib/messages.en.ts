@@ -5350,7 +5350,7 @@ export const MESSAGES_EN = {
   "studio.nameLabel": "Name label",
   "studio.saveExport": "Save & export",
   "studio.exportWhere": "Choose where to save the models",
-  "studio.exported": "Saved the models for printing and in occlusion: {print} and {occlusion}.",
+  "studio.exported": "Saved {files}.",
   "studio.printView": "Print view",
   "studio.occlusionView": "Occlusion",
   "studio.trimTitle": "Trim and tidy the scans",

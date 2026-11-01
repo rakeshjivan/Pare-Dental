@@ -143,7 +143,7 @@ import { bedOverhangs, keepDismissedOverhangs, printerPresetById, shapeBedFootpr
 import { SplitPanel, type SplitWorkplaneDirection } from "./workplane/SplitPanel";
 import { ReadyPartsSection } from "./ReadyPartsSection";
 import { MoreShapesSection } from "./MoreShapesSection";
-import { cachedFileSettings } from "@/lib/pareFiles";
+import { cachedFileSettings, chooseFilesFolder, getFileSettings, saveUserFile } from "@/lib/pareFiles";
 import { withFixedSides } from "@/lib/fixedSides";
 import { SavedFileToast } from "@/components/SavedFileToast";
 import { moreShapeFromDragId, moreShapePart } from "@/lib/moreShapes";
@@ -3284,6 +3284,10 @@ export function LayerlingEditor({
   const [studioBiteLive, setStudioBiteLive] = useState(false);
   // Build 106: each object's opacity in the studio frame (shape id -> 0..1).
   const [studioOpacity, setStudioOpacity] = useState<Record<string, number>>({});
+  // Build 106: the made models shown in the bite instead of laid out to print (the view only).
+  const [studioOccView, setStudioOccView] = useState(false);
+  const occViewCache = useRef(new WeakMap<WorkplaneShape, WorkplaneShape>());
+  const studioExporting = useRef(false);
   // Build 106: the studio's dark ground for the 3D view (the panels stay light).
   const [studioDark, setStudioDarkState] = useState(() => readStudioDark());
   const [waxColourful, setWaxColourful] = useState(() => { try { return window.localStorage.getItem("pare3d.waxColourful") === "1"; } catch { return false; } });
@@ -3295,6 +3299,33 @@ export function LayerlingEditor({
     let result = baseViewportShapes;
     if (dentalHidden.length) result = result.filter((shape) => !dentalHidden.includes(shape.id));
     if (studioHidden.length) result = result.filter((shape) => !studioHidden.includes(shape.id));
+    if (studioOccView) {
+      // Each made model moved into the bite; the pair stood on the plate; the pin set (on the plate in front)
+      // left out of this view.
+      const moves = new Map<string, THREE.Matrix4>();
+      let lowest = Infinity;
+      for (const shape of result) {
+        if (!shape.dentalBite || shape.hidden) continue;
+        const local = localToWorld(shape);
+        if (!local) continue;
+        const move = new THREE.Matrix4().fromArray(shape.dentalBite).multiply(local);
+        moves.set(shape.id, move);
+        lowest = Math.min(lowest, placedBounds(shape, move).min.y);
+      }
+      if (moves.size) {
+        const lift = new THREE.Matrix4().makeTranslation(0, Number.isFinite(lowest) ? -lowest : 0, 0);
+        result = result.flatMap((shape) => {
+          const move = moves.get(shape.id);
+          if (!move) return shape.dental === "model" && !shape.dentalBite ? [] : [shape];
+          const cached = occViewCache.current.get(shape);
+          if (cached) return [cached];
+          const fields = placementFor(shape, lift.clone().multiply(move));
+          const placed = fields ? { ...shape, ...fields } : shape;
+          occViewCache.current.set(shape, placed);
+          return [placed];
+        });
+      }
+    }
     if (studioBiteLive && studioBiteShown.length) {
       result = result.map((shape) => (studioBiteShown.includes(shape.id) ? { ...shape, hidden: false, color: BITE_OVERLAY_COLOUR, drawOnTop: true, locked: true } : shape));
     }
@@ -3329,7 +3360,7 @@ export function LayerlingEditor({
       result = [...result.map((shape) => (overlapping.has(shape.id) ? { ...shape, transparent: true } : shape)), ...fitOverlay];
     }
     return result;
-  }, [baseViewportShapes, dentalHidden, studioHidden, studioBiteLive, studioBiteShown, waxTint, waxColourful, waxSeeThrough, dragTextGhost, fitCheck, fitOverlay, fitReport, intersectPreviewIds, intersectPreviewShape, surfaceTextTool?.editingId, surfaceTextTool?.preview]);
+  }, [baseViewportShapes, dentalHidden, studioHidden, studioBiteLive, studioBiteShown, studioOccView, waxTint, waxColourful, waxSeeThrough, dragTextGhost, fitCheck, fitOverlay, fitReport, intersectPreviewIds, intersectPreviewShape, surfaceTextTool?.editingId, surfaceTextTool?.preview]);
   // A revolve sketch on the base plate is a side view: the bodies are shown from the front, as the profile is drawn (#525).
   // Opened again to edit a body that stands upright, it is the same side view: that body stands at its height, not on the plate's workplane.
   const editedRevolveShape = sketchActive && sketchOperation === "revolve" && editingSketchShapeId ? shapes.find((shape) => shape.id === editingSketchShapeId) : undefined;
@@ -10508,6 +10539,8 @@ export function LayerlingEditor({
   useEffect(() => { setStudioBiteLive(biteLiveNow); }, [biteLiveNow]);
   // A new case starts with its bite scans off again.
   useEffect(() => { if (!dentalStudio) { setStudioBiteShown([]); setStudioOpacity({}); setStudioTrimmed([]); } }, [dentalStudio]);
+  // Laid out to print again whenever the models are not on show (being made again, edited, closed).
+  useEffect(() => { if (dentalStudio?.stage !== "made") setStudioOccView(false); }, [dentalStudio?.stage]);
   // New scans in the case: each arch to be trimmed (or accepted) again.
   useEffect(() => { setStudioTrimmed([]); }, [dentalStudio?.slots.upper, dentalStudio?.slots.lower]);
   // Build 106: a new case opens its studio a moment after the editor - until then a plain cover, not the
@@ -11478,6 +11511,19 @@ export function LayerlingEditor({
           made.set(part.id, canonicalizeShape({ ...shapeWithWorldPositions(meshShapeFromPositions(series2 ? `${name} - ${t("waxup.imtSeries2")}` : name, shape.color, positions), positions), dental: "model" }));
           // Build 101: the model as it stands in the bite (wherever it is laid out), for its contacts map.
           if (part.toBite) madeBiteRef.current.set(made.get(part.id)!.id, Float32Array.from(fromZUp(transformSoup(Float32Array.from(part.positions), new THREE.Matrix4().fromArray(part.toBite)), offset)));
+          // Build 106: and the move that takes it there, kept with the model - the studio's Occlusion view
+          // shows the pair in the bite at any time (also when the case is opened again).
+          if (part.toBite) {
+            const toBite = new THREE.Matrix4().fromArray(part.toBite);
+            const step = Math.max(3, Math.floor(part.positions.length / 3 / 40) * 3);
+            const sample: number[] = [];
+            for (let i = 0; i + 2 < part.positions.length && sample.length < 120; i += step) sample.push(part.positions[i], part.positions[i + 1], part.positions[i + 2]);
+            const here = fromZUp(Float32Array.from(sample), offset);
+            if (lift) for (let i = 1; i < here.length; i += 3) here[i] += lift;
+            const there = fromZUp(transformSoup(Float32Array.from(sample), toBite), offset);
+            const move = rigidMoveBetween(here, there);
+            if (move) made.set(part.id, { ...made.get(part.id)!, dentalBite: move.toArray() });
+          }
         });
         // Build 79: the wax-up is in the model now - its teeth are kept, hidden, as used.
         const waxedArches = new Set(input.arches.filter((arch) => arch.wax?.length).map((arch) => arch.id));
@@ -11543,6 +11589,8 @@ export function LayerlingEditor({
         const heights = result.parts.map((part) => part.height.toFixed(1)).join(" / ");
         const kind = t(state.options.inside === "solid" ? "dental.doneSolid" : state.options.inside === "open" ? "dental.doneHollow" : "dental.doneClosed", { wall: state.options.wall.toFixed(1) });
         commitShapes(next, madeIds, t(result.parts.length > 1 ? "dental.donePair" : "dental.done", { height: heights, kind }));
+        // Build 106: in the studio frame the panel says the models are made - no message over the view.
+        if (STUDIO_SHELL && dentalWorkspace) dismissNotice();
         setMeshCheck(null);
         const notes = result.warnings.map((warning) => t(({ edge: "dental.warn.edge", vents: "dental.warn.vents", apart: "dental.warn.apart", teeth: "dental.warn.teeth", opening: "dental.warn.opening", loose: state.options.hinge ? "dental.warn.loose" : "dental.warn.looseScan", tag: "dental.warn.tag" } as const)[warning as "edge"] ?? "dental.warn.label"));
         // Build 60: how far the printed articulator opens.
@@ -11570,7 +11618,7 @@ export function LayerlingEditor({
         if (contactArea >= 1) notes.push(t("dental.toothOnGum", { area: Math.round(contactArea) }));
         const pin3 = result.pinTable?.find((row) => row.pin === 3);
         if (pin3) notes.push(t("dental.pinSetNote", { front: pin3.front.toFixed(1), back: pin3.back.toFixed(1) }));
-        if (notes.length) setNotice(`${t(result.parts.length > 1 ? "dental.donePair" : "dental.done", { height: heights, kind })} ${notes.join(" ")}`);
+        if (notes.length && !(STUDIO_SHELL && dentalWorkspace)) setNotice(`${t(result.parts.length > 1 ? "dental.donePair" : "dental.done", { height: heights, kind })} ${notes.join(" ")}`);
         // Build 79: the studio stays open on the models made: open the design again, or finish.
         const madeFor = { upper: state.slots.upper ? made.get(state.slots.upper)?.id : undefined, lower: state.slots.lower ? made.get(state.slots.lower)?.id : undefined };
         setDentalStudio({ ...state, stage: "made", made: madeIds, madeFor, editing: undefined, error: null, notes: [] });
@@ -17507,6 +17555,40 @@ export function LayerlingEditor({
    * Kommt das Bild rechtzeitig, reist es mit; kommt es nicht, geht es eben
    * ohne, und die Uebersicht zeigt wie bisher das Bild von vorhin.
    */
+  /**
+   * Build 106: Model Builder's Save & export - each made model (upper, lower, and the pin set when there is
+   * one) as an STL file of its own, laid out to print, into a folder the dentist chooses (in the app; in
+   * a browser, as downloads).
+   */
+  const saveExportDentalModels = async () => {
+    const state = dentalStudioRef.current;
+    if (!state || studioExporting.current) return;
+    const parts = (state.made ?? []).map((id) => shapesRef.current.find((shape) => shape.id === id)).filter((shape): shape is WorkplaneShape => Boolean(shape));
+    if (!parts.length) return;
+    studioExporting.current = true;
+    try {
+      if (await getFileSettings()) {
+        const chosen = await chooseFilesFolder("exports", t("studio.exportWhere"));
+        if (!chosen) return;
+      }
+      const caseName = (projectName || "").trim() || t("dental.title");
+      const saved: string[] = [];
+      for (const part of parts) {
+        const { meshes } = await exportBodiesWithLooseHoles([part]);
+        if (!meshes.length) continue;
+        const which = part.id === state.madeFor?.upper ? t("dental.upper") : part.id === state.madeFor?.lower ? t("dental.lower") : displayShapeName(part);
+        const name = projectExportFileName(`${caseName} - ${which}`, "stl");
+        const answer = await saveUserFile(name, new Blob([new Uint8Array(exportMeshesToStl(meshes))], { type: "model/stl" }), t("files.saveExport"));
+        if (answer === "cancelled") return;
+        saved.push(name);
+      }
+      if (saved.length) setNotice(t("studio.exported", { files: saved.join(", ") }));
+    } catch (error) {
+      setNotice(error instanceof Error ? localizedError(error.message) : String(error), true);
+    } finally {
+      studioExporting.current = false;
+    }
+  };
   const leaveToDashboard = useCallback(() => {
     if (!onHome) return;
     let left = false;
@@ -19829,6 +19911,7 @@ export function LayerlingEditor({
             objects={objects}
             colour={studioWax ? { on: waxColourful, onChange: setWaxColourful } : null}
             dark={{ on: studioDark, onChange: (on) => { setStudioDarkState(on); setStudioDark(on); } }}
+            layoutView={dentalStudio.stage === "made" && shapes.some((shape) => shape.dentalBite && dentalStudio.made?.includes(shape.id)) ? { occlusion: studioOccView, onChange: setStudioOccView } : null}
             chart={studioWax && arches.length ? {
               arch: waxSlot,
               arches: [...arches],
@@ -20101,6 +20184,7 @@ export function LayerlingEditor({
           editing={Boolean(dentalStudio.editing?.length)}
           shell={studioShellOn}
           onMbStep={setStudioMbStep}
+          onSaveExport={studioShellOn && !dentalStudio.waxStudio ? () => void saveExportDentalModels() : undefined}
           trimSlot={sculptTool?.trim ? (sculptTool.shapeId === dentalStudio.slots.upper ? "upper" : sculptTool.shapeId === dentalStudio.slots.lower ? "lower" : null) : null}
           nextSignal={studioNext}
           trimmedDone={dentalStudio.stage === "made" || dentalStudio.editing?.length ? null : studioTrimmed}
