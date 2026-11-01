@@ -713,6 +713,8 @@ declare global {
     /** Fork (build 53): draws triangles (world, a soup) over the scene as a tinted highlight; null clears it. */
     /** `owners` (build 74): which part each run of triangles belongs to, in order - each run then moves with its part. */
     layerlingHighlight?: (triangles: Float32Array | null, owners?: Array<{ shapeId: string; triangles: number }>) => void;
+    /** Build 107: Wax-up's landmark dots - small red balls, moved in place (no new geometry) while one is dragged; null clears them. */
+    layerlingMarkDots?: (points: Array<[number, number, number]> | null, radius?: number) => void;
     /** Build 69: Sculpt's working copy of a part (world soup) drawn in its place while it is worked on; null puts the part back. */
     layerlingSculptPreview?: (shapeId: string, triangles: Float32Array | null, color?: string) => void;
     /** Build 73: live Sculpt - the engine's own geometry drawn in the part's place (it updates the buffers itself); null puts the part back. */
@@ -9801,6 +9803,36 @@ export function WorkplaneViewport({
       return { drawn: Boolean(mesh), inScene: Boolean(mesh?.parent), hidden: hidden.length, showing, triangles: mesh ? (mesh.geometry.getAttribute("position") as THREE.BufferAttribute).count / 3 : 0 };
     };
     return () => { clear(); clearOverlay(); delete window.layerlingSculptPreview; delete window.layerlingSculptLive; delete window.layerlingColorOverlay; delete window.layerlingPartOpacity; delete window.layerlingRedraw; delete window.layerlingViewLook; delete window.layerlingStrokeMotion; delete window.layerlingOnFrame; beforeFrame = null; delete window.layerlingScreenRay; };
+  }, []);
+  // Build 107: Wax-up's landmark dots - one instanced ball, its instances moved in place.
+  useEffect(() => {
+    let dots: THREE.InstancedMesh | null = null;
+    const dummy = new THREE.Object3D();
+    const clear = () => {
+      const state = threeRef.current;
+      if (dots && state) state.scene.remove(dots);
+      dots?.geometry.dispose();
+      (dots?.material as THREE.Material | undefined)?.dispose();
+      dots = null;
+      if (state) state.needsRender = true;
+    };
+    window.layerlingMarkDots = (points, radius = 0.45) => {
+      const state = threeRef.current;
+      if (!state || !points || !points.length) { clear(); return; }
+      if (!dots || dots.count !== points.length || dots.userData.radius !== radius) {
+        clear();
+        const material = new THREE.MeshBasicMaterial({ color: 0xe0322f });
+        dots = new THREE.InstancedMesh(new THREE.SphereGeometry(radius, 16, 12), material, points.length);
+        dots.userData.radius = radius;
+        dots.renderOrder = 12;
+        dots.frustumCulled = false;
+        state.scene.add(dots);
+      }
+      points.forEach((point, i) => { dummy.position.set(point[0], point[1], point[2]); dummy.updateMatrix(); dots!.setMatrixAt(i, dummy.matrix); });
+      dots.instanceMatrix.needsUpdate = true;
+      state.needsRender = true;
+    };
+    return () => { clear(); delete window.layerlingMarkDots; };
   }, []);
   // Fork (build 53): Dental Studio's tooth area, tinted over the scan while it is being designated.
   useEffect(() => {

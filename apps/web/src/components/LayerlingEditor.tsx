@@ -80,7 +80,7 @@ import { adaptWaxInBackground, waxContactsInBackground } from "@/lib/meshJobs";
 import { alignToPlate, bridgeChoice, expandConnected, extrudeChoice, invertConnected, optimizeBoundary, shrinkChoice, smoothChoice } from "@/lib/meshEditTools";
 import { adjustMatrix, isIdentityAdjust, mirrorAdjust, setMoveAdjust, waxedNeighbourSides, ARC_DEPTH_DEFAULT, SMILE_LATERAL_STEP, CENTRAL_RATIO, contralateral, crownCutter, imtFirstInjection, moveFrame, nudgeMatrix, rigidMoveBetween, type ToothNudge, type ToothAdjust, fdiNumber, parseObj, splitShells, librarySet, type WaxLandmarks, marksFromTeeth, marksFromNeighbours, TOOTH_MARK_ORDER, type ToothMarks } from "@/lib/dentalWaxup";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
-import { WaxupPointOverlay, markerTriangles, rayHit } from "./workplane/WaxupPointOverlay";
+import { WaxupPointOverlay, rayHit, rayGrid, rayHitGrid, type RayGrid } from "./workplane/WaxupPointOverlay";
 import { WaxMarkDrag, type DragMark } from "./workplane/WaxMarkDrag";
 import { WAXUP_LANDMARKS, WAX_BLUE, WAX_CONFIRMED_COLOURS, WAX_TOOTH_COLOURS, defaultMarkTeeth, archOrder, type WaxupView } from "./workplane/WaxupCard";
 import { brushArea, lassoArea, screenTriangles } from "@/lib/dentalArea";
@@ -11896,7 +11896,7 @@ export function LayerlingEditor({
   const stopWaxPicking = useCallback(() => {
     setWaxup((current) => ({ ...current, picking: null, marks: [] }));
     setDentalHidden([]);
-    window.layerlingHighlight?.(null);
+    window.layerlingHighlight?.(null); window.layerlingMarkDots?.(null);
     highlightDrawn.current = null;
   }, []);
   const startWaxPicking = useCallback(() => {
@@ -11917,7 +11917,7 @@ export function LayerlingEditor({
     const hit = rayHit(worldTriangles(arch.shape), ray.origin, ray.direction);
     if (!hit) return;
     const marks = [...current.marks, hit];
-    window.layerlingHighlight?.(markerTriangles(marks));
+    window.layerlingMarkDots?.(marks.length ? marks : null);
     if (marks.length < 3) {
       setWaxup({ ...current, marks, picking: marks.length });
       return;
@@ -11938,7 +11938,7 @@ export function LayerlingEditor({
       const m = state.toothMarks[fdi];
       if (m) for (const key of TOOTH_MARK_ORDER) points.push(new THREE.Vector3(...m[key]).applyMatrix4(back).toArray() as [number, number, number]);
     }
-    window.layerlingHighlight?.(points.length ? markerTriangles(points, 0.6) : null);
+    window.layerlingMarkDots?.(points.length ? points : null);
   }, [waxArch]); // eslint-disable-line react-hooks/exhaustive-deps
   const startToothMarks = useCallback((only?: number[]) => {
     const arch = waxArch();
@@ -11963,7 +11963,7 @@ export function LayerlingEditor({
     marksOverlay.current = null;
     setWaxup((current) => ({ ...current, toothPick: null }));
     setDentalHidden([]);
-    window.layerlingHighlight?.(null);
+    window.layerlingHighlight?.(null); window.layerlingMarkDots?.(null);
     highlightDrawn.current = null;
   }, []);
   /** The current tooth done (its four points kept) or skipped: on to the next, or finished. */
@@ -12026,13 +12026,14 @@ export function LayerlingEditor({
   const marksMoved = useRef(false);
   // Build 106: marks moved since the teeth were last fitted to them (Update fits them again).
   const [marksChanged, setMarksChanged] = useState(false);
-  const markScan = useRef<{ id: string; tris: Float32Array } | null>(null);
+  const markScan = useRef<{ id: string; tris: Float32Array; grid: RayGrid } | null>(null);
   const markSurfaceAt = useCallback((x: number, y: number): [number, number, number] | null => {
     const arch = waxArch();
     const ray = window.layerlingScreenRay?.(x, y);
     if (!arch || !ray) return null;
-    if (!markScan.current || markScan.current.id !== arch.shape.id) markScan.current = { id: arch.shape.id, tris: Float32Array.from(worldTriangles(arch.shape)) };
-    return rayHit(markScan.current.tris, ray.origin, ray.direction);
+    // Build 107: the scan's triangles filed in a grid once, so a drag looks up only those along the ray.
+    if (!markScan.current || markScan.current.id !== arch.shape.id) { const tris = Float32Array.from(worldTriangles(arch.shape)); markScan.current = { id: arch.shape.id, tris, grid: rayGrid(tris) }; }
+    return rayHitGrid(markScan.current.grid, ray.origin, ray.direction);
   }, [waxArch]); // eslint-disable-line react-hooks/exhaustive-deps
   const markDragList = (): DragMark[] => {
     const arch = waxArch();
@@ -12067,8 +12068,9 @@ export function LayerlingEditor({
     if (!m) return;
     const inInput = new THREE.Vector3(...point).applyMatrix4(arch.sceneToInput).toArray() as [number, number, number];
     const next: WaxupState = { ...current, toothMarks: { ...current.toothMarks, [fdi]: { ...m, [key]: inInput } }, autoMarked: done ? current.autoMarked.filter((n) => n !== fdi) : current.autoMarked };
-    if (done) { waxRecordRef.current(); marksMoved.current = true; setMarksChanged(true); }
-    setWaxup(next);
+    // Build 107: while dragged only the dot moves (the editor is not drawn again each frame); let go, it is kept.
+    if (done) { waxRecordRef.current(); marksMoved.current = true; setMarksChanged(true); setWaxup(next); }
+    else waxupRef.current = next;
     showToothMarks(next);
     // Build 106: an incisal dot moved - the teeth follow it along the arch line as it is dragged (laid
     // again, moved and turned only; their sizes change with Update).
@@ -12093,7 +12095,7 @@ export function LayerlingEditor({
       window.clearTimeout(timer);
       setDentalHidden([]);
       setWaxSeeThrough(false);
-      window.layerlingHighlight?.(null);
+      window.layerlingHighlight?.(null); window.layerlingMarkDots?.(null);
       highlightDrawn.current = null;
     };
   }, [marksEditing, waxup.toothPick, waxup.slot]); // eslint-disable-line react-hooks/exhaustive-deps
