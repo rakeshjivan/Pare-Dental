@@ -20836,12 +20836,24 @@ function partGeom(shape: WorkplaneShape) {
  * shape object) - only for code that reads it and never changes it. A 256-step sphere takes most
  * of a second to build, and several tools asked for it again at every click.
  */
-const readOnlyMeshes = new WeakMap<WorkplaneShape, MeshData>();
+/**
+ * Build 107: only the last few versions are kept. A scan's mesh is a million small arrays (~70 MB for a
+ * full arch), and old versions of a part stay reachable for a while from earlier renders, so a cache
+ * that lived as long as each version kept one copy per trim - the Mac app ran out of memory after a
+ * run of trims in Wax-up Studio.
+ */
+const READ_ONLY_MESHES_KEPT = 4;
+const readOnlyMeshes = new Map<WorkplaneShape, MeshData>();
 function readOnlyMesh(shape: WorkplaneShape): MeshData {
   const known = readOnlyMeshes.get(shape);
-  if (known) return known;
+  if (known) {
+    readOnlyMeshes.delete(shape);
+    readOnlyMeshes.set(shape, known);
+    return known;
+  }
   const mesh = meshForShape(shape);
   readOnlyMeshes.set(shape, mesh);
+  while (readOnlyMeshes.size > READ_ONLY_MESHES_KEPT) readOnlyMeshes.delete(readOnlyMeshes.keys().next().value as WorkplaneShape);
   return mesh;
 }
 
