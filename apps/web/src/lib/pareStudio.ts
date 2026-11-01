@@ -10,6 +10,17 @@ import type { WorkplaneShape } from "@/types/layerling";
 
 export type PareStudio = "cad" | "dental";
 
+/**
+ * Build 106: what a Dental Studio case card says about the case - which workflow, whether its models are
+ * made (and articulated), the patient's details given for the label, and the step it was left at.
+ */
+export type DentalCaseSummary = { flow: "model" | "wax"; made: boolean; articulated?: boolean; patient?: string; step?: string };
+
+export function isDentalCaseSummary(value: unknown): value is DentalCaseSummary {
+  const v = value as DentalCaseSummary | null;
+  return Boolean(v && (v.flow === "model" || v.flow === "wax") && typeof v.made === "boolean");
+}
+
 export const PARE_STUDIOS: readonly PareStudio[] = ["cad", "dental"];
 
 export function isPareStudio(value: unknown): value is PareStudio {

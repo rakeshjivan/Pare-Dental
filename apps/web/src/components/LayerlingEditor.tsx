@@ -251,6 +251,7 @@ import { displayShapeName, iconTagAsset, qrCodeAsset, libraryShapeAssets, makeSh
 import { PORT_PRESET_ORDER, PORT_PRESETS, type PortPreset } from "@/lib/portGeometry";
 import { importedShapeFromStl, SCAN_GREY } from "@/lib/stlImport";
 import { readStudioDark, setStudioDark, setViewLook, studioLook } from "@/lib/viewLook";
+import type { DentalCaseSummary } from "@/lib/pareStudio";
 /** Build 106: the bite scan shown over the scans in Model Builder - a warm amber, see-through. */
 const BITE_OVERLAY_COLOUR = "#e9a23b";
 import { exportMeshesToStl } from "@/lib/stlExport";
@@ -1901,6 +1902,7 @@ export function LayerlingEditor({
   serverFileName = null,
   onProjectShapesChange,
   onProjectSnapshot,
+  onDentalSummary,
   isProjectThumbnailMissing,
   projectSaveFailure,
   onProjectWorkspaceChange,
@@ -1948,6 +1950,8 @@ export function LayerlingEditor({
     sketchPlacementWorkplane: PlacementWorkplane;
   }) => void;
   onProjectSnapshot?: (snapshot: { image: string; projectId: string; shapes: number }, signal?: AbortSignal) => Promise<void> | void;
+  /** Build 106: the case card's summary (workflow, made, patient, step) as the case changes. */
+  onDentalSummary?: (projectId: string, summary: DentalCaseSummary) => void;
   /** Whether the design's card has no picture; the editor then takes one once the design is open. */
   isProjectThumbnailMissing?: (projectId: string) => Promise<boolean>;
   /** The last failed autosave, so the editor can say so; `at` makes a repeat failure show again. */
@@ -10545,6 +10549,29 @@ export function LayerlingEditor({
   useEffect(() => { setStudioBiteLive(biteLiveNow); }, [biteLiveNow]);
   // A new case starts with its bite scans off again.
   useEffect(() => { if (!dentalStudio) { setStudioBiteShown([]); setStudioOpacity({}); setStudioTrimmed([]); } }, [dentalStudio]);
+  // Build 106: the case card's summary, told to the start page whenever it changes.
+  const dentalSummaryKey = useRef("");
+  useEffect(() => {
+    if (!projectId || !onDentalSummary || !dentalWorkspace) return;
+    const made = shapes.filter((shape) => shape.dental === "model" && shape.dentalSource && !shape.hidden);
+    const source = made[0]?.dentalSource;
+    const wax = Boolean(dentalStudio?.waxStudio || source?.waxStudio || shapes.some((shape) => shape.dental === "wax"));
+    const scans = shapes.some((shape) => shape.importedMesh);
+    if (!made.length && !dentalStudio && !scans) return;
+    const options = (source?.options ?? dentalStudio?.options) as { label?: string; hinge?: boolean } | undefined;
+    const patientKept = (source?.patientDetails ?? dentalStudio?.patientDetails) !== "remove";
+    const summary: DentalCaseSummary = {
+      flow: wax ? "wax" : "model",
+      made: made.length > 0,
+      ...(made.length && options?.hinge ? { articulated: true } : {}),
+      ...(patientKept && options?.label?.trim() ? { patient: options.label.trim() } : {}),
+      ...(!made.length && !wax && studioMbStep ? { step: studioMbStep } : {}),
+    };
+    const key = JSON.stringify(summary);
+    if (key === dentalSummaryKey.current) return;
+    dentalSummaryKey.current = key;
+    onDentalSummary(projectId, summary);
+  }, [projectId, onDentalSummary, dentalWorkspace, shapes, dentalStudio, studioMbStep]);
   // Laid out to print again whenever the models are not on show (being made again, edited, closed).
   useEffect(() => { if (dentalStudio?.stage !== "made") { setStudioOccView(false); setStudioExported(false); } }, [dentalStudio?.stage]);
   // New scans in the case: each arch to be trimmed (or accepted) again.

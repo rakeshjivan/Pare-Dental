@@ -91,7 +91,7 @@ import type { GridSize, ProjectAsset, WorkplaneShape, WorkplaneWorkspaceSettings
 import { saveUserFile } from "@/lib/pareFiles";
 import { BackupStrip } from "@/components/BackupStrip";
 import { SavedFileToast } from "@/components/SavedFileToast";
-import { dentalStudioAvailable, dentalWorkIn, isPareStudio, studioOfShapes, type PareStudio } from "@/lib/pareStudio";
+import { dentalStudioAvailable, dentalWorkIn, isDentalCaseSummary, isPareStudio, studioOfShapes, type DentalCaseSummary, type PareStudio } from "@/lib/pareStudio";
 import { HomeTopBar, type HomePlace } from "@/components/home/HomeTopBar";
 import { HomeLauncher } from "@/components/home/HomeLauncher";
 import { DentalStart, StudioHeader } from "@/components/home/StudioPage";
@@ -122,6 +122,8 @@ type DashboardProject = {
   folderId?: string | null;
   /** Build 104: the studio the design belongs to. Designs from before have none until they are sorted. */
   studio?: PareStudio;
+  /** Build 106: a Dental Studio case's summary for its card. */
+  dental?: DentalCaseSummary;
   /** Build 104: sent to its studio by hand, so the parts in it no longer move it by themselves. */
   studioPinned?: boolean;
 };
@@ -977,6 +979,7 @@ function readStoredProjects() {
             : undefined,
           folderId: typeof project.folderId === "string" && project.folderId ? project.folderId : null,
           studio: isPareStudio(project.studio) ? project.studio : undefined,
+          dental: isDentalCaseSummary(project.dental) ? project.dental : undefined,
           studioPinned: project.studioPinned === true ? true : undefined,
         };
       });
@@ -1014,6 +1017,7 @@ function mergeProjectForStorage(project: DashboardProject, storedProject?: Dashb
     sharedProject: project.sharedProject ?? storedProject.sharedProject,
     studio: project.studio ?? storedProject.studio,
     studioPinned: project.studioPinned ?? storedProject.studioPinned,
+    dental: project.dental ?? storedProject.dental,
   };
 }
 
@@ -1037,6 +1041,7 @@ function projectForStorage(project: DashboardProject): DashboardProject {
     ...(project.folderId ? { folderId: project.folderId } : {}),
     ...(project.studio ? { studio: project.studio } : {}),
     ...(project.studioPinned ? { studioPinned: true } : {}),
+    ...(project.dental ? { dental: project.dental } : {}),
   };
 }
 
@@ -1656,6 +1661,10 @@ export default function Home() {
       window.history.replaceState(null, "", nextUrl);
     }
   };
+
+  const updateDentalSummary = useCallback((projectId: string, dental: DentalCaseSummary) => {
+    setProjects((current) => current.map((project) => (project.id === projectId ? { ...project, dental } : project)));
+  }, []);
 
   const updateProjectSnapshot = useCallback(async (snapshot: { image: string; projectId: string; shapes: number }, signal?: AbortSignal) => {
     const version = Date.now();
@@ -3082,6 +3091,7 @@ export default function Home() {
               serverFileName={activeProject?.sharedProject?.fileName ?? null}
               onProjectShapesChange={updateProjectShapes}
               onProjectSnapshot={updateProjectSnapshot}
+              onDentalSummary={updateDentalSummary}
               isProjectThumbnailMissing={isProjectThumbnailMissing}
               projectSaveFailure={projectSaveFailure}
               onProjectWorkspaceChange={updateProjectWorkspace}
@@ -4272,15 +4282,24 @@ function Dashboard({
                         className="project-card-open"
                         type="button"
                         aria-pressed={selectMode ? selectedIds.has(project.id) : undefined}
+                        aria-label={project.studio === "dental" && project.dental
+                          ? `${project.dental.patient || project.name} - ${t(project.dental.flow === "wax" ? "case.tagWax" : "case.tagModel")}, ${dentalCaseStatus(project.dental)}, ${formatUpdated(project.updatedAt, language)}`
+                          : `${project.name}, ${formatUpdated(project.updatedAt, language)} - ${t("dashboard.shapeCount", { count: project.shapes })}`}
                         onClick={() => (selectMode ? toggleSelected(project.id) : onOpenProject(project.id))}
                       >
                         {selectMode ? (
                           <span className="project-card-check" aria-hidden="true">{selectedIds.has(project.id) ? <Check size={14} strokeWidth={3} /> : null}</span>
                         ) : null}
                         <ProjectPreview accent={project.accent} thumbnailUrl={project.thumbnailUrl} />
-                        <span className="project-card-title" translate="no">{project.name}</span>
+                        {/* Build 106: a Dental Studio case says which workflow it is, whose it is and how far it got. */}
+                        {project.studio === "dental" && project.dental ? (
+                          <span className={`case-tag ${project.dental.flow}`}>{t(project.dental.flow === "wax" ? "case.tagWax" : "case.tagModel")}</span>
+                        ) : null}
+                        <span className="project-card-title" translate="no">{project.studio === "dental" && project.dental?.patient ? project.dental.patient : project.name}</span>
                         <span className="project-card-meta">
-                          {formatUpdated(project.updatedAt, language)} - {t("dashboard.shapeCount", { count: project.shapes })}
+                          {project.studio === "dental" && project.dental
+                            ? `${dentalCaseStatus(project.dental)} · ${formatUpdated(project.updatedAt, language)}`
+                            : `${formatUpdated(project.updatedAt, language)} - ${t("dashboard.shapeCount", { count: project.shapes })}`}
                         </span>
                       </button>
                       {/* A design found by the search says which folder it is in, and takes you there. */}
@@ -4781,6 +4800,13 @@ function Dashboard({
 
     </main>
   );
+}
+
+/** Build 106: a Dental Studio case's state, in a few words. */
+function dentalCaseStatus(dental: DentalCaseSummary): string {
+  if (dental.made) return `${t("case.made")} · ${t(dental.articulated ? "case.articulated" : "case.separate")}`;
+  const step = dental.step && ["scans", "prepare", "model", "base", "label"].includes(dental.step) ? t(`modelBuilder.step.${dental.step}` as "modelBuilder.step.scans") : "";
+  return step ? t("case.inProgressAt", { step }) : t("case.inProgress");
 }
 
 function ProjectPreview({ accent, thumbnailUrl }: { accent: DashboardProject["accent"]; thumbnailUrl?: string | null }) {
