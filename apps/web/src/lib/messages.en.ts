@@ -5364,6 +5364,7 @@ export const MESSAGES_EN = {
   "case.separate": "Separate",
   "case.inProgress": "In progress",
   "case.inProgressAt": "In progress: {step}",
+  "dentalStart.comingSoon": "Coming soon",
   "studio.trimTitle": "Trim and tidy the scans",
   "studio.trimArch": "Choose the arch",
   "studio.resetUpper": "Reset upper",

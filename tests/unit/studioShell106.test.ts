@@ -31,8 +31,9 @@ describe("build 106: the studio frame", () => {
     expect(names).toEqual(["Import", "Select teeth", "Landmarks", "Library", "Position", "Sculpt", "Export"]);
   });
 
-  it("frames the studios only in test builds, and leaves CAD Studio and Dental Studio's own frame as they were", () => {
-    expect(src("lib/pareFeatures.ts")).toContain("export const STUDIO_SHELL = WAXUP_ENABLED;");
+  it("frames Dental Studio's workflows (live since 1 Nov 2026) and leaves CAD Studio as it was", () => {
+    expect(src("lib/pareFeatures.ts")).toContain("export const STUDIO_SHELL = true;");
+    expect(src("lib/pareFeatures.ts")).toContain('export const WAXUP_ENABLED = process.env.NEXT_PUBLIC_PARE_WAXUP === "on";');
     const editor = src("components/LayerlingEditor.tsx");
     expect(editor).toContain("const studioShellOn = STUDIO_SHELL && dentalWorkspace && Boolean(dentalStudio);");
     expect(editor).toContain("shell={studioShellOn}");

@@ -67,6 +67,8 @@ export function DentalStart({ onStart, onScans, waxupShown }: { onStart: (tool: 
   const [over, setOver] = useState<"model" | "wax" | null>(null);
   const card = (tool: "model" | "wax") => {
     const wax = tool === "wax";
+    // Build 106: in the live release Wax-Up is shown, marked Coming soon, and cannot be opened.
+    const soon = wax && !waxupShown;
     const chips = wax
       ? [t("dentalStart.waxChip1"), t("dentalStart.waxChip2"), t("dentalStart.waxChip3"), t("dentalStart.waxChip4")]
       : [t("dentalStart.modelChip1"), t("dentalStart.modelChip2"), t("dentalStart.modelChip3"), t("dentalStart.modelChip4")];
@@ -74,10 +76,11 @@ export function DentalStart({ onStart, onScans, waxupShown }: { onStart: (tool: 
     return (
       <section
         key={tool}
-        className={`home-studio-card dental dental-workflow ${tool}${over === tool ? " over" : ""}`}
+        className={`home-studio-card dental dental-workflow ${tool}${over === tool ? " over" : ""}${soon ? " soon" : ""}`}
         aria-labelledby={`dental-workflow-${tool}`}
+        aria-disabled={soon || undefined}
         onDragOver={(event: DragEvent) => {
-          if (!event.dataTransfer.types.includes("Files")) return;
+          if (soon || !event.dataTransfer.types.includes("Files")) return;
           event.preventDefault();
           event.dataTransfer.dropEffect = "copy";
           setOver(tool);
@@ -87,22 +90,24 @@ export function DentalStart({ onStart, onScans, waxupShown }: { onStart: (tool: 
         }}
         onDrop={(event: DragEvent) => {
           event.preventDefault();
+          if (soon) return;
           setOver(null);
           const files = Array.from(event.dataTransfer.files ?? []);
           if (files.length) onScans(files, tool);
         }}
       >
         {/* Build 104: the picture starts a new case, as New case does (and as Home's pictures open their studio). */}
-        <button type="button" className="home-studio-stage" aria-label={wax ? t("dentalStart.waxTitle") : t("dentalStart.modelTitle")} onClick={() => onStart(tool)}>
+        <button type="button" className="home-studio-stage" aria-label={wax ? t("dentalStart.waxTitle") : t("dentalStart.modelTitle")} disabled={soon} onClick={() => { if (!soon) onStart(tool); }}>
           <img src={wax ? "/assets/home/dental-hero.webp" : "/assets/home/model-builder-hero.webp"} alt="" draggable={false} />
           <span className="home-studio-kicker"><span className="home-studio-dot dental" aria-hidden="true" />{t("dentalStart.workflow")}</span>
           {over === tool ? <span className="dental-workflow-drop">{t("dentalStart.dropHere")}</span> : null}
+          {soon ? <span className="dental-workflow-soon">{t("dentalStart.comingSoon")}</span> : null}
         </button>
         <div className="home-studio-body">
           <div className="home-studio-text">
             <h2 id={`dental-workflow-${tool}`}>
               {wax ? t("dentalStart.waxTitle") : t("dentalStart.modelTitle")}
-              {wax ? <em className="test-pill">{t("home.testBuild")}</em> : null}
+              {wax ? <em className={`test-pill${soon ? " soon" : ""}`}>{t(soon ? "dentalStart.comingSoon" : "home.testBuild")}</em> : null}
             </h2>
             <p>{wax ? t("dentalStart.waxSummary") : t("dentalStart.modelSummary")}</p>
           </div>
@@ -110,10 +115,14 @@ export function DentalStart({ onStart, onScans, waxupShown }: { onStart: (tool: 
             {chips.map((chip) => <li key={chip}>{chip}</li>)}
           </ul>
           <div className="home-studio-actions">
-            <button type="button" className="home-primary dental" onClick={() => onStart(tool)}>
-              <Plus size={17} strokeWidth={2.4} aria-hidden="true" />
-              {t("home.newCase")}
-            </button>
+            {soon ? (
+              <button type="button" className="home-primary dental soon" disabled>{t("dentalStart.comingSoon")}</button>
+            ) : (
+              <button type="button" className="home-primary dental" onClick={() => onStart(tool)}>
+                <Plus size={17} strokeWidth={2.4} aria-hidden="true" />
+                {t("home.newCase")}
+              </button>
+            )}
             {/* Build 106: New case only - the scans are added inside the case. */}
             <input
               id={inputId}
@@ -133,9 +142,9 @@ export function DentalStart({ onStart, onScans, waxupShown }: { onStart: (tool: 
     );
   };
   return (
-    <div className={`dental-workflows${waxupShown ? "" : " single"}`}>
+    <div className="dental-workflows">
       {card("model")}
-      {waxupShown ? card("wax") : null}
+      {card("wax")}
     </div>
   );
 }

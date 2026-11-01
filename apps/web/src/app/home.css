@@ -1417,3 +1417,15 @@ html[data-theme="dark"] .pare-home .home-recent-thumb .project-preview {
 }
 .case-tag.model { background: #2f7d6d; }
 .case-tag.wax { background: #c7801f; }
+
+/* Build 106: Wax-Up in the live release - shown, marked Coming soon, not to be opened. */
+.dental-workflow.soon .home-studio-stage { cursor: default; }
+.dental-workflow.soon .home-studio-stage img { filter: grayscale(0.55); opacity: 0.6; }
+.dental-workflow.soon .home-studio-text p, .dental-workflow.soon .home-chips { opacity: 0.65; }
+.dental-workflow-soon {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  padding: 8px 16px; border-radius: 999px; background: rgba(17, 24, 39, 0.78); color: #ffffff;
+  font: 650 14px/1.2 var(--font-ui, Inter, sans-serif); letter-spacing: 0.02em; pointer-events: none;
+}
+.test-pill.soon { color: #374151; background: #e5e7eb; }
+.home-primary.dental.soon, .home-primary.dental.soon:hover { color: #6b7280; background: #e5e7eb; border-color: #e5e7eb; cursor: not-allowed; box-shadow: none; }
