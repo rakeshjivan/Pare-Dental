@@ -4914,6 +4914,7 @@ export const MESSAGES_EN = {
   "dental.summaryNoHinge": "No articulator",
   "dental.summaryNoLabel": "No label",
   "sculpt.trimTitle": "Trim and fill the scan",
+  "studio.trimScan": "Trim the scan",
   "sculpt.trimHelp": "Paint with Select (Unselect takes it back). Delete cuts it away and leaves the edge open; Erase & Fill removes it and closes the hole with a smooth patch that carries on the surface round it - for a bubble, spike or void. Surface I see selects only what faces you; Through selects right through the scan. Drag with the right or middle button to turn the view.",
   "sculpt.trimUndo": "Undo takes back each delete or fill. Restore original upper or lower in Dental Studio puts the whole scan back.",
   "dental.trimStep": "Trim and fill",

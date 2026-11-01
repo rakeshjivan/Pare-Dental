@@ -412,13 +412,15 @@ export function DentalStudioPanel({
     // The other arch chosen further on, with nothing placed on it yet: back to Find teeth for it.
     const past = ["set", "place", "adjust", "occlusion", "sculpt", "make"].includes(waxStep);
     if (past && !wv.placed.length && !waxAutoDone.current.has(wv.slot)) { setWaxStepId("select"); return; }
-    // Build 106: entering Select teeth (or Landmarks) the first time runs on to the teeth placed.
-    if ((waxStep === "select" || waxStep === "teeth") && !waxAutoDone.current.has(wv.slot)) { waxAutoDone.current.add(wv.slot); setWaxAuto(true); }
+    // Build 107: each step does its own work the first time it is entered (teeth found, marked, a set
+    // chosen, the teeth placed) and then waits for Next - as Model Builder, it never moves on by itself.
+    const key = `${wv.slot}:${waxStep}`;
+    if (["select", "teeth", "set", "place"].includes(waxStep) && !waxAutoDone.current.has(key)) { waxAutoDone.current.add(key); waxAutoDone.current.add(wv.slot); setWaxAuto(true); }
   }, [waxStep, wv?.slot]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!waxAuto || !waxStep || !wv || !waxup || busy || wv.busy || wv.finder.busy) return;
     const once = (what: string, run: () => void) => { const key = `${wv.slot}:${what}`; if (waxAutoTried.current.has(key)) return false; waxAutoTried.current.add(key); run(); return true; };
-    const next = () => { const i = waxSteps!.indexOf(waxStep); if (i >= 0 && i + 1 < waxSteps!.length) setWaxStepId(waxSteps![i + 1]); };
+    const next = () => setWaxAuto(false);
     // Build 105: the teeth found and marked for the dentist; without the finder (or nothing found) the dentist marks them.
     if (waxStep === "select") { if (waxStepDone("select")) next(); else setWaxAuto(false); return; }
     if (waxStep === "teeth") { if (waxStepDone("teeth")) next(); else if (wv.found && !once("marks", () => waxup.actions.onAutoMarks?.())) setWaxAuto(false); else if (!wv.found && (!wv.finder.name || !once("find", waxup.actions.onFindTeeth))) setWaxAuto(false); return; }

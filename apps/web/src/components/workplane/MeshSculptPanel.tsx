@@ -201,7 +201,8 @@ export function MeshSculptPanel({
   useLanguage();
   // Build 92: a list of every tool and button with a line on what it does, opened from the header.
   const [helpOpen, setHelpOpen] = useState(false);
-  const title = t(trim ? "sculpt.trimTitle" : "sculpt.title");
+  // Build 107: in the studio frame it is just "Trim the scan" - the scan's file name is not shown under it.
+  const title = t(studioTrim ? "studio.trimScan" : trim ? "sculpt.trimTitle" : "sculpt.title");
   // Build 94: the tab in view - Select while a select tool is in hand.
   const [tabChosen, setTab] = useState<"brush" | "select" | "part">(tool === "select" || tool === "unselect" ? "select" : "brush");
   const tab = tool === "select" || tool === "unselect" ? "select" : tabChosen === "select" ? "brush" : tabChosen;
@@ -599,7 +600,7 @@ export function MeshSculptPanel({
       <div className="edge-modifier-header movable" title={t("panel.moveHint")} {...handleProps}>
         <div>
           <strong>{title}</strong>
-          <span>{targetName}</span>
+          {studioTrim ? null : <span>{targetName}</span>}
         </div>
         <div className="panel-header-actions">
           <GuideHelpLink section="meshSculpt" />
