@@ -1041,3 +1041,7 @@
 .layerling-editor.studio-shell-on .waxup-set img { -webkit-user-drag: none; pointer-events: none; }
 .layerling-editor.studio-shell-on .waxup-set:hover:not(:disabled) { border-color: #7fc79a; }
 .layerling-editor.studio-shell-on .waxup-set.active { outline: none; border-color: #22a35a; box-shadow: 0 0 0 2px #22a35a; }
+
+/* Build 108: Wax-up Sculpt's Done sits under the sliders - the sticky footer, see-through in the docked panel, showed the Strength slider through it. */
+.waxup-sculpt-slot .mesh-sculpt-panel > .edge-modifier-footer { position: static; margin: 14px 0 0; padding-bottom: 0; }
+.waxup-sculpt-slot .sculpt-tabs[hidden] { display: none; }

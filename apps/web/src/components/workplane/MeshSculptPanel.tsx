@@ -36,6 +36,13 @@ export const WHOLE_PART_TOOLS = true;
 
 // Build 89: Meshmixer's brushes, in its order where it has them.
 export const SCULPT_TOOLS: SculptTool[] = ["drag", "draw", "draw2", "attract", "flatten", "inflate", "deflate", "pinch", "move", "crease", "smooth", "shrinkSmooth", "bubbleSmooth", "mask", "select", "unselect"];
+/**
+ * Build 108: Wax-up Studio's Sculpt - the brushes a dental technician shapes an anterior wax-up with in
+ * Meshmixer (add, build up, cut back, flatten, smooth, move, sharpen an edge, pull to a neighbour), and
+ * the two presets that matter for six front teeth. Nothing to select, freeze or rebuild there.
+ */
+export const WAX_SCULPT_TOOLS: SculptTool[] = ["draw", "inflate", "deflate", "flatten", "smooth", "move", "pinch", "attract"];
+const WAX_PRESET_IDS: readonly string[] = ["contact", "margin"];
 /** Build 75: Trim (Dental Studio's step 2a) - only selecting and deleting. */
 export const TRIM_TOOLS: SculptTool[] = ["select", "unselect"];
 /** Build 76: Erase & Fill (fill) sits beside Delete in Trim and Sculpt. */
@@ -122,6 +129,7 @@ export function MeshSculptPanel({
   onSoft,
   onSoftEnd,
   onPreset,
+  waxup = false,
 }: {
   targetName: string;
   tool: SculptTool | null;
@@ -197,6 +205,8 @@ export function MeshSculptPanel({
   onSoftEnd?: (keep: boolean) => void;
   /** Build 94: a dental preset picked. */
   onPreset?: (preset: SculptPreset) => void;
+  /** Build 108: Wax-up Studio's Sculpt step - its brushes and presets only, one page, no tabs. */
+  waxup?: boolean;
 }) {
   useLanguage();
   // Build 92: a list of every tool and button with a line on what it does, opened from the header.
@@ -205,7 +215,7 @@ export function MeshSculptPanel({
   const title = t(studioTrim ? "studio.trimScan" : trim ? "sculpt.trimTitle" : "sculpt.title");
   // Build 94: the tab in view - Select while a select tool is in hand.
   const [tabChosen, setTab] = useState<"brush" | "select" | "part">(tool === "select" || tool === "unselect" ? "select" : "brush");
-  const tab = tool === "select" || tool === "unselect" ? "select" : tabChosen === "select" ? "brush" : tabChosen;
+  const tab = waxup ? "brush" : tool === "select" || tool === "unselect" ? "select" : tabChosen === "select" ? "brush" : tabChosen;
   const [lastBrush, setLastBrush] = useState<SculptTool>("draw");
   if (tool && tool !== "select" && tool !== "unselect" && tool !== lastBrush) setLastBrush(tool);
   const chooseTab = (value: "brush" | "select" | "part") => {
@@ -242,7 +252,7 @@ export function MeshSculptPanel({
           </label>
         </details>
   ) : null;
-  const REFINE_AND_SYMMETRY = (<>
+  const REFINE = (
         <div className="edge-modifier-field edge-kind-switch shell-openings" role="radiogroup" aria-label={t("sculpt.refine")}>
           <span className="sculpt-reach-label" title={t("sculpt.tip.refine")}>{t("sculpt.refine")}</span>
           <div className="shell-opening-options four">
@@ -254,6 +264,9 @@ export function MeshSculptPanel({
           </div>
           <p className="blend-hint">{t(refine === "off" ? "sculpt.refine.offHint" : "sculpt.refine.onHint")}</p>
         </div>
+  );
+  const REFINE_AND_SYMMETRY = (<>
+        {REFINE}
         <div className="edge-modifier-field edge-kind-switch shell-openings" role="radiogroup" aria-label={t("sculpt.symmetry")}>
           <span className="sculpt-reach-label" title={t("sculpt.tip.symmetry")}>{t("sculpt.symmetry")}</span>
           <div className="shell-opening-options">
@@ -627,7 +640,7 @@ export function MeshSculptPanel({
       {trim ? (<>{TRIM_BODY}</>) : (<>
       {/* Build 94: three tabs - the brushes, the selection and what is done with it, and the whole part -
           so only what the job in hand needs is in view, and a selection's actions sit by its tools. */}
-      <div className="sculpt-tabs" role="tablist" aria-label={t("sculpt.tabs")}>
+      <div className="sculpt-tabs" role="tablist" aria-label={t("sculpt.tabs")} hidden={waxup}>
         {(["brush", "select", "part"] as const).map((value) => (
           <button key={value} type="button" role="tab" aria-selected={tab === value} className={tab === value ? "active" : ""} disabled={busy} title={t(`sculpt.tab.${value}Hint`)} onClick={() => chooseTab(value)}>{t(`sculpt.tab.${value}`)}</button>
         ))}
@@ -641,7 +654,7 @@ export function MeshSculptPanel({
       {tab === "brush" ? (<>
         <p className="edge-modifier-selection-help">{t("sculpt.help")}</p>
         <div className="dental-trim-mode dental-area-tools sculpt-tools" role="radiogroup" aria-label={t("sculpt.brushes")}>
-          {SCULPT_TOOLS.filter((value) => value !== "select" && value !== "unselect").map((value) => (
+          {(waxup ? WAX_SCULPT_TOOLS : SCULPT_TOOLS.filter((value) => value !== "select" && value !== "unselect")).map((value) => (
             <button key={value} type="button" role="radio" aria-checked={tool === value} className={tool === value ? "active" : ""} disabled={busy} title={t(`sculpt.tip.${value}` as "sculpt.tip.draw")} onClick={() => onTool(tool === value ? null : value)}>
               {t(`sculpt.tool.${value}`)}
             </button>
@@ -651,7 +664,7 @@ export function MeshSculptPanel({
           <details className="sculpt-brush-options sculpt-presets" open>
             <summary>{t("sculpt.presets")}</summary>
             <div className="dental-trim-buttons sculpt-selection">
-              {SCULPT_PRESETS.map((preset) => (
+              {SCULPT_PRESETS.filter((preset) => !waxup || WAX_PRESET_IDS.includes(preset.id)).map((preset) => (
                 <button key={preset.id} type="button" disabled={busy} title={t(`sculpt.preset.${preset.id}Hint`)} onClick={() => onPreset(preset)}>{t(`sculpt.preset.${preset.id}`)}</button>
               ))}
             </div>
@@ -660,6 +673,7 @@ export function MeshSculptPanel({
         {SIZE_SLIDER}
         <EdgeModifierSlider label={t("sculpt.strength")} title={t("sculpt.tip.strength")} value={Math.round(strength * 100)} min={1} max={100} step={1} workspace={workspace} disabled={busy} onChange={(value) => onStrength(value / 100)} />
         {tool ? <p className="blend-hint sculpt-keys">{t(tool === "mask" ? "sculpt.freeze.keys" : "sculpt.keysHint")}</p> : null}
+        {waxup ? REFINE : (<>
         {BRUSH_OPTIONS}
         {tool !== "mask" ? REFINE_AND_SYMMETRY : null}
         {FREEZE}
@@ -668,6 +682,7 @@ export function MeshSculptPanel({
           {DEVIATION}
           {GROUPS}
         </div>
+        </>)}
       </>) : null}
       {tab === "select" ? (<>
         <p className="edge-modifier-selection-help">{t("sculpt.selectHelp")}</p>

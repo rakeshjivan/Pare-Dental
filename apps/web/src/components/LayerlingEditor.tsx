@@ -88,7 +88,7 @@ import { brushArea, lassoArea, screenTriangles } from "@/lib/dentalArea";
 import { applyToSelection, brushChoice, lassoChoice, type LassoMode, cornerPositions, growChoice, soupFloat32, invertChoice, sculptMeshOf, soupOf, withoutTriangles, type SculptMesh, type SelectReach } from "@/lib/meshSculpt";
 import { remeshRegion, LiveMesh, averageEdgeOf, stampBrush, type LiveBrush, type LivePatch } from "@/lib/liveSculpt";
 import { defaultRemeshDetail, type RemeshMode } from "@/lib/meshRemesh";
-import { MeshSculptPanel, type SculptBrushOptions, type SoftTransform, type SculptFreezeAction, type SculptRefine, type SculptSelectionAction, type SculptSymmetry, type SculptTool } from "./workplane/MeshSculptPanel";
+import { MeshSculptPanel, WAX_SCULPT_TOOLS, type SculptBrushOptions, type SoftTransform, type SculptFreezeAction, type SculptRefine, type SculptSelectionAction, type SculptSymmetry, type SculptTool } from "./workplane/MeshSculptPanel";
 import { DentalBrushOverlay, DentalTrimOverlay, SculptLassoOverlay, trimLineDistance, type TrimPoint } from "./workplane/DentalTrimOverlay";
 import { SculptSelectionBar } from "./workplane/SculptSelectionBar";
 import { BiteContactsCard } from "./workplane/BiteContactsCard";
@@ -157,7 +157,7 @@ import { belowBedCutter } from "@/lib/cutBelowBed";
 import { fillHoleAt, isManifoldSolid, makeSolidPositions, meshHealth, pendingMeshChecks, shapeWithWorldPositions, tidyOpenSurface } from "@/lib/meshRepair";
 import { worldTriangles } from "@/lib/blend";
 import { eggshellTooth } from "@/lib/dentalEggshell";
-import { NearestSurface, DeviationProbe } from "@/lib/nearestSurface";
+import { NearestSurface, DeviationProbe, rayMeetsSoup, soupBoxOf, soupWithin } from "@/lib/nearestSurface";
 import { repairStlPositions } from "@/lib/stlRepair";
 import { checkForPrinting, type PrintIssue } from "@/lib/printCheck";
 import { toolLayout, toolPocketPositions, tracedSolidPositions, type ToolBinOptions, type TraceOptions, type TraceResult } from "@/lib/photoTrace";
@@ -9531,6 +9531,8 @@ export function LayerlingEditor({
     }
     return state.selection;
   };
+  /** Build 108: Wax-up Studio's Sculpt - the brush, size and strength in hand, kept from tooth to tooth. */
+  const waxSculptLast = useRef<{ tool: SculptTool; size: number; strength: number } | null>(null);
   const openSculpt = useCallback((shape: WorkplaneShape, trim = false) => {
     if (shape.locked || shape.hole || isNonSolidShapeKind(shape.kind)) { setNotice(t("sculpt.selectOne")); return; }
     setMeshRoundTool(null);
@@ -9540,7 +9542,8 @@ export function LayerlingEditor({
       sculptHidOthers.current = true;
       setDentalHidden(Object.values(studio.slots).filter((id): id is string => Boolean(id) && id !== shape.id));
     }
-    const settings = { shapeId: shape.id, trim, tool: (trim ? "select" : "smooth") as SculptTool, size: 30, strength: SCULPT_STRENGTH, reach: trim ? readTrimReach() : readSculptReach(), selectShape: readSelectShape(), chosen: 0, refine: readSculptRefine(), brushOptions: readBrushOptions(), symmetry: "off" as SculptSymmetry, remeshMode: "remesh" as RemeshMode, amount: 2, error: null, panelSteps: 0, panelRedo: 0 };
+    const last = !trim && shape.dental === "wax" && studio?.waxStudio ? waxSculptLast.current : null;
+    const settings = { shapeId: shape.id, trim, tool: (trim ? "select" : last?.tool ?? "smooth") as SculptTool, size: last?.size ?? 30, strength: last?.strength ?? SCULPT_STRENGTH, reach: trim ? readTrimReach() : readSculptReach(), selectShape: readSelectShape(), chosen: 0, refine: readSculptRefine(), brushOptions: readBrushOptions(), symmetry: "off" as SculptSymmetry, remeshMode: "remesh" as RemeshMode, amount: 2, error: null, panelSteps: 0, panelRedo: 0 };
     const known = sculptState.current;
     const ready = (state: SculptSession) => Math.max(0.05, Math.round(averageEdgeOf(state.live) * 100) / 100);
     if (known && known.shapeId === shape.id && known.key === projectShapesFingerprint([shape])) {
@@ -9868,15 +9871,34 @@ export function LayerlingEditor({
     } else stroke.frame = requestAnimationFrame(() => sculptFrameRef.current());
   };
   /** Build 92: the surface of every other part that is not hidden (within 4 mm reach), made once per version of them. */
-  const attractCache = useRef<{ key: string; target: NearestSurface | null } | null>(null);
+  const attractCache = useRef<{ key: string; target: NearestSurface | null; box?: number[] } | null>(null);
   /** Build 103: Meshmixer's magnet - when set, Attract pulls onto this part only (the opposing arch), shown or not. */
   const attractOnly = useRef<string | null>(null);
+  /** Build 108: the nearest visible wax tooth (other than `except`) a view ray meets, if any. */
+  const waxToothUnder = (ray: { origin: Vec3; direction: Vec3 }, except: string) => {
+    let best: string | null = null, bestAt = Infinity;
+    for (const other of shapesRef.current) {
+      if (other.id === except || other.dental !== "wax" || other.hidden || other.hole) continue;
+      const at = rayMeetsSoup(ray.origin, ray.direction, worldTriangles(other), bestAt);
+      if (at < bestAt) { bestAt = at; best = other.id; }
+    }
+    return best;
+  };
   const attractTargetFor = (shape: WorkplaneShape) => {
     const only = attractOnly.current ? shapesRef.current.find((other) => other.id === attractOnly.current && other.id !== shape.id) : undefined;
     const others = only ? [only] : shapesRef.current.filter((other) => other.id !== shape.id && !other.hidden && !other.hole && !isNonSolidShapeKind(other.kind));
-    const key = `${shape.id}|${projectShapesFingerprint(others)}`;
-    if (attractCache.current?.key === key) return attractCache.current.target;
-    const soups = others.map((other) => worldTriangles(other));
+    // Build 108: the parts' versions by identity (a changed part is a new object) - the fingerprint read every
+    // point of a full-arch scan at the start of each Attract stroke (~0.3 s).
+    const key = `${shape.id}|${others.map(shapeVersionKey).join(",")}`;
+    // Build 108: for a wax tooth, only what lies near it (Attract reaches 4 mm): the surface within 10 mm of the
+    // tooth's box, kept while the tooth stays 6 mm inside that - gathering and indexing the whole full-arch
+    // scan took close to a second at the first Attract stroke.
+    const wax = shape.dental === "wax";
+    const toothBox = wax ? soupBoxOf(worldTriangles(shape), 6) : null;
+    const cached = attractCache.current;
+    if (cached?.key === key && (!toothBox || (cached.box && toothBox.every((v, k) => (k < 3 ? v >= cached.box![k] : v <= cached.box![k]))))) return cached.target;
+    const near = toothBox ? toothBox.map((v, k) => (k < 3 ? v - 4 : v + 4)) : undefined;
+    const soups = others.map((other) => near ? soupWithin(worldTriangles(other), near) : worldTriangles(other));
     const total = soups.reduce((sum, soup) => sum + soup.length, 0);
     let target: NearestSurface | null = null;
     if (total) {
@@ -9885,7 +9907,7 @@ export function LayerlingEditor({
       for (const soup of soups) { all.set(soup, at); at += soup.length; }
       target = new NearestSurface(all, 4);
     }
-    attractCache.current = { key, target };
+    attractCache.current = { key, target, box: near };
     return target;
   };
   const startSculptStroke = useCallback((x: number, y: number, keys?: { ctrl: boolean; shift: boolean }) => {
@@ -9895,7 +9917,13 @@ export function LayerlingEditor({
     const { tool, shape, state } = target;
     const ray = window.layerlingScreenRay?.(x, y);
     const hit = ray ? state.live.pick(ray.origin, ray.direction) : null;
-    if (!ray || !hit) { setNotice(t("sculpt.nothing")); return; }
+    if (!ray || !hit) {
+      // Build 108: in Wax-up Studio a stroke begun on another wax tooth picks that tooth (its brushes open
+      // on it, the brush in hand kept) rather than saying there is nothing to sculpt.
+      const other = ray && shape.dental === "wax" && dentalStudioRef.current?.waxStudio ? waxToothUnder(ray, shape.id) : null;
+      if (other) { setSelectedIds([other]); return; }
+      setNotice(t("sculpt.nothing")); return;
+    }
     window.layerlingSculptLive?.(shape.id, state.live.geometry, shape.color);
     // Build 82: Meshmixer's keys while stroking - Shift smooths, Ctrl does the opposite.
     const chosenBrush = tool.tool as LiveBrush;
@@ -10616,9 +10644,14 @@ export function LayerlingEditor({
     const shape = id ? shapesRef.current.find((candidate) => candidate.id === id && candidate.dental === "wax" && !candidate.hidden) : undefined;
     if (!shape || waxSculptOpened.current === id) return;
     waxSculptOpened.current = id;
-    if (sculptToolRef.current && sculptToolRef.current.shapeId !== id) { flushSculptRef.current(); setSculptTool(null); }
+    // Build 108: saving the last tooth's strokes selects that tooth again - the tooth picked stays picked.
+    if (sculptToolRef.current && sculptToolRef.current.shapeId !== id) { flushSculptRef.current(); setSculptTool(null); setSelectedIds([shape.id]); }
     if (sculptToolRef.current?.shapeId !== id) window.setTimeout(() => openSculpt(shape), 0);
   }, [studioWaxSculpt, selectedIds, waxSculptMove]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!studioWaxSculpt || !sculptTool || sculptTool.trim || !sculptTool.tool || !WAX_SCULPT_TOOLS.includes(sculptTool.tool)) return;
+    waxSculptLast.current = { tool: sculptTool.tool, size: sculptTool.size, strength: sculptTool.strength };
+  }, [studioWaxSculpt, sculptTool?.tool, sculptTool?.size, sculptTool?.strength]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 106: the Model Builder step open in the frame - the right-click menu follows it.
   // Build 106: Trim and tidy's Done moves on - to the lower arch after the upper, then to the next step.
   const [studioNext, setStudioNext] = useState(0);
@@ -20595,6 +20628,7 @@ export function LayerlingEditor({
       ) : null}
       {sculptTool ? ((panel: React.ReactNode) => (studioShellOn && (sculptTool.trim || studioWaxSculpt) ? (studioToolSlot ? createPortal(panel, studioToolSlot) : null) : panel))(
         <MeshSculptPanel
+          waxup={studioWaxSculpt}
           onSpeed={() => setSculptSpeedShown((shown) => { try { window.localStorage.setItem("pare3d.sculptSpeed", shown ? "off" : "on"); } catch { /* this visit */ } return !shown; })}
           speedShown={sculptSpeedShown}
           targetName={displayShapeName(shapes.find((shape) => shape.id === sculptTool.shapeId) ?? ({ name: "" } as WorkplaneShape))}
@@ -21048,6 +21082,14 @@ type SculptSession = {
 type SculptSpeed = { brush: LiveBrush; refine: SculptRefine; seconds: number; fps: number; longest: number; work: number; workMost: number; gpu: number; end: number; triangles: number };
 /** Build 105: the most triangles one sculpt stroke's refinement adds. */
 const SCULPT_STROKE_TRIANGLES = 250_000;
+/** Build 108: a number for each version of a part - shapes are never changed in place, so a new object is a new version. */
+const shapeVersions = new WeakMap<WorkplaneShape, number>();
+let shapeVersionNext = 1;
+function shapeVersionKey(shape: WorkplaneShape) {
+  let version = shapeVersions.get(shape);
+  if (!version) { version = shapeVersionNext++; shapeVersions.set(shape, version); }
+  return `${shape.id}#${version}`;
+}
 type SculptStroke = {
   /** Build 105: the mesh's triangle slots when the stroke began - refinement stops once a stroke has added SCULPT_STROKE_TRIANGLES. */
   trianglesAtStart?: number;

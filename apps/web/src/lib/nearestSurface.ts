@@ -124,3 +124,56 @@ export class DeviationProbe {
     return this.far.nearest(x, y, z, out);
   }
 }
+
+/** Build 108: a triangle soup's box (min x y z, max x y z), grown by `grow` mm on every side. */
+export function soupBoxOf(soup: ArrayLike<number>, grow = 0): [number, number, number, number, number, number] {
+  const box: [number, number, number, number, number, number] = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+  for (let i = 0; i + 2 < soup.length; i += 3) {
+    for (let k = 0; k < 3; k += 1) {
+      const v = soup[i + k];
+      if (v < box[k]) box[k] = v;
+      if (v > box[k + 3]) box[k + 3] = v;
+    }
+  }
+  for (let k = 0; k < 3; k += 1) { box[k] -= grow; box[k + 3] += grow; }
+  return box;
+}
+
+/** Build 108: the triangles of a soup whose own box meets `box` (the rest are left out). */
+export function soupWithin(soup: ArrayLike<number>, box: readonly number[]): Float32Array {
+  const out = new Float32Array(soup.length);
+  let n = 0;
+  for (let i = 0; i + 8 < soup.length; i += 9) {
+    let inside = true;
+    for (let k = 0; k < 3 && inside; k += 1) {
+      const a = soup[i + k], b = soup[i + 3 + k], c = soup[i + 6 + k];
+      if (Math.max(a, b, c) < box[k] || Math.min(a, b, c) > box[k + 3]) inside = false;
+    }
+    if (inside) { for (let k = 0; k < 9; k += 1) out[n + k] = soup[i + k]; n += 9; }
+  }
+  return out.slice(0, n);
+}
+
+/** Build 108: how far along a ray (origin, unit direction) it first meets a soup's triangles, or Infinity (Möller–Trumbore, both faces). */
+export function rayMeetsSoup(origin: readonly number[], direction: readonly number[], soup: ArrayLike<number>, before = Infinity): number {
+  const [ox, oy, oz] = origin, [dx, dy, dz] = direction;
+  let best = before;
+  for (let i = 0; i + 8 < soup.length; i += 9) {
+    const ax = soup[i], ay = soup[i + 1], az = soup[i + 2];
+    const e1x = soup[i + 3] - ax, e1y = soup[i + 4] - ay, e1z = soup[i + 5] - az;
+    const e2x = soup[i + 6] - ax, e2y = soup[i + 7] - ay, e2z = soup[i + 8] - az;
+    const px = dy * e2z - dz * e2y, py = dz * e2x - dx * e2z, pz = dx * e2y - dy * e2x;
+    const det = e1x * px + e1y * py + e1z * pz;
+    if (Math.abs(det) < 1e-12) continue;
+    const inv = 1 / det;
+    const tx = ox - ax, ty = oy - ay, tz = oz - az;
+    const u = (tx * px + ty * py + tz * pz) * inv;
+    if (u < 0 || u > 1) continue;
+    const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x;
+    const v = (dx * qx + dy * qy + dz * qz) * inv;
+    if (v < 0 || u + v > 1) continue;
+    const t = (e2x * qx + e2y * qy + e2z * qz) * inv;
+    if (t > 0 && t < best) best = t;
+  }
+  return best;
+}
