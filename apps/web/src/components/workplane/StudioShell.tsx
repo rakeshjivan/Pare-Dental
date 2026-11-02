@@ -202,44 +202,48 @@ export function StudioShell({
 }
 
 function ToothChart({ chart }: { chart: StudioChart }): ReactNode {
-  const data = STUDIO_CHART[chart.arch];
-  const cx = data.w / 2, cy = data.h * 0.62;
+  // Build 108: with both arches, both charts at once - the upper, and below it the lower turned over, as an open
+  // mouth (the two arches facing each other, the patient's right on the left on both); a tooth on either picks it.
+  const arches = chart.arches.length > 1 ? chart.arches : [chart.arch];
   return (
     <div className="studio-chart-wrap">
       <p className="studio-sec">{t("studio.teeth")}</p>
-      {chart.arches.length > 1 ? (
-        <div className="studio-seg" role="group" aria-label={t("studio.arch")}>
-          {chart.arches.map((arch) => (
-            <button key={arch} type="button" className={chart.arch === arch ? "on" : ""} aria-pressed={chart.arch === arch} onClick={() => chart.onArch(arch)}>{t(arch === "upper" ? "dental.upper" : "dental.lower")}</button>
-          ))}
-        </div>
-      ) : null}
-      <div className="studio-chart">
-        <svg viewBox={`-46 -30 ${data.w + 92} ${data.h + 60}`} role="img" aria-label={t(chart.arch === "upper" ? "studio.chartUpper" : "studio.chartLower")}>
-          <image href={data.src} x={0} y={0} width={data.w} height={data.h} />
-          {Object.entries(data.teeth).map(([key, tooth]) => {
-            const fdi = Number(key);
-            const fill = chart.colours[fdi];
-            const pick = chart.pickable(fdi);
-            const dx = tooth.c[0] - cx, dy = tooth.c[1] - cy, d = Math.hypot(dx, dy) || 1;
-            const off = fdi % 10 >= 6 ? 66 : fdi % 10 >= 4 ? 58 : 50;
-            return (
-              <g key={key}>
-                {fill ? <path d={tooth.d} fill={fill} opacity={0.72} style={{ mixBlendMode: "multiply" }} /> : null}
-                <path
-                  d={tooth.d}
-                  className={`studio-chart-tooth${chart.selected === fdi ? " selected" : ""}${pick ? " pickable" : ""}`}
-                  fill="transparent"
-                  onClick={pick ? () => chart.onPick(fdi) : undefined}
-                >
-                  <title>{t("studio.toothN", { fdi })}</title>
-                </path>
-                <text x={tooth.c[0] + (dx / d) * off} y={tooth.c[1] + (dy / d) * off + 9} textAnchor="middle" className={`studio-chart-num${chart.selected === fdi ? " selected" : ""}`}>{fdi}</text>
+      {arches.map((arch) => {
+        const data = STUDIO_CHART[arch];
+        const cx = data.w / 2, cy = data.h * 0.62;
+        const flip = arch === "lower" && arches.length > 1;
+        const y = (v: number) => (flip ? data.h - v : v);
+        return (
+          <div key={arch} className={`studio-chart${arches.length > 1 && chart.arch === arch ? " active" : ""}`}>
+            <svg viewBox={`-46 -30 ${data.w + 92} ${data.h + 60}`} role="img" aria-label={t(arch === "upper" ? "studio.chartUpper" : "studio.chartLower")}>
+              <g transform={flip ? `translate(0 ${data.h}) scale(1 -1)` : undefined}>
+                <image href={data.src} x={0} y={0} width={data.w} height={data.h} />
+                {Object.entries(data.teeth).map(([key, tooth]) => {
+                  const fdi = Number(key);
+                  const fill = chart.colours[fdi];
+                  const pick = chart.pickable(fdi);
+                  return (
+                    <g key={key}>
+                      {fill ? <path d={tooth.d} fill={fill} opacity={0.72} style={{ mixBlendMode: "multiply" }} /> : null}
+                      <path d={tooth.d} className={`studio-chart-tooth${chart.selected === fdi ? " selected" : ""}${pick ? " pickable" : ""}`} fill="transparent" onClick={pick ? () => chart.onPick(fdi) : undefined}>
+                        <title>{t("studio.toothN", { fdi })}</title>
+                      </path>
+                    </g>
+                  );
+                })}
               </g>
-            );
-          })}
-        </svg>
-      </div>
+              {Object.entries(data.teeth).map(([key, tooth]) => {
+                const fdi = Number(key);
+                const dx = tooth.c[0] - cx, dy = tooth.c[1] - cy, d = Math.hypot(dx, dy) || 1;
+                const off = fdi % 10 >= 6 ? 66 : fdi % 10 >= 4 ? 58 : 50;
+                // The numbers stay upright: placed where the turned-over tooth is.
+                const ty = y(tooth.c[1] + (dy / d) * off) + 9;
+                return <text key={key} x={tooth.c[0] + (dx / d) * off} y={ty} textAnchor="middle" className={`studio-chart-num${chart.selected === fdi ? " selected" : ""}`}>{fdi}</text>;
+              })}
+            </svg>
+          </div>
+        );
+      })}
       <div className="studio-legend"><span><i style={{ background: Object.values(chart.colours)[0] ?? "#a8c3ea" }} />{t("studio.legendWax")}</span><span><i className="ring" />{t("studio.legendSelected")}</span></div>
     </div>
   );

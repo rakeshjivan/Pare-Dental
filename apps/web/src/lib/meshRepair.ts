@@ -15,7 +15,7 @@ import * as THREE from "three";
 import { getManifoldRuntime } from "@/lib/editorMeshCore";
 import { meshShapeFromPositions } from "@/lib/lithophane";
 import type { WorkplaneShape } from "@/types/layerling";
-import { carryScanFrame } from "@/lib/scanFrame";
+import { carryScanFrame, localToWorld } from "@/lib/scanFrame";
 
 const WELD = 1e4; // corners within 0.1 µm are one corner
 
@@ -409,7 +409,24 @@ export async function isManifoldSolid(positions: ArrayLike<number>): Promise<boo
 /** The part with new triangles (in the world), keeping its name, colour and settings; turned and mirrored into the mesh. */
 export function shapeWithWorldPositions(shape: WorkplaneShape, positions: number[]): WorkplaneShape {
   // Build 74: a scan keeps where it stands in the scanner's coordinates (the bite) through the edit.
-  return carryScanFrame(shape, rebuiltFromWorld(shape, positions));
+  return carryWaxFrame(shape, carryScanFrame(shape, rebuiltFromWorld(shape, positions)));
+}
+
+/**
+ * Build 108: a wax tooth's frame (its incisal point and axes) is kept in the part's own coordinates; the part
+ * rebuilt from world positions is re-centred and unturned, so the frame is carried over to stay where it was
+ * in the world - kept as it was, the axes a sculpted tooth was moved and turned along (its drag preview, its
+ * gimbal) pointed wherever its old turn had left them, and the tooth jumped off across the view.
+ */
+function carryWaxFrame(before: WorkplaneShape, next: WorkplaneShape): WorkplaneShape {
+  const tooth = before.waxTooth;
+  if (!tooth) return next;
+  const was = localToWorld(before), now = localToWorld(next);
+  if (!was || !now) return next;
+  const m = now.clone().invert().multiply(was);
+  const dir = (v: readonly number[]) => new THREE.Vector3(v[0], v[1], v[2]).transformDirection(m).toArray() as [number, number, number];
+  const f = tooth.frame;
+  return { ...next, waxTooth: { ...tooth, frame: { origin: new THREE.Vector3(...f.origin).applyMatrix4(m).toArray() as [number, number, number], out: dir(f.out), mesial: dir(f.mesial), up: dir(f.up) } } };
 }
 function rebuiltFromWorld(shape: WorkplaneShape, positions: number[]): WorkplaneShape {
   const rebuilt = meshShapeFromPositions(shape.name, shape.color, positions);

@@ -12336,7 +12336,7 @@ export function LayerlingEditor({
       out[i + k * 3] = x - 2 * d * normal.x; out[i + k * 3 + 1] = y - 2 * d * normal.y; out[i + k * 3 + 2] = z - 2 * d * normal.z;
     }
     waxRecordRef.current();
-    const changed = canonicalizeShape({ ...shapeWithWorldPositions(b, out), waxTooth: b.waxTooth });
+    const changed = canonicalizeShape(shapeWithWorldPositions(b, out));
     commitShapes(shapesRef.current.map((shape) => (shape.id === b.id ? changed : shape)), [a.id], t("waxup.mirrorShapeDone", { from: a.waxTooth.fdi, to: partnerFdi }));
   };
   /** Build 105: Ctrl + wheel over the teeth: the next (or previous) tooth set for this arch, each tooth kept where it was moved to. */
@@ -12583,7 +12583,10 @@ export function LayerlingEditor({
       const toWorld = localToWorld(shape);
       const fields = toWorld ? placementFor(shape, delta.clone().multiply(toWorld)) : null;
       // A part that cannot be stood there by a turn and a move (resized) is moved corner by corner.
-      moved.set(shape.id, canonicalizeShape(fields ? { ...shape, ...fields } : { ...shapeWithWorldPositions(shape, Array.from(transformSoup(Float32Array.from(worldTriangles(shape)), delta))), ...(shape.waxTooth ? { waxTooth: shape.waxTooth } : {}) }));
+      // (Rebuilt, a wax tooth's frame is carried to where the tooth now is: moved with it by the same turn.)
+      const rebuilt = fields ? null : shapeWithWorldPositions(shape, Array.from(transformSoup(Float32Array.from(worldTriangles(shape)), delta)));
+      const rebuiltAt = rebuilt ? localToWorld(rebuilt) : null;
+      moved.set(shape.id, canonicalizeShape(fields ? { ...shape, ...fields } : rebuilt && shape.waxTooth && toWorld && rebuiltAt ? { ...rebuilt, waxTooth: { ...shape.waxTooth, frame: moveFrame(moveFrame(shape.waxTooth.frame, delta.clone().multiply(toWorld)), rebuiltAt.clone().invert()) } } : rebuilt!));
     }
     waxRecordRef.current(true);
     commitShapes(shapesRef.current.map((shape) => moved.get(shape.id) ?? shape), [], t("waxup.biteOpened", { mm: raise.toFixed(1) }));
@@ -12655,6 +12658,27 @@ export function LayerlingEditor({
       }
     }
     setWaxup((latest) => ({ ...latest, gum: { mode: "even", keep: next } }));
+  };
+  /** Build 103/108: the arch worked on - the other arch's teeth stay; this one's come back with its set, size and curve. */
+  const switchWaxSlot = (slot: "upper" | "lower") => {
+    // Build 103: a set made for the other arch is not carried over (an upper set was placed on
+    // the lower teeth); the set last chosen for this arch comes back.
+    const current = waxupRef.current;
+    const setArch = current.builtIn.find((set) => set.id === current.setId)?.arch;
+    const remembered = waxSetByArch.current[slot];
+    const keep = !setArch || setArch === slot;
+    if (!keep) waxShells.current = null;
+    // Build 108: both arches waxed - the other arch's teeth stay where they are; coming back to an arch
+    // brings its teeth (from the scene), its set size and its arch curve back with it.
+    waxArchKnobs.current[current.slot] = { setScale: current.setScale ?? 1, setCurve: current.setCurve ?? 0 };
+    setWaxup((now) => {
+      const id = dentalStudioRef.current?.slots[slot];
+      const found = id ? waxFound[id] : undefined;
+      const placed = id ? waxTeethOf(id).flatMap((shape) => (shape.waxTooth ? [{ id: shape.id, fdi: shape.waxTooth.fdi, clearance: null, width: shape.waxTooth.width, length: shape.waxTooth.length, lengthening: 0, extension: 0 }] : [])).sort((a, b) => archOrder(a.fdi) - archOrder(b.fdi)) : [];
+      const knobs = waxArchKnobs.current[slot] ?? { setScale: 1, setCurve: 0 };
+      return { ...now, slot, landmarks: found?.landmarks ?? null, guessed: false, placed, ...knobs, ...(keep ? {} : { setId: null, setName: null, teeth: 0 }) };
+    });
+    if (!keep && remembered) void chooseBuiltInSet(remembered);
   };
   const scaleWaxSet = (scale: number) => {
     const current = waxupRef.current;
@@ -13367,7 +13391,7 @@ export function LayerlingEditor({
         const shape = input.teeth[k];
         if (!tooth.bite && !tooth.contact) return;
         bite += tooth.bite ? 1 : 0; contact += tooth.contact ? 1 : 0; deepest = Math.max(deepest, tooth.deepest);
-        changed.set(shape.id, canonicalizeShape({ ...shapeWithWorldPositions(shape, Array.from(transformSoup(tooth.positions, back))), waxTooth: shape.waxTooth }));
+        changed.set(shape.id, canonicalizeShape(shapeWithWorldPositions(shape, Array.from(transformSoup(tooth.positions, back)))));
       });
       if (changed.size) commitShapes(shapesRef.current.map((shape) => changed.get(shape.id) ?? shape), selectedIdsRef.current, t("waxup.adaptDone"));
       const note = changed.size ? t("waxup.adaptNote", { bite, contact, deepest: deepest.toFixed(2), clearance: occlusal.toFixed(2) }) : t("waxup.adaptNothing");
@@ -13421,7 +13445,7 @@ export function LayerlingEditor({
           const shape = side.wax[k];
           if (!shape) return;
           const positions = transformSoup(tooth.positions, back);
-          changed.set(shape.id, canonicalizeShape({ ...shapeWithWorldPositions(shape, Array.from(positions)), waxTooth: shape.waxTooth }));
+          changed.set(shape.id, canonicalizeShape(shapeWithWorldPositions(shape, Array.from(positions))));
         });
       }
       if (changed.size) commitShapes(shapesRef.current.map((shape) => changed.get(shape.id) ?? shape), [], t("waxup.occlusionDone"));
@@ -20493,17 +20517,18 @@ export function LayerlingEditor({
             chart={studioWax && arches.length ? {
               arch: waxSlot,
               arches: [...arches],
-              onArch: (arch) => {
-                if (arch === waxupRef.current.slot) return;
-                const current = dentalStudioRef.current;
-                if (current?.waxStudio && current.waxStudio.arches === "both") setWaxup((now) => ({ ...now, slot: arch, landmarks: null, guessed: false, placed: [] }));
-              },
-              colours: Object.fromEntries(markTeeth.map((fdi) => [fdi, waxColourful ? WAX_TOOTH_COLOURS[fdi] ?? WAX_BLUE : WAX_BLUE])),
-              selected: selectedFdi,
+              onArch: (arch) => { if (arch !== waxupRef.current.slot && dentalStudioRef.current?.waxStudio?.arches === "both") switchWaxSlot(arch); },
+              // Build 108: both arches on the chart at once - each arch's wax teeth in their colours.
+              colours: Object.fromEntries([...markTeeth, ...shapes.filter((shape) => shape.dental === "wax" && shape.waxTooth && !shape.hidden && arches.some((slot) => dentalStudio.slots[slot] === shape.waxFor)).map((shape) => shape.waxTooth!.fdi)].map((fdi) => [fdi, waxColourful ? WAX_TOOTH_COLOURS[fdi] ?? WAX_BLUE : WAX_BLUE])),
+              selected: selectedFdi ?? shapes.find((shape) => selectedIds.length === 1 && shape.id === selectedIds[0] && shape.dental === "wax")?.waxTooth?.fdi ?? null,
               pickable: (fdi) => fdi % 10 <= 5,
               onPick: (fdi) => {
-                const tooth = placedHere.find((entry) => entry.fdi === fdi);
+                // Build 108: a tooth of the other arch picks that arch too.
+                const arch = fdi < 30 ? "upper" as const : "lower" as const;
+                if (arch !== waxupRef.current.slot && dentalStudioRef.current?.waxStudio?.arches === "both") switchWaxSlot(arch);
+                const tooth = shapesRef.current.find((shape) => shape.dental === "wax" && !shape.hidden && shape.waxTooth?.fdi === fdi && shape.waxFor === dentalStudioRef.current?.slots[arch]);
                 if (tooth) { setSelectedIds([tooth.id]); return; }
+                if (arch !== waxupRef.current.slot) return;
                 setWaxup((current) => { const teeth = markTeethFor(current); return { ...current, markTeeth: teeth.includes(fdi) ? teeth.filter((n) => n !== fdi) : [...teeth, fdi].sort((a, b) => archOrder(a) - archOrder(b)) }; });
               },
             } : null}
@@ -20627,26 +20652,7 @@ export function LayerlingEditor({
             actions: {
               onSet: (files) => void loadWaxSet(files),
               onBuiltIn: (id) => void chooseBuiltInSet(id),
-              onSlot: (slot) => {
-                // Build 103: a set made for the other arch is not carried over (an upper set was placed on
-                // the lower teeth); the set last chosen for this arch comes back.
-                const current = waxupRef.current;
-                const setArch = current.builtIn.find((set) => set.id === current.setId)?.arch;
-                const remembered = waxSetByArch.current[slot];
-                const keep = !setArch || setArch === slot;
-                if (!keep) waxShells.current = null;
-                // Build 108: both arches waxed - the other arch's teeth stay where they are; coming back to an arch
-                // brings its teeth (from the scene), its set size and its arch curve back with it.
-                waxArchKnobs.current[current.slot] = { setScale: current.setScale ?? 1, setCurve: current.setCurve ?? 0 };
-                setWaxup((now) => {
-                  const id = dentalStudioRef.current?.slots[slot];
-                  const found = id ? waxFound[id] : undefined;
-                  const placed = id ? waxTeethOf(id).flatMap((shape) => (shape.waxTooth ? [{ id: shape.id, fdi: shape.waxTooth.fdi, clearance: null, width: shape.waxTooth.width, length: shape.waxTooth.length, lengthening: 0, extension: 0 }] : [])).sort((a, b) => archOrder(a.fdi) - archOrder(b.fdi)) : [];
-                  const knobs = waxArchKnobs.current[slot] ?? { setScale: 1, setCurve: 0 };
-                  return { ...now, slot, landmarks: found?.landmarks ?? null, guessed: false, placed, ...knobs, ...(keep ? {} : { setId: null, setName: null, teeth: 0 }) };
-                });
-                if (!keep && remembered) void chooseBuiltInSet(remembered);
-              },
+              onSlot: (slot) => switchWaxSlot(slot),
               onMark: startWaxPicking,
               onMarkTeeth: (only?: number[]) => startToothMarks(only),
               onSkipTooth: skipToothMarks,

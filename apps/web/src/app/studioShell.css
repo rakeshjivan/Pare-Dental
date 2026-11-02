@@ -1049,3 +1049,6 @@
 .waxup-gum-key { list-style: none; margin: 4px 0 12px; padding: 0; display: grid; gap: 4px; font-size: 13px; color: #3d4654; }
 .waxup-gum-key li { display: flex; align-items: center; gap: 8px; }
 .waxup-gum-key span { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+/* Build 108: both arches on the chart - the lower under the upper, as an open mouth; the arch worked on marked. */
+.studio-chart + .studio-chart { margin-top: -6px; }
+.studio-chart.active { background: rgba(47, 125, 109, 0.06); border-radius: 12px; }
