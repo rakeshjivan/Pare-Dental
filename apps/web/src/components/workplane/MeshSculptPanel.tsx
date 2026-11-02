@@ -130,6 +130,7 @@ export function MeshSculptPanel({
   onSoftEnd,
   onPreset,
   waxup = false,
+  brushLassoOnly = false,
 }: {
   targetName: string;
   tool: SculptTool | null;
@@ -207,6 +208,8 @@ export function MeshSculptPanel({
   onPreset?: (preset: SculptPreset) => void;
   /** Build 108: Wax-up Studio's Sculpt step - its brushes and presets only, one page, no tabs. */
   waxup?: boolean;
+  /** Build 108: Wax-up Studio's Trim - Brush and Lasso only (no Group). */
+  brushLassoOnly?: boolean;
 }) {
   useLanguage();
   // Build 92: a list of every tool and button with a line on what it does, opened from the header.
@@ -411,7 +414,7 @@ export function MeshSculptPanel({
         <div className="edge-modifier-field edge-kind-switch shell-openings" role="radiogroup" aria-label={t("sculpt.selectShape")}>
           <div className="shell-opening-options">
             {/* Build 108: the studio's Trim - Brush and Lasso only. */}
-            {(studioTrim ? (["brush", "lasso"] as const) : (["brush", "lasso", "group"] as const)).map((value) => (
+            {(brushLassoOnly ? (["brush", "lasso"] as const) : (["brush", "lasso", "group"] as const)).map((value) => (
               <button key={value} type="button" role="radio" aria-checked={selectShape === value} className={selectShape === value ? "active" : ""} disabled={busy} title={t(`sculpt.tip.selectShape.${value}` as "sculpt.tip.selectShape.brush")} onClick={() => onSelectShape?.(value)}>
                 {t(`sculpt.selectShape.${value}`)}
               </button>

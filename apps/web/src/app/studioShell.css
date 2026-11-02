@@ -1077,3 +1077,11 @@ html.studio-right-hidden .studio-shell-on .dental-studio-panel.studio-framed { d
 .studio-side-tab.left.hidden { left: calc(var(--studio-gap) + 8px); }
 .studio-side-tab.right.hidden { left: calc(100vw - var(--studio-gap) - 8px); }
 .dental-view-title { display: block; margin: 10px 0 6px; }
+/* Build 108: Library - what to pick, and room round Load your own set with the file types under it. */
+.waxup-set-guide { margin: 0 0 12px; font-size: 15px; font-weight: 600; color: var(--studio-teal, #0a786c); }
+.waxup-load-own { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--studio-line, #e3e6eb); }
+.waxup-load-own .dental-import { width: 100%; justify-content: center; }
+.waxup-load-own .waxup-load-types { margin: 8px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--studio-muted, #56606f); }
+/* Build 108: Open bite - the opening at the front and at the back. */
+.wax-bite-openings { display: grid; gap: 6px; margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--studio-line, #e3e6eb); border-radius: 10px; background: #f7f9fa; font-size: 13.5px; color: var(--studio-text, #101722); }
+.wax-bite-openings b { font-variant-numeric: tabular-nums; }

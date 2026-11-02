@@ -2,6 +2,7 @@
 
 import type { BiteContactStats } from "@/lib/biteContacts";
 import { PIN_CLEAR, PIN_GAP_MAX, PIN_MAX, PIN_STEP, PIN_WARN, articulatorPinPatch } from "@/lib/dentalArticulator";
+import { biteOpenings } from "@/lib/waxOcclusion";
 
 /** Build 78: a bite scan further than this from the scanner's bite (mm RMS) is pointed out. */
 /** Build 79: the bite scan's own error is often 0.2-0.3 mm; only well beyond that is the kept bite questioned. */
@@ -369,7 +370,7 @@ export function DentalStudioPanel({
    * first library set for the arch, placed on the teeth): you adjust from there.
    */
   // Build 103: as Meshmixer (manual) - the teeth positioned, then sculpted, then the model made; nothing fitted for you.
-  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", ...(slots.upper && slots.lower && (slots.bite || slots.bite2) ? ["bite" as const] : []), "set", "place", "sculpt", "gum", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
+  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), "set", "place", "sculpt", "gum", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
   const [waxStepId, setWaxStepId] = useState<WaxStepId>("scans");
   const waxStep = waxSteps ? (waxSteps.includes(waxStepId) ? waxStepId : "make") : null;
   const wv = waxup?.view;
@@ -379,6 +380,8 @@ export function DentalStudioPanel({
   const waxPlaceable = Boolean(wv?.setName) && (Boolean(wv?.manual) || (wv?.markedTeeth.length ?? 0) > 0);
   /** Build 108: both arches waxed (each with its own set, both adjusted to their models). */
   const bothArches = Boolean(waxStudio && waxStudio.arches === "both" && slots.upper && slots.lower);
+  /** Build 108: Open bite's slider freed to move although wax teeth are placed. */
+  const [biteUnlocked, setBiteUnlocked] = useState(false);
   const waxStepDone = (id: WaxStepId): boolean => {
     if (!wv) return false;
     switch (id) {
@@ -723,7 +726,7 @@ export function DentalStudioPanel({
           {biteLocked ? <p className="dental-status" role="status">{t("dental.biteLocked")}</p> : null}
           {onLayout && analysis && slots.upper && slots.lower ? (<>
             {/* Build 108: named, so it reads as a choice of how the scans are shown. */}
-            <span className="edge-modifier-label dental-view-title">{t("dental.changeView")}</span>
+            {waxStudio ? <span className="edge-modifier-label dental-view-title">{t("dental.changeView")}</span> : null}
             <div className="dental-trim-mode" role="radiogroup" aria-label={t("dental.scanLayout")}>
               {(["side", "occlusion"] as const).map((value) => (
                 <button key={value} type="button" role="radio" aria-checked={layout === value} className={layout === value ? "active" : ""} disabled={busy} onClick={() => onLayout(value)}>
@@ -750,7 +753,20 @@ export function DentalStudioPanel({
           lower scan turning open in the view as it moves; the teeth are then placed and made at this opening. */}
       {waxSteps && waxStep === "bite" && wv && waxup ? card(3, t("waxup.biteTitle"), true, t("waxStudio.stepHint.bite"), null, (<>
         <div className="studio-artic-picture"><ArticulatorPicture pinRaise={wv.bite?.raise ?? 0} pin pinGap={PIN_CLEAR} /></div>
-        <EdgeModifierSlider label={t("studio.increaseOvd")} title={t("waxup.biteHint")} value={wv.bite?.raise ?? 0} min={0} max={PIN_MAX} step={PIN_STEP} workspace={workspace} length disabled={busy || Boolean(wv.bite?.busy)} onChange={(value) => waxup.actions.onBite?.(value)} />
+        {/* Build 108: with wax teeth already placed, the opening is changed only once the dentist says so. */}
+        {wv.anyWax && !biteUnlocked ? (
+          <div className="wax-guide">
+            <strong>{t("waxup.biteLockedTitle")}</strong>
+            <span>{t("waxup.biteLocked")}</span>
+            <div className="dental-trim-buttons"><button type="button" className="secondary" onClick={() => setBiteUnlocked(true)}>{t("waxup.biteUnlock")}</button></div>
+          </div>
+        ) : null}
+        <EdgeModifierSlider label={t("waxup.biteSlider")} title={t("waxup.biteHint")} value={wv.bite?.raise ?? 0} min={0} max={PIN_MAX} step={PIN_STEP} workspace={workspace} length disabled={busy || Boolean(wv.bite?.busy) || (Boolean(wv.anyWax) && !biteUnlocked)} onChange={(value) => waxup.actions.onBite?.(value)} />
+        {/* Build 108: what the opening does at the front and at the back. */}
+        <div className="wax-bite-openings" role="status">
+          <span><b>{(wv.bite?.hinge ? biteOpenings(wv.bite.hinge, wv.bite.raise ?? 0).front : 0).toFixed(1)} mm</b>{t("waxup.biteFront")}</span>
+          <span><b>{(wv.bite?.hinge ? biteOpenings(wv.bite.hinge, wv.bite.raise ?? 0).back : 0).toFixed(1)} mm</b>{t("waxup.biteBack")}</span>
+        </div>
         {wv.bite?.busy ? <p className="dental-status" role="status"><LoaderCircle className="edge-modifier-spinner" size={15} aria-hidden="true" /> {t("waxup.biteWorking")}</p> : null}
         {(wv.bite?.raise ?? 0) > PIN_WARN ? <p className="blend-hint warn">{t("dental.pinRaiseWarn", { max: PIN_WARN })}</p> : <p className="blend-hint">{t("waxup.biteHint")}</p>}
       </>)) : null}

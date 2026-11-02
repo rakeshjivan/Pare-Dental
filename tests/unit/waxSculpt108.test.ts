@@ -56,3 +56,15 @@ describe("Wax-up Open the bite (build 108)", () => {
     expect(p.clone().applyMatrix4(two).applyMatrix4(step).distanceTo(p.clone().applyMatrix4(five))).toBeLessThan(1e-9);
   });
 });
+
+import { biteOpenings } from "@/lib/waxOcclusion";
+describe("Open bite readout (build 108)", () => {
+  const hinge = { frame: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], incisal: [0, -25, 0] as [number, number, number], molar: [0, 10, 0] as [number, number, number] };
+  it("reads the opening at the incisors and less at the molars", () => {
+    const { front, back } = biteOpenings(hinge, 3);
+    expect(front).toBeCloseTo(3, 1);
+    expect(back).toBeGreaterThan(0);
+    expect(back).toBeLessThan(front);
+    expect(biteOpenings(hinge, 0)).toEqual({ front: 0, back: 0 });
+  });
+});

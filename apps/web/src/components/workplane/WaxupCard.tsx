@@ -47,6 +47,8 @@ export type WaxupView = {
   gum?: { mode: import("@/lib/waxGum").GumMode; keep: Record<string, number> };
   /** Build 108: Open the bite - the opening at the incisors (mm), the hinge once worked out, and whether it is being worked out. */
   bite?: { raise: number; busy: boolean; hinge: import("@/lib/waxOcclusion").BiteHinge | null };
+  /** Build 108: wax teeth placed on either arch (changing the bite's opening then asks first). */
+  anyWax?: boolean;
   /** Build 107: Sculpt - the tooth taken up to be moved (double-clicked), else null. */
   sculptMoving?: string | null;
   /** Build 107: every tooth of the set selected (it moves as one). */
@@ -623,6 +625,8 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
       {show("set") ? (
       <div className="dental-substep">
         {part ? null : <h4 className="dental-substep-title">{t("waxup.setStep")}</h4>}
+        {/* Build 108: what to do here, for the arches being waxed. */}
+        {part === "set" ? <p className="waxup-set-guide">{t(slots.upper && slots.lower ? "waxup.selectBoth" : view.slot === "lower" ? "waxup.selectLower" : "waxup.selectUpper")}</p> : null}
         <input
           ref={file}
           type="file"
@@ -654,7 +658,10 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
             ))}
           </div>
         ) : null}
-        <button type="button" className="dental-import" disabled={working} onClick={() => file.current?.click()}><Upload size={15} /> {t("waxup.loadSet")}</button>
+        <div className="waxup-load-own">
+          <button type="button" className="dental-import" disabled={working} onClick={() => file.current?.click()}><Upload size={15} /> {t("waxup.loadSet")}</button>
+          <p className="waxup-load-types">{t("waxup.loadSetTypes")}</p>
+        </div>
         <p className="blend-hint">{view.setName ? t("waxup.setLoaded", { name: view.setName, count: view.teeth }) : t("waxup.setHint")}</p>
       </div>
       ) : null}

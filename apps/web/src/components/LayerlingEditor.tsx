@@ -13590,6 +13590,7 @@ export function LayerlingEditor({
   }, [studioShellOn, dentalStudio?.waxStudio, studioWaxStep, waxup.gum, viewportShapes]); // eslint-disable-line react-hooks/exhaustive-deps
   const waxupView: WaxupView = {
     ...waxup,
+    anyWax: shapes.some((shape) => shape.dental === "wax" && !shape.hidden && Boolean(shape.waxFor) && Object.values(dentalStudio?.slots ?? {}).includes(shape.waxFor!)),
     placed: waxPlacedNow,
     marked: waxup.landmarks && !waxup.guessed ? 3 : waxup.marks.length,
     selected: selectedIds.length === 1 ? selectedIds[0] : null,
@@ -20561,6 +20562,7 @@ export function LayerlingEditor({
               if (current?.editing?.length) leaveDentalEdit(current);
               setDentalStudio(null);
             }}
+            sideTabs={Boolean(dentalStudio.waxStudio)}
             onHome={onHome ? () => {
               // Build 107: the home button leaves from any step - a trim or a make in progress is stopped first.
               stopDentalTrim();
@@ -20927,12 +20929,14 @@ export function LayerlingEditor({
             // after the upper (Build 108: whichever arch is waxed - with a lower scan in, it is trimmed too), the upper
             // after the lower when the lower was first. (The last one accepted: Next is ready - the dentist moves on
             // with it, free to go back into a trim first.)
-            const otherSlot = doneSlot === "upper" ? "lower" : doneSlot === "lower" ? "upper" : null;
+            // (Model Builder as it was: the lower after the upper only.)
+            const otherSlot = doneSlot === "upper" ? "lower" : doneSlot === "lower" && state?.waxStudio ? "upper" : null;
             const other = state && otherSlot && state.slots[otherSlot] ? shapesRef.current.find((shape) => shape.id === state.slots[otherSlot!]) : undefined;
             if (other && otherSlot && !studioTrimmed.includes(otherSlot)) window.setTimeout(() => { setSelectedIds([other.id]); openSculpt(other, true); }, 0);
           } : undefined}
           besideDental={Boolean(dentalStudio)}
           studioTrim={studioShellOn && Boolean(sculptTool.trim)}
+          brushLassoOnly={studioShellOn && Boolean(sculptTool.trim) && Boolean(dentalStudio?.waxStudio)}
         />,
       ) : null}
       {sculptTool?.tool && !sculptTool.busy && sculptTool.selectShape === "lasso" && (sculptTool.tool === "select" || sculptTool.tool === "unselect") ? (

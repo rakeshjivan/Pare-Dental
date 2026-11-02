@@ -68,6 +68,7 @@ export function StudioShell({
   onRedo,
   onClose,
   onHome,
+  sideTabs = false,
   helpSection,
 }: {
   title: string;
@@ -89,6 +90,8 @@ export function StudioShell({
   onClose: () => void;
   /** Back to Dental Studio's home page; the close button's way out when not given. */
   onHome?: () => void;
+  /** Build 108: Wax-up Studio's tabs that put each side window away (Model Builder is left as it is). */
+  sideTabs?: boolean;
   helpSection?: Parameters<typeof GuideHelpLink>[0]["section"];
 }) {
   useLanguage();
@@ -101,13 +104,14 @@ export function StudioShell({
   });
   useEffect(() => {
     const root = document.documentElement;
+    if (!sideTabs) { root.classList.remove("studio-left-hidden", "studio-right-hidden"); return; }
     root.classList.toggle("studio-left-hidden", sides.left);
     root.classList.toggle("studio-right-hidden", sides.right);
     try { window.localStorage.setItem("pare.studioLeftHidden", sides.left ? "1" : "0"); window.localStorage.setItem("pare.studioRightHidden", sides.right ? "1" : "0"); } catch { /* this visit only */ }
     // The 3D view takes the room: its canvas follows the window's size.
     window.dispatchEvent(new Event("resize"));
     return () => { root.classList.remove("studio-left-hidden", "studio-right-hidden"); };
-  }, [sides]);
+  }, [sides, sideTabs]);
   const sideTab = (side: "left" | "right") => {
     const hidden = sides[side];
     const label = t(hidden ? (side === "left" ? "studio.showCase" : "studio.showPanel") : side === "left" ? "studio.hideCase" : "studio.hidePanel");
@@ -120,8 +124,8 @@ export function StudioShell({
   };
   return (
     <>
-      {sideTab("left")}
-      {sideTab("right")}
+      {sideTabs ? sideTab("left") : null}
+      {sideTabs ? sideTab("right") : null}
       <header className="studio-top">
         <div className="studio-brand">
           <b>Pare<span>3D</span></b>

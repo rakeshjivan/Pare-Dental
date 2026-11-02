@@ -640,10 +640,34 @@ export function occlusionInScanFrame(input: OcclusionInput): OcclusionResult {
  * Build 108: Wax-up Studio's Open the bite - the average articulator set on the pair as scanned (closed):
  * the pair frame and the lower's incisal point in it. Worked out once; each opening is then a turn.
  */
-export type BiteHinge = { frame: number[]; incisal: [number, number, number] };
+export type BiteHinge = { frame: number[]; incisal: [number, number, number]; /** Build 108: the lower's last molars' cusps (midway between the two sides), pair frame. */ molar?: [number, number, number] };
 export function biteHinge(upperScan: Float32Array, lowerScan: Float32Array): BiteHinge {
   const { frame } = pairFrame(cleanScan(upperScan), cleanScan(lowerScan));
-  return { frame: frame.toArray(), incisal: incisalPoint(transformSoup(lowerScan, frame)) };
+  const lower = transformSoup(lowerScan, frame);
+  return { frame: frame.toArray(), incisal: incisalPoint(lower), molar: molarPoint(lower) };
+}
+
+/** Build 108: the lower's rearmost cusps near the occlusal plane, each side (|x| over 12 mm), and the point midway between them. */
+export function molarPoint(lowerScan: Float32Array): [number, number, number] | undefined {
+  const best: Array<[number, number, number] | null> = [null, null];
+  for (let i = 0; i + 2 < lowerScan.length; i += 3) {
+    const x = lowerScan[i], y = lowerScan[i + 1], z = lowerScan[i + 2];
+    if (Math.abs(x) < 12 || z < -3) continue;
+    const side = x < 0 ? 0 : 1;
+    if (!best[side] || y > best[side]![1]) best[side] = [x, y, z];
+  }
+  const found = best.filter((p): p is [number, number, number] => Boolean(p));
+  if (!found.length) return undefined;
+  return [0, found.reduce((s, p) => s + p[1], 0) / found.length, found.reduce((s, p) => s + p[2], 0) / found.length];
+}
+
+/** Build 108: how far apart the teeth stand at an opening - at the incisors and at the last molars, mm (vertically). */
+export function biteOpenings(hinge: BiteHinge, raise: number): { front: number; back: number } {
+  if (!(raise > 0)) return { front: 0, back: 0 };
+  const pose = mandiblePose({ kind: "rest" }, openingFor(Math.min(OVD_MAX * 2, raise), hinge.incisal), hinge.incisal);
+  const drop = (p: [number, number, number]) => Math.max(0, p[2] - new THREE.Vector3(...p).applyMatrix4(pose).z);
+  const molar = hinge.molar ?? [0, hinge.incisal[1] + 35, hinge.incisal[2]] as [number, number, number];
+  return { front: drop(hinge.incisal), back: drop(molar) };
 }
 
 /** Build 108: the lower's move (scan coordinates) that opens the bite `raise` mm at the incisors about the condylar axis. */
