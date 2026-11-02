@@ -163,6 +163,8 @@ export type WaxupActions = {
   onSelectSet?: () => void;
   /** Build 107: the set dropped on the arch again, as it first came in. */
   onDropAgain?: () => void;
+  /** Build 108: back to Library for another set (its teeth then dropped in place of these). */
+  onChangeSet?: () => void;
   onSet: (files: File[]) => void;
   onBuiltIn: (id: string) => void;
   onSlot: (slot: "upper" | "lower") => void;
@@ -731,9 +733,10 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
               <input type="checkbox" checked={view.scanSeeThrough} onChange={(event) => actions.onScanSeeThrough?.(event.currentTarget.checked)} />
               <span>{t("waxup.seeThrough")}</span>
             </label>
-            {actions.onDropAgain ? (
+            {actions.onDropAgain || actions.onChangeSet ? (
               <div className="dental-trim-buttons">
-                <button type="button" className="secondary" disabled={working} onClick={() => actions.onDropAgain?.()}>{t("waxup.dropAgain")}</button>
+                {actions.onChangeSet ? <button type="button" className="secondary" disabled={working} onClick={() => actions.onChangeSet?.()}>{t("waxup.changeSet")}</button> : null}
+                {actions.onDropAgain ? <button type="button" className="secondary" disabled={working} onClick={() => actions.onDropAgain?.()}>{t("waxup.dropAgain")}</button> : null}
               </div>
             ) : null}
           </>

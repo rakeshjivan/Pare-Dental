@@ -453,6 +453,17 @@ export function DentalStudioPanel({
     if (waxStep === "place") { if (waxStepDone("place")) setWaxAuto(false); else if (!waxPlaceable && bothArches && wv.setIds?.[wv.slot]) return; else if (!waxPlaceable || !once("place", waxup.actions.onPlace)) setWaxAuto(false); return; }
     setWaxAuto(false);
   }, [waxAuto, waxStep, busy, wv?.busy, wv?.finder.busy, wv?.found?.length, wv?.chosen.length, wv?.markedTeeth.length, wv?.setName, wv?.placed.length, wv?.slot]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Build 108: a different set chosen in Library after this arch's teeth were placed - back at Position its
+  // teeth are dropped in place of the old set's (one step, so Undo brings the old set back).
+  const waxPlacedWith = useRef<Record<string, string | null>>({});
+  useEffect(() => {
+    if (!wv || !waxup || !waxStudio) return;
+    if (!wv.placed.length) { delete waxPlacedWith.current[wv.slot]; return; }
+    if (waxStep !== "place" || wv.busy || !wv.setId) return;
+    const was = waxPlacedWith.current[wv.slot];
+    waxPlacedWith.current[wv.slot] = wv.setId;
+    if (was && was !== wv.setId) waxup.actions.onDropAgain?.();
+  }, [waxStep, wv?.slot, wv?.setId, wv?.placed.length, wv?.busy]); // eslint-disable-line react-hooks/exhaustive-deps
   const waxStepper = waxSteps && waxStep && wv && waxup ? (
     <div className="wax-stepper">
       <ol className="wax-steps" aria-label={t("waxStudio.steps")}>
@@ -869,7 +880,7 @@ export function DentalStudioPanel({
       {/* Build 101: in Wax-up Studio's steps, the step's own part of it, on its own. */}
       {waxup && waxSteps && waxPart ? (
         <section className="dental-section dental-card current wax-step-body" aria-label={t(`waxStudio.step.${waxPart}` as "waxStudio.step.scans")}>
-          <WaxupCard part={waxPart} toolSlot={framed && waxPart === "sculpt" ? toolSlot : undefined} view={waxup.view} actions={{ ...waxup.actions, onConfirm: () => { setWaxAuto(false); goWax(waxup.view.manual ? "sculpt" : "adjust"); } }} slots={{ upper: Boolean(slots.upper) && waxStudio?.arches !== "lower", lower: Boolean(slots.lower) && waxStudio?.arches !== "upper" }} imt={waxStudio?.flow === "imt"} busy={busy || !analysis} workspace={workspace} />
+          <WaxupCard part={waxPart} toolSlot={framed && waxPart === "sculpt" ? toolSlot : undefined} view={waxup.view} actions={{ ...waxup.actions, onConfirm: () => { setWaxAuto(false); goWax(waxup.view.manual ? "sculpt" : "adjust"); }, ...(waxStudio && waxPart === "place" ? { onChangeSet: () => { setWaxAuto(false); goWax("set"); } } : {}) }} slots={{ upper: Boolean(slots.upper) && waxStudio?.arches !== "lower", lower: Boolean(slots.lower) && waxStudio?.arches !== "upper" }} imt={waxStudio?.flow === "imt"} busy={busy || !analysis} workspace={workspace} />
         </section>
       ) : null}
       {waxup && !waxSteps && !mbSteps ? card(3, t(waxStudio ? "waxup.stepStudio" : "waxup.step"), waxup.view.placed.length > 0, t(waxStudio ? "waxup.stepStudioHint" : "waxup.stepHint"), waxupSummary(waxup.view), (

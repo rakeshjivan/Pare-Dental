@@ -5597,6 +5597,7 @@ export const MESSAGES_EN = {
   "waxup.dropSize": "Set size",
   "waxup.dropSizeHint": "The whole set larger or smaller about its middle; 100% is the library's own size.",
   "waxup.dropAgain": "Put the set back where it came in",
+  "waxup.changeSet": "Choose a different tooth set",
   "waxup.placedLive": "{count} teeth placed. The sliders place them again as you move them; Undo takes each change back.",
   "waxup.undone": "Wax-up step undone.",
   "waxup.redone": "Wax-up step redone.",
