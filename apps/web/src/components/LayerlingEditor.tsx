@@ -20451,7 +20451,24 @@ export function LayerlingEditor({
           }
           return { id, name, shown: !studioHidden.includes(id), ...(slot === "upper" || slot === "lower" ? { opacity, onOpacity } : {}), onToggle: () => setStudioHidden((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id])) };
         });
-        if (studioWax && waxIds.length) {
+        // Build 108: both arches waxed - each arch's wax-up its own row (shown or hidden, its own opacity), beside
+        // the upper and lower models.
+        const waxArches = studioWax && dentalStudio.waxStudio?.arches === "both" ? (["upper", "lower"] as const).flatMap((slot) => {
+          const ids = shapes.filter((shape) => shape.dental === "wax" && shape.waxTooth && shape.waxFor === dentalStudio.slots[slot]).map((shape) => shape.id);
+          return ids.length ? [{ slot, ids }] : [];
+        }) : [];
+        for (const { slot, ids } of waxArches) {
+          const shown = !ids.every((id) => studioHidden.includes(id));
+          objects.push({
+            id: `wax-${slot}`,
+            name: t(slot === "upper" ? "studio.waxTeethUpper" : "studio.waxTeethLower", { count: ids.length }),
+            shown,
+            opacity: studioOpacity[ids[0]] ?? 1,
+            onOpacity: (value: number) => setStudioOpacity((current) => ({ ...current, ...Object.fromEntries(ids.map((id) => [id, value])) })),
+            onToggle: () => setStudioHidden((current) => (shown ? [...current.filter((entry) => !ids.includes(entry)), ...ids] : current.filter((entry) => !ids.includes(entry)))),
+          } as (typeof objects)[number]);
+        }
+        if (studioWax && waxIds.length && !waxArches.length) {
           const shown = !waxIds.every((id) => studioHidden.includes(id));
           objects.push({
             id: "wax",

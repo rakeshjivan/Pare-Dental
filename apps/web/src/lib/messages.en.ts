@@ -5492,6 +5492,8 @@ export const MESSAGES_EN = {
   "studio.legendWax": "Wax-up",
   "studio.legendSelected": "Selected",
   "studio.waxTeeth": "Wax-up ({count} teeth)",
+  "studio.waxTeethUpper": "Wax-up upper ({count} teeth)",
+  "studio.waxTeethLower": "Wax-up lower ({count} teeth)",
   "studio.nextTo": "Next: {step}",
   "studio.stepOf": "Step {n} of {count}",
   "studio.quickPicks": "Quick picks",

@@ -422,7 +422,8 @@ export function DentalStudioPanel({
     // Build 107: in Wax-up Studio (as Meshmixer) back to Library - and Library itself is never "past" it.
     const past = (wv.manual ? ["place", "adjust", "occlusion", "sculpt", "gum", "make"] : ["set", "place", "adjust", "occlusion", "sculpt", "make"]).includes(waxStep);
     // Build 108: both arches waxed, the other arch's set already chosen - its teeth are placed here instead.
-    if (past && !wv.placed.length && !waxAutoDone.current.has(`${wv.slot}:place`)) {
+    // (Once an arch has been through Library - its set picked there - Position is no jump ahead for it.)
+    if (past && !wv.placed.length && !waxAutoDone.current.has(wv.slot)) {
       const target: WaxStepId = wv.manual ? (bothArches && wv.setIds?.[wv.slot] ? "place" : "set") : "teeth";
       if (target !== waxStep) { setWaxStepId(target); return; }
     }
