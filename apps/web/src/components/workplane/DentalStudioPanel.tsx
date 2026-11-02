@@ -266,7 +266,7 @@ export function DentalStudioPanel({
   /** Build 79: the wax-up step. */
   waxup?: { view: WaxupView; actions: WaxupActions };
   /** Build 94: open as Wax-up Studio - the workflow (wax-up only, or IMT with its index models) and the arches waxed. */
-  waxStudio?: { flow: "waxup" | "imt"; arches: "upper" | "lower" | "both"; onFlow: (flow: "waxup" | "imt") => void; onArches: (arches: "upper" | "lower" | "both") => void };
+  waxStudio?: { flow: "waxup" | "imt"; arches: "upper" | "lower" | "both"; chosen?: boolean; onFlow: (flow: "waxup" | "imt") => void; onArches: (arches: "upper" | "lower" | "both") => void };
   /** Build 106: shown in the studio frame - the steps along its top, Back and Next along its bottom. */
   shell?: boolean;
   /** Build 106: a scan nudged by accident put back (the design's own Undo and Redo), under the layout buttons. */
@@ -341,6 +341,8 @@ export function DentalStudioPanel({
     : trimming || areaTool ? t("dental.next.editing")
     : t("dental.next.ready", { button: t(pair ? "dental.applyPair" : "dental.apply") });
   const scansDone = Boolean(analysis) && Boolean(slots.upper || slots.lower);
+  /** Build 108: Wax-up Studio - the arches being waxed picked by the dentist (asked before the scans). */
+  const archesChosen = !waxStudio || waxStudio.chosen !== false;
   const baseName = (style: DentalBaseStyle) => t(style === "clean" ? "dental.cleanBase" : style === "follow" ? "dental.follow" : style === "plate" ? "dental.plate" : style === "ortho" ? "dental.orthoBase" : "dental.articulatorBase");
   const insideName = t(options.inside === "solid" ? "dental.solid" : options.inside === "open" ? "dental.hollowOpen" : "dental.hollowClosed");
   const step = (number: number, label: string, done: boolean, hint: string | null) => (
@@ -383,7 +385,8 @@ export function DentalStudioPanel({
       // Build 106: and, in the frame, each arch trimmed (or accepted as it is) - Next waits for that.
       // (The arches being waxed only: an opposing arch need not be trimmed for a wax-up.)
       // Build 107: Import is the scans brought in; Trim (its own step now) waits for each waxed arch accepted.
-      case "scans": return scansDone;
+      // Build 108: the arches chosen, and the scans of each of them in.
+      case "scans": return scansDone && archesChosen && (!waxStudio || (waxStudio.arches === "both" ? Boolean(slots.upper && slots.lower) : Boolean(slots[waxStudio.arches])));
       case "trim": return scansDone && (!shell || !trimmedDone || (["upper", "lower"] as const).every((slot) => !slots[slot] || (waxStudio && waxStudio.arches !== "both" && waxStudio.arches !== slot) || trimmedDone.includes(slot)));
       // Build 105: the teeth to wax up chosen, each with its four marks.
       case "teeth": return wv.markedTeeth.length > 0 && !wv.markPick;
@@ -680,8 +683,9 @@ export function DentalStudioPanel({
       {waxStudio && inWaxStep("scans") ? (
         <div className="wax-studio-choices">
           {choice(t("waxStudio.flow"), waxStudio.flow, [["waxup", t("waxStudio.flowWaxup")], ["imt", t("waxStudio.flowImt")]], waxStudio.onFlow, t("waxStudio.flowHint"))}
-          {/* Build 108: asked only with both arches brought in - which to wax up, one or both. */}
-          {slots.upper && slots.lower ? choice(t("waxStudio.arches"), waxStudio.arches, [["upper", t("dental.upper")], ["lower", t("dental.lower")], ["both", t("waxStudio.both")]], waxStudio.onArches) : null}
+          {/* Build 108: which arches are waxed - asked first, before the scans (none chosen until the dentist picks). */}
+          {choice(t("waxStudio.arches"), (archesChosen ? waxStudio.arches : "") as "upper" | "lower" | "both", [["upper", t("dental.upper")], ["lower", t("dental.lower")], ["both", t("waxStudio.both")]], waxStudio.onArches)}
+          {!archesChosen ? <p className="dental-status warn" role="status">{t("waxStudio.archesFirst")}</p> : null}
           <p className="blend-hint">{t(waxStudio.flow === "imt" ? "waxStudio.imtHint" : "waxStudio.waxupHint")}</p>
         </div>
       ) : null}
@@ -692,7 +696,7 @@ export function DentalStudioPanel({
         <div className="dental-slots">
           {parts.length === 0 ? <a className="dental-guide-link" href={DENTAL_GUIDE_PDF} download={DENTAL_GUIDE_FILE}><FileDown size={15} aria-hidden="true" /> {t("dental.guidePdfFirst")}</a> : null}
           <div className={onNewPatient ? "dental-import-row" : undefined}>
-            <button type="button" className="dental-import" disabled={stage === "making"} onClick={onImport}><Upload size={15} /> {t("dental.import")}</button>
+            <button type="button" className="dental-import" disabled={stage === "making" || !archesChosen} title={archesChosen ? undefined : t("waxStudio.archesFirst")} onClick={onImport}><Upload size={15} /> {t("dental.import")}</button>
             {onNewPatient ? <button type="button" className="dental-import dental-new-patient" disabled={stage === "making"} title={t("dental.newPatientHint")} onClick={onNewPatient}><FilePlus2 size={15} /> {t("dental.newPatient")}</button> : null}
           </div>
           {modelsHere ? <p className="dental-status warn" role="status">{t("dental.modelsHere")}</p> : null}

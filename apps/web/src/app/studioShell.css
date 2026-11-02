@@ -1052,3 +1052,27 @@
 /* Build 108: both arches on the chart - the lower under the upper, as an open mouth; the arch worked on marked. */
 .studio-chart + .studio-chart { margin-top: -6px; }
 .studio-chart.active { background: rgba(47, 125, 109, 0.06); border-radius: 12px; }
+
+/* Build 108: the side windows put away and brought back - a small tab in the middle of each one's inner edge. */
+html.studio-left-hidden .layerling-editor.studio-shell-on { --studio-left-w: 0px; }
+html.studio-right-hidden .layerling-editor.studio-shell-on { --studio-right-w: 0px; }
+html.studio-left-hidden .studio-shell-on .studio-left { display: none; }
+html.studio-right-hidden .studio-shell-on .dental-studio-panel.studio-framed { display: none !important; }
+.studio-side-tab {
+  position: fixed;
+  top: calc((var(--studio-top) + 100vh - var(--studio-bottom)) / 2);
+  z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  width: 16px; height: 52px; padding: 0;
+  color: #6b7686; background: #ffffff;
+  border: 1px solid var(--studio-line); border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(16, 23, 34, 0.08);
+  cursor: pointer; opacity: 0.85;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.studio-side-tab:hover, .studio-side-tab:focus-visible { opacity: 1; color: var(--studio-teal); background: var(--studio-teal-soft); }
+.studio-side-tab.left { left: calc(var(--studio-gap) + var(--studio-left-w)); }
+.studio-side-tab.right { left: calc(100vw - var(--studio-gap) - var(--studio-right-w)); }
+.studio-side-tab.left.hidden { left: calc(var(--studio-gap) + 8px); }
+.studio-side-tab.right.hidden { left: calc(100vw - var(--studio-gap) - 8px); }

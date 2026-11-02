@@ -8,8 +8,8 @@
  * panel fills the step bar, Back and Next and the guidance through slots (lib/studioSlots), and every
  * control here calls the same action the studio already has.
  */
-import { ChevronDown, ChevronUp, Eye, EyeOff, Home, Moon, Redo2, Undo2, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Eye, EyeOff, Home, Moon, Redo2, Undo2, X } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import { GuideHelpLink } from "@/components/GuideHelpLink";
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/lib/useLanguage";
@@ -94,8 +94,34 @@ export function StudioShell({
   useLanguage();
   const [caseOpen, setCaseOpen] = useState(true);
   const [view, setView] = useState<DentalView | null>(null);
+  // Build 108: each side window can be put away for room to work - a small tab in the middle of its inner edge
+  // (pointing the way it goes); the tab stays at the edge to bring it back. Remembered between visits.
+  const [sides, setSides] = useState(() => {
+    try { return { left: window.localStorage.getItem("pare.studioLeftHidden") === "1", right: window.localStorage.getItem("pare.studioRightHidden") === "1" }; } catch { return { left: false, right: false }; }
+  });
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("studio-left-hidden", sides.left);
+    root.classList.toggle("studio-right-hidden", sides.right);
+    try { window.localStorage.setItem("pare.studioLeftHidden", sides.left ? "1" : "0"); window.localStorage.setItem("pare.studioRightHidden", sides.right ? "1" : "0"); } catch { /* this visit only */ }
+    // The 3D view takes the room: its canvas follows the window's size.
+    window.dispatchEvent(new Event("resize"));
+    return () => { root.classList.remove("studio-left-hidden", "studio-right-hidden"); };
+  }, [sides]);
+  const sideTab = (side: "left" | "right") => {
+    const hidden = sides[side];
+    const label = t(hidden ? (side === "left" ? "studio.showCase" : "studio.showPanel") : side === "left" ? "studio.hideCase" : "studio.hidePanel");
+    const pointsLeft = side === "left" ? !hidden : hidden;
+    return (
+      <button type="button" className={`studio-side-tab ${side}${hidden ? " hidden" : ""}`} aria-label={label} title={label} aria-expanded={!hidden} onClick={() => setSides((now) => ({ ...now, [side]: !now[side] }))}>
+        {pointsLeft ? <ChevronLeft size={14} strokeWidth={2.2} aria-hidden="true" /> : <ChevronRight size={14} strokeWidth={2.2} aria-hidden="true" />}
+      </button>
+    );
+  };
   return (
     <>
+      {sideTab("left")}
+      {sideTab("right")}
       <header className="studio-top">
         <div className="studio-brand">
           <b>Pare<span>3D</span></b>

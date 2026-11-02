@@ -10578,7 +10578,8 @@ export function LayerlingEditor({
     /** Build 78: "fit" lines the arches up on the bite scan; otherwise the scanner's bite is kept. */
     biteMode?: "auto" | "fit";
     /** Build 94: open as Wax-up Studio - its workflow and the arches waxed. */
-    waxStudio?: { flow: "waxup" | "imt"; arches: "upper" | "lower" | "both" };
+    /** Build 108: `chosen` false until the dentist has picked the arches (a new case asks before its scans come in). */
+    waxStudio?: { flow: "waxup" | "imt"; arches: "upper" | "lower" | "both"; chosen?: boolean };
   };
   const [dentalStudio, setDentalStudio] = useState<DentalStudioState | null>(null);
   // Build 106: Wax-up Studio and Model Builder in the studio frame (Dental Studio, test builds).
@@ -11189,7 +11190,7 @@ export function LayerlingEditor({
     const chosen = selectedShapes.filter((shape) => candidates.some((candidate) => candidate.id === shape.id));
     const pool = (chosen.length ? chosen : candidates).slice(0, 4);
     const { slots, rolesChosen } = guessDentalSlots(pool);
-    analyseDentalStudio({ ...freshDentalState(slots, rolesChosen), ...(wax ? { waxStudio: { flow: "waxup" as const, arches: slots.upper || !slots.lower ? "upper" as const : "lower" as const } } : {}) });
+    analyseDentalStudio({ ...freshDentalState(slots, rolesChosen), ...(wax ? { waxStudio: { flow: "waxup" as const, arches: slots.upper || !slots.lower ? "upper" as const : "lower" as const, chosen: false } } : {}) });
   }, [analyseDentalStudio, dentalCandidates, editDentalDesign, leaveDentalEdit, selectedShapes]);
   // Build 86: Dental Studio opens on Meshmixer's dark background, so scans read as they do there from the
   // start (the switch at the top of the window changes it back).
@@ -18304,6 +18305,8 @@ export function LayerlingEditor({
       // Build 107: in Model Builder and Wax-up Studio only scans are brought in by a drop - a picture
       // (a library set's preview dragged from the panel, say) made a relief model that broke the workflow.
       if (studioShellDropRef.current) {
+        // Build 108: Wax-up Studio asks which arches are being waxed before the scans come in.
+        if (dentalStudioRef.current?.waxStudio?.chosen === false) { setNotice(t("waxStudio.archesFirst")); return; }
         files = files.filter((file) => /\.(stl|obj|ply|3mf|off|zip)$/i.test(file.name));
         if (!files.length) { setNotice(t("studio.dropScansOnly")); return; }
       }
@@ -20519,7 +20522,7 @@ export function LayerlingEditor({
               arches: [...arches],
               onArch: (arch) => { if (arch !== waxupRef.current.slot && dentalStudioRef.current?.waxStudio?.arches === "both") switchWaxSlot(arch); },
               // Build 108: both arches on the chart at once - each arch's wax teeth in their colours.
-              colours: Object.fromEntries([...markTeeth, ...shapes.filter((shape) => shape.dental === "wax" && shape.waxTooth && !shape.hidden && arches.some((slot) => dentalStudio.slots[slot] === shape.waxFor)).map((shape) => shape.waxTooth!.fdi)].map((fdi) => [fdi, waxColourful ? WAX_TOOTH_COLOURS[fdi] ?? WAX_BLUE : WAX_BLUE])),
+              colours: Object.fromEntries([...markTeeth, ...arches.filter((slot) => slot !== waxSlot && !shapes.some((shape) => shape.dental === "wax" && shape.waxFor === dentalStudio.slots[slot])).flatMap((slot) => defaultMarkTeeth(slot)), ...shapes.filter((shape) => shape.dental === "wax" && shape.waxTooth && !shape.hidden && arches.some((slot) => dentalStudio.slots[slot] === shape.waxFor)).map((shape) => shape.waxTooth!.fdi)].map((fdi) => [fdi, waxColourful ? WAX_TOOTH_COLOURS[fdi] ?? WAX_BLUE : WAX_BLUE])),
               selected: selectedFdi ?? shapes.find((shape) => selectedIds.length === 1 && shape.id === selectedIds[0] && shape.dental === "wax")?.waxTooth?.fdi ?? null,
               pickable: (fdi) => fdi % 10 <= 5,
               onPick: (fdi) => {
@@ -20643,7 +20646,7 @@ export function LayerlingEditor({
             ...dentalStudio.waxStudio,
             onFlow: (flow) => setDentalStudio((current) => current?.waxStudio ? { ...current, waxStudio: { ...current.waxStudio, flow } } : current),
             onArches: (arches) => {
-              setDentalStudio((current) => current?.waxStudio ? { ...current, waxStudio: { ...current.waxStudio, arches } } : current);
+              setDentalStudio((current) => current?.waxStudio ? { ...current, waxStudio: { ...current.waxStudio, arches, chosen: true } } : current);
               if (arches !== "both" && arches !== waxupRef.current.slot) setWaxup((current) => ({ ...current, slot: arches, landmarks: null, guessed: false, placed: [] }));
             },
           } : undefined}
