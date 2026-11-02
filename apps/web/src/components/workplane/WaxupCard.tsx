@@ -49,6 +49,8 @@ export type WaxupView = {
   bite?: { raise: number; busy: boolean; hinge: import("@/lib/waxOcclusion").BiteHinge | null };
   /** Build 108: wax teeth placed on either arch (changing the bite's opening then asks first). */
   anyWax?: boolean;
+  /** Build 108: wax teeth put out of view in Case objects - their buttons cannot pick them. */
+  hiddenIds?: string[];
   /** Build 107: Sculpt - the tooth taken up to be moved (double-clicked), else null. */
   sculptMoving?: string | null;
   /** Build 107: every tooth of the set selected (it moves as one). */
@@ -693,7 +695,7 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
             {view.selected && !view.selectedAll ? (
               <div className="waxup-teeth" role="group" aria-label={t("waxup.teeth")}>
                 {[...view.placed].sort((a, b) => a.fdi - b.fdi).map((tooth) => (
-                  <button key={tooth.id} type="button" className={`waxup-tooth${view.selected === tooth.id ? " active" : ""}`} onClick={() => actions.onSelect(tooth.id)}>{tooth.fdi}</button>
+                  <button key={tooth.id} type="button" className={`waxup-tooth${view.selected === tooth.id ? " active" : ""}`} disabled={view.hiddenIds?.includes(tooth.id)} title={view.hiddenIds?.includes(tooth.id) ? t("waxup.toothHidden") : undefined} onClick={() => actions.onSelect(tooth.id)}>{tooth.fdi}</button>
                 ))}
               </div>
             ) : null}
@@ -793,7 +795,7 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
                     type="button"
                     className={`waxup-tooth${view.selected === tooth.id ? " active" : ""}${low ? " warn" : ""}`}
                     title={t("waxup.toothInfo", { fdi: tooth.fdi, width: tooth.width.toFixed(1), length: tooth.length.toFixed(1), ratio: Math.round((tooth.width / Math.max(0.1, tooth.length)) * 100), wax: tooth.clearance === null ? "-" : tooth.clearance.toFixed(2) })}
-                    onClick={() => actions.onSelect(tooth.id)}
+                    disabled={view.hiddenIds?.includes(tooth.id)} onClick={() => actions.onSelect(tooth.id)}
                     style={view.confirmed.includes(tooth.fdi) ? { background: WAX_CONFIRMED_COLOURS[tooth.fdi] ?? "#9aa0a6", color: "#fff" } : (view.stage === "position" || view.colourful !== undefined) && WAX_TOOTH_COLOURS[tooth.fdi] ? { background: view.colourful === false ? WAX_BLUE : WAX_TOOTH_COLOURS[tooth.fdi], color: "#1d1d1f" } : undefined}
                   >
                     {low ? <AlertTriangle size={12} aria-hidden="true" /> : null}{view.confirmed.includes(tooth.fdi) ? <Check size={12} aria-hidden="true" /> : null}{tooth.fdi}
@@ -930,7 +932,7 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
         <div className="dental-substep">
           <div className="waxup-teeth" role="group" aria-label={t("waxup.teeth")}>
             {[...view.placed].sort((a, b) => a.fdi - b.fdi).map((tooth) => (
-              <button key={tooth.id} type="button" className={`waxup-tooth${view.selected === tooth.id ? " active" : ""}`} onClick={() => actions.onSelect(tooth.id)}>{tooth.fdi}</button>
+              <button key={tooth.id} type="button" className={`waxup-tooth${view.selected === tooth.id ? " active" : ""}`} disabled={view.hiddenIds?.includes(tooth.id)} title={view.hiddenIds?.includes(tooth.id) ? t("waxup.toothHidden") : undefined} onClick={() => actions.onSelect(tooth.id)}>{tooth.fdi}</button>
             ))}
           </div>
           {toolSlot ? (

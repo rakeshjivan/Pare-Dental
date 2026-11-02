@@ -13598,6 +13598,7 @@ export function LayerlingEditor({
   }, [studioShellOn, dentalStudio?.waxStudio, studioWaxStep, waxup.gum, viewportShapes]); // eslint-disable-line react-hooks/exhaustive-deps
   const waxupView: WaxupView = {
     ...waxup,
+    hiddenIds: studioHidden,
     anyWax: shapes.some((shape) => shape.dental === "wax" && !shape.hidden && Boolean(shape.waxFor) && Object.values(dentalStudio?.slots ?? {}).includes(shape.waxFor!)),
     placed: waxPlacedNow,
     marked: waxup.landmarks && !waxup.guessed ? 3 : waxup.marks.length,
@@ -20571,6 +20572,7 @@ export function LayerlingEditor({
               setDentalStudio(null);
             }}
             sideTabs={Boolean(dentalStudio.waxStudio)}
+            contactsPanel={studioWax && studioWaxStep === "place"}
             onHome={onHome ? () => {
               // Build 107: the home button leaves from any step - a trim or a make in progress is stopped first.
               stopDentalTrim();
@@ -20713,7 +20715,7 @@ export function LayerlingEditor({
               onUndo: waxUndo,
               onRedo: waxRedo,
               onRemove: removeWaxup,
-              onSelect: (id) => setSelectedIds([id]),
+              onSelect: (id) => { if (!studioHiddenRef.current.includes(id)) setSelectedIds([id]); },
               onNudge: nudgeWaxTooth,
               onHelper: waxHelper,
               onRestrict: (restrict: WaxRestrict) => setWaxup((current) => ({ ...current, restrict })),

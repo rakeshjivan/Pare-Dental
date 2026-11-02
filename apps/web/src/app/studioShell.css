@@ -1085,3 +1085,8 @@ html.studio-right-hidden .studio-shell-on .dental-studio-panel.studio-framed { d
 /* Build 108: Open bite - the opening at the front and at the back. */
 .wax-bite-openings { display: grid; gap: 6px; margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--studio-line, #e3e6eb); border-radius: 10px; background: #f7f9fa; font-size: 13.5px; color: var(--studio-text, #101722); }
 .wax-bite-openings b { font-variant-numeric: tabular-nums; }
+/* Build 108: Position - the bite contacts panel on the left. */
+.studio-contacts-panel { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--studio-line, #e3e6eb); }
+.studio-contacts-panel .studio-toggle { margin-top: 6px; }
+.studio-contacts-key { margin-top: 10px; }
+.studio-contacts-key .studio-cticks { display: flex; justify-content: space-between; font-size: 12px; color: var(--studio-muted, #56606f); margin-top: 4px; }

@@ -69,6 +69,7 @@ export function StudioShell({
   onClose,
   onHome,
   sideTabs = false,
+  contactsPanel = false,
   helpSection,
 }: {
   title: string;
@@ -92,6 +93,8 @@ export function StudioShell({
   onHome?: () => void;
   /** Build 108: Wax-up Studio's tabs that put each side window away (Model Builder is left as it is). */
   sideTabs?: boolean;
+  /** Build 108: Wax-up's Position - the bite contacts as a panel on the left (in place of the teeth chart), off until switched on there. */
+  contactsPanel?: boolean;
   helpSection?: Parameters<typeof GuideHelpLink>[0]["section"];
 }) {
   useLanguage();
@@ -184,7 +187,21 @@ export function StudioShell({
         ) : null}
         {/* Build 106: the bite contacts & clearance, when on, under the objects. */}
         <div className="studio-case-extra" ref={caseSlot} />
-        {chart ? <ToothChart chart={chart} /> : null}
+        {contactsPanel && contacts ? (
+          <div className="studio-contacts-panel">
+            <p className="studio-sec">{t("studio.biteContacts")}</p>
+            <div className="studio-toggle">
+              <span id="studio-contacts-label">{t("studio.showContacts")}</span>
+              <button type="button" role="switch" aria-checked={contacts.on} aria-labelledby="studio-contacts-label" disabled={contacts.busy} className={`studio-switch${contacts.on ? " on" : ""}`} onClick={contacts.onToggle}><i /></button>
+            </div>
+            {contacts.on ? (
+              <div className="studio-contacts-key" role="img" aria-label={t("studio.contactsKey")}>
+                <div className="studio-cbar" />
+                <div className="studio-cticks"><span>{t("studio.contactsInto")}</span><span>{t("studio.contactsTouch")}</span><span>{t("studio.contactsClear")}</span></div>
+              </div>
+            ) : <p className="studio-muted">{t("studio.contactsOffHint")}</p>}
+          </div>
+        ) : chart ? <ToothChart chart={chart} /> : null}
       </aside>
 
       <div className="studio-hint" role="status" ref={hintSlot} />
@@ -203,8 +220,8 @@ export function StudioShell({
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={entry.icon} /></svg>
             </button>
           )) : null}
-          {onView && contacts ? <span className="studio-vsep" aria-hidden="true" /> : null}
-          {contacts ? (
+          {onView && contacts && !contactsPanel ? <span className="studio-vsep" aria-hidden="true" /> : null}
+          {contacts && !contactsPanel ? (
             <button type="button" className={`studio-vb wide${contacts.on ? " on" : ""}`} aria-pressed={contacts.on} disabled={contacts.busy} onClick={contacts.onToggle}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="9" cy="12" r="6" /><circle cx="15" cy="12" r="6" /></svg>
               {t("studio.contacts")}
@@ -212,7 +229,7 @@ export function StudioShell({
           ) : null}
         </div>
       ) : null}
-      {contacts?.on && contacts.legend !== false ? (
+      {contacts?.on && contacts.legend !== false && !contactsPanel ? (
         <div className="studio-clegend" role="img" aria-label={t("studio.contactsKey")}>
           <b>{t("studio.contacts")}</b>
           <div className="studio-cbar" />
