@@ -3287,9 +3287,12 @@ export function LayerlingEditor({
   const [studioHidden, setStudioHidden] = useState<string[]>([]);
   const studioHiddenRef = useRef<string[]>([]);
   studioHiddenRef.current = studioHidden;
-  // Build 108: a part put out of view is let go of too (its gimbal went on showing over nothing).
+  // Build 108: a part put out of view is let go of too (its gimbal went on showing over nothing), and Sculpt open on
+  // it closes, its strokes kept - the brushes went on working on a hidden upper tooth while the lower was shown.
   useEffect(() => {
     if (!studioHidden.length) return;
+    const open = sculptToolRef.current;
+    if (open && !open.trim && studioHidden.includes(open.shapeId)) { flushSculptRef.current(); setSculptTool(null); }
     setSelectedIds((current) => (current.some((id) => studioHidden.includes(id)) ? current.filter((id) => !studioHidden.includes(id)) : current));
   }, [studioHidden]);
   // Build 106: Model Builder's bite scans - off at first; shown from the case panel, only in occlusion,
