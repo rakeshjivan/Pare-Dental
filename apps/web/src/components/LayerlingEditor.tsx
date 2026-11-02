@@ -20923,12 +20923,13 @@ export function LayerlingEditor({
             const state = dentalStudioRef.current;
             const doneSlot = state?.slots.upper === sculptTool.shapeId ? "upper" : state?.slots.lower === sculptTool.shapeId ? "lower" : null;
             if (doneSlot) setStudioTrimmed((current) => (current.includes(doneSlot) ? current : [...current, doneSlot]));
-            const lower = state?.slots.lower ? shapesRef.current.find((shape) => shape.id === state.slots.lower) : undefined;
-            if (state && sculptTool.shapeId === state.slots.upper && lower && !studioTrimmed.includes("lower") && state.waxStudio?.arches !== "upper") {
-              // The upper accepted: the lower opens for trimming. (The last one accepted: Next: Model is
-              // ready - the dentist moves on with it, free to go back into a trim first.)
-              window.setTimeout(() => { setSelectedIds([lower.id]); openSculpt(lower, true); }, 0);
-            }
+            // The arch accepted: the other scan, when there is one not yet accepted, opens for trimming - the lower
+            // after the upper (Build 108: whichever arch is waxed - with a lower scan in, it is trimmed too), the upper
+            // after the lower when the lower was first. (The last one accepted: Next is ready - the dentist moves on
+            // with it, free to go back into a trim first.)
+            const otherSlot = doneSlot === "upper" ? "lower" : doneSlot === "lower" ? "upper" : null;
+            const other = state && otherSlot && state.slots[otherSlot] ? shapesRef.current.find((shape) => shape.id === state.slots[otherSlot!]) : undefined;
+            if (other && otherSlot && !studioTrimmed.includes(otherSlot)) window.setTimeout(() => { setSelectedIds([other.id]); openSculpt(other, true); }, 0);
           } : undefined}
           besideDental={Boolean(dentalStudio)}
           studioTrim={studioShellOn && Boolean(sculptTool.trim)}
