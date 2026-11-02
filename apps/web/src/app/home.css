@@ -313,6 +313,10 @@ html[data-theme="dark"] .pare-home {
   to { opacity: 1; transform: none; }
 }
 
+/* Build 108: the build by the name; a rule before the about links in Learn. */
+.home-brand-build { padding: 3px 7px; border-radius: 6px; background: var(--h-hover, #eef1f4); color: var(--h-muted, #5b6573); font: 600 11.5px/1 var(--h-font, inherit); letter-spacing: 0; }
+.home-menu-rule { margin: 6px 4px; border: 0; border-top: 1px solid var(--h-border, #e3e6eb); }
+
 .home-menu-title {
   padding: 8px 10px 6px;
   font-weight: 650;

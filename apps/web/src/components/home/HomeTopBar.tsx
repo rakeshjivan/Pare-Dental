@@ -6,6 +6,7 @@
  * start page: the shared folder, learning, notifications and settings. No side menu, so everything
  * below the bar has the window's full width.
  */
+import { PARE_BUILD, PARE_PREVIEW } from "@/lib/pareUpdate";
 import { Bell, BookOpen, Folder, Search, Settings, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "@/lib/i18n";
@@ -113,6 +114,8 @@ export function HomeTopBar({
       <button type="button" className="home-brand" onClick={() => onPlace("home")} aria-label={t("brand.home")}>
         <img src="/assets/pare3d/pare3d-icon.svg" alt="" width={28} height={28} />
         <span>Pare 3D</span>
+        {/* Build 108: the build in use, by the name (it was in the footer). */}
+        {PARE_BUILD ? <span className="home-brand-build">{PARE_PREVIEW ? t("home.testBuildNumber", { build: PARE_BUILD, test: PARE_PREVIEW }) : t("home.buildNumber", { build: PARE_BUILD })}</span> : null}
       </button>
       <nav className="home-tabs" aria-label={t("home.places")}>
         {tab("home", t("home.tabHome"))}
