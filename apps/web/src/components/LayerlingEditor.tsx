@@ -10989,6 +10989,12 @@ export function LayerlingEditor({
     const ids = (Object.values(state.slots).filter(Boolean) as string[]);
     window.setTimeout(() => window.layerlingShowParts?.(ids, [0.35, 0.55, 0.75]), 400);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Build 108: Wax-up Studio keeps the pair in the bite from Trim on - side by side is a choice at Import only.
+  useEffect(() => {
+    const studio = dentalStudioRef.current;
+    if (!studioShellOn || !studio?.waxStudio || !studioWaxStep || studioWaxStep === "scans" || studio.stage === "made") return;
+    if (studio.layout !== "occlusion" && studio.slots.upper && studio.slots.lower) layOutDentalScans("occlusion");
+  }, [studioWaxStep]); // eslint-disable-line react-hooks/exhaustive-deps
   /**
    * Build 74: puts an arch's original scan back (the imported file, kept in the design), still in the
    * locked bite and where the edited one stood - undoing every trim, sculpt and cut of it at once.
