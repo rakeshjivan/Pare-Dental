@@ -1050,6 +1050,9 @@ function syncMoveDimensionOverlay(
   accuracy: MeasurementAccuracy,
   theme: ResolvedAppTheme,
 ) {
+  // Build 107: none where the studio has put the handles away (Model Builder, Wax-up's Import, Trim and
+  // Library) - a scan turned or moved there to look at it shows no distances.
+  if (transformHandlesHidden) session = null;
   syncMoveDimensionWorldLines(state, session, theme);
   const rect = state.renderer.domElement.getBoundingClientRect();
   const projected = session
@@ -11093,7 +11096,7 @@ export function WorkplaneViewport({
             </div>
           ) : null}
           {!workplaneMode && !splitActive && marqueeRect ? <div className={marqueeTouching ? "selection-marquee touching" : "selection-marquee"} style={marqueeRect} /> : null}
-          {!workplaneMode && !splitActive && moveDimensionsEnabled && moveDimensionOverlay ? (
+          {!workplaneMode && !splitActive && moveDimensionsEnabled && moveDimensionOverlay && !transformHandlesHidden ? (
             <MoveDimensionOverlay
               overlay={moveDimensionOverlay}
               active={moveDimensionOverlay.active}
