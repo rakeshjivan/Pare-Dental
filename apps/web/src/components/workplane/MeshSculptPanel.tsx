@@ -264,16 +264,6 @@ export function MeshSculptPanel({
             ))}
           </div>
         </div>
-        <div className="edge-modifier-field edge-kind-switch shell-openings" role="radiogroup" aria-label={t("sculpt.symmetry")}>
-          <span className="sculpt-reach-label" title={t("sculpt.tip.symmetry")}>{t("sculpt.symmetry")}</span>
-          <div className="shell-opening-options">
-            {(["off", "x", "z"] as const).map((value) => (
-              <button key={value} type="button" role="radio" aria-checked={symmetry === value} className={symmetry === value ? "active" : ""} disabled={busy} title={t("sculpt.tip.symmetry")} onClick={() => onSymmetry(value)}>
-                {t(`sculpt.symmetry.${value}`)}
-              </button>
-            ))}
-          </div>
-        </div>
   </>);
   const FREEZE = !trim && onFreeze ? (<>
         <p className="blend-hint" role="status">{frozen ? t("sculpt.freeze.count", { count: frozen.toLocaleString() }) : t("sculpt.freeze.none")}</p>

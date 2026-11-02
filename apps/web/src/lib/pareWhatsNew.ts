@@ -4,6 +4,21 @@
  */
 export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] }> = [
   {
+    build: 105,
+    items: [
+      "Model Builder: hollow and honeycomb models get three drain slots through the outer wall where the hollow meets the floor - at the front of the arch and at the back of each side - so a model printed base-down never holds resin. Walls are 3 mm by default.",
+      "The Model Builder Guide is rewritten for the new studio: its five steps, drain slots, printing, and Save & export.",
+      "A home button beside the studio's name takes you back to Dental Studio's page from any step.",
+      "The update check is in the top bar of the start page, between the search and the guides: Up to date (click to check again), or the new build, ready to get.",
+      "A case that was open when the page reloaded comes back in its studio, never on the old Dental Studio screen.",
+      "Moving a scan just to look at it in Model Builder no longer shows distance labels and lines.",
+      "Steadier on large scans: trimming no longer holds on to memory with every Delete, and the undo history lets its oldest steps go once the scan copies it keeps get large (at least three steps are always kept).",
+      "CAD Studio: undo and redo are much quicker in larger designs - the plate is no longer drawn again from scratch on every step.",
+      "CAD Studio has a fresh look to try: white bars, quiet grey labels and one teal accent, with every tool where it was. Turn it on or off in Settings (Fresh look).",
+      "Sculpt shows its Symmetry choice once (it was listed twice).",
+    ],
+  },
+  {
     build: 104,
     items: [
       "A new Home: CAD Studio and Dental Studio side by side; your designs and cases are in their studios. One bar across the top holds search (Ctrl or ⌘ + K), the guides, notifications (updates, backups) and settings.",
