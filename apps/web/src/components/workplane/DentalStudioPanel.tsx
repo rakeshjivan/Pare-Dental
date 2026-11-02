@@ -788,7 +788,7 @@ export function DentalStudioPanel({
       {/* Build 101: in Wax-up Studio's steps, the step's own part of it, on its own. */}
       {waxup && waxSteps && waxPart ? (
         <section className="dental-section dental-card current wax-step-body" aria-label={t(`waxStudio.step.${waxPart}` as "waxStudio.step.scans")}>
-          <WaxupCard part={waxPart} view={waxup.view} actions={{ ...waxup.actions, onConfirm: () => { setWaxAuto(false); goWax(waxup.view.manual ? "sculpt" : "adjust"); } }} slots={{ upper: Boolean(slots.upper) && waxStudio?.arches !== "lower", lower: Boolean(slots.lower) && waxStudio?.arches !== "upper" }} imt={waxStudio?.flow === "imt"} busy={busy || !analysis} workspace={workspace} />
+          <WaxupCard part={waxPart} toolSlot={framed && waxPart === "sculpt" ? toolSlot : undefined} view={waxup.view} actions={{ ...waxup.actions, onConfirm: () => { setWaxAuto(false); goWax(waxup.view.manual ? "sculpt" : "adjust"); } }} slots={{ upper: Boolean(slots.upper) && waxStudio?.arches !== "lower", lower: Boolean(slots.lower) && waxStudio?.arches !== "upper" }} imt={waxStudio?.flow === "imt"} busy={busy || !analysis} workspace={workspace} />
         </section>
       ) : null}
       {waxup && !waxSteps && !mbSteps ? card(3, t(waxStudio ? "waxup.stepStudio" : "waxup.step"), waxup.view.placed.length > 0, t(waxStudio ? "waxup.stepStudioHint" : "waxup.stepHint"), waxupSummary(waxup.view), (

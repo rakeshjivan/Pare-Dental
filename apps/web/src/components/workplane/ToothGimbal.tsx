@@ -78,13 +78,15 @@ const gainOf = (event: { shiftKey: boolean; altKey: boolean }) => (event.shiftKe
 
 export type GimbalTooth = { frame: ToothFrame; width: number; length: number };
 
-export function ToothGimbal({ tooth, disabled, totals, handles = true, onPreview, onCommit }: {
+export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = false, onPreview, onCommit }: {
   tooth: GimbalTooth;
   /** Build 103: false - only the readout and the keys (the tooth itself is dragged). */
   handles?: boolean;
   disabled?: boolean;
   /** The tooth's change so far and its sizes, shown when nothing is being moved. */
   totals?: string;
+  /** Build 107: the handles only - no readout or key hints over the view (Wax-up Studio, as Meshmixer). */
+  bare?: boolean;
   /** The change so far while it is being moved (null: nothing is). */
   onPreview: (change: ToothAdjust | null) => void;
   /** The change, kept. */
@@ -422,7 +424,7 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, onPreview
         {square("size", 7)}
         <circle cx={c[0]} cy={c[1]} r={3} fill="#1f2328" stroke="#fff" strokeWidth={1} />
       </svg>
-      <div className="tooth-gimbal-panel" style={{ left: c[0] + 22, top: c[1] - 48 }}>
+      {bare ? null : <div className="tooth-gimbal-panel" style={{ left: c[0] + 22, top: c[1] - 48 }}>
         {typing ? (
           <form onSubmit={(event) => { event.preventDefault(); typed(); }}>
             <select value={typing.handle} onChange={(event) => { const handle = event.currentTarget.value as GimbalHandle; setTyping((now) => (now ? { ...now, handle } : now)); }} aria-label={t("toothGimbal.what")}>
@@ -440,7 +442,7 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, onPreview
         {typing ? null : (
           <span className="tooth-gimbal-keys">{t("toothGimbal.keys")}</span>
         )}
-      </div>
+      </div>}
     </>
   );
 }

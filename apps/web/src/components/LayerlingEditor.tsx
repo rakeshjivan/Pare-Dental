@@ -10603,6 +10603,22 @@ export function LayerlingEditor({
   const studioCaseSlot = useStudioSlot("case");
   // Build 106: Trim's tools, in the Prepare step's panel instead of over the view.
   const studioToolSlot = useStudioSlot("tool");
+  // Build 107: Wax-up Studio's Sculpt step - the tooth picked (its number or on the model) opens its sculpt
+  // tools in the panel at once; Done closes them, and they open again only for a tooth picked anew.
+  const studioWaxSculpt = studioShellOn && Boolean(dentalStudio?.waxStudio) && studioWaxStep === "sculpt";
+  const waxSculptOpened = useRef<string | null>(null);
+  /** Build 107: Sculpt - the tooth double-clicked to be moved and adjusted (its gimbal), until double-clicked again. */
+  const [waxSculptMove, setWaxSculptMove] = useState<string | null>(null);
+  useEffect(() => {
+    if (!studioWaxSculpt) { waxSculptOpened.current = null; setWaxSculptMove(null); return; }
+    if (waxSculptMove) return;
+    const id = selectedIds.length === 1 ? selectedIds[0] : null;
+    const shape = id ? shapesRef.current.find((candidate) => candidate.id === id && candidate.dental === "wax" && !candidate.hidden) : undefined;
+    if (!shape || waxSculptOpened.current === id) return;
+    waxSculptOpened.current = id;
+    if (sculptToolRef.current && sculptToolRef.current.shapeId !== id) { flushSculptRef.current(); setSculptTool(null); }
+    if (sculptToolRef.current?.shapeId !== id) window.setTimeout(() => openSculpt(shape), 0);
+  }, [studioWaxSculpt, selectedIds, waxSculptMove]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 106: the Model Builder step open in the frame - the right-click menu follows it.
   // Build 106: Trim and tidy's Done moves on - to the lower arch after the upper, then to the next step.
   const [studioNext, setStudioNext] = useState(0);
@@ -12499,7 +12515,7 @@ export function LayerlingEditor({
       });
       return;
     }
-    const partner = waxMirror ? shapesRef.current.find((shape) => shape.dental === "wax" && shape.waxFor === first.waxFor && !shape.hidden && shape.waxTooth?.fdi === contralateral(first.waxTooth!.fdi) && shape.id !== id) : undefined;
+    const partner = waxMirror && !dentalStudioRef.current?.waxStudio ? shapesRef.current.find((shape) => shape.dental === "wax" && shape.waxFor === first.waxFor && !shape.hidden && shape.waxTooth?.fdi === contralateral(first.waxTooth!.fdi) && shape.id !== id) : undefined;
     const changed = new Map<string, WorkplaneShape>();
     for (const shape of [first, ...(partner ? [partner] : [])]) {
       const tooth = shape.waxTooth!;
@@ -12605,9 +12621,12 @@ export function LayerlingEditor({
     if (waxPreviewHeld.current === id) { waxPreviewHeld.current = null; waxHeldChange.current = {}; }
     const heldBy = waxupRef.current.locks ?? {};
     const archTeeth = shapesRef.current.filter((shape) => shape.dental === "wax" && shape.waxFor === first.waxFor && !shape.hidden && shape.waxTooth && !heldBy[shape.waxTooth.fdi]);
-    const partner = waxMirror ? archTeeth.find((shape) => shape.waxTooth?.fdi === contralateral(first.waxTooth!.fdi) && shape.id !== id) : undefined;
-    const movedTeeth = waxupRef.current.moveAll ? archTeeth : [first, ...(partner ? [partner] : [])].filter((shape) => archTeeth.includes(shape));
-    const chained = waxupRef.current.manual && waxupRef.current.chain && change.mesial && !waxupRef.current.moveAll
+    // Build 107: in Wax-up Studio (as Meshmixer) a tooth adjusted on its own is the only one that changes -
+    // no mirrored partner, no chain; the whole set moves with the gimbal on the whole set instead.
+    const alone = Boolean(dentalStudioRef.current?.waxStudio);
+    const partner = waxMirror && !alone ? archTeeth.find((shape) => shape.waxTooth?.fdi === contralateral(first.waxTooth!.fdi) && shape.id !== id) : undefined;
+    const movedTeeth = waxupRef.current.moveAll && !alone ? archTeeth : [first, ...(partner ? [partner] : [])].filter((shape) => archTeeth.includes(shape));
+    const chained = !alone && waxupRef.current.manual && waxupRef.current.chain && change.mesial && !waxupRef.current.moveAll
       ? archTeeth.filter((shape) => !movedTeeth.includes(shape) && movedTeeth.some((m) => Math.floor(m.waxTooth!.fdi / 10) === Math.floor(shape.waxTooth!.fdi / 10) && shape.waxTooth!.fdi % 10 > m.waxTooth!.fdi % 10))
       : [];
     const changed = new Map<string, WorkplaneShape>();
@@ -13308,7 +13327,7 @@ export function LayerlingEditor({
   }, [waxFrameKey]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 103: the teeth taken hold of in Position (their triangles in the scene, read when first needed).
   const waxDragCache = useRef(new Map<string, { shape: WorkplaneShape; tris: Float32Array }>());
-  const waxDragTeeth: DragTooth[] = !dentalStudio?.waxStudio || waxup.stage !== "position" ? [] : shapes.flatMap((shape) => {
+  const waxDragTeeth: DragTooth[] = !dentalStudio?.waxStudio || (waxup.stage !== "position" && !studioWaxSculpt) ? [] : shapes.flatMap((shape) => {
     const toWorld = shape.dental === "wax" && shape.waxTooth && !shape.hidden ? localToWorld(shape) : null;
     if (!shape.waxTooth || !toWorld) return [];
     return [{ id: shape.id, frame: moveFrame(shape.waxTooth.frame, toWorld), width: shape.waxTooth.width, length: shape.waxTooth.length, locked: Boolean(waxup.locks[shape.waxTooth.fdi]), triangles: () => {
@@ -13326,6 +13345,7 @@ export function LayerlingEditor({
     marked: waxup.landmarks && !waxup.guessed ? 3 : waxup.marks.length,
     selected: selectedIds.length === 1 ? selectedIds[0] : null,
     selectedAll: waxPlacedNow.length > 1 && waxPlacedNow.every((tooth) => selectedIds.includes(tooth.id)),
+    sculptMoving: studioWaxSculpt && waxSculptMove ? waxSculptMove : null,
     confirmed: Object.keys(waxup.locks).map(Number),
     manual: waxup.manual,
     colourful: studioWax ? waxColourful : undefined,
@@ -20157,11 +20177,12 @@ export function LayerlingEditor({
       ) : null}
       {/* Build 104: the gimbal over the selected wax tooth again (arrows, rings and size squares, typed values),
           with the arrow keys sizing it - the tooth itself can still be dragged as before. */}
-      {waxGimbal && waxup.stage === "position" && !marksEditing ? (
+      {waxGimbal && (waxup.stage === "position" || (studioWaxSculpt && waxSculptMove === waxGimbal.id)) && !marksEditing ? (
         <ToothGimbal
           key={waxGimbal.id}
           tooth={waxGimbal.tooth}
           totals={waxGimbal.totals}
+          bare={Boolean(dentalStudio?.waxStudio)}
           disabled={waxup.busy || Boolean(shapes.find((shape) => shape.id === waxGimbal.id)?.waxTooth && waxup.locks[shapes.find((shape) => shape.id === waxGimbal.id)!.waxTooth!.fdi])}
           onPreview={(change) => previewWaxTooth(waxGimbal.id, change)}
           onCommit={(change) => adjustWaxToothBy(waxGimbal.id, change)}
@@ -20172,6 +20193,25 @@ export function LayerlingEditor({
       ) : null}
       {dentalStudio?.waxStudio && waxup.stage === "position" && waxup.placed.length && waxup.picking === null && !marksEditing ? (
         <WaxToothDrag teeth={waxDragTeeth} restrict={waxup.restrict} onLibrary={cycleWaxSet} onSelect={(id) => selectShape(id, "replace")} onPreview={previewWaxTooth} onCommit={adjustWaxToothBy} onDouble={(id) => confirmWaxTooth(id, false)} />
+      ) : null}
+      {studioWaxSculpt && waxup.placed.length ? (
+        // Build 107: Sculpt - a tooth double-clicked is taken up to be moved and adjusted (dragged, or with its
+        // gimbal); double-clicked again, it goes back to sculpting.
+        <WaxToothDrag
+          teeth={waxSculptMove ? waxDragTeeth.filter((tooth) => tooth.id === waxSculptMove) : waxDragTeeth}
+          restrict={waxup.restrict}
+          doubleOnly={!waxSculptMove}
+          onSelect={(id) => selectShape(id, "replace")}
+          onPreview={previewWaxTooth}
+          onCommit={adjustWaxToothBy}
+          onDouble={(id) => {
+            if (waxSculptMove === id) { setWaxSculptMove(null); waxSculptOpened.current = null; return; }
+            flushSculptRef.current(); setSculptTool(null);
+            waxSculptOpened.current = id;
+            setWaxSculptMove(id);
+            selectShape(id, "replace");
+          }}
+        />
       ) : null}
       {studioShellOn && dentalStudio ? (() => {
         // Build 106: the studio frame - the case on the left, the steps, views and Back/Next around the panel.
@@ -20450,6 +20490,7 @@ export function LayerlingEditor({
                 waxLiveShow("arch", () => null, () => waxArchMoves(curve), () => waxLineUp(curve));
               },
               onSetScale: (scale: number) => scaleWaxSet(scale),
+              onSculptMoveDone: () => { setWaxSculptMove(null); waxSculptOpened.current = null; },
               onSetCurve: (curve: number) => bendWaxSet(curve),
               onSelectSet: () => {
                 const arch = dentalStudioRef.current?.slots[waxupRef.current.slot];
@@ -20552,7 +20593,7 @@ export function LayerlingEditor({
           </div>
         </div>
       ) : null}
-      {sculptTool ? ((panel: React.ReactNode) => (studioShellOn && sculptTool.trim ? (studioToolSlot ? createPortal(panel, studioToolSlot) : null) : panel))(
+      {sculptTool ? ((panel: React.ReactNode) => (studioShellOn && (sculptTool.trim || studioWaxSculpt) ? (studioToolSlot ? createPortal(panel, studioToolSlot) : null) : panel))(
         <MeshSculptPanel
           onSpeed={() => setSculptSpeedShown((shown) => { try { window.localStorage.setItem("pare3d.sculptSpeed", shown ? "off" : "on"); } catch { /* this visit */ } return !shown; })}
           speedShown={sculptSpeedShown}

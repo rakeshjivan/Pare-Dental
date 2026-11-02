@@ -11,7 +11,9 @@ export class NearestSurface {
   /** Build 105: the triangle the last nearest() found (its index in the soup), -1 for none. */
   lastTriangle = -1;
   constructor(private readonly soup: Float32Array, readonly reach: number) {
-    this.cell = Math.max(0.25, reach);
+    // Build 107: a fine grid searched outward ring by ring (below) - a 4 mm grid on a dense full-arch scan
+    // held thousands of triangles per query, and Attract at full strength froze the page.
+    this.cell = Math.max(0.25, Math.min(reach, 0.75));
     const c = this.cell;
     for (let t = 0; t * 9 + 8 < soup.length; t += 1) {
       const o = t * 9;
@@ -40,13 +42,20 @@ export class NearestSurface {
     const c = this.cell, cx = Math.floor(x / c), cy = Math.floor(y / c), cz = Math.floor(z / c);
     let best = this.reach * this.reach, found = false;
     this.lastTriangle = -1;
-    for (let ox = -1; ox <= 1; ox += 1) for (let oy = -1; oy <= 1; oy += 1) for (let oz = -1; oz <= 1; oz += 1) {
-      const list = this.cells.get(key(cx + ox, cy + oy, cz + oz));
-      if (!list) continue;
-      for (let i = 0; i < list.length; i += 1) {
-        const d2 = closest(x, y, z, this.soup, list[i] * 9, this.q);
-        if (d2 < best) { best = d2; found = true; this.lastTriangle = list[i]; out[0] = this.q[0]; out[1] = this.q[1]; out[2] = this.q[2]; }
+    const rings = Math.ceil(this.reach / c);
+    for (let k = 0; k <= rings; k += 1) {
+      // The cells at Chebyshev distance k from the point's cell (the shell of the cube).
+      for (let ox = -k; ox <= k; ox += 1) for (let oy = -k; oy <= k; oy += 1) for (let oz = -k; oz <= k; oz += 1) {
+        if (Math.max(Math.abs(ox), Math.abs(oy), Math.abs(oz)) !== k) continue;
+        const list = this.cells.get(key(cx + ox, cy + oy, cz + oz));
+        if (!list) continue;
+        for (let i = 0; i < list.length; i += 1) {
+          const d2 = closest(x, y, z, this.soup, list[i] * 9, this.q);
+          if (d2 < best) { best = d2; found = true; this.lastTriangle = list[i]; out[0] = this.q[0]; out[1] = this.q[1]; out[2] = this.q[2]; }
+        }
       }
+      // Anything in a further shell is at least k cells away: nearer than that is final.
+      if (found && best <= (k * c) * (k * c)) break;
     }
     return found ? Math.sqrt(best) : Infinity;
   }

@@ -13,11 +13,11 @@ import type { WaxRestrict } from "@/components/workplane/WaxToothDrag";
 /** Build 105: each library tooth in its own colour while it is being positioned (light; a confirmed tooth takes the stronger colour below). */
 /** Build 106: the wax teeth in one colour (the studio's default; each tooth in its own colour is a switch). */
 export const WAX_BLUE = "#a8c3ea";
-/** Build 107: Meshmixer's colours for a six-tooth part, tooth by tooth (sampled from its screen): salmon, purple, blue | green, tan, white. */
+/** Build 107: Meshmixer's colours for a six-tooth part, tooth by tooth (sampled from its screen): salmon, purple, blue | green, tan; the 23 in yellow, not white, to stand out from the scan. */
 export const WAX_TOOTH_COLOURS: Record<number, string> = {
-  13: "#e09a88", 12: "#c486d0", 11: "#8fb8d5", 21: "#7ec479", 22: "#c39c70", 23: "#eeeaea",
+  13: "#e09a88", 12: "#c486d0", 11: "#8fb8d5", 21: "#7ec479", 22: "#c39c70", 23: "#f2d04b",
   14: "#e6b3d9", 15: "#d7d38e", 24: "#a9b8f0", 25: "#f0bb90",
-  43: "#e09a88", 42: "#c486d0", 41: "#8fb8d5", 31: "#7ec479", 32: "#c39c70", 33: "#eeeaea",
+  43: "#e09a88", 42: "#c486d0", 41: "#8fb8d5", 31: "#7ec479", 32: "#c39c70", 33: "#f2d04b",
   44: "#e6b3d9", 45: "#d7d38e", 34: "#a9b8f0", 35: "#f0bb90",
 };
 /** Build 105: the teeth marked and waxed up unless the dentist chooses others: canine to canine. */
@@ -41,6 +41,8 @@ export type WaxupView = {
   setScale?: number;
   /** Build 107: how much further back (+) or forward (-) the canines stand than as dropped, mm. */
   setCurve?: number;
+  /** Build 107: Sculpt - the tooth taken up to be moved (double-clicked), else null. */
+  sculptMoving?: string | null;
   /** Build 107: every tooth of the set selected (it moves as one). */
   selectedAll?: boolean;
   /** The tooth set loaded, and how many teeth it has. */
@@ -136,6 +138,8 @@ export type WaxupActions = {
   onSetScale?: (scale: number) => void;
   /** Build 107: the set's curve opened (+) or closed (-), mm at the canines. */
   onSetCurve?: (curve: number) => void;
+  /** Build 107: Sculpt - back to sculpting after moving a tooth. */
+  onSculptMoveDone?: () => void;
   /** Build 107: the whole set selected, so the gimbal moves and turns it as one. */
   onSelectSet?: () => void;
   /** Build 107: the set dropped on the arch again, as it first came in. */
@@ -404,7 +408,7 @@ function WaxArchPicture({ next }: { next: number }) {
   );
 }
 
-export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, part }: { view: WaxupView; actions: WaxupActions; slots: { upper: boolean; lower: boolean }; busy: boolean; workspace: WorkplaneWorkspaceSettings; imt?: boolean; part?: WaxupPart }) {
+export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, part, toolSlot }: { view: WaxupView; actions: WaxupActions; slots: { upper: boolean; lower: boolean }; busy: boolean; workspace: WorkplaneWorkspaceSettings; imt?: boolean; part?: WaxupPart; /** Build 107: where the studio docks the sculpt tools (Sculpt step). */ toolSlot?: (element: HTMLElement | null) => void }) {
   const show = (which: WaxupPart) => !part || part === which;
   // Build 105: the Teeth step's marks shown and draggable while it is open.
   const marksEditing = part === "teeth";
@@ -904,12 +908,27 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
               <button key={tooth.id} type="button" className={`waxup-tooth${view.selected === tooth.id ? " active" : ""}`} onClick={() => actions.onSelect(tooth.id)}>{tooth.fdi}</button>
             ))}
           </div>
+          {toolSlot ? (
+            // Build 107: in the studio the whole sculpt toolset (brushes, presets, size and strength) opens
+            // here, on the tooth picked - no floating window.
+            <>
+              {view.sculptMoving ? (
+                <div className="wax-guide">
+                  <strong>{t("waxup.sculptMovingTitle")}</strong>
+                  <span>{t("waxup.sculptMovingHint")}</span>
+                  <div className="dental-trim-buttons"><button type="button" className="active" onClick={() => actions.onSculptMoveDone?.()}>{t("waxup.sculptMovingDone")}</button></div>
+                </div>
+              ) : view.selected ? <p className="blend-hint">{t("waxup.sculptDoubleHint")}</p> : <p className="blend-hint">{t("waxup.sculptPick")}</p>}
+              <div className="studio-tool-slot waxup-sculpt-slot" ref={toolSlot} />
+            </>
+          ) : (<>
           <div className="dental-trim-buttons waxup-sculpt-brushes">
             {(["bubbleSmooth", "move", "smooth", "attract"] as const).map((brush) => (
               <button key={brush} type="button" className="secondary" disabled={working || !view.selected} title={t(`waxup.sculpt.${brush}Hint`)} onClick={() => actions.onSculpt(brush)}>{t(`waxup.sculpt.${brush}`)}</button>
             ))}
           </div>
           <p className="blend-hint">{t("waxup.sculptHint")}</p>
+          </>)}
           <div className="dental-trim-buttons">
             <button type="button" className="secondary" disabled={working || !view.selected} title={t("waxup.mirrorShapeHint")} onClick={() => actions.onMirrorShape?.()}>{t("waxup.mirrorShape")}</button>
           </div>

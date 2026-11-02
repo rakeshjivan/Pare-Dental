@@ -60,7 +60,7 @@ function hitDistance(o: V, d: V, tris: Float32Array): number | null {
   return Number.isFinite(best) ? best : null;
 }
 
-export function WaxToothDrag({ teeth, restrict = "free", onSelect, onPreview, onCommit, onDouble, onLibrary }: {
+export function WaxToothDrag({ teeth, restrict = "free", doubleOnly = false, onSelect, onPreview, onCommit, onDouble, onLibrary }: {
   teeth: DragTooth[];
   /** Build 105: Ctrl (or ⌘) + wheel over a tooth - the next or previous tooth set (exocad's library switch). */
   onLibrary?: (step: 1 | -1) => void;
@@ -69,9 +69,11 @@ export function WaxToothDrag({ teeth, restrict = "free", onSelect, onPreview, on
   onPreview: (id: string, change: ToothAdjust | null) => void;
   onCommit: (id: string, change: ToothAdjust) => void;
   onDouble?: (id: string) => void;
+  /** Build 107: only the double click (Sculpt: a tooth double-clicked is taken up to move; no drag or wheel). */
+  doubleOnly?: boolean;
 }) {
-  const live = useRef({ teeth, restrict, onSelect, onPreview, onCommit, onDouble, onLibrary });
-  live.current = { teeth, restrict, onSelect, onPreview, onCommit, onDouble, onLibrary };
+  const live = useRef({ teeth, restrict, doubleOnly, onSelect, onPreview, onCommit, onDouble, onLibrary });
+  live.current = { teeth, restrict, doubleOnly, onSelect, onPreview, onCommit, onDouble, onLibrary };
   useEffect(() => {
     const ray = (x: number, y: number) => window.layerlingScreenRay?.(x, y) ?? null;
     const onCanvas = (event: Event) => {
@@ -115,7 +117,7 @@ export function WaxToothDrag({ teeth, restrict = "free", onSelect, onPreview, on
       return { right: unit(r), up: unit(u) };
     };
     const onDown = (event: PointerEvent) => {
-      if (event.button !== 0 || !onCanvas(event)) return;
+      if (live.current.doubleOnly || event.button !== 0 || !onCanvas(event)) return;
       const hit = pick(event.clientX, event.clientY);
       if (!hit) return;
       // The tooth is taken: the view does not orbit or select.
@@ -181,7 +183,7 @@ export function WaxToothDrag({ teeth, restrict = "free", onSelect, onPreview, on
       live.current.onPreview(tooth.id, null);
     };
     // Ctrl + click opens the menu on a Mac: not over a tooth being taken.
-    const onMenu = (event: MouseEvent) => { if (onCanvas(event) && (drag || pick(event.clientX, event.clientY))) event.preventDefault(); };
+    const onMenu = (event: MouseEvent) => { if (!live.current.doubleOnly && onCanvas(event) && (drag || pick(event.clientX, event.clientY))) event.preventDefault(); };
     const onDbl = (event: MouseEvent) => {
       if (!onCanvas(event)) return;
       const hit = pick(event.clientX, event.clientY, true);
@@ -200,7 +202,7 @@ export function WaxToothDrag({ teeth, restrict = "free", onSelect, onPreview, on
       live.current.onPreview(tooth.id, null);
     };
     const onWheel = (event: WheelEvent) => {
-      if (!onCanvas(event)) return;
+      if (live.current.doubleOnly || !onCanvas(event)) return;
       const hit = wheel ? { tooth: wheel.tooth } : pick(event.clientX, event.clientY);
       if (!hit) return;
       event.preventDefault();
