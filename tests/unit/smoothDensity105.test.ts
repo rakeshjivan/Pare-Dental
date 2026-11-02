@@ -63,7 +63,6 @@ describe("Build 105: smoothing that does not depend on the triangles' size", () 
       stroke(mesh, "smooth", [0, -3], [0, 3], 3, 0.5);
       return ridgeLeft(mesh);
     });
-    require("fs").writeFileSync("/tmp/claude-0/-home-claude/cb85eabe-15bc-5f9e-9ca7-c20b57946dce/scratchpad/smooth105.json", JSON.stringify({ left, classic }));
     // Classic: the fine plate keeps far more of its ridges than the coarse one.
     expect(classic[2] - classic[0]).toBeGreaterThan(0.2);
     // Now: within 0.15 of each other.
@@ -78,7 +77,6 @@ describe("Build 105: smoothing that does not depend on the triangles' size", () 
     const after = volume(mesh);
     const shrink = plate(160, bump);
     for (let k = 0; k < 4; k += 1) stroke(shrink, "shrinkSmooth", [-2, 0], [2, 0], 3, 0.8);
-    require("fs").appendFileSync("/tmp/claude-0/-home-claude/cb85eabe-15bc-5f9e-9ca7-c20b57946dce/scratchpad/smooth105.json", "\n" + JSON.stringify({ before, after, shrunk: volume(shrink) }));
     expect(Math.abs(after - before) / (before - 1600)).toBeLessThan(0.03);
     expect(volume(shrink)).toBeLessThan(after);
   });
