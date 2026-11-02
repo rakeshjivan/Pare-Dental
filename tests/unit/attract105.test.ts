@@ -61,4 +61,22 @@ describe("Build 105: Attract", () => {
     strokes(mesh, 5);
     expect(bottom(mesh)).toBeLessThan(-0.2);
   });
+
+  // Build 108: a wax tooth onto the patient's tooth under it - the wax melts into it, as Meshmixer's wax-up.
+  it("inward, it pulls the surface onto the tooth behind it, flush, and no further", () => {
+    const mesh = plate(80);
+    mesh.attractInward = true;
+    mesh.attractTarget = new NearestSurface(sheet(-1, false), 4);
+    strokes(mesh, 30);
+    expect(bottom(mesh)).toBeLessThan(-0.9);
+    expect(bottom(mesh)).toBeGreaterThan(-1 - 1e-3);
+  });
+
+  it("inward, it never pulls the surface out to something in front of it", () => {
+    const mesh = plate(80);
+    mesh.attractInward = true;
+    mesh.attractTarget = new NearestSurface(sheet(1, true), 4);
+    strokes(mesh, 10);
+    expect(top(mesh)).toBeLessThan(1e-6);
+  });
 });

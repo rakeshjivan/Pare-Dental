@@ -1045,3 +1045,7 @@
 /* Build 108: Wax-up Sculpt's Done sits under the sliders - the sticky footer, see-through in the docked panel, showed the Strength slider through it. */
 .waxup-sculpt-slot .mesh-sculpt-panel > .edge-modifier-footer { position: static; margin: 14px 0 0; padding-bottom: 0; }
 .waxup-sculpt-slot .sculpt-tabs[hidden] { display: none; }
+/* Build 108: Gum line - the colours on the wax teeth, explained. */
+.waxup-gum-key { list-style: none; margin: 4px 0 12px; padding: 0; display: grid; gap: 4px; font-size: 13px; color: #3d4654; }
+.waxup-gum-key li { display: flex; align-items: center; gap: 8px; }
+.waxup-gum-key span { width: 14px; height: 14px; border-radius: 4px; flex: none; }

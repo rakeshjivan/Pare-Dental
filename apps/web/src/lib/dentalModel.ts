@@ -19,6 +19,7 @@ import { alignToBite, archFrame, biteResidual, contacts, vertexNormals, canineWi
 import { ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, bevelCutter, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
+import { GUM_REACH, marginRegion, moveGumCut, type GumCut } from "@/lib/waxGum";
 import { articulatorParts, incisalPins, PIN, PIN_BAND, PIN_CLEAR, PIN_HALF, PIN_MAX, PIN_SET, POST_BACK, restAngle, type ArticulatorSides, type PinStyle } from "@/lib/dentalArticulator";
 import {
   applyMatrix, boundaryLoops, cloneMesh, transformSoup, convexHull, cutAlongField, cutBelow, dropFragments, smoothField, faceArea, loopLength, surfaceKept, pinchedEdges, PointGrid, solidPositions, toManifold, upwardness, weld,
@@ -67,6 +68,8 @@ export type DentalArchInput = {
    */
   cuts?: Array<{ positions: ArrayLike<number>; facing: [number, number, number]; through: [number, number, number]; /** The wax tooth that replaces it (a soup) and its long axis towards the edge: only what stands in front of or beyond it is cut, so no hole is left where it does not reach. */ cover?: ArrayLike<number>; up?: [number, number, number];
     /** Build 103: towards each waxed neighbour (unit directions along the arch): the cut reaches CUT_SIDE that way too, so a patient's tooth wider than the ideal one leaves no wall in the embrasure. */ beside?: Array<[number, number, number]> }> | null;
+  /** Build 108: Wax-up Studio's even gum line - the gum over each wax tooth trimmed back to a scalloped margin (lib/waxGum). */
+  gum?: GumCut[];
 };
 export type DentalStudioInput = {
   arches: DentalArchInput[];
@@ -643,6 +646,7 @@ function buildArch(
   opponent?: { mesh: Mesh; teeth: Uint8Array; normals: Float64Array } | null,
   wax?: ArrayLike<number> | null,
   cutAway?: DentalArchInput["cuts"],
+  gumCuts?: GumCut[],
 ): Built {
   const warnings: string[] = [];
   const m = cloneMesh(arch.clean.mesh);
@@ -845,6 +849,21 @@ function buildArch(
     inset.delete();
     solid = keepSolid(runtime.Manifold.union(solid, slab));
     footprint = [hull];
+  }
+  // Build 108: the even gum line - before hollowing, so the wall follows the new gum. Over each wax tooth, the gum
+  // in front of its labial face (the tooth swept GUM_REACH labially, less the tooth) coronal of the margin goes.
+  for (const raw of gumCuts ?? []) {
+    try {
+      const cut = moveGumCut(raw, arch.frame.elements);
+      const tooth = keepSolid(toManifold(runtime, weld(cut.soup, 1e-6)));
+      let sweep = tooth;
+      for (const s of [0.6, 1.2, 1.8, GUM_REACH]) sweep = keepSolid(runtime.Manifold.union(sweep, keepSolid(tooth.translate([cut.out[0] * s, cut.out[1] * s, cut.out[2] * s]))));
+      const front = keepSolid(runtime.Manifold.difference(sweep, tooth));
+      const region = keepSolid(toManifold(runtime, weld(marginRegion(cut), 1e-6)));
+      solid = keepSolid(runtime.Manifold.difference(solid, keepSolid(runtime.Manifold.intersection(front, region))));
+    } catch {
+      warnings.push("gum");
+    }
   }
   let voxel: number | null = null;
   // Build 74: the model before hollowing, and the wall, so cuts made after it keep a wall round them.
@@ -1172,7 +1191,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
       for (let i = 0; i < normals.length; i += 3) { normals[i] = -normals[i]; normals[i + 2] = -normals[i + 2]; }
       opponent = { mesh, teeth: otherTeeth, normals };
     }
-    const made = buildArch(runtime, arch, { ...options, base }, -depth, ortho, line, areaOn(arch.id, arch.clean.mesh), opponent, input.arches.find((entry) => entry.id === arch.id)?.wax, input.arches.find((entry) => entry.id === arch.id)?.cuts);
+    const made = buildArch(runtime, arch, { ...options, base }, -depth, ortho, line, areaOn(arch.id, arch.clean.mesh), opponent, input.arches.find((entry) => entry.id === arch.id)?.wax, input.arches.find((entry) => entry.id === arch.id)?.cuts, input.arches.find((entry) => entry.id === arch.id)?.gum);
     if (mode.only !== undefined) {
       mode.take?.(archPartOf(made));
       made.solid.delete();

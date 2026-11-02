@@ -43,6 +43,8 @@ export type WaxupView = {
   setCurve?: number;
   /** Build 108: the set chosen for each arch (both arches waxed: one for the upper, one for the lower). */
   setIds?: { upper?: string; lower?: string };
+  /** Build 108: the Gum line step - follow the patient's gum, or an even line (each pair's visible crown length at its zenith, mm). */
+  gum?: { mode: import("@/lib/waxGum").GumMode; keep: Record<string, number> };
   /** Build 108: Open the bite - the opening at the incisors (mm), the hinge once worked out, and whether it is being worked out. */
   bite?: { raise: number; busy: boolean; hinge: import("@/lib/waxOcclusion").BiteHinge | null };
   /** Build 107: Sculpt - the tooth taken up to be moved (double-clicked), else null. */
@@ -144,8 +146,14 @@ export type WaxupActions = {
   onSetCurve?: (curve: number) => void;
   /** Build 108: Open the bite - the opening at the incisors, mm. */
   onBite?: (raise: number) => void;
+  /** Build 108: the Gum line step. */
+  onGumMode?: (mode: import("@/lib/waxGum").GumMode) => void;
+  onGumKeep?: (pair: string, keep: number) => void;
+  onGumIdeal?: () => void;
   /** Build 107: Sculpt - back to sculpting after moving a tooth. */
   onSculptMoveDone?: () => void;
+  /** Build 108: Sculpt - the picked tooth moved, turned and sized (its gimbal), as a double-click on it. */
+  onSculptMove?: () => void;
   /** Build 107: the whole set selected, so the gimbal moves and turns it as one. */
   onSelectSet?: () => void;
   /** Build 107: the set dropped on the arch again, as it first came in. */
@@ -928,7 +936,11 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
                   <span>{t("waxup.sculptMovingHint")}</span>
                   <div className="dental-trim-buttons"><button type="button" className="active" onClick={() => actions.onSculptMoveDone?.()}>{t("waxup.sculptMovingDone")}</button></div>
                 </div>
-              ) : view.selected ? <p className="blend-hint">{t("waxup.sculptDoubleHint")}</p> : <p className="blend-hint">{t("waxup.sculptPick")}</p>}
+              ) : view.selected ? (<>
+                {/* Build 108: the tooth's position can still be changed while sculpting - a button, as well as the double-click. */}
+                {actions.onSculptMove ? <div className="dental-trim-buttons"><button type="button" className="secondary waxup-adjust-position" disabled={working} title={t("waxup.sculptDoubleHint")} onClick={() => actions.onSculptMove?.()}>{t("waxup.adjustPosition")}</button></div> : null}
+                <p className="blend-hint">{t("waxup.sculptDoubleHint")}</p>
+              </>) : <p className="blend-hint">{t("waxup.sculptPick")}</p>}
               <div className="studio-tool-slot waxup-sculpt-slot" ref={toolSlot} />
             </>
           ) : (<>

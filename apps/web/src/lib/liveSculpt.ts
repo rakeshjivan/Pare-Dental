@@ -1061,7 +1061,11 @@ export class LiveMesh {
           // ATTRACT_DAB a dab nor ATTRACT_STROKE a stroke.
           this.vertexNormal(v, n);
           const ux = (q[0] - x) / d, uy = (q[1] - y) / d, uz = (q[2] - z) / d;
-          if (ux * n.x + uy * n.y + uz * n.z < ATTRACT_FACING) continue;
+          // Build 108: inward (a wax tooth onto the patient's own tooth under it, as Meshmixer's wax-up) the
+          // surface is pulled onto what lies behind it, so the extra wax sinks into the tooth and is gone;
+          // never out towards a point in front of it (a corner already inside the tooth stays).
+          const facing = ux * n.x + uy * n.y + uz * n.z;
+          if (this.attractInward ? facing > -ATTRACT_FACING : facing < ATTRACT_FACING) continue;
           const tri = target.lastTriangle ?? -1;
           if (tri >= 0 && target.triangleNormal) {
             target.triangleNormal(tri, this.attractNormal);
@@ -1234,6 +1238,8 @@ export class LiveMesh {
   private attractNormal = new Float64Array(3);
   /** Build 105: Attract stops this short of the target, mm (the clearance; 0: onto it). */
   attractGap = 0;
+  /** Build 108: Attract pulls onto what lies behind the surface (the tooth under a wax tooth), not in front. */
+  attractInward = false;
   /** Build 105: Attract as before (onto the nearest point of anything within reach, no facing test or limits). */
   classicAttract = false;
 

@@ -70,7 +70,7 @@ export type DentalAreaTool = "paint" | "erase" | "lassoAdd" | "lassoRemove";
 
 /** Fork (build 47): Dental Studio - raw intraoral scans to printable models, one arch or a pair with its bite. */
 type ModelStepId = "scans" | "prepare" | "model" | "base" | "articulator" | "label";
-type WaxStepId = "scans" | "trim" | "bite" | "select" | "teeth" | "find" | "choose" | "set" | "place" | "adjust" | "occlusion" | "sculpt" | "make";
+type WaxStepId = "scans" | "trim" | "bite" | "gum" | "select" | "teeth" | "find" | "choose" | "set" | "place" | "adjust" | "occlusion" | "sculpt" | "make";
 
 /** Build 106: a step's explanation, kept behind a small (?) - shown on hover or focus. */
 /**
@@ -367,7 +367,7 @@ export function DentalStudioPanel({
    * first library set for the arch, placed on the teeth): you adjust from there.
    */
   // Build 103: as Meshmixer (manual) - the teeth positioned, then sculpted, then the model made; nothing fitted for you.
-  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", ...(slots.upper && slots.lower && (slots.bite || slots.bite2) ? ["bite" as const] : []), "set", "place", "sculpt", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
+  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", ...(slots.upper && slots.lower && (slots.bite || slots.bite2) ? ["bite" as const] : []), "set", "place", "sculpt", "gum", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
   const [waxStepId, setWaxStepId] = useState<WaxStepId>("scans");
   const waxStep = waxSteps ? (waxSteps.includes(waxStepId) ? waxStepId : "make") : null;
   const wv = waxup?.view;
@@ -566,7 +566,8 @@ export function DentalStudioPanel({
   const waxAutoStep = (id: WaxStepId) => Boolean(wv) && (id === "teeth" ? wv!.autoMarked.some((fdi) => wv!.markTeeth.includes(fdi)) : (id === "select" || id === "set") && waxAutoDone.current.has(wv!.slot));
   const frameSteps = !framed ? null : waxSteps && waxStep && wv ? waxSteps.map((id, i) => {
     const reachable = i <= waxIndex || waxSteps.slice(0, i).every((prev) => waxStepDone(prev));
-    const state = id === waxStep ? "current" : i < waxIndex && waxStepDone(id) ? (waxAutoStep(id) ? "auto" : "done") : "";
+    // Build 108: once the models are made, the wax teeth are in them (hidden, used) - every step before is done.
+    const state = id === waxStep ? "current" : i < waxIndex && (stage === "made" || waxStepDone(id)) ? (waxAutoStep(id) ? "auto" : "done") : "";
     return frameStep(id, waxName(id), i + 1, state, !reachable || stage === "making", () => { setWaxAuto(false); goWax(id); });
   }) : mbSteps && mbStep ? mbSteps.map((id, i) => {
     const reachable = i <= mbIndex || mbSteps.slice(0, i).every((prev) => mbStepDone(prev));
@@ -734,6 +735,33 @@ export function DentalStudioPanel({
         <EdgeModifierSlider label={t("studio.increaseOvd")} title={t("waxup.biteHint")} value={wv.bite?.raise ?? 0} min={0} max={PIN_MAX} step={PIN_STEP} workspace={workspace} length disabled={busy || Boolean(wv.bite?.busy)} onChange={(value) => waxup.actions.onBite?.(value)} />
         {wv.bite?.busy ? <p className="dental-status" role="status"><LoaderCircle className="edge-modifier-spinner" size={15} aria-hidden="true" /> {t("waxup.biteWorking")}</p> : null}
         {(wv.bite?.raise ?? 0) > PIN_WARN ? <p className="blend-hint warn">{t("dental.pinRaiseWarn", { max: PIN_WARN })}</p> : <p className="blend-hint">{t("waxup.biteHint")}</p>}
+      </>)) : null}
+      {/* Build 108: Gum line - how the wax teeth meet the gum: the patient's gum as it is, or an even, mirrored line
+          (gum trimmed back, never added). The wax teeth show the patient's gum line on them in red; with the even
+          line, the gum that goes in amber and the new margin in green. */}
+      {waxSteps && waxStep === "gum" && wv && waxup ? card(8, t("waxup.gumTitle"), true, t("waxStudio.stepHint.gum"), null, (<>
+        <div className="studio-mm-choice two" role="radiogroup" aria-label={t("waxup.gumTitle")}>
+          {(["follow", "even"] as const).map((mode) => (
+            <button key={mode} type="button" role="radio" aria-checked={(wv.gum?.mode ?? "follow") === mode} className={(wv.gum?.mode ?? "follow") === mode ? "active" : ""} disabled={busy} title={t(`waxup.gum.${mode}Hint`)} onClick={() => waxup.actions.onGumMode?.(mode)}>{t(`waxup.gum.${mode}`)}</button>
+          ))}
+        </div>
+        <p className="blend-hint" role="status">{t(`waxup.gum.${wv.gum?.mode ?? "follow"}Hint`)}</p>
+        <ul className="waxup-gum-key">
+          <li><span style={{ background: "#d6403a" }} /> {t("waxup.gum.keyMargin")}</li>
+          <li><span style={{ background: "#9eb3c7" }} /> {t("waxup.gum.keyCovered")}</li>
+          {wv.gum?.mode === "even" ? (<>
+            <li><span style={{ background: "#f2b34c" }} /> {t("waxup.gum.keyTrimmed")}</li>
+            <li><span style={{ background: "#2e9e5c" }} /> {t("waxup.gum.keyLine")}</li>
+          </>) : null}
+        </ul>
+        {wv.gum?.mode === "even" ? (<>
+          {Object.keys(wv.gum.keep).sort((a, b) => (a.startsWith("upper") === b.startsWith("upper") ? Number(a.slice(-1)) - Number(b.slice(-1)) : a.startsWith("upper") ? -1 : 1)).map((pair) => {
+            const [arch, k] = pair.split(":");
+            const label = arch === "upper" ? `1${k} | 2${k}` : `4${k} | 3${k}`;
+            return <EdgeModifierSlider key={pair} label={t("waxup.gum.pair", { teeth: label })} title={t("waxup.gum.pairHint")} value={wv.gum!.keep[pair]} min={0} max={14} step={0.1} workspace={workspace} length disabled={busy} onChange={(value) => waxup.actions.onGumKeep?.(pair, value)} />;
+          })}
+          <div className="dental-trim-buttons"><button type="button" className="secondary" disabled={busy} title={t("waxup.gum.idealHint")} onClick={() => waxup.actions.onGumIdeal?.()}>{t("waxup.gum.ideal")}</button></div>
+        </>) : null}
       </>)) : null}
       {inWaxStep("trim") && inMb("prepare") ? card(2, t(framed ? "studio.trimTitle" : "dental.step2Prepare"), scansDone, null, prepareSummary, (<>
         <div className="dental-substep">
