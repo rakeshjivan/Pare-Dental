@@ -4607,6 +4607,7 @@ export const MESSAGES_EN = {
   "dental.biteLockedDone": "Locked the bite in and laid the scans out side by side.",
   "dental.scanLayout": "Show the scans",
   "dental.scanSide": "Side by side",
+  "dental.changeView": "Change view",
   "dental.scanOcclusion": "In occlusion",
   "dental.layoutSideDone": "Laid the scans out side by side.",
   "dental.layoutOcclusionDone": "Put the scans in occlusion.",

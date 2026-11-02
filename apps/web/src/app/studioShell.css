@@ -1076,3 +1076,4 @@ html.studio-right-hidden .studio-shell-on .dental-studio-panel.studio-framed { d
 .studio-side-tab.right { left: calc(100vw - var(--studio-gap) - var(--studio-right-w)); }
 .studio-side-tab.left.hidden { left: calc(var(--studio-gap) + 8px); }
 .studio-side-tab.right.hidden { left: calc(100vw - var(--studio-gap) - 8px); }
+.dental-view-title { display: block; margin: 10px 0 6px; }

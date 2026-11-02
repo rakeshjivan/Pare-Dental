@@ -710,7 +710,9 @@ export function DentalStudioPanel({
           {stage === "analysing" ? <p className="dental-status" role="status"><LoaderCircle className="edge-modifier-spinner" size={15} /> {t("dental.analysing")}</p> : null}
           {pairLine ? <p className={`dental-status ${pairLine.warn ? "warn" : ""}`} role="status">{pairLine.text}{"fit" in pairLine && onFitBite ? <>{" "}<button type="button" className="link-button" disabled={busy} onClick={onFitBite}>{t(slots.bite2 ? "dental.fitBite2" : "dental.fitBite")}</button></> : null}</p> : null}
           {biteLocked ? <p className="dental-status" role="status">{t("dental.biteLocked")}</p> : null}
-          {onLayout && analysis && slots.upper && slots.lower ? (
+          {onLayout && analysis && slots.upper && slots.lower ? (<>
+            {/* Build 108: named, so it reads as a choice of how the scans are shown. */}
+            <span className="edge-modifier-label dental-view-title">{t("dental.changeView")}</span>
             <div className="dental-trim-mode" role="radiogroup" aria-label={t("dental.scanLayout")}>
               {(["side", "occlusion"] as const).map((value) => (
                 <button key={value} type="button" role="radio" aria-checked={layout === value} className={layout === value ? "active" : ""} disabled={busy} onClick={() => onLayout(value)}>
@@ -718,7 +720,7 @@ export function DentalStudioPanel({
                 </button>
               ))}
             </div>
-          ) : null}
+          </>) : null}
           {/* Build 84: the bite contacts & clearance map, in occlusion. */}
           {onBiteMap && analysis && slots.upper && slots.lower ? (
             <div className="dental-bite-map">
