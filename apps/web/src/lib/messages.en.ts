@@ -5176,7 +5176,7 @@ export const MESSAGES_EN = {
   "waxStudio.flowWaxup": "Wax-up only",
   "waxStudio.flowImt": "IMT",
   "waxStudio.flowHint": "IMT: GC's injection moulding technique - the models for a clear silicone index, injected in two series.",
-  "waxStudio.arches": "Arches",
+  "waxStudio.arches": "Select arches requiring wax-up",
   "waxStudio.both": "Both",
   "waxStudio.waxupHint": "Load the scans, trim them, find and choose the teeth, place a tooth set, adjust it tooth by tooth, then make the model with the wax-up joined to it.",
   "waxStudio.imtHint": "As a wax-up, and Make also makes the IMT models for each arch waxed: the pre-op model, the full wax-up (series 2 index) and the alternate-tooth wax-up (series 1 index). Make the index chairside on the printed models.",
