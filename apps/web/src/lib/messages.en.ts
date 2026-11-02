@@ -4145,6 +4145,8 @@ export const MESSAGES_EN = {
   "feedback.footer": "Report a problem / suggest",
   "helpMenu.whatsNewHint": "What the latest builds brought",
   "helpMenu.feedback": "Send feedback",
+  "helpMenu.openSourceHint": "Pare 3D's source code (AGPL-3.0)",
+  "helpMenu.licencesHint": "Where the code and the tooth libraries come from",
   "helpMenu.feedbackHint": "Tell us what's hard, broken or missing",
   "busy.combine": "Combining parts…",
   "busy.cad": "Working on the edges…",

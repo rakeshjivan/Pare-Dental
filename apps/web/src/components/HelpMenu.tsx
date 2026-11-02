@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, CircleHelp, GraduationCap, Keyboard, LibraryBig, MessageSquareHeart, MousePointerClick, Sparkles, Tags } from "lucide-react";
+import { BookOpen, CircleHelp, Code2, ScrollText, GraduationCap, Keyboard, LibraryBig, MessageSquareHeart, MousePointerClick, Sparkles, Tags } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/lib/useLanguage";
@@ -9,6 +9,7 @@ import { OPEN_TINKERCAD_GUIDE_EVENT } from "@/components/TinkercadGuide";
 import { readToolNames, setToolNames } from "@/lib/toolNames";
 import { OPEN_WHATS_NEW_EVENT } from "@/components/WhatsNew";
 import { openFeedback } from "@/lib/feedback";
+import { SOURCE_CODE_URL } from "@/lib/appUpdate";
 
 
 /**
@@ -107,6 +108,15 @@ export function HelpMenu({
           <a role="menuitem" href={guideHref(language)} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>
             <LibraryBig size={17} aria-hidden="true" />
             <span><strong>{t("dashboard.userGuide")}</strong><small>{t("helpMenu.userGuideHint")}</small></span>
+          </a>
+          {/* Build 108: what the footer band held (it is gone) - the source a click away, as AGPL-3.0 section 13 asks. */}
+          <a role="menuitem" href={SOURCE_CODE_URL} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>
+            <Code2 size={17} aria-hidden="true" />
+            <span><strong>{t("home.openSource")}</strong><small>{t("helpMenu.openSourceHint")}</small></span>
+          </a>
+          <a role="menuitem" href={guideHref(language).replace(/[^/]*$/, "licences-and-credits.html")} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>
+            <ScrollText size={17} aria-hidden="true" />
+            <span><strong>{t("home.licences")}</strong><small>{t("helpMenu.licencesHint")}</small></span>
           </a>
         </div>
       ) : null}

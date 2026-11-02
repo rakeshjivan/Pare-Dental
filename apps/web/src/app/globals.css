@@ -409,7 +409,8 @@ input:where([type='button'], [type='reset'], [type='submit']),
   --editor-toolbar-height: 120px;
   --editor-toolbar-title-height: 44px;
   --editor-toolbar-tools-height: 76px;
-  --editor-footer-height: 30px;
+  /* Build 108: no footer band under the workspace (its links are in the Help menu). */
+  --editor-footer-height: 0px;
 
 --hover-accent-color: #dc3f36;
 --hover-accent-border-color: #ffffff;

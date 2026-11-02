@@ -939,9 +939,8 @@ export function SecondaryToolbar({
     { id: "sculpt", label: t("sculpt.title"), icon: Brush, action: build33.onSculpt, enabled: build33.canRound || build33.sculptActive, active: build33.sculptActive },
   ];
   // Fork (build 47): Dental Studio, in a toolbar section of its own.
-  const dentalTools = onSendToDental ? [
-    { id: "sendToDental", label: t("home.sendToDental"), icon: ForkToothIcon, action: onSendToDental, enabled: true, active: false },
-  ] : [
+  // Build 108: CAD Studio no longer sends a design to Dental Studio (it opened the old Dental Studio screen).
+  const dentalTools = onSendToDental ? [] : [
     { id: "dentalModel", label: t("dental.title"), icon: ForkToothIcon, action: () => window.dispatchEvent(new Event(DENTAL_MODEL_EVENT)), enabled: true, active: Boolean(dentalOpen) && !waxStudioOpen },
     // Build 94: Wax-up Studio, beside it - the same steps, with the wax-up. Build 95: in test builds
     // only, until its steps are clear and it does the work by itself.
@@ -1835,12 +1834,6 @@ export function SecondaryToolbar({
           {toolbarMode === "geometry" ? (
             <div className="title-row-tools">
               <ExportButton />
-              {onSendToDental ? (
-                <button type="button" className="send-to-dental-button" data-layerling-tool="sendToDental" title={t("home.sendToDental")} onClick={onSendToDental}>
-                  <ForkToothIcon width={18} height={18} aria-hidden="true" />
-                  <span>{t("home.sendToDental")}</span>
-                </button>
-              ) : null}
             <div className="toolbar-section toolbar-actions-section" data-group="manage">
               <div className="toolbar-section-label">{t("editor.group.manage")}</div>
               <div className="action-buttons">

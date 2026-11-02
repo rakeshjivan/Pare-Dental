@@ -124,7 +124,8 @@ export function AppFooter({
   return (
     <>
     {variant === "editor" ? <PenHoverTips /> : null}
-    <footer className={variant === "editor" ? "dashboard-legal editor-legal" : "dashboard-legal"}>
+    {/* Build 108: no band under the workspace - its links are in the Help menu. */}
+    {variant === "editor" ? null : <footer className="dashboard-legal">
       <div className="dashboard-legal-group">
         <a href={t("welcome.guideUrl")} target="_blank" rel="noreferrer">
           {t("dashboard.userGuide")}
@@ -141,7 +142,7 @@ export function AppFooter({
         <a href={SOURCE_CODE_URL} target="_blank" rel="noreferrer" title={`Pare 3D's source code (AGPL-3.0) - based on layerling ${version}`}>Open source</a>
         <a href={t("welcome.guideUrl").replace(/[^/]*$/, "licences-and-credits.html")} target="_blank" rel="noreferrer">Licences &amp; credits</a>
       </div>
-    </footer>
+    </footer>}
     </>
   );
 }
