@@ -410,7 +410,8 @@ export function MeshSculptPanel({
       {tool === "select" || tool === "unselect" ? (
         <div className="edge-modifier-field edge-kind-switch shell-openings" role="radiogroup" aria-label={t("sculpt.selectShape")}>
           <div className="shell-opening-options">
-            {(["brush", "lasso", "group"] as const).map((value) => (
+            {/* Build 108: the studio's Trim - Brush and Lasso only. */}
+            {(studioTrim ? (["brush", "lasso"] as const) : (["brush", "lasso", "group"] as const)).map((value) => (
               <button key={value} type="button" role="radio" aria-checked={selectShape === value} className={selectShape === value ? "active" : ""} disabled={busy} title={t(`sculpt.tip.selectShape.${value}` as "sculpt.tip.selectShape.brush")} onClick={() => onSelectShape?.(value)}>
                 {t(`sculpt.selectShape.${value}`)}
               </button>
