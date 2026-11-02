@@ -4,6 +4,16 @@
  */
 export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] }> = [
   {
+    build: 106,
+    items: [
+      "A cleaner screen: the strip of links along the bottom of the start pages and of CAD Studio is gone, so the work goes right to the bottom of the window.",
+      "Its links moved into the menus: on the start pages, the Learn (book) menu now ends with Report a problem / suggest, Open source and Licences & credits; in CAD Studio they are in the Help menu.",
+      "The build you are using is shown beside the Pare 3D name at the top left of the start pages.",
+      "CAD Studio no longer has a Send to Dental Studio button - it opened the old Dental Studio screen. To take a design across, use Send to Dental Studio in its ⋮ menu on CAD Studio's page.",
+      "The Digital Wax-Up card says what the first version will cover: the six front teeth, canine to canine.",
+    ],
+  },
+  {
     build: 105,
     items: [
       "Model Builder: hollow and honeycomb models get three drain slots through the outer wall where the hollow meets the floor - at the front of the arch and at the back of each side - so a model printed base-down never holds resin. Walls are 3 mm by default.",
