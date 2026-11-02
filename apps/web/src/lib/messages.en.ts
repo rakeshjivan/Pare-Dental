@@ -5447,7 +5447,7 @@ export const MESSAGES_EN = {
   "studio.hint.teeth": "Three dots on each tooth, then three for the arch - drag any that are off.",
   "studio.hint.find": "Find the teeth.",
   "studio.hint.choose": "Choose the teeth to wax up.",
-  "studio.hint.set": "Choose a tooth set - Ctrl + wheel over the teeth tries the next.",
+  "studio.hint.set": "Choose a tooth set from the panel on the right.",
   "studio.hint.place": "Drag a tooth to move it.",
   "studio.hint.adjust": "Check how the teeth sit on the gum.",
   "studio.hint.occlusion": "Bring the teeth into contact.",
