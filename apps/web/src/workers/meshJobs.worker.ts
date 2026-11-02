@@ -86,6 +86,10 @@ scope.onmessage = async (event: MessageEvent<MeshJobRequest | { archPartFor: num
       const result = occlusionInScanFrame(job.input);
       const reply: MeshJobResponse = { id: job.id, ok: true, kind: "occlusion", result };
       scope.postMessage(reply, [...result.upperWax, ...result.lowerWax].map((t) => t.positions.buffer as ArrayBuffer));
+    } else if (job.kind === "biteHinge") {
+      const { biteHinge } = await import("@/lib/waxOcclusion");
+      const reply: MeshJobResponse = { id: job.id, ok: true, kind: "biteHinge", hinge: biteHinge(job.upper, job.lower) };
+      scope.postMessage(reply);
     } else if (job.kind === "dentalArea") {
       const { autoDentalArea } = await import("@/lib/dentalArea");
       const crowns = new Uint8Array(Math.floor(job.positions.length / 9));

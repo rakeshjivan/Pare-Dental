@@ -635,3 +635,21 @@ export function occlusionInScanFrame(input: OcclusionInput): OcclusionResult {
   const lowerPose = back.clone().multiply(pose).multiply(frame).toArray();
   return { ...result, upperWax: move(result.upperWax, back), lowerWax: move(result.lowerWax, back), lowerPose };
 }
+
+/**
+ * Build 108: Wax-up Studio's Open the bite - the average articulator set on the pair as scanned (closed):
+ * the pair frame and the lower's incisal point in it. Worked out once; each opening is then a turn.
+ */
+export type BiteHinge = { frame: number[]; incisal: [number, number, number] };
+export function biteHinge(upperScan: Float32Array, lowerScan: Float32Array): BiteHinge {
+  const { frame } = pairFrame(cleanScan(upperScan), cleanScan(lowerScan));
+  return { frame: frame.toArray(), incisal: incisalPoint(transformSoup(lowerScan, frame)) };
+}
+
+/** Build 108: the lower's move (scan coordinates) that opens the bite `raise` mm at the incisors about the condylar axis. */
+export function openedLowerPose(hinge: BiteHinge, raise: number): THREE.Matrix4 {
+  if (!(raise > 0)) return new THREE.Matrix4();
+  const frame = new THREE.Matrix4().fromArray(hinge.frame);
+  const pose = mandiblePose({ kind: "rest" }, openingFor(Math.min(OVD_MAX * 2, raise), hinge.incisal), hinge.incisal);
+  return frame.clone().invert().multiply(pose).multiply(frame);
+}

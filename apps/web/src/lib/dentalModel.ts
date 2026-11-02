@@ -852,6 +852,8 @@ function buildArch(
   // Build 107: the drain slots, cut once everything else on the base is made (so no collar or bar fills one in).
   let drainCutters: ManifoldSolid[] = [];
   let hollowWall = 0;
+  /** Build 108: what the hollowing took out (the cavity, less any honeycomb) - taken out of the wax-up too. */
+  let hollowTaken: ManifoldSolid | null = null;
   if (options.inside !== "solid" && options.baseStyle !== "articulator") {
     const open = options.inside === "open";
     const wall = Math.max(DENTAL_MIN_WALL, Math.min(DENTAL_MAX_WALL, options.wall));
@@ -865,7 +867,8 @@ function buildArch(
       // Fork (build 49): a honeycomb inside carries the shell, so hollow is as stiff as solid.
       const infill = options.infill ?? "base";
       const taken = infill === "none" ? cavity.solid : keepSolid(honeycombIn(runtime, cavity.solid, floor, open, infill === "base" ? floor + HONEYCOMB_BASE_HEIGHT : Infinity));
-      solid = keepSolid(runtime.Manifold.difference(solid, taken.isEmpty() ? cavity.solid : taken));
+      hollowTaken = taken.isEmpty() ? cavity.solid : taken;
+      solid = keepSolid(runtime.Manifold.difference(solid, hollowTaken));
       // Build 107: three drain slots through the outer wall at the cavity's floor - the middle of the arch and each heel.
       const outerRing = footprint.reduce<Ring | null>((best, ring) => (!best || Math.abs(signedRing(ring)) > Math.abs(signedRing(best)) ? ring : best), null);
       if (outerRing) {
@@ -966,7 +969,11 @@ function buildArch(
   const waxShells = wax && wax.length ? splitShells(transformSoup(wax, arch.frame), 4) : [];
   for (const shell of waxShells) {
     try {
-      solid = keepSolid(runtime.Manifold.union(solid, keepSolid(toManifold(runtime, weld(shell, 1e-6)))));
+      // Build 108: on a hollow model the hollow goes on under the wax teeth as under the scan's own - the wax
+      // below the gum, reaching into it, came out as solid lumps inside the model. Only what lies in the hollow
+      // goes: the crowns, the gum and the wall a wall thick are as they were.
+      const tooth = keepSolid(toManifold(runtime, weld(shell, 1e-6)));
+      solid = keepSolid(runtime.Manifold.union(solid, hollowTaken && !hollowTaken.isEmpty() ? keepSolid(runtime.Manifold.difference(tooth, hollowTaken)) : tooth));
     } catch {
       warnings.push("wax");
     }

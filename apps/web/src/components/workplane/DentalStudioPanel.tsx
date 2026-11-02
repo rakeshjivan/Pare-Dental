@@ -70,7 +70,7 @@ export type DentalAreaTool = "paint" | "erase" | "lassoAdd" | "lassoRemove";
 
 /** Fork (build 47): Dental Studio - raw intraoral scans to printable models, one arch or a pair with its bite. */
 type ModelStepId = "scans" | "prepare" | "model" | "base" | "articulator" | "label";
-type WaxStepId = "scans" | "trim" | "select" | "teeth" | "find" | "choose" | "set" | "place" | "adjust" | "occlusion" | "sculpt" | "make";
+type WaxStepId = "scans" | "trim" | "bite" | "select" | "teeth" | "find" | "choose" | "set" | "place" | "adjust" | "occlusion" | "sculpt" | "make";
 
 /** Build 106: a step's explanation, kept behind a small (?) - shown on hover or focus. */
 /**
@@ -367,7 +367,7 @@ export function DentalStudioPanel({
    * first library set for the arch, placed on the teeth): you adjust from there.
    */
   // Build 103: as Meshmixer (manual) - the teeth positioned, then sculpted, then the model made; nothing fitted for you.
-  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", "set", "place", "sculpt", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
+  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", ...(slots.upper && slots.lower && (slots.bite || slots.bite2) ? ["bite" as const] : []), "set", "place", "sculpt", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
   const [waxStepId, setWaxStepId] = useState<WaxStepId>("scans");
   const waxStep = waxSteps ? (waxSteps.includes(waxStepId) ? waxStepId : "make") : null;
   const wv = waxup?.view;
@@ -375,6 +375,8 @@ export function DentalStudioPanel({
   // Build 105: Wax-up Studio fits the library teeth to the four marks on each tooth.
   // Build 107: as Meshmixer, the set is dropped whole on the arch - no marks needed first.
   const waxPlaceable = Boolean(wv?.setName) && (Boolean(wv?.manual) || (wv?.markedTeeth.length ?? 0) > 0);
+  /** Build 108: both arches waxed (each with its own set, both adjusted to their models). */
+  const bothArches = Boolean(waxStudio && waxStudio.arches === "both" && slots.upper && slots.lower);
   const waxStepDone = (id: WaxStepId): boolean => {
     if (!wv) return false;
     switch (id) {
@@ -390,8 +392,11 @@ export function DentalStudioPanel({
       case "find": return Boolean(wv.found?.length);
       case "choose": return wv.chosen.length > 0;
       // Build 103: and made for this arch (an upper set is no set for the lower teeth).
-      case "set": { const arch = wv.builtIn.find((set) => set.id === wv.setId)?.arch; return Boolean(wv.setName) && (!arch || arch === wv.slot); }
+      // Build 108: both arches waxed - a set for each.
+      case "set": { const arch = wv.builtIn.find((set) => set.id === wv.setId)?.arch; return Boolean(wv.setName) && (!arch || arch === wv.slot) && (!bothArches || (Boolean(wv.setIds?.upper) && Boolean(wv.setIds?.lower))); }
       case "place": return wv.placed.length > 0;
+      // Build 108: the articulator set up on the scans (0, the bite as scanned, is a choice too).
+      case "bite": return !wv.bite?.busy;
       case "adjust": return wv.stage === "adapted" && wv.placed.length > 0 && !wv.busy;
       default: return true;
     }
@@ -416,7 +421,11 @@ export function DentalStudioPanel({
     // The other arch chosen further on, with nothing placed on it yet: back to Find teeth for it.
     // Build 107: in Wax-up Studio (as Meshmixer) back to Library - and Library itself is never "past" it.
     const past = (wv.manual ? ["place", "adjust", "occlusion", "sculpt", "make"] : ["set", "place", "adjust", "occlusion", "sculpt", "make"]).includes(waxStep);
-    if (past && !wv.placed.length && !waxAutoDone.current.has(wv.slot)) { setWaxStepId(wv.manual ? "set" : "teeth"); return; }
+    // Build 108: both arches waxed, the other arch's set already chosen - its teeth are placed here instead.
+    if (past && !wv.placed.length && !waxAutoDone.current.has(`${wv.slot}:place`)) {
+      const target: WaxStepId = wv.manual ? (bothArches && wv.setIds?.[wv.slot] ? "place" : "set") : "teeth";
+      if (target !== waxStep) { setWaxStepId(target); return; }
+    }
     // Build 107: each step does its own work the first time it is entered (teeth found, marked, a set
     // chosen, the teeth placed) and then waits for Next - as Model Builder, it never moves on by itself.
     const key = `${wv.slot}:${waxStep}`;
@@ -433,7 +442,8 @@ export function DentalStudioPanel({
     // Build 107: in Wax-up Studio the dentist picks the set - nothing is chosen for them.
     if (waxStep === "set") { if (waxStepDone("set") || wv.manual) next(); else if (!waxSetsHere.length || !once("set", () => waxup.actions.onBuiltIn(waxSetsHere[0].id))) setWaxAuto(false); return; }
     // Build 103: the run stops at Position - the dentist confirms the teeth before they are fitted.
-    if (waxStep === "place") { if (waxStepDone("place")) setWaxAuto(false); else if (!waxPlaceable || !once("place", waxup.actions.onPlace)) setWaxAuto(false); return; }
+    // Build 108: the other arch's set still loading (both arches) - wait for it rather than stop.
+    if (waxStep === "place") { if (waxStepDone("place")) setWaxAuto(false); else if (!waxPlaceable && bothArches && wv.setIds?.[wv.slot]) return; else if (!waxPlaceable || !once("place", waxup.actions.onPlace)) setWaxAuto(false); return; }
     setWaxAuto(false);
   }, [waxAuto, waxStep, busy, wv?.busy, wv?.finder.busy, wv?.found?.length, wv?.chosen.length, wv?.markedTeeth.length, wv?.setName, wv?.placed.length, wv?.slot]); // eslint-disable-line react-hooks/exhaustive-deps
   const waxStepper = waxSteps && waxStep && wv && waxup ? (
@@ -668,7 +678,8 @@ export function DentalStudioPanel({
       {waxStudio && inWaxStep("scans") ? (
         <div className="wax-studio-choices">
           {choice(t("waxStudio.flow"), waxStudio.flow, [["waxup", t("waxStudio.flowWaxup")], ["imt", t("waxStudio.flowImt")]], waxStudio.onFlow, t("waxStudio.flowHint"))}
-          {choice(t("waxStudio.arches"), waxStudio.arches, [["upper", t("dental.upper")], ["lower", t("dental.lower")], ["both", t("waxStudio.both")]], waxStudio.onArches)}
+          {/* Build 108: asked only with both arches brought in - which to wax up, one or both. */}
+          {slots.upper && slots.lower ? choice(t("waxStudio.arches"), waxStudio.arches, [["upper", t("dental.upper")], ["lower", t("dental.lower")], ["both", t("waxStudio.both")]], waxStudio.onArches) : null}
           <p className="blend-hint">{t(waxStudio.flow === "imt" ? "waxStudio.imtHint" : "waxStudio.waxupHint")}</p>
         </div>
       ) : null}
@@ -716,6 +727,14 @@ export function DentalStudioPanel({
       </>)) : null}
 
       {/* Build 106: Wax-up Studio's Import step holds the trim too. */}
+      {/* Build 108: Open the bite - Model Builder's Increase OVD (its side view opening on the condyles, its slider), the
+          lower scan turning open in the view as it moves; the teeth are then placed and made at this opening. */}
+      {waxSteps && waxStep === "bite" && wv && waxup ? card(3, t("waxup.biteTitle"), true, t("waxStudio.stepHint.bite"), null, (<>
+        <div className="studio-artic-picture"><ArticulatorPicture pinRaise={wv.bite?.raise ?? 0} pin pinGap={PIN_CLEAR} /></div>
+        <EdgeModifierSlider label={t("studio.increaseOvd")} title={t("waxup.biteHint")} value={wv.bite?.raise ?? 0} min={0} max={PIN_MAX} step={PIN_STEP} workspace={workspace} length disabled={busy || Boolean(wv.bite?.busy)} onChange={(value) => waxup.actions.onBite?.(value)} />
+        {wv.bite?.busy ? <p className="dental-status" role="status"><LoaderCircle className="edge-modifier-spinner" size={15} aria-hidden="true" /> {t("waxup.biteWorking")}</p> : null}
+        {(wv.bite?.raise ?? 0) > PIN_WARN ? <p className="blend-hint warn">{t("dental.pinRaiseWarn", { max: PIN_WARN })}</p> : <p className="blend-hint">{t("waxup.biteHint")}</p>}
+      </>)) : null}
       {inWaxStep("trim") && inMb("prepare") ? card(2, t(framed ? "studio.trimTitle" : "dental.step2Prepare"), scansDone, null, prepareSummary, (<>
         <div className="dental-substep">
           <h4 className="dental-substep-title">{t(framed ? "studio.trimArch" : "dental.trimStep")}</h4>

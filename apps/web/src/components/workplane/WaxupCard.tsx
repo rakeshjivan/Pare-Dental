@@ -41,6 +41,10 @@ export type WaxupView = {
   setScale?: number;
   /** Build 107: how much further back (+) or forward (-) the canines stand than as dropped, mm. */
   setCurve?: number;
+  /** Build 108: the set chosen for each arch (both arches waxed: one for the upper, one for the lower). */
+  setIds?: { upper?: string; lower?: string };
+  /** Build 108: Open the bite - the opening at the incisors (mm), the hinge once worked out, and whether it is being worked out. */
+  bite?: { raise: number; busy: boolean; hinge: import("@/lib/waxOcclusion").BiteHinge | null };
   /** Build 107: Sculpt - the tooth taken up to be moved (double-clicked), else null. */
   sculptMoving?: string | null;
   /** Build 107: every tooth of the set selected (it moves as one). */
@@ -138,6 +142,8 @@ export type WaxupActions = {
   onSetScale?: (scale: number) => void;
   /** Build 107: the set's curve opened (+) or closed (-), mm at the canines. */
   onSetCurve?: (curve: number) => void;
+  /** Build 108: Open the bite - the opening at the incisors, mm. */
+  onBite?: (raise: number) => void;
   /** Build 107: Sculpt - back to sculpting after moving a tooth. */
   onSculptMoveDone?: () => void;
   /** Build 107: the whole set selected, so the gimbal moves and turns it as one. */
@@ -456,6 +462,10 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
             </button>
           ))}
         </div>
+      ) : null}
+      {/* Build 108: both arches waxed - a set for each, shown here so it is plain which arch still needs one. */}
+      {slots.upper && slots.lower && part === "set" ? (
+        <p className="blend-hint waxup-sets-both" role="status">{t("waxup.setsBoth", { upper: view.builtIn.find((set) => set.id === view.setIds?.upper)?.name ?? t("waxup.setNone"), lower: view.builtIn.find((set) => set.id === view.setIds?.lower)?.name ?? t("waxup.setNone") })}</p>
       ) : null}
 
       {/* Build 94: the teeth found on the scan, and those to wax up. */}

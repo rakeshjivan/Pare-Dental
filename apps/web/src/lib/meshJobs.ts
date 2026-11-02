@@ -9,7 +9,7 @@ import type { DentalAnalysis, DentalArchPart, DentalStudioInput, DentalStudioOpt
 import type { DentalTrimMode, DentalTrimResult } from "@/lib/dentalTrim";
 import type { WaxLandmarks, WaxupOptions, WaxupPlan } from "@/lib/dentalWaxup";
 import type { ScanTeeth } from "@/lib/toothSegment";
-import type { OcclusionInput, OcclusionResult } from "@/lib/waxOcclusion";
+import type { BiteHinge, OcclusionInput, OcclusionResult } from "@/lib/waxOcclusion";
 /** Build 94: fit the set tooth by tooth to the teeth found: each scan triangle's FDI, the teeth chosen. */
 export type WaxTeethFit = { fdi: Uint8Array; chosen: number[]; arch: "upper" | "lower"; ideal?: number; red?: number; centralRatio?: number; arcDepth?: number; adjust?: Record<number, import("@/lib/dentalWaxup").ToothAdjust>; /** Build 103: false - the whole library teeth (Position); true - fitted to the patient's (Adapt). */ blend?: boolean; /** Build 105: each library tooth fitted to the dentist's four marks (FDI to marks, scan coordinates). */ marks?: Record<number, import("@/lib/dentalWaxup").ToothMarks>; /** Build 107: fitted to the marks exactly (zenith to incisal mark). */ exact?: boolean };
 import type { WorkplaneShape } from "@/types/layerling";
@@ -30,6 +30,7 @@ export type MeshJobRequest =
   | { id: number; base: string; kind: "biteContacts"; upper: Float32Array; lower: Float32Array }
   | { id: number; base: string; kind: "findTeeth"; scan: Float32Array; arch: "upper" | "lower"; weights: ArrayBuffer | null }
   | { id: number; base: string; kind: "occlusion"; input: OcclusionInput }
+  | { id: number; base: string; kind: "biteHinge"; upper: Float32Array; lower: Float32Array }
   | { id: number; base: string; kind: "waxContacts"; teeth: Float32Array[]; antagonist: Float32Array | null }
   | { id: number; base: string; kind: "waxAdapt"; teeth: Array<{ fdi: number; positions: Float32Array }>; antagonist: Float32Array | null; options: { occlusal?: number; approximal?: number; bite?: boolean; contacts?: boolean } };
 export type MeshJobResponse =
@@ -47,6 +48,7 @@ export type MeshJobResponse =
   | { id: number; ok: true; kind: "findTeeth"; teeth: ScanTeeth }
   | { id: number; ok: true; kind: "progress"; share: number }
   | { id: number; ok: true; kind: "occlusion"; result: OcclusionResult }
+  | { id: number; ok: true; kind: "biteHinge"; hinge: BiteHinge }
   | { id: number; ok: true; kind: "waxContacts"; distances: Float32Array[] }
   | { id: number; ok: true; kind: "waxAdapt"; result: import("@/lib/waxAdapt").AdaptResult }
   | { id: number; ok: false; error: string };
@@ -83,6 +85,7 @@ function meshWorker(): Worker | null {
       else if (reply.kind === "waxAdapt") waiting.resolve(reply.result);
       else if (reply.kind === "findTeeth") waiting.resolve(reply.teeth);
       else if (reply.kind === "occlusion") waiting.resolve(reply.result);
+      else if (reply.kind === "biteHinge") waiting.resolve(reply.hinge);
       else if (reply.kind === "remesh") waiting.resolve({ ...reply.remesh, positions: Array.from(reply.remesh.positions) });
       else waiting.resolve({ positions: Array.from(reply.result.positions), voxel: reply.result.voxel, coarse: reply.result.coarse });
     };
@@ -518,6 +521,24 @@ export async function occlusionInBackground(input: OcclusionInput): Promise<Occl
     return await new Promise<OcclusionResult>((resolve, reject) => {
       pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
       target.postMessage({ id, base: new URL(".", window.location.href).href, kind: "occlusion", input } satisfies MeshJobRequest);
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "worker-unavailable") return here();
+    throw error;
+  }
+}
+
+/** Build 108: Wax-up's Open the bite - the average articulator set on the closed pair (lib/waxOcclusion biteHinge), in the worker when one runs. */
+export async function biteHingeInBackground(upper: Float32Array, lower: Float32Array): Promise<BiteHinge> {
+  const here = async () => (await import("@/lib/waxOcclusion")).biteHinge(upper, lower);
+  const target = meshWorker();
+  if (!target) return here();
+  const id = nextId;
+  nextId += 1;
+  try {
+    return await new Promise<BiteHinge>((resolve, reject) => {
+      pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
+      target.postMessage({ id, base: new URL(".", window.location.href).href, kind: "biteHinge", upper, lower } satisfies MeshJobRequest);
     });
   } catch (error) {
     if (error instanceof Error && error.message === "worker-unavailable") return here();
