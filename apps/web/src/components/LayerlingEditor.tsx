@@ -72,6 +72,7 @@ import { BUILT_IN_FINDER, finderBytes, loadStoredFinder, storeFinder } from "@/l
 import { toothColour, transferLabels, type ScanTeeth } from "@/lib/toothSegment";
 import { smoothOpenEdges, smoothOpenEdgesOf } from "@/lib/edgeSmooth";
 import { solidPositions, toManifold, transformSoup, weld, type ManifoldSolid } from "@/lib/dentalMesh";
+import { WAX_SET_FORMS } from "@/lib/waxSetForms";
 import { BUILT_IN_LIBRARIES, loadToothLibrary, loadToothSet, type ToothLibraryManifest } from "@/lib/toothLibrary";
 import { exocadSets } from "@/lib/exocadLibrary";
 import { composeAdjust, ToothGimbal } from "@/components/workplane/ToothGimbal";
@@ -11850,13 +11851,13 @@ export function LayerlingEditor({
       // the sets' Pare names - the authors are credited on the Licences & credits page, not in the tool.
       // Build 107: Christian Brenes's six-tooth sets only (the Pare library) - the Smile Overlay parts first,
       // as Meshmixer's Parts bring them in, then the Elchi forms; no full arches.
-      const order = (set: { id: string }) => (/tapered|youthful|smile-/.test(set.id) ? 0 : 1);
-      const builtIn = libraries.filter((library) => !library.hidden && library.id === "pare").flatMap((library) => library.sets.filter((set) => set.kind !== "arch" && (set.teeth ?? 6) === 6).sort((a, b) => order(a) - order(b)).map((set) => ({
-        id: set.id, name: set.name,
-        preview: set.preview ? `libraries/${library.id}/${set.preview}` : null,
-        // Build 94: which arch the set is for (from its teeth's numbers), so the picker shows the arch being waxed.
-        ...(set.fdi?.length ? { arch: set.fdi.every((n) => n >= 31) ? "lower" as const : set.fdi.every((n) => n < 30) ? "upper" as const : undefined } : {}),
-      })));
+      // Build 108: every library's front sets again (Pare's, Dr Nulty's, Teethy's - no pontics, no full
+      // arches), each by its arch and form and named by it (Square 1, Oval 2...).
+      const builtIn = libraries.flatMap((library) => library.sets.flatMap((set) => {
+        const form = WAX_SET_FORMS.get(set.id);
+        if (!form) return [];
+        return [{ id: set.id, name: t(`waxup.form.${form.form}N`, { n: form.index }), preview: set.preview ? `libraries/${library.id}/${set.preview}` : null, arch: form.arch, form: form.form, order: form.order }];
+      })).sort((a, b) => a.order - b.order).map(({ order: _order, ...set }) => set);
       setWaxup((current) => ({ ...current, builtIn: [...builtIn, ...current.builtIn.filter((set) => set.id.startsWith("own-"))], builtInCredit: null }));
     });
   }, [dentalStudio?.waxStudio]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -11868,9 +11869,13 @@ export function LayerlingEditor({
   const waxArchKnobs = useRef<Partial<Record<"upper" | "lower", { setScale: number; setCurve: number }>>>({});
   /** Build 103: each set's teeth once loaded, by id - so placing always uses the set the wax-up names (after an Undo, or the other arch's visit), never a leftover. */
   const waxShellsById = useRef(new Map<string, Float32Array[]>());
-  const chooseBuiltInSet = useCallback(async (id: string) => {
-    waxRecordRef.current();
+  /** Build 108: switchWaxSlot, for chooseBuiltInSet (declared before it). */
+  const switchWaxSlotRef = useRef<(slot: "upper" | "lower", then?: string) => void>(() => {});
+  const chooseBuiltInSet = useCallback(async (id: string, here = false) => {
     const arch = waxupRef.current.builtIn.find((set) => set.id === id)?.arch;
+    // Build 108: both arches' sets shown at once - a set for the other arch goes to that arch (it is made the one worked on).
+    if (!here && arch && arch !== waxupRef.current.slot && dentalStudioRef.current?.slots[arch]) { switchWaxSlotRef.current(arch, id); return; }
+    waxRecordRef.current();
     if (arch) { waxSetByArch.current[arch] = id; setWaxup((latest) => ({ ...latest, setIds: { ...latest.setIds, [arch]: id } })); }
     const own = waxOwnSets.current.get(id);
     if (own) {
@@ -11886,7 +11891,7 @@ export function LayerlingEditor({
       const shells = await loadToothSet(library.id, set);
       waxShells.current = shells;
       waxShellsById.current.set(id, shells);
-      setWaxup((current) => ({ ...current, setId: id, setName: set.name, teeth: shells.length, builtInCredit: null, error: null }));
+      setWaxup((current) => ({ ...current, setId: id, setName: current.builtIn.find((entry) => entry.id === id)?.name ?? set.name, teeth: shells.length, builtInCredit: null, error: null }));
     } catch {
       setWaxup((current) => ({ ...current, error: t("waxup.setFailed") }));
     }
@@ -12677,7 +12682,7 @@ export function LayerlingEditor({
     setWaxup((latest) => ({ ...latest, gum: { mode: "even", keep: next } }));
   };
   /** Build 103/108: the arch worked on - the other arch's teeth stay; this one's come back with its set, size and curve. */
-  const switchWaxSlot = (slot: "upper" | "lower") => {
+  const switchWaxSlot = (slot: "upper" | "lower", then?: string) => {
     // Build 103: a set made for the other arch is not carried over (an upper set was placed on
     // the lower teeth); the set last chosen for this arch comes back.
     const current = waxupRef.current;
@@ -12695,8 +12700,10 @@ export function LayerlingEditor({
       const knobs = waxArchKnobs.current[slot] ?? { setScale: 1, setCurve: 0 };
       return { ...now, slot, landmarks: found?.landmarks ?? null, guessed: false, placed, ...knobs, ...(keep ? {} : { setId: null, setName: null, teeth: 0 }) };
     });
-    if (!keep && remembered) void chooseBuiltInSet(remembered);
+    if (then) void chooseBuiltInSet(then, true);
+    else if (!keep && remembered) void chooseBuiltInSet(remembered, true);
   };
+  switchWaxSlotRef.current = switchWaxSlot;
   const scaleWaxSet = (scale: number) => {
     const current = waxupRef.current;
     const arch = dentalStudioRef.current?.slots[current.slot];

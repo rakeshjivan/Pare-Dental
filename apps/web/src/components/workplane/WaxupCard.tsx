@@ -6,6 +6,7 @@
  * only ever adds; Make joins it to the model.
  */
 import { AlertTriangle, Check, LoaderCircle, Upload } from "lucide-react";
+import { WAX_SET_FORM_ORDER, type WaxSetForm } from "@/lib/waxSetForms";
 import { useEffect, useRef, useState } from "react";
 import { EGGSHELL_MAX_WALL, EGGSHELL_MIN_WALL, EGGSHELL_WALL } from "@/lib/dentalEggshell";
 import type { WaxRestrict } from "@/components/workplane/WaxToothDrag";
@@ -58,7 +59,7 @@ export type WaxupView = {
   /** The tooth set loaded, and how many teeth it has. */
   setName: string | null;
   /** Build 79: the sets that ship with Pare 3D, and the one chosen (null = none, or one loaded from a file). */
-  builtIn: Array<{ id: string; name: string; library?: string; credit?: string; preview?: string | null; arch?: "upper" | "lower" }>;
+  builtIn: Array<{ id: string; name: string; library?: string; credit?: string; preview?: string | null; arch?: "upper" | "lower"; form?: WaxSetForm }>;
   builtInCredit: string | null;
   setId: string | null;
   teeth: number;
@@ -441,6 +442,8 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
   const [eggshellWall, setEggshellWall] = useState(EGGSHELL_WALL);
   // Build 107: Landmarks - the tooth buttons add or take out teeth while this is on.
   const [choosing, setChoosing] = useState(false);
+  // Build 108: Library - the tooth shape shown for each arch (until chosen, the chosen set's).
+  const [forms, setForms] = useState<Partial<Record<"upper" | "lower", WaxSetForm | "own">>>({});
   const working = busy || view.busy;
   /** Build 107: Wax-up Studio's Position as Meshmixer - the set dropped whole, moved, turned and sized. */
   const dropMode = part === "place" && view.manual && Boolean(actions.onSetScale) && view.placed.length > 0;
@@ -466,7 +469,7 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
   return (
     <div className="waxup-card">
       {part ? null : <p className="blend-hint">{t("waxup.hint")}</p>}
-      {slots.upper && slots.lower && part !== "occlusion" ? (
+      {slots.upper && slots.lower && part !== "occlusion" && part !== "set" ? (
         <div className="dental-trim-mode" role="radiogroup" aria-label={t("waxup.arch")}>
           {(["upper", "lower"] as const).map((slot) => (
             <button key={slot} type="button" role="radio" aria-checked={view.slot === slot} className={view.slot === slot ? "active" : ""} disabled={working} onClick={() => actions.onSlot(slot)}>
@@ -475,11 +478,6 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
           ))}
         </div>
       ) : null}
-      {/* Build 108: both arches waxed - a set for each, shown here so it is plain which arch still needs one. */}
-      {slots.upper && slots.lower && part === "set" ? (
-        <p className="blend-hint waxup-sets-both" role="status">{t("waxup.setsBoth", { upper: view.builtIn.find((set) => set.id === view.setIds?.upper)?.name ?? t("waxup.setNone"), lower: view.builtIn.find((set) => set.id === view.setIds?.lower)?.name ?? t("waxup.setNone") })}</p>
-      ) : null}
-
       {/* Build 94: the teeth found on the scan, and those to wax up. */}
       {show("find") || show("choose") ? (
       <div className="dental-substep">
@@ -641,30 +639,57 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
             if (files.length) actions.onSet(files);
           }}
         />
-        {view.builtIn.length ? (
-          // Build 91: the sets as pictures. Build 102: Pare's own sets by their Pare names (no heading); an
-          // exocad library the user loads, under "Your library".
-          <div className="waxup-sets" role="radiogroup" aria-label={t("waxup.builtIn")}>
-            {[...new Set(sets.map((set) => set.library ?? ""))].map((library) => (
-              <div key={library} className="waxup-set-library">
-                {library ? <span className="waxup-set-library-name">{library === "own" ? t("waxup.ownLibrary") : library}</span> : null}
-                <div className="waxup-set-grid">
-                  {sets.filter((set) => (set.library ?? "") === library).map((set) => (
-                    <button key={set.id} type="button" role="radio" aria-checked={view.setId === set.id} className={`waxup-set${view.setId === set.id ? " active" : ""}`} disabled={working} title={set.name} draggable={false} onDragStart={(event) => event.preventDefault()} onClick={() => actions.onBuiltIn(set.id)}>
-                      {set.preview ? <img src={set.preview} alt="" loading="lazy" draggable={false} /> : <span className="waxup-set-blank" aria-hidden="true" />}
-                      <span>{set.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : null}
+        {view.builtIn.length ? (() => {
+          // Build 91: the sets as pictures. Build 108: a tooth shape chosen first (Square, Oval, Round), then
+          // its sets; both arches waxed, the upper's and the lower's one under the other, each with its choice.
+          const both = Boolean(slots.upper && slots.lower) && part === "set";
+          const arches: Array<"upper" | "lower"> = both ? ["upper", "lower"] : [view.slot];
+          const chosenFor = (arch: "upper" | "lower") => (both ? view.setIds?.[arch] : view.setId);
+          return (
+            <div className="waxup-sets">
+              {arches.map((arch) => {
+                const mine = both ? view.builtIn.filter((set) => !set.arch || set.arch === arch) : sets;
+                const chosen = view.builtIn.find((set) => set.id === chosenFor(arch));
+                const own = mine.filter((set) => set.library === "own");
+                const offered = WAX_SET_FORM_ORDER.filter((form) => mine.some((set) => set.form === form));
+                const shape = forms[arch] ?? chosen?.form ?? (chosen?.library === "own" ? "own" : offered[0] ?? "own");
+                const shown = shape === "own" ? own : mine.filter((set) => set.form === shape);
+                const label = t(arch === "upper" ? "waxup.upperTeeth" : "waxup.lowerTeeth");
+                return (
+                  <section key={arch} className={`waxup-set-arch${both ? " both" : ""}`} aria-label={label}>
+                    {both ? (
+                      <header className={`waxup-set-arch-head${chosen ? " done" : ""}`}>
+                        <strong>{label}</strong>
+                        <span>{chosen ? <><Check size={13} aria-hidden="true" /> {chosen.name}</> : t("waxup.setNone")}</span>
+                      </header>
+                    ) : null}
+                    <span className="waxup-shape-label">{t("waxup.chooseShape")}</span>
+                    <div className={`studio-mm-choice waxup-shapes${own.length ? " four" : ""}`} role="radiogroup" aria-label={`${label}: ${t("waxup.chooseShape")}`}>
+                      {[...WAX_SET_FORM_ORDER, ...(own.length ? ["own" as const] : [])].map((form) => (
+                        <button key={form} type="button" role="radio" aria-checked={shape === form} className={shape === form ? "active" : ""} disabled={working || (form !== "own" && !offered.includes(form))} onClick={() => setForms((now) => ({ ...now, [arch]: form }))}>
+                          {form === "own" ? t("waxup.ownLibrary") : t(`waxup.form.${form}`)}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="waxup-set-grid" role="radiogroup" aria-label={label}>
+                      {shown.map((set) => (
+                        <button key={set.id} type="button" role="radio" aria-checked={chosenFor(arch) === set.id} className={`waxup-set${chosenFor(arch) === set.id ? " active" : ""}`} disabled={working} title={set.name} draggable={false} onDragStart={(event) => event.preventDefault()} onClick={() => actions.onBuiltIn(set.id)}>
+                          {set.preview ? <img src={set.preview} alt="" loading="lazy" draggable={false} /> : <span className="waxup-set-blank" aria-hidden="true" />}
+                          <span>{set.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          );
+        })() : null}
         <div className="waxup-load-own">
           <button type="button" className="dental-import" disabled={working} onClick={() => file.current?.click()}><Upload size={15} /> {t("waxup.loadSet")}</button>
           <p className="waxup-load-types">{t("waxup.loadSetTypes")}</p>
         </div>
-        <p className="blend-hint">{view.setName ? t("waxup.setLoaded", { name: view.setName, count: view.teeth }) : t("waxup.setHint")}</p>
+        {slots.upper && slots.lower && part === "set" ? null : <p className="blend-hint">{view.setName ? t("waxup.setLoaded", { name: view.setName, count: view.teeth }) : t("waxup.setHint")}</p>}
       </div>
       ) : null}
 

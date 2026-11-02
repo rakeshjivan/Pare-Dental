@@ -1079,6 +1079,16 @@ html.studio-right-hidden .studio-shell-on .dental-studio-panel.studio-framed { d
 .dental-view-title { display: block; margin: 10px 0 6px; }
 /* Build 108: Library - what to pick, and room round Load your own set with the file types under it. */
 .waxup-set-guide { margin: 0 0 12px; font-size: 15px; font-weight: 600; color: var(--studio-teal, #0a786c); }
+/* Build 108: Library - the sets by form; both arches waxed, each arch in its own labelled box. */
+.waxup-shape-label { display: block; margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--studio-text, #101722); }
+.waxup-shapes { margin: 0 0 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.waxup-shapes.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.waxup-set-arch.both { padding: 10px; border: 1px solid var(--studio-line, #e3e6eb); border-radius: 12px; background: #fbfcfc; }
+.waxup-set-arch + .waxup-set-arch { margin-top: 12px; }
+.waxup-set-arch-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 10px; }
+.waxup-set-arch-head strong { font-size: 14.5px; color: var(--studio-text, #101722); }
+.waxup-set-arch-head span { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--studio-muted, #56606f); text-align: right; }
+.waxup-set-arch-head.done span { color: var(--studio-teal, #0a786c); font-weight: 600; }
 .waxup-load-own { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--studio-line, #e3e6eb); }
 .waxup-load-own .dental-import { width: 100%; justify-content: center; }
 .waxup-load-own .waxup-load-types { margin: 8px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--studio-muted, #56606f); }
