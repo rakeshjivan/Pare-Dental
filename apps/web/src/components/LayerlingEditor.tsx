@@ -3285,6 +3285,13 @@ export function LayerlingEditor({
   // Build 106: the studio frame's case list - scans set aside on screen only - and the wax teeth drawn in
   // one colour or each in its own (on screen only: the parts keep their own colour).
   const [studioHidden, setStudioHidden] = useState<string[]>([]);
+  const studioHiddenRef = useRef<string[]>([]);
+  studioHiddenRef.current = studioHidden;
+  // Build 108: a part put out of view is let go of too (its gimbal went on showing over nothing).
+  useEffect(() => {
+    if (!studioHidden.length) return;
+    setSelectedIds((current) => (current.some((id) => studioHidden.includes(id)) ? current.filter((id) => !studioHidden.includes(id)) : current));
+  }, [studioHidden]);
   // Build 106: Model Builder's bite scans - off at first; shown from the case panel, only in occlusion,
   // in a colour of their own over the scans (so the arches can be seen set into the bite).
   const [studioBiteShown, setStudioBiteShown] = useState<string[]>([]);
@@ -9880,7 +9887,7 @@ export function LayerlingEditor({
   const waxToothUnder = (ray: { origin: Vec3; direction: Vec3 }, except: string) => {
     let best: string | null = null, bestAt = Infinity;
     for (const other of shapesRef.current) {
-      if (other.id === except || other.dental !== "wax" || other.hidden || other.hole) continue;
+      if (other.id === except || other.dental !== "wax" || other.hidden || other.hole || studioHiddenRef.current.includes(other.id)) continue;
       const at = rayMeetsSoup(ray.origin, ray.direction, worldTriangles(other), bestAt);
       if (at < bestAt) { bestAt = at; best = other.id; }
     }
@@ -13558,7 +13565,8 @@ export function LayerlingEditor({
   // Build 103: the teeth taken hold of in Position (their triangles in the scene, read when first needed).
   const waxDragCache = useRef(new Map<string, { shape: WorkplaneShape; tris: Float32Array }>());
   const waxDragTeeth: DragTooth[] = !dentalStudio?.waxStudio || (waxup.stage !== "position" && !studioWaxSculpt) ? [] : shapes.flatMap((shape) => {
-    const toWorld = shape.dental === "wax" && shape.waxTooth && !shape.hidden ? localToWorld(shape) : null;
+    // Build 108: a tooth put out of view in Case objects (its wax-up row hidden) cannot be taken hold of.
+    const toWorld = shape.dental === "wax" && shape.waxTooth && !shape.hidden && !studioHidden.includes(shape.id) ? localToWorld(shape) : null;
     if (!shape.waxTooth || !toWorld) return [];
     return [{ id: shape.id, frame: moveFrame(shape.waxTooth.frame, toWorld), width: shape.waxTooth.width, length: shape.waxTooth.length, locked: Boolean(waxup.locks[shape.waxTooth.fdi]), triangles: () => {
       const cached = waxDragCache.current.get(shape.id);
@@ -20532,12 +20540,12 @@ export function LayerlingEditor({
               colours: Object.fromEntries([...markTeeth, ...arches.filter((slot) => slot !== waxSlot && !shapes.some((shape) => shape.dental === "wax" && shape.waxFor === dentalStudio.slots[slot])).flatMap((slot) => defaultMarkTeeth(slot)), ...shapes.filter((shape) => shape.dental === "wax" && shape.waxTooth && !shape.hidden && arches.some((slot) => dentalStudio.slots[slot] === shape.waxFor)).map((shape) => shape.waxTooth!.fdi)].map((fdi) => [fdi, waxColourful ? WAX_TOOTH_COLOURS[fdi] ?? WAX_BLUE : WAX_BLUE])),
               selected: selectedFdi ?? shapes.find((shape) => selectedIds.length === 1 && shape.id === selectedIds[0] && shape.dental === "wax")?.waxTooth?.fdi ?? null,
               // Build 108: canine to canine, always - the chart shows what is waxed; a tooth is clicked only to pick a wax tooth on it.
-              pickable: (fdi) => shapes.some((shape) => shape.dental === "wax" && !shape.hidden && shape.waxTooth?.fdi === fdi && arches.some((slot) => dentalStudio.slots[slot] === shape.waxFor)),
+              pickable: (fdi) => shapes.some((shape) => shape.dental === "wax" && !shape.hidden && !studioHidden.includes(shape.id) && shape.waxTooth?.fdi === fdi && arches.some((slot) => dentalStudio.slots[slot] === shape.waxFor)),
               onPick: (fdi) => {
                 // Build 108: a tooth of the other arch picks that arch too.
                 const arch = fdi < 30 ? "upper" as const : "lower" as const;
                 if (arch !== waxupRef.current.slot && dentalStudioRef.current?.waxStudio?.arches === "both") switchWaxSlot(arch);
-                const tooth = shapesRef.current.find((shape) => shape.dental === "wax" && !shape.hidden && shape.waxTooth?.fdi === fdi && shape.waxFor === dentalStudioRef.current?.slots[arch]);
+                const tooth = shapesRef.current.find((shape) => shape.dental === "wax" && !shape.hidden && !studioHiddenRef.current.includes(shape.id) && shape.waxTooth?.fdi === fdi && shape.waxFor === dentalStudioRef.current?.slots[arch]);
                 if (tooth) setSelectedIds([tooth.id]);
               },
             } : null}
