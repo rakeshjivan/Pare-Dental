@@ -20524,15 +20524,14 @@ export function LayerlingEditor({
               // Build 108: both arches on the chart at once - each arch's wax teeth in their colours.
               colours: Object.fromEntries([...markTeeth, ...arches.filter((slot) => slot !== waxSlot && !shapes.some((shape) => shape.dental === "wax" && shape.waxFor === dentalStudio.slots[slot])).flatMap((slot) => defaultMarkTeeth(slot)), ...shapes.filter((shape) => shape.dental === "wax" && shape.waxTooth && !shape.hidden && arches.some((slot) => dentalStudio.slots[slot] === shape.waxFor)).map((shape) => shape.waxTooth!.fdi)].map((fdi) => [fdi, waxColourful ? WAX_TOOTH_COLOURS[fdi] ?? WAX_BLUE : WAX_BLUE])),
               selected: selectedFdi ?? shapes.find((shape) => selectedIds.length === 1 && shape.id === selectedIds[0] && shape.dental === "wax")?.waxTooth?.fdi ?? null,
-              pickable: (fdi) => fdi % 10 <= 5,
+              // Build 108: canine to canine, always - the chart shows what is waxed; a tooth is clicked only to pick a wax tooth on it.
+              pickable: (fdi) => shapes.some((shape) => shape.dental === "wax" && !shape.hidden && shape.waxTooth?.fdi === fdi && arches.some((slot) => dentalStudio.slots[slot] === shape.waxFor)),
               onPick: (fdi) => {
                 // Build 108: a tooth of the other arch picks that arch too.
                 const arch = fdi < 30 ? "upper" as const : "lower" as const;
                 if (arch !== waxupRef.current.slot && dentalStudioRef.current?.waxStudio?.arches === "both") switchWaxSlot(arch);
                 const tooth = shapesRef.current.find((shape) => shape.dental === "wax" && !shape.hidden && shape.waxTooth?.fdi === fdi && shape.waxFor === dentalStudioRef.current?.slots[arch]);
-                if (tooth) { setSelectedIds([tooth.id]); return; }
-                if (arch !== waxupRef.current.slot) return;
-                setWaxup((current) => { const teeth = markTeethFor(current); return { ...current, markTeeth: teeth.includes(fdi) ? teeth.filter((n) => n !== fdi) : [...teeth, fdi].sort((a, b) => archOrder(a) - archOrder(b)) }; });
+                if (tooth) setSelectedIds([tooth.id]);
               },
             } : null}
             onView={(view) => showDentalView(studioWax ? waxSlot : dentalStudio.slots.upper ? "upper" : "lower", view, studioWax ? undefined : (["upper", "lower"] as const).map((slot) => dentalStudio.slots[slot]).filter((id): id is string => Boolean(id) && !studioHidden.includes(id!)))}

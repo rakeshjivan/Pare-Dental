@@ -110,6 +110,8 @@ export function DentalStart({ onStart, onScans, waxupShown }: { onStart: (tool: 
               {wax ? <em className={`test-pill${soon ? " soon" : ""}`}>{t(soon ? "dentalStart.comingSoon" : "home.testBuild")}</em> : null}
             </h2>
             <p>{wax ? t("dentalStart.waxSummary") : t("dentalStart.modelSummary")}</p>
+            {/* Build 108: what the wax-up covers for now. */}
+            {wax ? <p className="dental-workflow-scope">{t("dentalStart.waxScope")}</p> : null}
           </div>
           <ul className="home-chips" aria-label={t("home.includes")}>
             {chips.map((chip) => <li key={chip}>{chip}</li>)}

@@ -1465,3 +1465,4 @@ html[data-theme="dark"] .pare-home .home-recent-thumb .project-preview {
 }
 .test-pill.soon { color: #374151; background: #e5e7eb; }
 .home-primary.dental.soon, .home-primary.dental.soon:hover { color: #6b7280; background: #e5e7eb; border-color: #e5e7eb; cursor: not-allowed; box-shadow: none; }
+.dental-workflow-scope { margin: 4px 0 0; font-size: 13px; font-weight: 600; color: #0a786c; }
