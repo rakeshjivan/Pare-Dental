@@ -181,11 +181,15 @@ export function gumSides(soup: ArrayLike<number>, tooth: ToothGum, scan: Surface
 const COVERED = -0.03;
 
 /**
- * The visible crown length at the zenith now: from the incisal edge to the most apical labial corner in a
- * strip 1.2 mm either side of the zenith's line that the gum does not cover, mm.
+ * The visible crown length at the zenith now: from the incisal edge to the most apical labial corner, in a strip
+ * 1.2 mm either side of the zenith's line, that the gum does not cover, mm. "Covered" is under the scan's surface -
+ * which is also inside the patient's own tooth, so a wax tooth sunk in the patient's near its edge is not read as
+ * gum-covered there. A corner beyond the look-up's reach counts as shown in the tooth's incisal half (wax standing
+ * clear of the scan) and as covered in its cervical half (deep under the gum).
  */
-export function visibleLength(soup: ArrayLike<number>, tooth: ToothGum, sides: Float32Array): number {
+export function visibleLength(soup: ArrayLike<number>, tooth: ToothGum & { length?: number }, sides: Float32Array): number {
   let best = 0;
+  const length = tooth.length ?? 12;
   const n = Math.floor(soup.length / 9);
   for (let t = 0; t < n; t += 1) {
     const o = t * 9;
@@ -196,12 +200,12 @@ export function visibleLength(soup: ArrayLike<number>, tooth: ToothGum, sides: F
     if ((nx * tooth.out[0] + ny * tooth.out[1] + nz * tooth.out[2]) / len < 0.3) continue;
     for (let k = 0; k < 3; k += 1) {
       const v = t * 3 + k;
-      if (!(sides[v] >= COVERED)) continue;
       const f = inToothFrame(tooth, [soup[v * 3], soup[v * 3 + 1], soup[v * 3 + 2]]);
-      if (Math.abs(f.m) <= 1.2 && f.u > best) best = f.u;
+      const shown = Number.isFinite(sides[v]) ? sides[v] >= COVERED : f.u < length * 0.5;
+      if (shown && Math.abs(f.m) <= 1.2 && f.u > best) best = f.u;
     }
   }
-  return best;
+  return Math.min(best, length);
 }
 
 /** The preview's colours (RGB, 0-1). */

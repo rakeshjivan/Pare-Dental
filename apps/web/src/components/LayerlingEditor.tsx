@@ -10651,10 +10651,18 @@ export function LayerlingEditor({
     window.setTimeout(() => showDentalView("upper", "right", ids), 0);
   }, [studioWaxStep]); // eslint-disable-line react-hooks/exhaustive-deps
   const waxSculptOpened = useRef<string | null>(null);
+  const waxSculptWas = useRef(false);
   /** Build 107: Sculpt - the tooth double-clicked to be moved and adjusted (its gimbal), until double-clicked again. */
   const [waxSculptMove, setWaxSculptMove] = useState<string | null>(null);
   useEffect(() => {
-    if (!studioWaxSculpt) { waxSculptOpened.current = null; setWaxSculptMove(null); return; }
+    // Build 108: leaving Sculpt (for Gum line or Export) closes its tools - they were left floating over the view.
+    if (!studioWaxSculpt) {
+      waxSculptOpened.current = null; setWaxSculptMove(null);
+      if (waxSculptWas.current && sculptToolRef.current && !sculptToolRef.current.trim) { flushSculptRef.current(); setSculptTool(null); }
+      waxSculptWas.current = false;
+      return;
+    }
+    waxSculptWas.current = true;
     if (waxSculptMove) return;
     const id = selectedIds.length === 1 ? selectedIds[0] : null;
     const shape = id ? shapesRef.current.find((candidate) => candidate.id === id && candidate.dental === "wax" && !candidate.hidden) : undefined;
@@ -11415,8 +11423,10 @@ export function LayerlingEditor({
       out[studio.slots.upper] = Math.min(out[studio.slots.upper] ?? 1, biteMap.upperOpacity ?? 1);
       out[studio.slots.lower] = Math.min(out[studio.slots.lower] ?? 1, biteMap.lowerOpacity ?? 1);
     }
+    // Build 108: Gum line - the scans see-through, so the wax under the gum and the gum line on it show.
+    if (studio?.waxStudio && studioWaxStep === "gum") for (const id of [studio.slots.upper, studio.slots.lower]) if (id) out[id] = Math.min(out[id] ?? 1, 0.45);
     window.layerlingPartOpacity?.(Object.keys(out).length ? out : null);
-  }, [biteMap?.on, biteMap?.upperOpacity, biteMap?.lowerOpacity, dentalStudio?.layout, dentalStudio?.slots.upper, dentalStudio?.slots.lower, studioShellOn, studioOpacity]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [biteMap?.on, biteMap?.upperOpacity, biteMap?.lowerOpacity, dentalStudio?.layout, dentalStudio?.slots.upper, dentalStudio?.slots.lower, studioShellOn, studioOpacity, studioWaxStep]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => window.layerlingPartOpacity?.(null), []);
   // The map goes when Dental Studio closes.
   const studioOpen = Boolean(dentalStudio);
@@ -12620,7 +12630,7 @@ export function LayerlingEditor({
       for (const tooth of waxGumTeeth()) {
         const pair = gumPair(tooth.fdi);
         if (current.keep[pair] !== undefined) continue;
-        const shown = Math.min(tooth.length, Math.round(visibleLength(tooth.soup, tooth.tooth, tooth.sides) * 10) / 10);
+        const shown = Math.min(tooth.length, Math.round(visibleLength(tooth.soup, { ...tooth.tooth, length: tooth.length }, tooth.sides) * 10) / 10);
         keep[pair] = Math.max(keep[pair] ?? 0, shown);
       }
     }
@@ -12632,7 +12642,8 @@ export function LayerlingEditor({
     if (!current) return;
     const teeth = waxGumTeeth();
     const next = { ...current.keep };
-    for (const upper of [true, false]) {
+    // Chu et al. measured the maxillary teeth: the levels are set for the upper arch only.
+    for (const upper of [true]) {
       const arch = teeth.filter((tooth) => (tooth.fdi < 30) === upper);
       const centralKeep = next[upper ? "upper:1" : "lower:1"];
       if (!arch.length || centralKeep === undefined) continue;
@@ -13544,7 +13555,8 @@ export function LayerlingEditor({
       waxGumPainted.current = items.length > 0;
     }, 120);
     return () => window.clearTimeout(timer);
-  }, [studioShellOn, dentalStudio?.waxStudio, studioWaxStep, waxup.gum, shapes]); // eslint-disable-line react-hooks/exhaustive-deps
+  // (On the shapes the view draws, not the design's: a rebuild of them - a tint, see-through - showed the teeth over the colours.)
+  }, [studioShellOn, dentalStudio?.waxStudio, studioWaxStep, waxup.gum, viewportShapes]); // eslint-disable-line react-hooks/exhaustive-deps
   const waxupView: WaxupView = {
     ...waxup,
     placed: waxPlacedNow,
@@ -19001,7 +19013,7 @@ export function LayerlingEditor({
   const waxToothSelected = Boolean(dentalStudio?.waxStudio && selectedIds.length === 1 && shapes.some((shape) => shape.id === selectedIds[0] && shape.dental === "wax" && shape.waxTooth && !shape.hidden));
   // Build 106: Model Builder's frame is for looking at the case: no handles, gimbal or guides on a picked scan.
   // Build 107: and Wax-up's Import step the same - the scans are looked at and trimmed there, not moved.
-  const handlesAway = Boolean(sculptTool) || waxToothSelected || (studioShellOn && (!dentalStudio?.waxStudio || studioWaxStep === "scans" || studioWaxStep === "trim" || studioWaxStep === "bite" || studioWaxStep === "teeth" || studioWaxStep === "set"));
+  const handlesAway = Boolean(sculptTool) || waxToothSelected || (studioShellOn && (!dentalStudio?.waxStudio || studioWaxStep === "scans" || studioWaxStep === "trim" || studioWaxStep === "bite" || studioWaxStep === "teeth" || studioWaxStep === "set" || studioWaxStep === "gum"));
   const heldViewportShapes = historyView.shapes ?? viewportShapes;
   useEffect(() => { window.layerlingTransformHandles?.(handlesHidden || handlesAway); }, [handlesHidden, handlesAway]);
   // Build 101: closing Dental Studio puts the view back as it should be - handles as chosen, no drag left held.

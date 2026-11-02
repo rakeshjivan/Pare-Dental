@@ -409,7 +409,7 @@ export function DentalStudioPanel({
   useEffect(() => {
     if (!waxStep || !waxup) return;
     // (As Meshmixer, Sculpt and Make show the teeth solid and still; nothing is fitted - see placeWaxup.)
-    const adapted = ["adjust", "occlusion", "sculpt", "make"].includes(waxStep);
+    const adapted = ["adjust", "occlusion", "sculpt", "gum", "make"].includes(waxStep);
     if ((waxup.view.stage === "adapted") !== adapted) waxup.actions.onStage(adapted ? "adapted" : "position");
   }, [waxStep]); // eslint-disable-line react-hooks/exhaustive-deps
   // Straight through from Find teeth to the teeth placed, once per arch.
@@ -420,7 +420,7 @@ export function DentalStudioPanel({
     if (!waxStep || !wv || !waxup) return;
     // The other arch chosen further on, with nothing placed on it yet: back to Find teeth for it.
     // Build 107: in Wax-up Studio (as Meshmixer) back to Library - and Library itself is never "past" it.
-    const past = (wv.manual ? ["place", "adjust", "occlusion", "sculpt", "make"] : ["set", "place", "adjust", "occlusion", "sculpt", "make"]).includes(waxStep);
+    const past = (wv.manual ? ["place", "adjust", "occlusion", "sculpt", "gum", "make"] : ["set", "place", "adjust", "occlusion", "sculpt", "make"]).includes(waxStep);
     // Build 108: both arches waxed, the other arch's set already chosen - its teeth are placed here instead.
     if (past && !wv.placed.length && !waxAutoDone.current.has(`${wv.slot}:place`)) {
       const target: WaxStepId = wv.manual ? (bothArches && wv.setIds?.[wv.slot] ? "place" : "set") : "teeth";

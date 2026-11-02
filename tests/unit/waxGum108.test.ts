@@ -62,7 +62,15 @@ describe("Wax-up Gum line (build 108)", () => {
       triangleNormal(_t, out) { out[0] = 0; out[1] = -1; out[2] = 0; },
     };
     const sides = gumSides(Float32Array.from(soup), tooth, probe);
-    expect(visibleLength(soup, tooth, sides)).toBeCloseTo(8, 0);
+    // The gum begins between z = 2 and 1.5 (the strip's 0.5 mm steps): 8 to 8.5 mm from the edge.
+    const at = (s: Float32Array) => visibleLength(soup, { ...tooth, length: 10 }, s);
+    expect(at(sides)).toBeGreaterThanOrEqual(7.5);
+    expect(at(sides)).toBeLessThanOrEqual(8.5);
+    // Deeper under the gum than the look-up reaches (Infinity, in the cervical half) is not read as shown.
+    const deep = Float32Array.from(sides, (v, i) => (soup[i * 3 + 2] < 1 ? Infinity : v));
+    expect(at(deep)).toBe(at(sides));
+    // Nowhere covered: the whole tooth, to its length.
+    expect(visibleLength(soup, { ...tooth, length: 9.5 }, new Float32Array(sides.length).fill(1))).toBe(9.5);
   });
   it("sets the canines level with the centrals and the laterals 1 mm coronal", () => {
     const at = (fdi: number, x: number, edge: number) => ({ fdi, frame: { ...frame, origin: [x, -3, edge] as [number, number, number] } });

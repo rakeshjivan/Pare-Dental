@@ -5547,7 +5547,7 @@ export const MESSAGES_EN = {
   "waxup.gum.pair": "{teeth}: crown length at the zenith",
   "waxup.gum.pairHint": "From the incisal edge to the new gum line's lowest point, the same on both teeth of the pair. Shorter keeps more gum; the gum is never brought down past where it is now.",
   "waxup.gum.ideal": "Ideal levels from the centrals",
-  "waxup.gum.idealHint": "As in a healthy smile (Chu et al. 2009): the canines' gum line level with the centrals', the laterals' 1 mm lower (towards the incisal edge). Set the centrals first.",
+  "waxup.gum.idealHint": "As in a healthy smile (Chu et al. 2009): the canines' gum line level with the centrals', the laterals' 1 mm lower (towards the incisal edge). Set the centrals first. Upper teeth only - the study measured the maxillary teeth.",
   "dental.warn.gum": "The gum could not be trimmed to the even line around one of the wax teeth - it is as scanned there.",
   "waxup.adjustPosition": "Adjust tooth position",
   "waxup.setsBoth": "Upper: {upper} · Lower: {lower}. Pick a set for each arch (switch between them above).",
