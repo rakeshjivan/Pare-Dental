@@ -71,7 +71,7 @@ import { PIN_MAX, PIN_STEP } from "@/lib/dentalArticulator";
 import { BUILT_IN_FINDER, finderBytes, loadStoredFinder, storeFinder } from "@/lib/toothFinderStore";
 import { toothColour, transferLabels, type ScanTeeth } from "@/lib/toothSegment";
 import { smoothOpenEdges, smoothOpenEdgesOf } from "@/lib/edgeSmooth";
-import { solidPositions, toManifold, transformSoup, weld, type ManifoldSolid } from "@/lib/dentalMesh";
+import { solidPositions, toManifold, transformSoup, weld, type ManifoldSolid, cleanStlBinary } from "@/lib/dentalMesh";
 import { WAX_SET_FORMS } from "@/lib/waxSetForms";
 import { BUILT_IN_LIBRARIES, loadToothLibrary, loadToothSet, type ToothLibraryManifest } from "@/lib/toothLibrary";
 import { exocadSets } from "@/lib/exocadLibrary";
@@ -12441,6 +12441,7 @@ export function LayerlingEditor({
     const along = front.map((value, i) => -(value * Math.cos(turn) + left[i] * Math.sin(turn)) * Math.cos(tilt) + up[i] * Math.sin(tilt)) as [number, number, number];
     window.layerlingShowParts([id], toScene(along), 0.6);
   };
+  const marginViewed = useRef(false);
   const startMargin = (fdi: number) => {
     const current = waxupRef.current;
     const arch = waxArch();
@@ -12450,7 +12451,8 @@ export function LayerlingEditor({
     const next = { ...current, slot: arch.slot, marginPick: { fdi, points: kept ? [...kept] : [] } };
     setWaxup(next);
     showMargins(next);
-    window.setTimeout(() => showToothPalatal(arch.slot, fdi), 60);
+    // Build 116: the view turned to the tooth only when the step opens - after that it stays where the dentist put it.
+    if (!marginViewed.current) { marginViewed.current = true; window.setTimeout(() => showToothPalatal(arch.slot, fdi), 60); }
   };
   const pickMarginPoint = (x: number, y: number) => {
     const current = waxupRef.current;
@@ -12554,7 +12556,7 @@ export function LayerlingEditor({
     }
     showMargins(waxupRef.current);
   }, [marginStep, waxup.slot, waxup.margins, waxFound]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!marginStep && waxupRef.current.marginPick) setWaxup({ ...waxupRef.current, marginPick: null }); }, [marginStep]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!marginStep) marginViewed.current = false; if (!marginStep && waxupRef.current.marginPick) setWaxup({ ...waxupRef.current, marginPick: null }); }, [marginStep]); // eslint-disable-line react-hooks/exhaustive-deps
   /** A wax tooth's margin line in the scene (its drawn path), or null. */
   const marginFor = (tooth: WorkplaneShape) => {
     const studio = dentalStudioRef.current;
@@ -18755,7 +18757,7 @@ export function LayerlingEditor({
         if (!meshes.length) continue;
         const which = part.id === state.madeFor?.upper ? t("dental.upper") : part.id === state.madeFor?.lower ? t("dental.lower") : displayShapeName(part);
         const name = projectExportFileName([label, which, date].filter(Boolean).join(" - "), "stl");
-        const answer = await saveUserFile(name, new Blob([new Uint8Array(exportMeshesToStl(meshes))], { type: "model/stl" }), t("files.saveExport"));
+        const answer = await saveUserFile(name, new Blob([new Uint8Array(cleanStlBinary(exportMeshesToStl(meshes)))], { type: "model/stl" }), t("files.saveExport"));
         if (answer === "cancelled") return;
         saved.push(name);
       }
@@ -19684,7 +19686,10 @@ export function LayerlingEditor({
   // Build 107: and Wax-up's Import step the same - the scans are looked at and trimmed there, not moved.
   const handlesAway = Boolean(sculptTool) || waxToothSelected || (studioShellOn && (!dentalStudio?.waxStudio || studioWaxStep === "scans" || studioWaxStep === "trim" || studioWaxStep === "bite" || studioWaxStep === "keep" || studioWaxStep === "margin" || studioWaxStep === "teeth" || studioWaxStep === "set" || studioWaxStep === "gum"));
   // Build 110: each wax tooth shown with its erase.
-  const erasedViewportShapes = useMemo(() => (dentalStudio?.waxStudio && ((waxup.erase && Object.keys(waxup.erase).length) || (waxup.marginOn && (waxup.margins?.upper || waxup.margins?.lower))) ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? erasedShown(shape) : shape)) : viewportShapes), [viewportShapes, waxup.erase, waxup.margins, waxup.marginOn, dentalStudio, eraseTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Build 116: the wax shown erased (to the margins and paint) only once the teeth are placed - from Keep & erase on.
+  // While they are being positioned the whole library teeth are shown, and nothing is worked out as they move.
+  const eraseShownStep = !studioWaxStep || ["keep", "sculpt", "gum", "make"].includes(studioWaxStep);
+  const erasedViewportShapes = useMemo(() => (dentalStudio?.waxStudio && eraseShownStep && ((waxup.erase && Object.keys(waxup.erase).length) || (waxup.marginOn && (waxup.margins?.upper || waxup.margins?.lower))) ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? erasedShown(shape) : shape)) : viewportShapes), [viewportShapes, waxup.erase, waxup.margins, waxup.marginOn, dentalStudio, eraseTick, eraseShownStep]); // eslint-disable-line react-hooks/exhaustive-deps
   const heldViewportShapes = historyView.shapes ?? erasedViewportShapes;
   // Build 110: in Keep & erase, the paint shown over the teeth (again whenever they or it change); taken away on leaving.
   useEffect(() => {

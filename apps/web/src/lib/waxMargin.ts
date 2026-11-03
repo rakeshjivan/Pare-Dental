@@ -373,13 +373,42 @@ export function softCap(t: number, lim: number) {
  * Where a point on the patient's surface stands against a closed margin: whether it is on the tooth (inside), and
  * how far it is from the gum part of the margin (not the contacts with the teeth beside it), mm.
  */
+/** Build 116: how far from the gum margin is looked, mm - past it the taper no longer limits the wax. */
+export const GUM_LOOK = 4;
+const GUM_CELL = 1;
+const gumGrids = new WeakMap<Vec3[], Map<string, Vec3[]>>();
+/** The distance from a point to the nearest of `points`, looked for only within GUM_LOOK (GUM_LOOK if none is). */
+function gumDistance(points: Vec3[], c: ArrayLike<number>): number {
+  let grid = gumGrids.get(points);
+  if (!grid) {
+    grid = new Map();
+    for (const p of points) {
+      const k = `${Math.floor(p[0] / GUM_CELL)},${Math.floor(p[1] / GUM_CELL)},${Math.floor(p[2] / GUM_CELL)}`;
+      const list = grid.get(k);
+      if (list) list.push(p); else grid.set(k, [p]);
+    }
+    gumGrids.set(points, grid);
+  }
+  const cx = Math.floor(c[0] / GUM_CELL), cy = Math.floor(c[1] / GUM_CELL), cz = Math.floor(c[2] / GUM_CELL);
+  const reach = Math.ceil(GUM_LOOK / GUM_CELL);
+  let best = GUM_LOOK * GUM_LOOK;
+  // Ring by ring outwards: once a ring lies further than the best found, nothing nearer is left.
+  for (let r = 0; r <= reach; r += 1) {
+    if (r > 0 && ((r - 1) * GUM_CELL) ** 2 > best) break;
+    for (let x = cx - r; x <= cx + r; x += 1) for (let y = cy - r; y <= cy + r; y += 1) for (let z = cz - r; z <= cz + r; z += 1) {
+      if (Math.max(Math.abs(x - cx), Math.abs(y - cy), Math.abs(z - cz)) !== r) continue;
+      const list = grid.get(`${x},${y},${z}`);
+      if (!list) continue;
+      for (const p of list) { const d = (c[0] - p[0]) ** 2 + (c[1] - p[1]) ** 2 + (c[2] - p[2]) ** 2; if (d < best) best = d; }
+    }
+  }
+  return Math.sqrt(best);
+}
 export function closedMarginAt(m: ClosedMargin, c: ArrayLike<number>): { inside: boolean; gum: number } | null {
   const q = [0, 0, 0];
   if (m.surface.nearest(c[0], c[1], c[2], q) === Infinity || m.surface.lastTriangle < 0) return null;
   const inside = m.inside[m.surface.lastTriangle] === 1;
-  let best = Infinity;
-  for (const p of m.gum ?? m.line) { const d = (c[0] - p[0]) ** 2 + (c[1] - p[1]) ** 2 + (c[2] - p[2]) ** 2; if (d < best) best = d; }
-  return { inside, gum: Math.sqrt(best) };
+  return { inside, gum: gumDistance(m.gum ?? m.line, c) };
 }
 export function closedMarginWeight(m: ClosedMargin, c: ArrayLike<number>): number {
   const q = [0, 0, 0];
