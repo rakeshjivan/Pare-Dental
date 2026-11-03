@@ -170,7 +170,7 @@ import { eggshellTooth } from "@/lib/dentalEggshell";
 import { NearestSurface, DeviationProbe, rayMeetsSoup, soupBoxOf, soupWithin } from "@/lib/nearestSurface";
 import { ERASE_BRUSH, eraseKey, eraseTooth, keptCorners, surfaceSign, toFrame, type ToothAxes } from "@/lib/waxErase";
 import { closeEraseWorkers, eraseInBackground, type EraseJob } from "@/lib/waxEraseJobs";
-import { ScanPatch, closedMarginAt, marginFromLabels, patchBox, prepareMargin, resample, type ClosedMargin, type MarginLine } from "@/lib/waxMargin";
+import { ScanPatch, closedMarginAt, marginFromLabels, pastMargin, patchBox, prepareMargin, resample, type ClosedMargin, type MarginLine } from "@/lib/waxMargin";
 import { gumPaint, gumPair, gumSides, idealLevels, moveGumCut, visibleLength, zenithShift, type GumCut, type GumMode } from "@/lib/waxGum";
 import { repairStlPositions } from "@/lib/stlRepair";
 import { checkForPrinting, type PrintIssue } from "@/lib/printCheck";
@@ -12979,6 +12979,29 @@ export function LayerlingEditor({
       });
       if (side === "palatal") showToothPalatal(slot, fdi); else showDentalView(slot, "front");
       return { points, slot };
+    };
+    // Build 117: for checks - how much of a wax tooth (as Make takes it) stands proud of the patient past its boundary lines.
+    (window as unknown as { layerlingBoundaryProud?: (fdi: number) => unknown }).layerlingBoundaryProud = (fdi: number) => {
+      const tooth = shapesRef.current.find((shape) => shape.dental === "wax" && shape.waxTooth?.fdi === fdi && !shape.hidden);
+      const job = tooth ? eraseFor(tooth) : null;
+      if (!tooth || !job || !job.curves.length) return null;
+      const soup = waxTrianglesOf(tooth);
+      const surface = new NearestSurface(soupWithin(scanTrianglesOf(job.scan), soupBoxOf(Float32Array.from(soup), 4)), 4);
+      const sign = surfaceSign(job.axes, surface);
+      const lines = job.curves.map((curve) => prepareMargin(curve, surface, sign, job.axes.up)).filter((line): line is MarginLine => !!line);
+      const q = [0, 0, 0], nt = [0, 0, 0];
+      let past = 0, proud = 0, most = 0, corners = 0;
+      for (let i = 0; i + 2 < soup.length; i += 3) {
+        corners += 1;
+        if (surface.nearest(soup[i], soup[i + 1], soup[i + 2], q) === Infinity || surface.lastTriangle < 0) continue;
+        surface.triangleNormal(surface.lastTriangle, nt);
+        const n = [nt[0] * sign, nt[1] * sign, nt[2] * sign];
+        if (!lines.some((line) => pastMargin(line, q, n) > 0.98)) continue;
+        past += 1;
+        const above = (soup[i] - q[0]) * n[0] + (soup[i + 1] - q[1]) * n[1] + (soup[i + 2] - q[2]) * n[2];
+        if (above > 0.05) { proud += 1; most = Math.max(most, above); }
+      }
+      return { corners, past, proud, most: Number(most.toFixed(3)), baked: Boolean(tooth.waxTooth?.stopBaked), key: job.key.includes("|baked|") ? "baked" : "full" };
     };
     // Build 116: each wax tooth as Make will take it - its open or over-used edges once its corners are joined.
     (window as unknown as { layerlingWaxClosed?: () => unknown }).layerlingWaxClosed = () => shapesRef.current.filter((shape) => shape.dental === "wax" && shape.waxTooth && !shape.hidden).map((tooth) => {

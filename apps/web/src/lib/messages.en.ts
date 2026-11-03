@@ -5732,7 +5732,7 @@ export const MESSAGES_EN = {
   "waxup.boundary.clear": "Clear lines ({count})",
   "waxup.boundary.first": "Tooth {fdi}: click on the patient's tooth where the wax should stop.",
   "waxup.boundary.next": "Tooth {fdi}: click the next point along the line. Enter finishes, Backspace takes a point back, Esc stops.",
-  "waxup.boundary.hint": "Optional: mark where the wax must stop (a palatal finish line, or the gum). Add won't build past it, and Smooth leaves a clean edge along it.",
+  "waxup.boundary.hint": "Optional: mark where the wax must stop (a palatal finish line, or the gum). Wax added past the line is taken away when you put the brush down, leaving a clean edge along it to smooth.",
   "waxup.mirrorShapeHint": "The selected tooth's shape, as sculpted, mirrored onto the same tooth on the other side, where that tooth stands - as exocad's Symmetry (Ctrl + wheel over the teeth in Position switches the tooth set).",
   "waxup.mirrorShapeDone": "{from} mirrored to {to}",
   "waxup.mirrorShapeNone": "{fdi} has no partner on the other side to mirror to.",
