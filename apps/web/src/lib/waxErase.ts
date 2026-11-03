@@ -24,6 +24,11 @@ export type ToothAxes = { origin: Vec3; mesial: Vec3; up: Vec3; out: Vec3 };
 export const ERASE_BAND = 0.8;
 /** How far under the patient's surface erased wax is tucked, mm. */
 export const ERASE_TUCK = 0.15;
+/**
+ * Build 116: the cervical taper (the wax on the tooth thinned towards the gum margin) - off for now: on short, worn
+ * crowns (margin a few mm below the edge) it clamped most of the crown and left a torn edge. To be redone.
+ */
+export const CERVICAL_TAPER = false;
 /** Build 116: how much deeper the wax goes right at a closed margin, mm, and over what distance from it that eases off. */
 export const MARGIN_SINK = 0.25;
 export const MARGIN_SINK_REACH = 0.5;
@@ -111,7 +116,7 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
       // Build 116: only wax over the gum is erased - wax over a neighbouring tooth (or over the patient's own tooth that the
       // tooth finder gave another number) is kept; it is tooth there, not gum.
       if (at && !at.inside && at.overGum) { erased = 1; tuck = ERASE_TUCK + deep; }
-      else if (at) {
+      else if (at && CERVICAL_TAPER) {
         const target = (above > 0 ? softCap(above, taperLimit(at.gum)) : above) - deep;
         if (target < above) capped = (target - above) * kept;
       }
