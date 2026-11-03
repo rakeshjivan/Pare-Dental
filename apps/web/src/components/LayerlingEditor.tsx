@@ -170,7 +170,7 @@ import { eggshellTooth } from "@/lib/dentalEggshell";
 import { NearestSurface, DeviationProbe, rayMeetsSoup, soupBoxOf, soupWithin } from "@/lib/nearestSurface";
 import { ERASE_BRUSH, eraseKey, eraseTooth, keptCorners, surfaceSign, toFrame, type ToothAxes } from "@/lib/waxErase";
 import { closeEraseWorkers, eraseInBackground, type EraseJob } from "@/lib/waxEraseJobs";
-import { ScanPatch, closedMarginAt, marginFromLabels, patchBox, resample, type ClosedMargin } from "@/lib/waxMargin";
+import { ScanPatch, closedMarginAt, marginFromLabels, patchBox, prepareMargin, resample, type ClosedMargin, type MarginLine } from "@/lib/waxMargin";
 import { gumPaint, gumPair, gumSides, idealLevels, moveGumCut, visibleLength, zenithShift, type GumCut, type GumMode } from "@/lib/waxGum";
 import { repairStlPositions } from "@/lib/stlRepair";
 import { checkForPrinting, type PrintIssue } from "@/lib/printCheck";
@@ -9604,7 +9604,7 @@ export function LayerlingEditor({
     // Build 110: a wax tooth sculpted from its erased form keeps that erase (not erased again where it stands).
     const stop = shape.dental === "wax" ? eraseFor(shape) : null;
     const rebuilt = canonicalizeShape(shapeWithWorldPositions(shape, Array.from(positions)));
-    const next = stop && rebuilt.waxTooth ? { ...rebuilt, waxTooth: { ...rebuilt.waxTooth, stopBaked: bakedKey(stop.key) } } : rebuilt;
+    const next = stop && rebuilt.waxTooth ? { ...rebuilt, waxTooth: { ...rebuilt.waxTooth, stopBaked: bakedKey(stop.base) } } : rebuilt;
     commitShapes(shapesRef.current.map((candidate) => (candidate.id === shape.id ? next : candidate)), next.id, message);
     // Build 76: one more step the panel's Undo can take back; a new step ends what Redo could do again.
     setSculptTool((current) => current ? { ...current, panelSteps: (current.panelSteps ?? 0) + 1, panelRedo: 0 } : current);
@@ -12692,18 +12692,42 @@ export function LayerlingEditor({
     const studio = dentalStudioRef.current;
     if (!studio?.waxStudio || tooth.dental !== "wax" || !tooth.waxTooth || !tooth.waxFor) return null;
     const margin = marginFor(tooth);
-    const paint = waxupRef.current.erase?.[tooth.id] ?? (margin ? { keep: [], erase: [], rest: false } : undefined);
-    if (!paint || (!paint.rest && !paint.erase.length && !margin)) return null;
+    const bounds = boundariesFor(tooth);
+    const none = { keep: [], erase: [], rest: false };
+    const paint = waxupRef.current.erase?.[tooth.id] ?? (margin || bounds ? none : undefined);
+    if (!paint || (!paint.rest && !paint.erase.length && !margin && !bounds)) return null;
     const scan = shapesRef.current.find((shape) => shape.id === tooth.waxFor);
     const axes = toothAxesOf(tooth);
     if (!scan || !axes) return null;
     const at = [...axes.origin, ...axes.up, ...axes.out].map((v) => v.toFixed(3)).join(",");
-    return { scan, paint, axes, margin, key: `${meshVersionOf(tooth)}|${eraseKey(paint)}|${margin?.key ?? ""}|${shapeVersionKey(scan)}|${at}` };
+    const base = `${meshVersionOf(tooth)}|${eraseKey(paint)}|${margin?.key ?? ""}|${shapeVersionKey(scan)}|${at}`;
+    const curves = bounds?.curves ?? [];
+    // Build 110: a tooth sculpted from its erased form keeps that erase (it is not erased again where it stands) -
+    // Build 117: but its boundary lines still hold, so wax Add puts past one is taken away after the stroke.
+    if (tooth.waxTooth?.stopBaked === bakedKey(base)) {
+      if (!bounds) return null;
+      return { scan, paint: none, axes, margin: null, curves, base, key: `${base}|baked|${bounds.key}` };
+    }
+    return { scan, paint, axes, margin, curves, base, key: `${base}|${bounds?.key ?? ""}` };
+  };
+  /** Build 117: a wax tooth's boundary lines (scene points, on the patient's surface), and a key for them; null if none. */
+  const boundariesFor = (tooth: WorkplaneShape): { curves: Array<Array<[number, number, number]>>; key: string } | null => {
+    const studio = dentalStudioRef.current;
+    if (!studio || !tooth.waxTooth || !tooth.waxFor) return null;
+    const slot = studio.slots.upper === tooth.waxFor ? "upper" : studio.slots.lower === tooth.waxFor ? "lower" : null;
+    const lines = slot ? boundaryLinesOf(waxupRef.current, slot)[tooth.waxTooth.fdi] : undefined;
+    const scan = shapesRef.current.find((shape) => shape.id === tooth.waxFor);
+    const toInput = scan ? waxArchInput(scan) : null;
+    if (!lines?.length || !scan || !toInput) return null;
+    const toScene = toInput.clone().invert();
+    const curves = lines.filter((line) => line.length >= 2).map((line) => resample(marginCurveOf(scan, toScene, line, false), 0.1));
+    if (!curves.length) return null;
+    return { curves, key: curves.map((curve) => eraseKeyOf(curve.filter((_, i) => i % 6 === 0))).join("/") };
   };
   const bakedKey = (key: string) => key.slice(key.indexOf("|") + 1);
   const erasedSoup = (tooth: WorkplaneShape, compute = true): Float32Array | null => {
     const job = eraseFor(tooth);
-    if (!job || tooth.waxTooth?.stopBaked === bakedKey(job.key)) return null;
+    if (!job) return null;
     const cached = eraseCache.current.get(tooth.id);
     if (cached?.key === job.key) return cached.soup;
     // Drawn in the view: worked out a moment after the tooth stops moving (the teeth move freely meanwhile).
@@ -12715,7 +12739,8 @@ export function LayerlingEditor({
       const surface = new NearestSurface(near, 6);
       const sign = surfaceSign(job.axes, surface);
       const margin = job.margin ? job.margin.region : null;
-      soup = eraseTooth(own, job.axes, job.paint, surface, sign, margin);
+      const lines = job.curves.map((curve) => prepareMargin(curve, surface, sign, job.axes.up)).filter((line): line is MarginLine => !!line);
+      soup = eraseTooth(own, job.axes, job.paint, surface, sign, margin, lines);
     }
     eraseCache.current.set(tooth.id, { key: job.key, soup, shown: new WeakMap() });
     return soup;
@@ -12734,7 +12759,7 @@ export function LayerlingEditor({
     const region = job.margin ? job.margin.region : null;
     if (region && !("inside" in region)) return null;
     const margin = region ? { soup: region.surface.triangles, inside: region.inside, line: region.line, ...(region.gum ? { gum: region.gum } : {}), ...(region.onGum ? { onGum: region.onGum } : {}), ...(region.gumSurface ? { gumSoup: region.gumSurface.triangles } : {}) } : null;
-    return { key: job.key, job: { own, axes: job.axes, paint: job.paint, near, margin } };
+    return { key: job.key, job: { own, axes: job.axes, paint: job.paint, near, margin, ...(job.curves.length ? { boundaries: job.curves } : {}) } };
   };
   /** Build 116: a tooth trimmed in a worker (or here, where none can run), its result kept if the tooth has not moved since. */
   const eraseInWorker = (tooth: WorkplaneShape): Promise<void> => {
@@ -19819,7 +19844,7 @@ export function LayerlingEditor({
   // Build 116: the wax shown erased (to the margins and paint) only once the teeth are placed - from Keep & erase on.
   // While they are being positioned the whole library teeth are shown, and nothing is worked out as they move.
   const eraseShownStep = !studioWaxStep || ["keep", "sculpt", "gum", "make"].includes(studioWaxStep);
-  const erasedViewportShapes = useMemo(() => (dentalStudio?.waxStudio && eraseShownStep && ((waxup.erase && Object.keys(waxup.erase).length) || (waxup.marginOn && (waxup.margins?.upper || waxup.margins?.lower))) ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? erasedShown(shape) : shape)) : viewportShapes), [viewportShapes, waxup.erase, waxup.margins, waxup.marginOn, dentalStudio, eraseTick, eraseShownStep]); // eslint-disable-line react-hooks/exhaustive-deps
+  const erasedViewportShapes = useMemo(() => (dentalStudio?.waxStudio && eraseShownStep && ((waxup.erase && Object.keys(waxup.erase).length) || (waxup.marginOn && (waxup.margins?.upper || waxup.margins?.lower)) || waxup.boundaries?.upper || waxup.boundaries?.lower) ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? erasedShown(shape) : shape)) : viewportShapes), [viewportShapes, waxup.erase, waxup.margins, waxup.boundaries, waxup.marginOn, dentalStudio, eraseTick, eraseShownStep]); // eslint-disable-line react-hooks/exhaustive-deps
   const heldViewportShapes = historyView.shapes ?? erasedViewportShapes;
   // Build 110: in Keep & erase, the paint shown over the teeth (again whenever they or it change); taken away on leaving.
   useEffect(() => {

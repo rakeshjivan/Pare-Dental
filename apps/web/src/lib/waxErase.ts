@@ -75,8 +75,8 @@ export function surfaceSign(a: ToothAxes, surface: NearestSurface): 1 | -1 {
  * The wax tooth (a scene soup, 9 numbers a triangle) with its paint applied: the wax not kept, where erased,
  * pushed under the patient's surface. A new soup, or null when nothing of it moved.
  */
-export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: ToothErase, surface: NearestSurface, sign: 1 | -1, margin: MarginLine | ClosedMargin | null = null): Float32Array | null {
-  if (!paint.rest && !paint.erase.length && !margin) return null;
+export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: ToothErase, surface: NearestSurface, sign: 1 | -1, margin: MarginLine | ClosedMargin | null = null, boundaries: MarginLine[] = []): Float32Array | null {
+  if (!paint.rest && !paint.erase.length && !margin && !boundaries.length) return null;
   const index = new Map<string, number>();
   const corner = new Int32Array(soup.length / 3);
   const xyz: number[] = [];
@@ -98,7 +98,7 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
     const kept = smooth01(outside(paint.keep, m, u, o) / ERASE_BAND);
     if (kept <= 1e-3) continue;
     const brushed = paint.rest ? 1 : paint.erase.length ? 1 - smooth01(outside(paint.erase, m, u, o) / ERASE_BAND) : 0;
-    if (brushed * kept <= 1e-3 && !margin) continue;
+    if (brushed * kept <= 1e-3 && !margin && !boundaries.length) continue;
     if (surface.nearest(p[0], p[1], p[2], q) === Infinity || surface.lastTriangle < 0) continue;
     surface.triangleNormal(surface.lastTriangle, nt);
     const nx = nt[0] * sign, ny = nt[1] * sign, nz = nt[2] * sign;
@@ -121,6 +121,9 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
         if (target < above) capped = (target - above) * kept;
       }
     } else if (margin) erased = Math.max(brushed, pastMargin(margin, q, [nx, ny, nz]));
+    // Build 117: boundary lines the user drew on the tooth - wax past one (on the gum side) is taken away, so a
+    // stroke of Add stops at the line and Smooth leaves a clean finish along it.
+    for (const line of boundaries) erased = Math.max(erased, pastMargin(line, q, [nx, ny, nz]));
     const w = kept * erased;
     if (w <= 1e-3 && capped > -1e-4) continue;
     const px = p[0] + nx * capped, py = p[1] + ny * capped, pz = p[2] + nz * capped;

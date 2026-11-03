@@ -55,6 +55,9 @@ export type WaxupView = {
   marginOn?: boolean;
   margins?: Partial<Record<"upper" | "lower", { scan: string; lines: Record<number, Array<[number, number, number]>> }>>;
   marginPick?: { fdi: number; points: Array<[number, number, number]> } | null;
+  /** Build 117: boundary lines drawn on the patient's teeth in Sculpt (studio coordinates, the scan they were drawn on) - wax is kept on a line's incisal side only; and the line being drawn. */
+  boundaries?: Partial<Record<"upper" | "lower", { scan: string; lines: Record<number, Array<Array<[number, number, number]>>> }>>;
+  boundaryPick?: { fdi: number; points: Array<[number, number, number]> } | null;
   /** Build 108: wax teeth placed on either arch (changing the bite's opening then asks first). */
   anyWax?: boolean;
   /** Build 108: wax teeth put out of view in Case objects - their buttons cannot pick them. */
@@ -167,6 +170,12 @@ export type WaxupActions = {
   /** Build 112: Sculpt - pick a brush (null: back to positioning), and the full sculpt panel shown or not. */
   onSculptTool?: (tool: "position" | "scale" | "add" | "remove" | "smooth" | "move") => void;
   onSculptMore?: () => void;
+  /** Build 117: Sculpt - a boundary line on the picked tooth: start drawing it, finish it, take back a point, stop, or clear the tooth's lines. */
+  onBoundaryStart?: () => void;
+  onBoundaryDone?: () => void;
+  onBoundaryUndo?: () => void;
+  onBoundaryCancel?: () => void;
+  onBoundaryClear?: () => void;
   /** Build 108: Sculpt - the picked tooth moved, turned and sized (its gimbal), as a double-click on it. */
   /** Build 107: the whole set selected, so the gimbal moves and turns it as one. */
   onSelectSet?: () => void;
@@ -1003,6 +1012,27 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
           </div>
           <p className="blend-hint">{t("waxup.sculptHint")}</p>
           </>)}
+          {/* Build 117: boundary lines - wax added past one (towards the gum) is taken away, and Smooth finishes at it. */}
+          {actions.onBoundaryStart ? (() => {
+            const tooth = view.placed.find((candidate) => candidate.id === view.selected);
+            const drawing = view.boundaryPick && tooth && view.boundaryPick.fdi === tooth.fdi ? view.boundaryPick : null;
+            const count = tooth ? Object.values(view.boundaries ?? {}).reduce((sum, entry) => sum + (entry?.lines[tooth.fdi]?.length ?? 0), 0) : 0;
+            return (
+              <div className="waxup-boundary" role="group" aria-label={t("waxup.boundary.title")}>
+                <div className="dental-trim-buttons">
+                  {drawing ? (<>
+                    <button type="button" disabled={drawing.points.length < 2} onClick={() => actions.onBoundaryDone?.()}>{t("waxup.boundary.done")}</button>
+                    <button type="button" className="secondary" disabled={!drawing.points.length} onClick={() => actions.onBoundaryUndo?.()}>{t("waxup.boundary.undo")}</button>
+                    <button type="button" className="secondary" onClick={() => actions.onBoundaryCancel?.()}>{t("waxup.boundary.cancel")}</button>
+                  </>) : (<>
+                    <button type="button" className="secondary" disabled={working || !tooth} title={t("waxup.boundary.startHint")} onClick={() => actions.onBoundaryStart?.()}>{t("waxup.boundary.start")}</button>
+                    {count ? <button type="button" className="secondary" disabled={working} onClick={() => actions.onBoundaryClear?.()}>{t("waxup.boundary.clear", { count })}</button> : null}
+                  </>)}
+                </div>
+                <p className="blend-hint" role="status">{drawing ? t(drawing.points.length ? "waxup.boundary.next" : "waxup.boundary.first", { fdi: drawing.fdi }) : t("waxup.boundary.hint")}</p>
+              </div>
+            );
+          })() : null}
           <div className="dental-trim-buttons">
             <button type="button" className="secondary" disabled={working || !view.selected} title={t("waxup.mirrorShapeHint")} onClick={() => actions.onMirrorShape?.()}>{t("waxup.mirrorShape")}</button>
           </div>

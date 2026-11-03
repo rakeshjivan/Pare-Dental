@@ -8,7 +8,7 @@ import type { ToothAxes, ToothErase } from "@/lib/waxErase";
 
 /** A closed margin as plain data (its surfaces as triangle soups, rebuilt in the worker). */
 export type EraseMarginData = { soup: Float32Array; inside: Uint8Array; line: Vec3[]; gum?: Vec3[]; onGum?: Uint8Array; gumSoup?: Float32Array };
-export type EraseJob = { own: Float32Array; axes: ToothAxes; paint: ToothErase; near: Float32Array; margin: EraseMarginData | null };
+export type EraseJob = { own: Float32Array; axes: ToothAxes; paint: ToothErase; near: Float32Array; margin: EraseMarginData | null; /** Build 117: boundary lines (scene points), each kept on its incisal side. */ boundaries?: Array<Array<[number, number, number]>> };
 export type EraseJobMessage = EraseJob & { jobId: number };
 export type EraseJobReply = { jobId: number; soup: Float32Array | null; ms: number } | { jobId: number; error: string };
 
