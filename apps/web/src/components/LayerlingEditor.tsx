@@ -12561,15 +12561,25 @@ export function LayerlingEditor({
     let region = marginRegions.current.get(key);
     if (region === undefined) {
       const patch = new ScanPatch(scanTrianglesOf(scan), patchBox(curve.filter((_, i) => i % 4 === 0)));
-      const origin = toothAxesOf(tooth)?.origin;
-      const inside = origin ? patch.inside(curve, origin) : null;
+      const axes = toothAxesOf(tooth);
+      const origin = axes?.origin;
+      // Between the margin's own mesial and distal ends (along the tooth's mesial direction), a little beyond them.
+      const along = (x: number, y: number, z: number) => axes ? (x - axes.origin[0]) * axes.mesial[0] + (y - axes.origin[1]) * axes.mesial[1] + (z - axes.origin[2]) * axes.mesial[2] : 0;
+      const ms = curve.map((p) => along(p[0], p[1], p[2]));
+      const lo = Math.min(...ms) - 0.3, hi = Math.max(...ms) + 0.3;
+      // Seeded from the patient's surface nearest the middle of the margin (inside the crown), not the wax tooth (it may stand off to one side).
+      const mid = [0, 1, 2].map((k) => curve.reduce((sum, p) => sum + p[k], 0) / Math.max(1, curve.length)) as [number, number, number];
+      const inside = origin ? patch.inside(curve, mid, (x, y, z) => { const m = along(x, y, z); return m >= lo && m <= hi; }) : null;
       region = inside ? { patch, inside, line: resample(curve, 0.1) } : null;
+      marginWhy.current[tooth.waxTooth.fdi] = `${patch.why}; seed ${origin ? "yes" : "no"}; curve ${curve.length}`;
       if (marginRegions.current.size > 40) marginRegions.current.clear();
       marginRegions.current.set(key, region);
     }
     return region ? { curve, region, key } : null;
   };
   const marginRegions = useRef(new Map<string, ClosedMargin | null>());
+  const marginWhy = useRef<Record<number, string>>({});
+  useEffect(() => { (window as unknown as { layerlingMarginWhy?: () => unknown }).layerlingMarginWhy = () => ({ ...marginWhy.current, on: waxupRef.current.marginOn, lines: Object.fromEntries(Object.entries(waxupRef.current.margins ?? {}).map(([k, v]) => [k, Object.keys(v?.lines ?? {})])) }); }, []);
   /** A wax tooth's frame in the scene, its axes unit length. */
   const toothAxesOf = (tooth: WorkplaneShape): ToothAxes | null => {
     const toWorld = tooth.waxTooth ? localToWorld(tooth) : null;

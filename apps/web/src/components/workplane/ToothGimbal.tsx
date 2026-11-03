@@ -416,11 +416,8 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
       </g>
     );
   };
-  const ring = (handle: "turn" | "tip" | "torque", index: number) => {
-    const d = ringPath(index);
-    const dim = active && active !== handle;
-    // Build 112 (as CEREC's curved arrows): an arrowhead each way round the ring - held, the tooth turns that way.
-    const head = (k: number, dir: number) => {
+  // Build 112 (as CEREC's curved arrows): an arrowhead each way round a ring - held, the tooth turns that way.
+  const ringHeadOf = (handle: "turn" | "tip" | "torque", index: number) => (k: number, dir: number) => {
       const p = at(RING_AT + index * (RING_STEPS + 1) + k), q = at(RING_AT + index * (RING_STEPS + 1) + k + dir);
       const vx = q[0] - p[0], vy = q[1] - p[1], l = Math.hypot(vx, vy) || 1, ux = vx / l, uy = vy / l;
       // The point on the screen that way round: anticlockwise there is +1 for this handle when the ring's parameter runs anticlockwise.
@@ -432,7 +429,9 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
         </g>
       );
     };
-    const at1 = Math.round(RING_STEPS * 0.15), at2 = Math.round(RING_STEPS * 0.35);
+  const ring = (handle: "turn" | "tip" | "torque", index: number) => {
+    const d = ringPath(index);
+    const dim = active && active !== handle;
     return (
       <g key={handle} opacity={dim ? 0.25 : 0.9}>
         <g className={`tooth-gimbal-handle${active === handle ? " active" : ""}`} {...handlers(handle)}>
@@ -440,10 +439,18 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
           <path d={d} fill="none" stroke="transparent" strokeWidth={14} />
           <path d={d} fill="none" stroke={COLOURS[handle]} strokeWidth={active === handle ? 3 : 1.8} />
         </g>
-        {head(at1, 1)}
-        {head(at2, -1)}
       </g>
     );
+  };
+  /** Build 112: a ring's two arrowheads - drawn over the arrows, and left out when the ring is seen edge on (they would sit on an arrow). */
+  const ringHeads = (handle: "turn" | "tip" | "torque", index: number) => {
+    const axis: V = handle === "turn" ? up : handle === "tip" ? out : mesial;
+    const l = Math.hypot(...toCamera) || 1, al = Math.hypot(...axis) || 1;
+    if (Math.abs(dot(axis, toCamera)) / (l * al) < 0.35) return null;
+    const dim = active && active !== handle;
+    const head = ringHeadOf(handle, index);
+    const at1 = Math.round(RING_STEPS * 0.15), at2 = Math.round(RING_STEPS * 0.35);
+    return <g key={`${handle}-heads`} opacity={dim ? 0.25 : 0.95}>{head(at1, 1)}{head(at2, -1)}</g>;
   };
   /** Build 112 (as CEREC's Scale): a double arrow along each of the tooth's directions, and a ball in the middle for the whole tooth. */
   const sizeArrow = (handle: "wider" | "longer" | "thicker", index: number) => {
@@ -494,6 +501,9 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
         {arrow("mesial", 1, -1)}
         {arrow("out", 2, -1)}
         {arrow("up", 3, -1)}
+        {ringHeads("turn", 0)}
+        {ringHeads("tip", 1)}
+        {ringHeads("torque", 2)}
         </>)}
         {only === "scale" ? (<>
         {sizeArrow("wider", 3)}

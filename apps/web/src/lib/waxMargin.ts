@@ -21,6 +21,8 @@ export class ScanPatch {
   readonly surface: NearestSurface;
   private readonly index: Map<number, number[]>;
   readonly box: number[];
+  /** For checks: why the last inside() came out as it did. */
+  why = "";
   /** The patch's triangles (vertex indices, 3 a triangle), in the order of its surface's soup. */
   readonly tri: Int32Array;
   /** Build 113: how much each vertex lies in a crease (the gum meeting the tooth), 0 none to 1 deep - the magnetic line's pull. */
@@ -107,7 +109,7 @@ export class ScanPatch {
   nearestVertex(p: ArrayLike<number>): number {
     let best = -1, bestD = Infinity;
     const cx = Math.floor(p[0] / CELL), cy = Math.floor(p[1] / CELL), cz = Math.floor(p[2] / CELL);
-    for (let r = 0; r < 6 && best < 0; r += 1) {
+    for (let r = 0; r < 14 && best < 0; r += 1) {
       for (let ox = -r; ox <= r; ox += 1) for (let oy = -r; oy <= r; oy += 1) for (let oz = -r; oz <= r; oz += 1) {
         if (Math.max(Math.abs(ox), Math.abs(oy), Math.abs(oz)) !== r) continue;
         const list = this.index.get(key3(cx + ox, cy + oy, cz + oz));
@@ -171,17 +173,30 @@ export class ScanPatch {
    * Build 113: the patch's triangles inside a closed margin (1), as a flood from the triangle nearest `seed`
    * that never crosses the line; null if it leaks round (the line not closed on the scan).
    */
-  inside(loop: Vec3[], seed: ArrayLike<number>): Uint8Array | null {
+  inside(loop: Vec3[], seed: ArrayLike<number>, within?: (x: number, y: number, z: number) => boolean): Uint8Array | null {
     const triCount = this.tri.length / 3;
     const wall = new Uint8Array(triCount);
     const q = [0, 0, 0];
-    // Every triangle the line runs through (sampled finely), and those it passes within a hair of.
+    // Every triangle the line runs through (sampled finely), and every triangle round the scan's corners it passes
+    // (the line runs along the scan's edges, so a wall of single triangles would leave gaps along it).
+    const byVertex: number[][] = Array.from({ length: this.xyz.length / 3 }, () => []);
+    for (let t = 0; t < triCount; t += 1) for (let j = 0; j < 3; j += 1) byVertex[this.tri[t * 3 + j]].push(t);
     for (const p of resample(loop, 0.03)) {
       if (this.surface.nearest(p[0], p[1], p[2], q) < 0.15 && this.surface.lastTriangle >= 0) wall[this.surface.lastTriangle] = 1;
+      const v = this.nearestVertex(p);
+      if (v >= 0 && Math.hypot(this.xyz[v * 3] - p[0], this.xyz[v * 3 + 1] - p[1], this.xyz[v * 3 + 2] - p[2]) < 0.25) for (const t of byVertex[v]) wall[t] = 1;
     }
-    if (this.surface.nearest(seed[0], seed[1], seed[2], q) === Infinity || this.surface.lastTriangle < 0) return null;
+    let seedAt = this.surface.nearest(seed[0], seed[1], seed[2], q);
+    if (seedAt === Infinity) {
+      // Further than the surface's reach: the nearest vertex instead, and its first triangle.
+      const v = this.nearestVertex(seed);
+      const t = v >= 0 ? this.tri.indexOf(v) : -1;
+      if (t < 0) { this.why = "seed off the scan"; return null; }
+      this.surface.lastTriangle = Math.floor(t / 3); seedAt = 0;
+    }
+    if (this.surface.lastTriangle < 0) { this.why = "seed off the scan"; return null; }
     const start = this.surface.lastTriangle;
-    if (wall[start]) return null;
+    if (wall[start]) { this.why = "seed on the line"; return null; }
     // Triangles beside each other across an edge.
     const byEdge = new Map<number, number[]>();
     const count = this.xyz.length / 3;
@@ -201,12 +216,18 @@ export class ScanPatch {
         const a = this.tri[t * 3 + j], b = this.tri[t * 3 + (j + 1) % 3];
         for (const u of byEdge.get(a < b ? a * count + b : b * count + a) ?? []) {
           if (inside[u] || wall[u]) continue;
+          // Build 113: never past the tooth's own mesial and distal limits - its neighbours touch it at the contacts.
+          if (within) {
+            const i0 = this.tri[u * 3] * 3, i1 = this.tri[u * 3 + 1] * 3, i2 = this.tri[u * 3 + 2] * 3, x = this.xyz;
+            if (!within((x[i0] + x[i1] + x[i2]) / 3, (x[i0 + 1] + x[i1 + 1] + x[i2 + 1]) / 3, (x[i0 + 2] + x[i1 + 2] + x[i2 + 2]) / 3)) continue;
+          }
           inside[u] = 1; filled += 1; stack.push(u);
         }
       }
     }
     // The wall counts as inside (the margin itself is the tooth's).
     for (let t = 0; t < triCount; t += 1) if (wall[t]) inside[t] = 1;
+    this.why = `${filled} of ${triCount} inside${filled > triCount * 0.6 ? " (leaked)" : ""}`;
     return filled > triCount * 0.6 ? null : inside;
   }
 }
