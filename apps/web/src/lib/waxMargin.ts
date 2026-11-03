@@ -354,7 +354,33 @@ export function pastMargin(line: MarginLine, c: ArrayLike<number>, nc: ArrayLike
  * and the line itself. A wax vertex whose nearest point on the patient's surface is outside the margin is erased;
  * inside, within MARGIN_BAND of the line, it eases down onto the tooth so the wax meets it at the margin.
  */
-export type ClosedMargin = { surface: NearestSurface; inside: Uint8Array; line: Vec3[] };
+export type ClosedMargin = { surface: NearestSurface; inside: Uint8Array; line: Vec3[]; gum?: Vec3[] };
+/**
+ * Build 116: the wax's cervical taper - how thick (mm, above the patient's tooth) the wax may be at a distance d
+ * (mm) from the gum margin, on the tooth. Measured on a professional anterior wax-up: about 0.06 mm within 0.25 mm
+ * of the margin, 0.13 at 0.5, 0.20 at 1.0, 0.27 at 1.5 (medians) - so the wax finishes as a feather edge on the
+ * tooth and a silicone index cut at the gum line seats and transfers it without cervical bulk.
+ */
+export const TAPER_SLOPE = 0.3;
+export const taperLimit = (d: number) => Math.max(0, d) * TAPER_SLOPE + 0.4 * Math.max(0, d - 1.5) ** 2;
+/** A soft cap: thickness t unchanged below half the limit, easing to the limit above it (no corner). */
+export function softCap(t: number, lim: number) {
+  if (lim <= 1e-4) return 0;
+  const x = t / lim;
+  return x <= 0.5 ? t : lim * (0.5 + 0.5 * Math.tanh((x - 0.5) / 0.5));
+}
+/**
+ * Where a point on the patient's surface stands against a closed margin: whether it is on the tooth (inside), and
+ * how far it is from the gum part of the margin (not the contacts with the teeth beside it), mm.
+ */
+export function closedMarginAt(m: ClosedMargin, c: ArrayLike<number>): { inside: boolean; gum: number } | null {
+  const q = [0, 0, 0];
+  if (m.surface.nearest(c[0], c[1], c[2], q) === Infinity || m.surface.lastTriangle < 0) return null;
+  const inside = m.inside[m.surface.lastTriangle] === 1;
+  let best = Infinity;
+  for (const p of m.gum ?? m.line) { const d = (c[0] - p[0]) ** 2 + (c[1] - p[1]) ** 2 + (c[2] - p[2]) ** 2; if (d < best) best = d; }
+  return { inside, gum: Math.sqrt(best) };
+}
 export function closedMarginWeight(m: ClosedMargin, c: ArrayLike<number>): number {
   const q = [0, 0, 0];
   if (m.surface.nearest(c[0], c[1], c[2], q) === Infinity || m.surface.lastTriangle < 0) return 0;
@@ -384,16 +410,20 @@ export function marginFromLabels(scan: ArrayLike<number>, labels: ArrayLike<numb
   if (count < 40) return null;
   // The margin itself: the edges where a tooth triangle meets one that is not (welded corners), as points along them.
   const key = (i: number, k: number) => `${Math.round(soup[i * 9 + k * 3] * 1e4)},${Math.round(soup[i * 9 + k * 3 + 1] * 1e4)},${Math.round(soup[i * 9 + k * 3 + 2] * 1e4)}`;
-  const edges = new Map<string, { a: number; b: number; inside: number; outside: number }>();
+  const edges = new Map<string, { a: number; b: number; inside: number; outside: number; gum: number }>();
   for (let i = 0; i < picked.length; i += 1) for (let k = 0; k < 3; k += 1) {
     const ka = key(i, k), kb = key(i, (k + 1) % 3);
     const e = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
     let entry = edges.get(e);
-    if (!entry) { entry = { a: i * 9 + k * 3, b: i * 9 + ((k + 1) % 3) * 3, inside: 0, outside: 0 }; edges.set(e, entry); }
-    if (inside[i]) entry.inside += 1; else entry.outside += 1;
+    if (!entry) { entry = { a: i * 9 + k * 3, b: i * 9 + ((k + 1) % 3) * 3, inside: 0, outside: 0, gum: 0 }; edges.set(e, entry); }
+    if (inside[i]) entry.inside += 1; else { entry.outside += 1; if (!labels[picked[i]]) entry.gum += 1; }
   }
-  const line: Vec3[] = [];
-  for (const e of edges.values()) if (e.inside && e.outside) line.push([(soup[e.a] + soup[e.b]) / 2, (soup[e.a + 1] + soup[e.b + 1]) / 2, (soup[e.a + 2] + soup[e.b + 2]) / 2]);
+  const line: Vec3[] = [], gum: Vec3[] = [];
+  for (const e of edges.values()) if (e.inside && e.outside) {
+    const mid: Vec3 = [(soup[e.a] + soup[e.b]) / 2, (soup[e.a + 1] + soup[e.b + 1]) / 2, (soup[e.a + 2] + soup[e.b + 2]) / 2];
+    line.push(mid);
+    if (e.gum) gum.push(mid); // the gum margin, not where the tooth touches the one beside it
+  }
   if (!line.length) return null;
-  return { surface: new NearestSurface(soup, 3), inside, line };
+  return { surface: new NearestSurface(soup, 3), inside, line, gum: gum.length ? gum : line };
 }

@@ -19,6 +19,7 @@ import { alignToBite, archFrame, biteResidual, contacts, vertexNormals, canineWi
 import { ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, bevelCutter, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
+import { makeSolidPositions } from "@/lib/meshRepair";
 import { GUM_REACH, marginRegion, moveGumCut, type GumCut } from "@/lib/waxGum";
 import { articulatorParts, incisalPins, PIN, PIN_BAND, PIN_CLEAR, PIN_HALF, PIN_MAX, PIN_SET, POST_BACK, restAngle, type ArticulatorSides, type PinStyle } from "@/lib/dentalArticulator";
 import {
@@ -986,13 +987,22 @@ function buildArch(
   }
   // Build 79: the wax-up, tooth by tooth (library teeth may overlap their neighbours).
   const waxShells = wax && wax.length ? splitShells(transformSoup(wax, arch.frame), 4) : [];
+  let waxJoined = 0;
   for (const shell of waxShells) {
+    // Build 116: a wax tooth that will not close as it is is made watertight (corners joined, openings capped)
+    // and tried again - never silently left out of the model.
+    let tooth: ManifoldSolid | null = null;
+    try { tooth = keepSolid(toManifold(runtime, weld(shell, 1e-6))); } catch { tooth = null; }
+    if (!tooth || tooth.isEmpty()) {
+      try { tooth = keepSolid(toManifold(runtime, weld(makeSolidPositions(shell).positions, 1e-5))); } catch { tooth = null; }
+    }
+    if (!tooth || tooth.isEmpty()) { warnings.push("wax"); continue; }
     try {
       // Build 108: on a hollow model the hollow goes on under the wax teeth as under the scan's own - the wax
       // below the gum, reaching into it, came out as solid lumps inside the model. Only what lies in the hollow
       // goes: the crowns, the gum and the wall a wall thick are as they were.
-      const tooth = keepSolid(toManifold(runtime, weld(shell, 1e-6)));
       solid = keepSolid(runtime.Manifold.union(solid, hollowTaken && !hollowTaken.isEmpty() ? keepSolid(runtime.Manifold.difference(tooth, hollowTaken)) : tooth));
+      waxJoined += 1;
     } catch {
       warnings.push("wax");
     }

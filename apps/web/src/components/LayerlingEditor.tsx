@@ -169,7 +169,7 @@ import { worldTriangles } from "@/lib/blend";
 import { eggshellTooth } from "@/lib/dentalEggshell";
 import { NearestSurface, DeviationProbe, rayMeetsSoup, soupBoxOf, soupWithin } from "@/lib/nearestSurface";
 import { ERASE_BRUSH, eraseKey, eraseTooth, keptCorners, surfaceSign, toFrame, type ToothAxes } from "@/lib/waxErase";
-import { ScanPatch, marginFromLabels, patchBox, resample, type ClosedMargin } from "@/lib/waxMargin";
+import { ScanPatch, closedMarginAt, marginFromLabels, patchBox, resample, type ClosedMargin } from "@/lib/waxMargin";
 import { gumPaint, gumPair, gumSides, idealLevels, moveGumCut, visibleLength, zenithShift, type GumCut, type GumMode } from "@/lib/waxGum";
 import { repairStlPositions } from "@/lib/stlRepair";
 import { checkForPrinting, type PrintIssue } from "@/lib/printCheck";
@@ -10902,6 +10902,8 @@ export function LayerlingEditor({
     // Build 102: the patient's crowns those wax teeth replace, cut back under them on their facial
     // side (the teeth as found on this scan; left out when the scan has changed since they were found).
     const cutsOf = (shape: WorkplaneShape, positions: Float32Array) => {
+      // Build 116: with margins the wax-up is added over the patient's teeth, so their crowns are never cut back.
+      if (dentalStudioRef.current?.waxStudio && waxupRef.current.marginOn) return undefined;
       const found = waxFoundRef.current[shape.id];
       const toInput = dentalLocalToInput.current.get(shape.id), world = localToWorld(shape);
       if (!found || found.input.length !== positions.length || !toInput || !world) return undefined;
@@ -11835,7 +11837,8 @@ export function LayerlingEditor({
         // Build 106: in the studio frame the panel says the models are made - no message over the view.
         if (STUDIO_SHELL && dentalWorkspace) dismissNotice();
         setMeshCheck(null);
-        const notes = result.warnings.map((warning) => t(({ edge: "dental.warn.edge", vents: "dental.warn.vents", apart: "dental.warn.apart", teeth: "dental.warn.teeth", opening: "dental.warn.opening", loose: state.options.hinge ? "dental.warn.loose" : "dental.warn.looseScan", tag: "dental.warn.tag", gum: "dental.warn.gum" } as const)[warning as "edge"] ?? "dental.warn.label"));
+        const notes = result.warnings.map((warning) => t(({ edge: "dental.warn.edge", vents: "dental.warn.vents", apart: "dental.warn.apart", teeth: "dental.warn.teeth", opening: "dental.warn.opening", loose: state.options.hinge ? "dental.warn.loose" : "dental.warn.looseScan", tag: "dental.warn.tag", gum: "dental.warn.gum", wax: "dental.warn.wax", cut: "dental.warn.cut" } as const)[warning as "edge"] ?? "dental.warn.label"));
+        (window as unknown as { layerlingLastMake?: unknown }).layerlingLastMake = { warnings: result.warnings, notes };
         // Build 60: how far the printed articulator opens.
         if (result.opening !== undefined && result.opening >= 30) notes.push(t(result.opening >= 90 ? "dental.opensFully" : "dental.opens", { angle: result.opening }));
         // Build 71: how far a raised pin holds the bite open, at the pin and at the teeth.
@@ -12710,7 +12713,50 @@ export function LayerlingEditor({
       }
       return { fdi: tooth.waxTooth!.fdi, corners: own.length / 3, moved, most: +most.toFixed(2), labialMoved: labial, keep: paint?.keep.length ?? 0 };
     });
-    return () => { delete (window as unknown as { layerlingEraseCheck?: unknown }).layerlingEraseCheck; };
+    // Build 116: each wax tooth as Make will take it - its open or over-used edges once its corners are joined.
+    (window as unknown as { layerlingWaxClosed?: () => unknown }).layerlingWaxClosed = () => shapesRef.current.filter((shape) => shape.dental === "wax" && shape.waxTooth && !shape.hidden).map((tooth) => {
+      const count = (soup: ArrayLike<number>) => {
+        const ids = new Map<string, number>(), edges = new Map<string, number>();
+        const id = (i: number) => { const k = `${Math.round(soup[i] * 1e5)},${Math.round(soup[i + 1] * 1e5)},${Math.round(soup[i + 2] * 1e5)}`; let v = ids.get(k); if (v === undefined) { v = ids.size; ids.set(k, v); } return v; };
+        let degenerate = 0;
+        for (let t = 0; t + 8 < soup.length; t += 9) {
+          const a = id(t), b = id(t + 3), c = id(t + 6);
+          if (a === b || b === c || a === c) { degenerate += 1; continue; }
+          for (const [x, y] of [[a, b], [b, c], [c, a]]) { const k = x < y ? `${x}_${y}` : `${y}_${x}`; edges.set(k, (edges.get(k) ?? 0) + 1); }
+        }
+        let bad = 0;
+        for (const n of edges.values()) if (n !== 2) bad += 1;
+        return { triangles: soup.length / 9, bad, degenerate };
+      };
+      return { fdi: tooth.waxTooth!.fdi, own: count(worldTriangles(tooth)), made: count(waxTrianglesOf(tooth)), erased: Boolean(erasedSoup(tooth)) };
+    });
+    // Build 116: the cervical taper measured - the wax's thickness over the patient's tooth (median, p90, mm) by its
+    // distance from the gum margin, as the professional benchmark was measured.
+    (window as unknown as { layerlingTaperCheck?: () => unknown }).layerlingTaperCheck = () => shapesRef.current.filter((shape) => shape.dental === "wax" && shape.waxTooth && !shape.hidden).map((tooth) => {
+      const job = eraseFor(tooth), erased = erasedSoup(tooth);
+      const region = job?.margin?.region;
+      if (!job || !erased || !region || !("inside" in region)) return { fdi: tooth.waxTooth!.fdi, none: true };
+      const near = soupWithin(scanTrianglesOf(job.scan), soupBoxOf(erased, 6));
+      const surface = new NearestSurface(near, 6);
+      const sign = surfaceSign(job.axes, surface);
+      const edges = [0, 0.25, 0.5, 1, 1.5, 2, 3];
+      const bins: number[][] = edges.slice(1).map(() => []);
+      const q = [0, 0, 0], n = [0, 0, 0];
+      let overGum = 0;
+      for (let i = 0; i + 2 < erased.length; i += 3) {
+        if (surface.nearest(erased[i], erased[i + 1], erased[i + 2], q) === Infinity || surface.lastTriangle < 0) continue;
+        surface.triangleNormal(surface.lastTriangle, n);
+        const above = ((erased[i] - q[0]) * n[0] + (erased[i + 1] - q[1]) * n[1] + (erased[i + 2] - q[2]) * n[2]) * sign;
+        const at = closedMarginAt(region, q);
+        if (!at) continue;
+        if (!at.inside) { if (above > 0.02) overGum += 1; continue; }
+        const b = edges.findIndex((e, k) => k > 0 && at.gum < e) - 1;
+        if (b >= 0) bins[b].push(Math.max(0, above));
+      }
+      const stat = (list: number[], f: number) => { if (!list.length) return null; const s = [...list].sort((a, b) => a - b); return +s[Math.min(s.length - 1, Math.floor(s.length * f))].toFixed(3); };
+      return { fdi: tooth.waxTooth!.fdi, overGum, ramp: bins.map((list, k) => `${edges[k]}-${edges[k + 1]}: ${stat(list, 0.5)} (${stat(list, 0.9)}) n=${list.length}`) };
+    });
+    return () => { delete (window as unknown as { layerlingWaxClosed?: unknown }).layerlingWaxClosed; delete (window as unknown as { layerlingTaperCheck?: unknown }).layerlingTaperCheck; delete (window as unknown as { layerlingEraseCheck?: unknown }).layerlingEraseCheck; };
   }); // eslint-disable-line react-hooks/exhaustive-deps
   // The painting: the brush in hand (keep, take keep away, erase, take erase away) and its size.
   const keepStep = Boolean(dentalStudio?.waxStudio) && studioWaxStep === "keep";
@@ -14008,7 +14054,7 @@ export function LayerlingEditor({
       const fdi = found && found.input.length === soup.length ? found.fdi : null;
       // Build 102: each wax tooth's crown cut back on its facial side, as Make will cut it.
       const turn = new THREE.Matrix3().setFromMatrix4(toInput);
-      const cuts = fdi ? wax.flatMap((w) => {
+      const cuts = fdi && !waxupRef.current.marginOn ? wax.flatMap((w) => {
         const n = w.waxTooth!.fdi, toothWorld = localToWorld(w);
         if (!toothWorld) return [];
         const frame = moveFrame(w.waxTooth!.frame, toothWorld);

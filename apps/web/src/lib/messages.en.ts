@@ -4932,6 +4932,8 @@ export const MESSAGES_EN = {
   "sculpt.trimTeeth": "{count} of the selected triangles are on the crowns of the teeth. Unselect them, or press the button again to go ahead.",
   "sculpt.deleteAnyway": "Delete anyway",
   "dental.warn.looseScan": "Part of a model came out loose from it - a piece of scan standing free of the model: do not print it as it is - trim the scan there (Prepare the scans) and make it again.",
+  "dental.warn.wax": "A wax-up tooth could not be joined to the model, so it is missing from it: do not print it as it is - move that tooth a little and make it again, or report it with the scans.",
+  "dental.warn.cut": "A patient's tooth under the wax-up could not be cut back, so it may show through the wax: check the model before printing.",
   "dental.warn.tag": "A small tag of scan standing free beside a model was left out - it held no teeth.",
   "sculpt.history": "Undo and redo",
   "sculpt.undo": "Undo",

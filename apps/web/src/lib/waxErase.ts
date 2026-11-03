@@ -10,7 +10,7 @@
  * is kept in the tooth's own frame, so it goes with the tooth.
  */
 import type { NearestSurface } from "@/lib/nearestSurface";
-import { closedMarginWeight, pastMargin, type ClosedMargin, type MarginLine } from "@/lib/waxMargin";
+import { closedMarginAt, pastMargin, softCap, taperLimit, type ClosedMargin, type MarginLine } from "@/lib/waxMargin";
 
 export type Vec3 = [number, number, number];
 /** A brush dab in a tooth's frame: along mesial, towards the incisal edge, labial (mm), and its radius (mm). */
@@ -93,16 +93,30 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
     if (surface.nearest(p[0], p[1], p[2], q) === Infinity || surface.lastTriangle < 0) continue;
     surface.triangleNormal(surface.lastTriangle, nt);
     const nx = nt[0] * sign, ny = nt[1] * sign, nz = nt[2] * sign;
-    // Build 111: and past the palatal (lingual) margin line, judged where the vertex meets the patient's surface.
-    const erased = margin ? Math.max(brushed, "inside" in margin ? closedMarginWeight(margin, q) : pastMargin(margin, q, [nx, ny, nz])) : brushed;
-    const w = kept * erased;
-    if (w <= 1e-3) continue;
     const above = (p[0] - q[0]) * nx + (p[1] - q[1]) * ny + (p[2] - q[2]) * nz;
-    if (above < -ERASE_TUCK) continue; // already under the patient's surface
-    const tx = q[0] - nx * ERASE_TUCK, ty = q[1] - ny * ERASE_TUCK, tz = q[2] - nz * ERASE_TUCK;
-    out[v * 3] = p[0] + w * (tx - p[0]); out[v * 3 + 1] = p[1] + w * (ty - p[1]); out[v * 3 + 2] = p[2] + w * (tz - p[2]);
-    weight[v] = w;
+    // Build 111: and past the palatal (lingual) margin line, judged where the vertex meets the patient's surface.
+    // Build 116: with a closed margin, wax over the gum (outside it) is erased; on the tooth (inside it) the wax is
+    // kept but tapered - no thicker than taperLimit at its distance from the gum margin, so it ends as a feather edge.
+    let erased = brushed, capped = 0;
+    if (margin && "inside" in margin) {
+      const at = closedMarginAt(margin, q);
+      if (at && !at.inside) erased = 1;
+      else if (at && above > 0) {
+        capped = (softCap(above, taperLimit(at.gum)) - above) * kept;
+      }
+    } else if (margin) erased = Math.max(brushed, pastMargin(margin, q, [nx, ny, nz]));
+    const w = kept * erased;
+    if (w <= 1e-3 && capped > -1e-4) continue;
+    const px = p[0] + nx * capped, py = p[1] + ny * capped, pz = p[2] + nz * capped;
+    out[v * 3] = px; out[v * 3 + 1] = py; out[v * 3 + 2] = pz;
     moved += 1;
+    if (w <= 1e-3 || above + capped < -ERASE_TUCK) continue; // already under the patient's surface
+    // Build 116: pushed along the surface's normal, not onto its nearest point - near a corner of the scan many
+    // vertices share one nearest point, and landing on it together folded the tooth so Make could not join it.
+    const sink = above + capped + ERASE_TUCK;
+    const tx = px - nx * sink, ty = py - ny * sink, tz = pz - nz * sink;
+    out[v * 3] = px + w * (tx - px); out[v * 3 + 1] = py + w * (ty - py); out[v * 3 + 2] = pz + w * (tz - pz);
+    weight[v] = w;
   }
   if (!moved) return null;
   // The band eased once more (a light smoothing of what moved part way), so the wax meets the surface without a crease.
