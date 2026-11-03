@@ -10,7 +10,7 @@
  * is kept in the tooth's own frame, so it goes with the tooth.
  */
 import type { NearestSurface } from "@/lib/nearestSurface";
-import { closedMarginAt, gumLinePoint, pastMargin, softCap, taperLimit, type ClosedMargin, type MarginLine } from "@/lib/waxMargin";
+import { closedMarginAt, pastMargin, softCap, taperLimit, type ClosedMargin, type MarginLine } from "@/lib/waxMargin";
 
 export type Vec3 = [number, number, number];
 /** A brush dab in a tooth's frame: along mesial, towards the incisal edge, labial (mm), and its radius (mm). */
@@ -84,8 +84,6 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
   }
   const count = xyz.length / 3;
   const weight = new Float32Array(count);
-  /** Build 116: vertices meant to be hidden under the patient's surface (erased, or tapered under it at the margin). */
-  const sunk = new Uint8Array(count);
   const out = Float64Array.from(xyz);
   const q = [0, 0, 0], nt = [0, 0, 0];
   let moved = 0;
@@ -105,13 +103,7 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
     // kept but tapered - no thicker than taperLimit at its distance from the gum margin, so it ends as a feather edge.
     let erased = brushed, capped = 0, tuck = ERASE_TUCK;
     if (margin && "inside" in margin) {
-      const found = closedMarginAt(margin, q);
-      // Build 116: how far above the gum margin the wax is, measured from the wax point itself along the tooth's
-      // long axis - not from its nearest scan point, which on the convex neck lies further up the crown and let wax
-      // stand 0.3-0.4 mm proud right at the gum line (a ledge, seen as a collar of facets round the neck).
-      const g = found?.inside ? gumLinePoint(margin, p) : null;
-      const height = g ? (p[0] - g[0]) * axes.up[0] + (p[1] - g[1]) * axes.up[1] + (p[2] - g[2]) * axes.up[2] : Infinity;
-      const at = found ? { inside: found.inside, gum: Math.min(found.gum, Math.max(0, height)) } : null;
+      const at = closedMarginAt(margin, q);
       // Build 116: right at the margin the gum meets the tooth in a hollow corner; a wax triangle spanning it from
       // the tooth to under the gum would cross it in the air (a fringe round the neck), so near the margin the wax
       // goes deeper - under the gum outside it and under the tooth inside it.
@@ -127,7 +119,6 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
     const px = p[0] + nx * capped, py = p[1] + ny * capped, pz = p[2] + nz * capped;
     out[v * 3] = px; out[v * 3 + 1] = py; out[v * 3 + 2] = pz;
     moved += 1;
-    if (above + capped < -1e-3) sunk[v] = 1;
     if (w <= 1e-3 || above + capped < -tuck) continue; // already under the patient's surface
     // Build 116: pushed along the surface's normal, not onto its nearest point - near a corner of the scan many
     // vertices share one nearest point, and landing on it together folded the tooth so Make could not join it.
@@ -135,74 +126,6 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
     const tx = px - nx * sink, ty = py - ny * sink, tz = pz - nz * sink;
     out[v * 3] = px + w * (tx - px); out[v * 3 + 1] = py + w * (ty - py); out[v * 3 + 2] = pz + w * (tz - pz);
     weight[v] = w;
-    if (w > 0.999) sunk[v] = 1;
-  }
-  // Build 116: near a closed margin the wax is moved by different amounts vertex to vertex (tapered, sunk under the
-  // tooth, sunk under the gum), which left steps; how far each vertex moved is smoothed over its neighbours there, so
-  // the wax fades onto the tooth. Never towards the outside: a vertex is not left standing further out than it was moved to.
-  if (moved && margin && "inside" in margin) {
-    const band = new Uint8Array(count);
-    for (let v = 0; v < count; v += 1) {
-      const g = gumLinePoint(margin, [out[v * 3], out[v * 3 + 1], out[v * 3 + 2]]);
-      if (g && Math.hypot(out[v * 3] - g[0], out[v * 3 + 1] - g[1], out[v * 3 + 2] - g[2]) < 2.2) band[v] = 1;
-    }
-    const ring: number[][] = Array.from({ length: count }, () => []);
-    for (let c = 0; c + 2 < corner.length; c += 3) {
-      const a = corner[c], b = corner[c + 1], e = corner[c + 2];
-      if (!band[a] && !band[b] && !band[e]) continue;
-      ring[a].push(b, e); ring[b].push(a, e); ring[e].push(a, b);
-    }
-    const shift = new Float64Array(count * 3);
-    for (let i = 0; i < shift.length; i += 1) shift[i] = out[i] - xyz[i];
-    for (let pass = 0; pass < 8; pass += 1) {
-      const next = Float64Array.from(shift);
-      for (let v = 0; v < count; v += 1) {
-        if (!band[v] || !ring[v].length) continue;
-        let sx = 0, sy = 0, sz = 0;
-        for (const u of ring[v]) { sx += shift[u * 3]; sy += shift[u * 3 + 1]; sz += shift[u * 3 + 2]; }
-        const k = ring[v].length;
-        next[v * 3] = 0.5 * shift[v * 3] + 0.5 * sx / k; next[v * 3 + 1] = 0.5 * shift[v * 3 + 1] + 0.5 * sy / k; next[v * 3 + 2] = 0.5 * shift[v * 3 + 2] + 0.5 * sz / k;
-      }
-      shift.set(next);
-    }
-    for (let v = 0; v < count; v += 1) {
-      if (!band[v]) continue;
-      const nx = xyz[v * 3] + shift[v * 3], ny = xyz[v * 3 + 1] + shift[v * 3 + 1], nz = xyz[v * 3 + 2] + shift[v * 3 + 2];
-      // Kept only where it does not stand further out from the patient's surface than the vertex was moved to.
-      if (surface.nearest(nx, ny, nz, q) === Infinity || surface.lastTriangle < 0) continue;
-      surface.triangleNormal(surface.lastTriangle, nt);
-      const hNew = ((nx - q[0]) * nt[0] + (ny - q[1]) * nt[1] + (nz - q[2]) * nt[2]) * sign;
-      const ox = out[v * 3], oy = out[v * 3 + 1], oz = out[v * 3 + 2];
-      if (surface.nearest(ox, oy, oz, q) === Infinity || surface.lastTriangle < 0) continue;
-      surface.triangleNormal(surface.lastTriangle, nt);
-      const hOld = ((ox - q[0]) * nt[0] + (oy - q[1]) * nt[1] + (oz - q[2]) * nt[2]) * sign;
-      if (hNew <= Math.max(hOld, 0) + 0.02) { out[v * 3] = nx; out[v * 3 + 1] = ny; out[v * 3 + 2] = nz; if (hNew < -1e-3) sunk[v] = 1; else sunk[v] = 0; }
-    }
-  }
-  // Build 116: a triangle whose corners are all under the patient's surface can still cross the gum-tooth groove in
-  // the air between them (a fringe round the neck). Each such triangle that breaks the surface is pushed in until its
-  // middle is under it too - a few times over, as pushing one moves its neighbours'.
-  if (moved) for (let pass = 0; pass < 4; pass += 1) {
-    const push = new Float64Array(count * 3), pushes = new Uint16Array(count);
-    let poked = 0;
-    for (let c = 0; c + 2 < corner.length; c += 3) {
-      const a = corner[c], b = corner[c + 1], e = corner[c + 2];
-      if (!sunk[a] || !sunk[b] || !sunk[e]) continue;
-      for (const [wa, wb, we] of [[1 / 3, 1 / 3, 1 / 3], [0.5, 0.5, 0], [0, 0.5, 0.5], [0.5, 0, 0.5]]) {
-        const mx = out[a * 3] * wa + out[b * 3] * wb + out[e * 3] * we, my = out[a * 3 + 1] * wa + out[b * 3 + 1] * wb + out[e * 3 + 1] * we, mz = out[a * 3 + 2] * wa + out[b * 3 + 2] * wb + out[e * 3 + 2] * we;
-        if (surface.nearest(mx, my, mz, q) === Infinity || surface.lastTriangle < 0) continue;
-        surface.triangleNormal(surface.lastTriangle, nt);
-        const nx = nt[0] * sign, ny = nt[1] * sign, nz = nt[2] * sign;
-        const above = (mx - q[0]) * nx + (my - q[1]) * ny + (mz - q[2]) * nz;
-        if (above <= -0.05) continue;
-        const depth = above + ERASE_TUCK;
-        for (const v of [a, b, e]) { push[v * 3] -= nx * depth; push[v * 3 + 1] -= ny * depth; push[v * 3 + 2] -= nz * depth; pushes[v] += 1; }
-        poked += 1;
-        break;
-      }
-    }
-    if (!poked) break;
-    for (let v = 0; v < count; v += 1) if (pushes[v]) { out[v * 3] += push[v * 3] / pushes[v]; out[v * 3 + 1] += push[v * 3 + 1] / pushes[v]; out[v * 3 + 2] += push[v * 3 + 2] / pushes[v]; }
   }
   if (!moved) return null;
   // The band eased once more (a light smoothing of what moved part way), so the wax meets the surface without a crease.
