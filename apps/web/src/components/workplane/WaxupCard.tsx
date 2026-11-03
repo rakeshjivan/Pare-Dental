@@ -60,7 +60,8 @@ export type WaxupView = {
   /** Build 108: wax teeth put out of view in Case objects - their buttons cannot pick them. */
   hiddenIds?: string[];
   /** Build 107: Sculpt - the tooth taken up to be moved (double-clicked), else null. */
-  sculptMoving?: string | null;
+  /** Build 112: Sculpt - the brush in hand (null: positioning the tooth). */
+  sculptTool?: "position" | "scale" | "add" | "remove" | "smooth" | "move";
   /** Build 107: every tooth of the set selected (it moves as one). */
   selectedAll?: boolean;
   /** The tooth set loaded, and how many teeth it has. */
@@ -163,9 +164,10 @@ export type WaxupActions = {
   onGumKeep?: (pair: string, keep: number) => void;
   onGumIdeal?: () => void;
   /** Build 107: Sculpt - back to sculpting after moving a tooth. */
-  onSculptMoveDone?: () => void;
+  /** Build 112: Sculpt - pick a brush (null: back to positioning), and the full sculpt panel shown or not. */
+  onSculptTool?: (tool: "position" | "scale" | "add" | "remove" | "smooth" | "move") => void;
+  onSculptMore?: () => void;
   /** Build 108: Sculpt - the picked tooth moved, turned and sized (its gimbal), as a double-click on it. */
-  onSculptMove?: () => void;
   /** Build 107: the whole set selected, so the gimbal moves and turns it as one. */
   onSelectSet?: () => void;
   /** Build 107: the set dropped on the arch again, as it first came in. */
@@ -978,25 +980,19 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
       {part === "sculpt" ? (
         <div className="dental-substep">
           <div className="waxup-teeth" role="group" aria-label={t("waxup.teeth")}>
-            {[...view.placed].sort((a, b) => a.fdi - b.fdi).map((tooth) => (
+            {[...view.placed].sort((a, b) => archOrder(a.fdi) - archOrder(b.fdi)).map((tooth) => (
               <button key={tooth.id} type="button" className={`waxup-tooth${view.selected === tooth.id ? " active" : ""}`} disabled={view.hiddenIds?.includes(tooth.id)} title={view.hiddenIds?.includes(tooth.id) ? t("waxup.toothHidden") : undefined} onClick={() => actions.onSelect(tooth.id)}>{tooth.fdi}</button>
             ))}
           </div>
           {toolSlot ? (
-            // Build 107: in the studio the whole sculpt toolset (brushes, presets, size and strength) opens
-            // here, on the tooth picked - no floating window.
+            // Build 112: positioning by default (the tooth's gimbal); a brush when one is picked - here, or in the tooth's right-click menu.
             <>
-              {view.sculptMoving ? (
-                <div className="wax-guide">
-                  <strong>{t("waxup.sculptMovingTitle")}</strong>
-                  <span>{t("waxup.sculptMovingHint")}</span>
-                  <div className="dental-trim-buttons"><button type="button" className="active" onClick={() => actions.onSculptMoveDone?.()}>{t("waxup.sculptMovingDone")}</button></div>
-                </div>
-              ) : view.selected ? (<>
-                {/* Build 108: the tooth's position can still be changed while sculpting - a button, as well as the double-click. */}
-                {actions.onSculptMove ? <div className="dental-trim-buttons"><button type="button" className="secondary waxup-adjust-position" disabled={working} title={t("waxup.sculptDoubleHint")} onClick={() => actions.onSculptMove?.()}>{t("waxup.adjustPosition")}</button></div> : null}
-                <p className="blend-hint">{t("waxup.sculptDoubleHint")}</p>
-              </>) : <p className="blend-hint">{t("waxup.sculptPick")}</p>}
+              <div className="studio-mm-choice wax-sculpt-modes" role="radiogroup" aria-label={t("waxup.brush.title")}>
+                {(["position", "scale", "add", "remove", "smooth", "move"] as const).map((tool) => (
+                  <button key={tool} type="button" role="radio" aria-checked={(view.sculptTool ?? "position") === tool} className={(view.sculptTool ?? "position") === tool ? "active" : ""} disabled={working || !view.selected} title={t(`waxup.brush.${tool}Hint`)} onClick={() => actions.onSculptTool?.(tool)}>{t(`waxup.brush.${tool}`)}</button>
+                ))}
+              </div>
+              <p className="blend-hint" role="status">{!view.selected ? t("waxup.sculptPick") : t(`waxup.brush.${view.sculptTool ?? "position"}Hint`)}</p>
               <div className="studio-tool-slot waxup-sculpt-slot" ref={toolSlot} />
             </>
           ) : (<>
@@ -1016,7 +1012,7 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
           </label>
         </div>
       ) : null}
-      {(part === "sculpt" || part === "adjust") && view.placed.length ? (
+      {part === "adjust" && view.placed.length ? (
         <WaxContacts view={view} actions={actions} workspace={workspace} adapt />
       ) : null}
       {view.occlusion.ready && show("occlusion") ? (

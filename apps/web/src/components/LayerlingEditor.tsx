@@ -86,6 +86,7 @@ import { WaxupPointOverlay, rayHit, rayGrid, rayHitGrid, type RayGrid } from "./
 import { ANCHOR_ORDER, ARCH_DOT_ORDER, ARCH_STEP, LATERAL_SHORTER, archCurvePoints, canineOf, marksFromAnchors, type ToothAnchors } from "@/lib/waxArchDots";
 import { WaxMarkDrag, type DragMark } from "./workplane/WaxMarkDrag";
 import { WaxPaintBrush } from "./workplane/WaxPaintBrush";
+import { WaxToolWheel } from "./workplane/WaxToolWheel";
 import { WAXUP_LANDMARKS, WAX_BLUE, WAX_CONFIRMED_COLOURS, WAX_TOOTH_COLOURS, defaultMarkTeeth, archOrder, type WaxupView } from "./workplane/WaxupCard";
 import { brushArea, lassoArea, screenTriangles } from "@/lib/dentalArea";
 import { applyToSelection, brushChoice, lassoChoice, type LassoMode, cornerPositions, growChoice, soupFloat32, invertChoice, sculptMeshOf, soupOf, withoutTriangles, type SculptMesh, type SelectReach } from "@/lib/meshSculpt";
@@ -97,6 +98,12 @@ import { SculptSelectionBar } from "./workplane/SculptSelectionBar";
 import { BiteContactsCard } from "./workplane/BiteContactsCard";
 import { setHandleStyle, setHandleStyleStudio, useHandleStyle } from "@/lib/handleStyle";
 import { RADIAL_TOOLS, SculptRadialMenu, radialIndex } from "./workplane/SculptRadialMenu";
+/** Build 112: Wax-up Studio's four brushes, and the sculpt tool each is. */
+type WaxSculptBrush = "add" | "remove" | "smooth" | "move";
+const WAX_BRUSH_TOOL: Record<WaxSculptBrush, SculptTool> = { add: "draw", remove: "draw", smooth: "smooth", move: "move" };
+/** Build 112: Sculpt's tools, as CEREC's Design tools: Position & Rotate and Scale (the tooth's handles), then the brushes. */
+type WaxSculptTool = "position" | "scale" | WaxSculptBrush;
+const WAX_SCULPT_ORDER: WaxSculptTool[] = ["position", "scale", "add", "remove", "smooth", "move"];
 import type { DentalTrimMode } from "@/lib/dentalTrim";
 import { layerlingToZUp, zUpToLayerling } from "@/lib/meshCoordinates";
 import { looksLikeDentalScan, type DentalAnalysis, type DentalRole, type DentalStudioInput, type DentalStudioOptions } from "@/lib/dentalModel";
@@ -9935,6 +9942,8 @@ export function LayerlingEditor({
   };
   const startSculptStroke = useCallback((x: number, y: number, keys?: { ctrl: boolean; shift: boolean }) => {
     const opened = performance.now();
+    // Build 112: Wax-up's Remove is Draw taking away (as Draw with Ctrl); Ctrl with Remove adds.
+    if (studioWaxSculptRef.current && waxSculptBrushRef.current === "remove") keys = { ctrl: !keys?.ctrl, shift: Boolean(keys?.shift) };
     const target = sculptTarget();
     if (!target || !target.tool.tool || target.tool.tool === "select" || target.tool.tool === "unselect") return;
     const { tool, shape, state } = target;
@@ -10671,26 +10680,65 @@ export function LayerlingEditor({
   }, [studioWaxStep]); // eslint-disable-line react-hooks/exhaustive-deps
   const waxSculptOpened = useRef<string | null>(null);
   const waxSculptWas = useRef(false);
-  /** Build 107: Sculpt - the tooth double-clicked to be moved and adjusted (its gimbal), until double-clicked again. */
-  const [waxSculptMove, setWaxSculptMove] = useState<string | null>(null);
+  /**
+   * Build 112: Sculpt - a tooth clicked is positioned (its gimbal: move, tip, turn, size) until a brush is picked
+   * (in the panel, or the tooth's right-click menu): Move, Add, Carve or Smooth, on that tooth. Esc, or
+   * Position, goes back to positioning. null: positioning.
+   */
+  const [waxSculptBrush, setWaxSculptBrush] = useState<WaxSculptBrush | null>(null);
+  const waxSculptBrushRef = useRef<WaxSculptBrush | null>(null);
+  waxSculptBrushRef.current = waxSculptBrush;
+  /** With no brush in hand: the tooth's handles for moving and turning it, or for sizing it. */
+  const [waxGimbalPart, setWaxGimbalPart] = useState<"position" | "scale">("position");
+  const waxSculptTool: WaxSculptTool = waxSculptBrush ?? waxGimbalPart;
+  const pickWaxSculptTool = (tool: WaxSculptTool) => {
+    if (tool === "position" || tool === "scale") { setWaxGimbalPart(tool); setWaxSculptBrush(null); }
+    else setWaxSculptBrush(tool);
+  };
+  const pickWaxSculptToolRef = useRef(pickWaxSculptTool);
+  pickWaxSculptToolRef.current = pickWaxSculptTool;
+  /** Build 112: the tool wheel, open at a point on the page (a right-click on a wax tooth in Sculpt). */
+  const [waxWheel, setWaxWheel] = useState<{ x: number; y: number } | null>(null);
+  const waxWheelOpened = useRef(0);
+  /** The sculpt panel with every tool (selections, remesh and the rest), not just the brush's size and strength. */
+  const [waxSculptMore, setWaxSculptMore] = useState(false);
   useEffect(() => {
     // Build 108: leaving Sculpt (for Gum line or Export) closes its tools - they were left floating over the view.
     if (!studioWaxSculpt) {
-      waxSculptOpened.current = null; setWaxSculptMove(null);
+      waxSculptOpened.current = null; setWaxSculptBrush(null); setWaxSculptMore(false);
       if (waxSculptWas.current && sculptToolRef.current && !sculptToolRef.current.trim) { flushSculptRef.current(); setSculptTool(null); }
       waxSculptWas.current = false;
       return;
     }
     waxSculptWas.current = true;
-    if (waxSculptMove) return;
     const id = selectedIds.length === 1 ? selectedIds[0] : null;
     const shape = id ? shapesRef.current.find((candidate) => candidate.id === id && candidate.dental === "wax" && !candidate.hidden) : undefined;
-    if (!shape || waxSculptOpened.current === id) return;
+    // Positioning (or no tooth): no brush open.
+    if (!waxSculptBrush || !shape) {
+      waxSculptOpened.current = null;
+      if (sculptToolRef.current && !sculptToolRef.current.trim) { flushSculptRef.current(); setSculptTool(null); }
+      return;
+    }
+    const tool = WAX_BRUSH_TOOL[waxSculptBrush];
+    if (sculptToolRef.current?.shapeId === id) {
+      if (sculptToolRef.current.tool !== tool) setSculptTool((current) => (current ? { ...current, tool } : current));
+      return;
+    }
     waxSculptOpened.current = id;
-    // Build 108: saving the last tooth's strokes selects that tooth again - the tooth picked stays picked.
-    if (sculptToolRef.current && sculptToolRef.current.shapeId !== id) { flushSculptRef.current(); setSculptTool(null); setSelectedIds([shape.id]); }
-    if (sculptToolRef.current?.shapeId !== id) window.setTimeout(() => openSculpt(shape), 0);
-  }, [studioWaxSculpt, selectedIds, waxSculptMove]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (sculptToolRef.current) { flushSculptRef.current(); setSculptTool(null); setSelectedIds([shape.id]); }
+    waxSculptLast.current = { tool, size: waxSculptLast.current?.size ?? 30, strength: waxSculptLast.current?.strength ?? SCULPT_STRENGTH };
+    attractOnly.current = null;
+    window.setTimeout(() => openSculpt(shape), 0);
+  }, [studioWaxSculpt, selectedIds, waxSculptBrush]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Esc puts the brush down (back to positioning the tooth).
+  useEffect(() => {
+    if (!studioWaxSculpt || !waxSculptBrush) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setWaxSculptBrush(null); } };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [studioWaxSculpt, waxSculptBrush]);
+  const studioWaxSculptRef = useRef(false);
+  studioWaxSculptRef.current = studioWaxSculpt;
   useEffect(() => {
     if (!studioWaxSculpt || !sculptTool || sculptTool.trim || !sculptTool.tool || !WAX_SCULPT_TOOLS.includes(sculptTool.tool)) return;
     waxSculptLast.current = { tool: sculptTool.tool, size: sculptTool.size, strength: sculptTool.strength };
@@ -12618,6 +12666,50 @@ export function LayerlingEditor({
     if (!best) return null;
     return { id: best.id, point: ray.origin.map((v, k) => v + ray.direction[k] * best!.at) as [number, number, number] };
   };
+  // Build 112 (as CEREC): in Sculpt, positioning, the handle goes to the tooth under the pointer - once the pointer
+  // has rested on it a moment (passing over a tooth on the way to a handle does not take it).
+  useEffect(() => {
+    if (!studioWaxSculpt || waxSculptBrush) return;
+    let frame = 0, timer = 0, pending: string | null = null, x = 0, y = 0;
+    const look = () => {
+      frame = 0;
+      const hit = waxPaintHit(x, y);
+      const id = hit?.id ?? null;
+      const now = selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null;
+      if (!id || id === now) { pending = null; window.clearTimeout(timer); return; }
+      if (pending === id) return;
+      pending = id;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => { if (pending === id) setSelectedIds([id]); pending = null; }, 350);
+    };
+    const onMove = (event: PointerEvent) => {
+      if (event.buttons || !(event.target as Element | null)?.closest?.(".workplane-plane canvas, .three-workplane-host canvas")) { pending = null; window.clearTimeout(timer); return; }
+      x = event.clientX; y = event.clientY;
+      if (!frame) frame = window.requestAnimationFrame(look);
+    };
+    window.addEventListener("pointermove", onMove, true);
+    return () => { window.removeEventListener("pointermove", onMove, true); window.cancelAnimationFrame(frame); window.clearTimeout(timer); };
+  }, [studioWaxSculpt, waxSculptBrush]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Build 112: a right-click (no drag) on a wax tooth in Sculpt picks the tooth and opens the tool wheel there.
+  useEffect(() => {
+    if (!studioWaxSculpt) { setWaxWheel(null); return; }
+    let press: { x: number; y: number } | null = null;
+    const onDown = (event: PointerEvent) => { if (event.button === 2) press = { x: event.clientX, y: event.clientY }; };
+    const onUp = (event: PointerEvent) => {
+      if (event.button !== 2 || !press) return;
+      const moved = Math.hypot(event.clientX - press.x, event.clientY - press.y);
+      press = null;
+      if (moved > 5 || !(event.target as Element | null)?.closest?.(".workplane-plane, .three-workplane-host, .tooth-gimbal")) return;
+      const hit = waxPaintHit(event.clientX, event.clientY);
+      if (!hit) return;
+      waxWheelOpened.current = Date.now();
+      setSelectedIds([hit.id]);
+      setWaxWheel({ x: event.clientX, y: event.clientY });
+    };
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("pointerup", onUp, true);
+    return () => { window.removeEventListener("pointerdown", onDown, true); window.removeEventListener("pointerup", onUp, true); };
+  }, [studioWaxSculpt]); // eslint-disable-line react-hooks/exhaustive-deps
   const paintStroke = useRef<{ recorded: boolean; last: Record<string, [number, number, number]> } | null>(null);
   const paintAt = (x: number, y: number, phase: "start" | "move" | "end") => {
     if (phase === "end") {
@@ -12744,6 +12836,8 @@ export function LayerlingEditor({
    * (exocad's Symmetry): through the plane halfway between the two teeth, square to the line joining
    * them, so the copy stands where the partner stood. The partner keeps its number and frame.
    */
+  const mirrorWaxShapeRef = useRef<() => void>(() => undefined);
+  mirrorWaxShapeRef.current = () => mirrorWaxShape();
   const mirrorWaxShape = () => {
     if (sculptToolRef.current) { flushSculpt(); setSculptTool(null); }
     const id = selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null;
@@ -14024,7 +14118,7 @@ export function LayerlingEditor({
     marked: waxup.landmarks && !waxup.guessed ? 3 : waxup.marks.length,
     selected: selectedIds.length === 1 ? selectedIds[0] : null,
     selectedAll: waxPlacedNow.length > 1 && waxPlacedNow.every((tooth) => selectedIds.includes(tooth.id)),
-    sculptMoving: studioWaxSculpt && waxSculptMove ? waxSculptMove : null,
+    sculptTool: studioWaxSculpt ? waxSculptTool : undefined,
     confirmed: Object.keys(waxup.locks).map(Number),
     manual: waxup.manual,
     colourful: studioWax ? waxColourful : undefined,
@@ -19403,6 +19497,8 @@ export function LayerlingEditor({
     setMenuHighlightIds([]);
   }, []);
   const openShapeContextMenu = useCallback((request: { shapeId: string | null; clientX: number; clientY: number; stackIds: string[] }) => {
+    // Build 112: in Sculpt a right-click on a wax tooth opens its tool wheel instead.
+    if (studioWaxSculptRef.current && Date.now() - waxWheelOpened.current < 600) return;
     setShapeContextMenu({ x: request.clientX, y: request.clientY, onShape: Boolean(request.shapeId), stack: request.stackIds });
     setMenuHighlightIds([]);
   }, []);
@@ -19560,7 +19656,7 @@ export function LayerlingEditor({
     );
     if (viewStep) {
       const tooth = shapeContextMenu?.onShape && selectedShapes.length === 1 && selectedShapes[0].dental === "wax" && selectedShapes[0].waxTooth ? selectedShapes[0] : null;
-      if (dentalStudio?.waxStudio && tooth?.waxTooth && dentalStudio.stage !== "made") {
+      if (dentalStudio?.waxStudio && tooth?.waxTooth && dentalStudio.stage !== "made" && !studioWaxSculpt) {
         const confirmed = Boolean(waxup.locks[tooth.waxTooth.fdi]);
         items.push({ key: "waxConfirm", label: t(confirmed ? "dentalMenu.waxRelease" : "dentalMenu.waxConfirm"), shortcut: confirmed ? undefined : "Enter", separated: true, onSelect: () => confirmWaxTooth(tooth.id, !confirmed) });
       }
@@ -20867,6 +20963,7 @@ export function LayerlingEditor({
         <WaxMarkDrag marks={marginDragList()} surfaceAt={(x, y) => markSurfaceAt(x, y)} onMove={(id, point) => moveMarginPoint(id, point, false)} onDrop={(id, point) => moveMarginPoint(id, point, true)} />
       ) : null}
       {/* Build 110: Keep & erase - the brush on the wax teeth (presses that miss them turn the view). */}
+      {studioWaxSculpt && waxWheel ? <WaxToolWheel x={waxWheel.x} y={waxWheel.y} current={waxSculptTool} onClose={() => setWaxWheel(null)} onPick={(tool) => { setWaxWheel(null); if (tool === "mirror") mirrorWaxShapeRef.current(); else pickWaxSculptTool(tool); }} /> : null}
       {keepStep ? <WaxPaintBrush hit={(x, y) => Boolean(waxPaintHit(x, y))} onPaint={paintAt} /> : null}
       {dentalStudio && waxup.toothPick ? (
         <WaxupPointOverlay hint={waxup.toothPick.queue[0] === ARCH_STEP ? t("waxup.archPoint", { point: t(`waxup.archDot.${ARCH_DOT_ORDER[Math.min(2, waxup.toothPick.points.length)]}`, { fdi: canineOf(waxup.slot, waxup.toothPick.points.length === 1 ? "right" : "left") }), n: Math.min(3, waxup.toothPick.points.length + 1) }) : t("waxup.anchorPoint", { fdi: waxup.toothPick.queue[0], point: t(`waxup.anchor.${ANCHOR_ORDER[Math.min(2, waxup.toothPick.points.length)]}`), n: Math.min(3, waxup.toothPick.points.length + 1) })} onPick={pickToothPoint} onCancel={stopToothMarks} onUndo={undoToothPoint} />
@@ -20876,12 +20973,13 @@ export function LayerlingEditor({
       ) : null}
       {/* Build 104: the gimbal over the selected wax tooth again (arrows, rings and size squares, typed values),
           with the arrow keys sizing it - the tooth itself can still be dragged as before. */}
-      {waxGimbal && (waxup.stage === "position" || (studioWaxSculpt && waxSculptMove === waxGimbal.id)) && !marksEditing ? (
+      {waxGimbal && (waxup.stage === "position" || (studioWaxSculpt && !waxSculptBrush)) && !marksEditing ? (
         <ToothGimbal
           key={waxGimbal.id}
           tooth={waxGimbal.tooth}
           totals={waxGimbal.totals}
           bare={Boolean(dentalStudio?.waxStudio)}
+          only={studioWaxSculpt ? waxGimbalPart : undefined}
           disabled={waxup.busy || Boolean(shapes.find((shape) => shape.id === waxGimbal.id)?.waxTooth && waxup.locks[shapes.find((shape) => shape.id === waxGimbal.id)!.waxTooth!.fdi])}
           onPreview={(change) => previewWaxTooth(waxGimbal.id, change)}
           onCommit={(change) => adjustWaxToothBy(waxGimbal.id, change)}
@@ -20893,24 +20991,9 @@ export function LayerlingEditor({
       {dentalStudio?.waxStudio && waxup.stage === "position" && waxup.placed.length && waxup.picking === null && !marksEditing ? (
         <WaxToothDrag teeth={waxDragTeeth} restrict={waxup.restrict} onLibrary={cycleWaxSet} onSelect={(id) => selectShape(id, "replace")} onPreview={previewWaxTooth} onCommit={adjustWaxToothBy} onDouble={(id) => confirmWaxTooth(id, false)} />
       ) : null}
-      {studioWaxSculpt && waxup.placed.length ? (
-        // Build 107: Sculpt - a tooth double-clicked is taken up to be moved and adjusted (dragged, or with its
-        // gimbal); double-clicked again, it goes back to sculpting.
-        <WaxToothDrag
-          teeth={waxSculptMove ? waxDragTeeth.filter((tooth) => tooth.id === waxSculptMove) : waxDragTeeth}
-          restrict={waxup.restrict}
-          doubleOnly={!waxSculptMove}
-          onSelect={(id) => selectShape(id, "replace")}
-          onPreview={previewWaxTooth}
-          onCommit={adjustWaxToothBy}
-          onDouble={(id) => {
-            if (waxSculptMove === id) { setWaxSculptMove(null); waxSculptOpened.current = null; return; }
-            flushSculptRef.current(); setSculptTool(null);
-            waxSculptOpened.current = id;
-            setWaxSculptMove(id);
-            selectShape(id, "replace");
-          }}
-        />
+      {studioWaxSculpt && waxup.placed.length && !waxSculptBrush ? (
+        // Build 112: Sculpt, positioning - a tooth clicked is picked (its gimbal shows), dragged it moves.
+        <WaxToothDrag teeth={waxDragTeeth} restrict={waxup.restrict} onSelect={(id) => selectShape(id, "replace")} onPreview={previewWaxTooth} onCommit={adjustWaxToothBy} onDouble={() => undefined} />
       ) : null}
       {studioShellOn && dentalStudio ? (() => {
         // Build 106: the studio frame - the case on the left, the steps, views and Back/Next around the panel.
@@ -21194,15 +21277,8 @@ export function LayerlingEditor({
                 waxLiveShow("arch", () => null, () => waxArchMoves(curve), () => waxLineUp(curve));
               },
               onSetScale: (scale: number) => scaleWaxSet(scale),
-              onSculptMoveDone: () => { setWaxSculptMove(null); waxSculptOpened.current = null; },
-              onSculptMove: () => {
-                const id = selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null;
-                if (!id) return;
-                flushSculptRef.current(); setSculptTool(null);
-                waxSculptOpened.current = id;
-                setWaxSculptMove(id);
-                setSelectedIds([id]);
-              },
+              onSculptTool: (tool: WaxSculptTool) => pickWaxSculptTool(tool),
+              onSculptMore: () => setWaxSculptMore((more) => !more),
               onSetCurve: (curve: number) => bendWaxSet(curve),
               onBite: (raise: number) => void openWaxBite(raise),
               onGumMode: (mode: GumMode) => setWaxGumMode(mode),
@@ -21322,6 +21398,8 @@ export function LayerlingEditor({
       {sculptTool ? ((panel: React.ReactNode) => (studioShellOn && (sculptTool.trim || studioWaxSculpt) ? (studioToolSlot ? createPortal(panel, studioToolSlot) : null) : panel))(
         <MeshSculptPanel
           waxup={studioWaxSculpt}
+          simple={studioWaxSculpt && !waxSculptMore}
+          onMore={studioWaxSculpt ? () => setWaxSculptMore((more) => !more) : undefined}
           onSpeed={() => setSculptSpeedShown((shown) => { try { window.localStorage.setItem("pare3d.sculptSpeed", shown ? "off" : "on"); } catch { /* this visit */ } return !shown; })}
           speedShown={sculptSpeedShown}
           targetName={displayShapeName(shapes.find((shape) => shape.id === sculptTool.shapeId) ?? ({ name: "" } as WorkplaneShape))}

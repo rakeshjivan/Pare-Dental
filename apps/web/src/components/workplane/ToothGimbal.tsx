@@ -31,11 +31,11 @@ const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a: V, b: V): V => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
 /** The gimbal's reach in the scene, mm, before it is grown to stay readable. */
-const ARROW = 7;
-const RING = 5;
+const ARROW = 6;
+const RING = 4.5;
 const RING_STEPS = 48;
 /** The arrows are never shorter than this on the screen, px. */
-export const GIMBAL_MIN_PX = 100;
+export const GIMBAL_MIN_PX = 72;
 /** A drag: mm per pixel, and degrees per pixel - the same at every zoom. */
 export const GIMBAL_MM_PER_PX = 0.01;
 export const GIMBAL_DEG_PER_PX = 0.1;
@@ -46,6 +46,11 @@ export const GIMBAL_KEY = { mm: 0.1, deg: 1 };
 const COARSE = 5, FINE = 0.2;
 /** Steps (wheel, keys) are kept this long after the last, ms. */
 const SETTLE_MS = 650;
+/**
+ * Build 112 (as CEREC): an arrow pressed and held moves (or turns, or sizes) the tooth on and on until let go -
+ * slowly at first, faster the longer it is held: mm (or degrees) a second at the start, and at the most.
+ */
+const HOLD_MS = 220, HOLD_RATE = { mm: 0.3, deg: 3 }, HOLD_RATE_MAX = { mm: 2, deg: 20 }, HOLD_RAMP_S = 1.5;
 /** One gesture moves a tooth at most this far, turns it this much, sizes it within this. */
 const MOVE_MAX = 5, TURN_MAX = 30, SIZE_MIN = 0.6, SIZE_MAX = 1.5;
 
@@ -78,7 +83,7 @@ const gainOf = (event: { shiftKey: boolean; altKey: boolean }) => (event.shiftKe
 
 export type GimbalTooth = { frame: ToothFrame; width: number; length: number };
 
-export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = false, onPreview, onCommit }: {
+export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = false, only, onPreview, onCommit }: {
   tooth: GimbalTooth;
   /** Build 103: false - only the readout and the keys (the tooth itself is dragged). */
   handles?: boolean;
@@ -87,13 +92,15 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
   totals?: string;
   /** Build 107: the handles only - no readout or key hints over the view (Wax-up Studio, as Meshmixer). */
   bare?: boolean;
+  /** Build 112: only the arrows and rings (position), or only the size squares (scale). */
+  only?: "position" | "scale";
   /** The change so far while it is being moved (null: nothing is). */
   onPreview: (change: ToothAdjust | null) => void;
   /** The change, kept. */
   onCommit: (change: ToothAdjust) => void;
 }) {
   const [, setTick] = useState(0);
-  const drag = useRef<{ handle: GimbalHandle; start: [number, number]; along: [number, number]; sign: number; gain: number; base: ToothAdjust; typed?: string; last?: [number, number]; target?: Element; pointerId?: number } | null>(null);
+  const drag = useRef<{ handle: GimbalHandle; start: [number, number]; along: [number, number]; sign: number; gain: number; base: ToothAdjust; typed?: string; last?: [number, number]; target?: Element; pointerId?: number; /** Build 112: held still (no drag): which way it goes, and how far it has gone so far. */ hold?: { dir: number; timer: number; started: number; amount: number; moved: boolean } } | null>(null);
   /** Build 104: set each render - shows a typed value at once, and ends a drag from the keyboard. */
   const typedPreview = useRef<(() => void) | null>(null);
   const finishDrag = useRef<((keep: boolean) => void) | null>(null);
@@ -243,7 +250,7 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
     const angle = (i / RING_STEPS) * Math.PI * 2;
     return add(add(centre, a, Math.cos(angle) * ringMm), b, Math.sin(angle) * ringMm);
   });
-  const all: V[] = [centre, add(centre, mesial, arrowMm), add(centre, out, arrowMm), add(centre, up, arrowMm), widerAt, longerAt, thickerAt, sizeAt, ...ringPoints(mesial, out), ...ringPoints(mesial, up), ...ringPoints(out, up)];
+  const all: V[] = [centre, add(centre, mesial, arrowMm), add(centre, out, arrowMm), add(centre, up, arrowMm), widerAt, longerAt, thickerAt, sizeAt, ...ringPoints(mesial, out), ...ringPoints(mesial, up), ...ringPoints(out, up), add(centre, mesial, -arrowMm), add(centre, out, -arrowMm), add(centre, up, -arrowMm), add(centre, mesial, Math.max(width / 2 + 2, arrowMm * 0.85)), add(centre, up, Math.max(length / 2 + 2, arrowMm * 0.85)), add(centre, out, Math.max(3.5, arrowMm * 0.75))];
   const flat = new Float32Array(all.length * 3);
   all.forEach((p, i) => flat.set(p, i * 3));
   const screen = project(flat);
@@ -280,7 +287,13 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
     // The distal square widens the tooth about its middle: twice what its side moves.
     return amountFor(d.handle, d.handle === "wider" ? mm * 2 : mm, deg);
   };
-  const begin = (handle: GimbalHandle, event: React.PointerEvent) => {
+  /** Build 112: the screen indices of the far-side arrow tips (and sizing arrows), after the rings. */
+  const EXTRA = RING_AT + 3 * (RING_STEPS + 1);
+  const holdAmount = (d: NonNullable<typeof drag.current>): ToothAdjust => {
+    const h = d.hold!;
+    return ANGLES.includes(d.handle) ? amountFor(d.handle, 0, h.amount * h.dir * d.sign) : amountFor(d.handle, d.handle === "wider" ? h.amount * h.dir * 2 : h.amount * h.dir, 0);
+  };
+  const begin = (handle: GimbalHandle, event: React.PointerEvent, dir = 1) => {
     if (disabled) return;
     event.preventDefault();
     event.stopPropagation();
@@ -294,17 +307,40 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
     } else {
       // Along its arrow as it shows (the squares: away from the crown); up the screen if it points at the eye.
       const index = handle === "mesial" ? 1 : handle === "out" ? 2 : handle === "up" ? 3 : handle === "wider" ? 4 : handle === "longer" ? 5 : handle === "thicker" ? 6 : 7;
-      along = towards(index) ?? [0, -1];
+      // Build 112: Scale's arrows are dragged along themselves, its ball up the screen to grow the tooth.
+      along = only === "scale" ? (handle === "size" ? [0, -1] : towards(EXTRA + (handle === "wider" ? 3 : handle === "longer" ? 4 : 5)) ?? [0, -1]) : towards(index) ?? [0, -1];
     }
     drag.current = { handle, start: [event.clientX, event.clientY], along, sign: ANGLES.includes(handle) ? ringSign(handle) : 1, gain: gainOf(event), base: {}, last: [event.clientX, event.clientY], target: event.currentTarget as Element, pointerId: event.pointerId };
     lastHandle.current = handle;
     setActive(handle);
+    // Build 112 (as CEREC): held still a moment, the tooth goes on moving that way until let go.
+    const d = drag.current;
+    const gain = gainOf(event);
+    const tick = () => {
+      if (drag.current !== d || !d.hold) return;
+      const now = performance.now(), held = (now - d.hold.started) / 1000;
+      const k = Math.min(1, held / HOLD_RAMP_S);
+      const rate = ANGLES.includes(handle) ? HOLD_RATE.deg + (HOLD_RATE_MAX.deg - HOLD_RATE.deg) * k : HOLD_RATE.mm + (HOLD_RATE_MAX.mm - HOLD_RATE.mm) * k;
+      d.hold.amount += rate * 0.04 * gain;
+      const change = clampAdjustChange(holdAmount(d));
+      setReadout(describe(handle, change));
+      live.current.onPreview(change);
+      d.hold.timer = window.setTimeout(tick, 40);
+    };
+    d.hold = { dir, started: performance.now(), amount: 0, moved: false, timer: window.setTimeout(() => { if (drag.current === d && d.hold && !d.hold.moved) { d.hold.started = performance.now(); tick(); } }, HOLD_MS) };
   };
   const move = (event: React.PointerEvent) => {
     const d = drag.current;
     if (!d) return;
     event.preventDefault();
     d.last = [event.clientX, event.clientY];
+    // Build 112: a drag (not a hold) once it has moved a few pixels - unless the hold has already begun.
+    if (d.hold && !d.hold.moved) {
+      if (d.hold.amount > 0) return;
+      if (Math.hypot(event.clientX - d.start[0], event.clientY - d.start[1]) < 4) return;
+      d.hold.moved = true; window.clearTimeout(d.hold.timer);
+    }
+    if (d.hold && d.hold.amount > 0) return;
     if (d.typed !== undefined && d.typed !== "") return;
     // Shift or Alt pressed or let go mid-drag: from here on at the new rate.
     const gain = gainOf(event);
@@ -320,7 +356,8 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
     setActive(null);
     setReadout(null);
     try { (event.currentTarget as Element).releasePointerCapture(event.pointerId); } catch { /* already released */ }
-    const change = clampAdjustChange(composeAdjust(d.base, current(d, event.clientX, event.clientY)));
+    if (d.hold) window.clearTimeout(d.hold.timer);
+    const change = d.hold && d.hold.amount > 0 ? clampAdjustChange(holdAmount(d)) : d.hold && !d.hold.moved ? {} : clampAdjustChange(composeAdjust(d.base, current(d, event.clientX, event.clientY)));
     // Kept first, so the tooth can stay where it was moved while it is placed again.
     if (!isEmpty(change) && event.type !== "pointercancel") onCommit(change);
     onPreview(null);
@@ -353,38 +390,71 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
     if (keep && !isEmpty(change)) onCommit(change);
     onPreview(null);
   };
-  const handlers = (handle: GimbalHandle) => ({
+  const handlers = (handle: GimbalHandle, dir = 1) => ({
     "data-handle": handle,
-    onPointerDown: (event: React.PointerEvent) => begin(handle, event),
+    onPointerDown: (event: React.PointerEvent) => begin(handle, event, dir),
     onPointerMove: move,
     onPointerUp: end,
     onPointerCancel: end,
   });
-  const arrow = (handle: "mesial" | "out" | "up", index: number) => {
-    const tip = at(index);
+  const arrow = (handle: "mesial" | "out" | "up", index: number, dir = 1) => {
+    const tip = at(dir > 0 ? index : EXTRA + index - 1);
     const vx = tip[0] - c[0], vy = tip[1] - c[1], len = Math.hypot(vx, vy) || 1;
     const ux = vx / len, uy = vy / len;
     const head = `M${tip[0] + ux * 9},${tip[1] + uy * 9} L${tip[0] - uy * 5},${tip[1] + ux * 5} L${tip[0] + uy * 5},${tip[1] - ux * 5} Z`;
     const dim = active && active !== handle;
     return (
-      <g key={handle} className={`tooth-gimbal-handle${active === handle ? " active" : ""}`} opacity={dim ? 0.35 : 1} {...handlers(handle)}>
+      <g key={`${handle}${dir}`} className={`tooth-gimbal-handle${active === handle ? " active" : ""}`} opacity={dim ? 0.35 : dir > 0 ? 1 : 0.8} {...handlers(handle, dir)}>
         <title>{t(`toothGimbal.${handle}`)}</title>
         {/* Build 104: a filled band to take hold of - a line seen straight up or across has no width, and could not be taken. */}
         <polygon points={`${c[0] - uy * 10 + ux * 10},${c[1] + ux * 10 + uy * 10} ${tip[0] - uy * 10 + ux * 12},${tip[1] + ux * 10 + uy * 12} ${tip[0] + uy * 10 + ux * 12},${tip[1] - ux * 10 + uy * 12} ${c[0] + uy * 10 + ux * 10},${c[1] - ux * 10 + uy * 10}`} fill="transparent" />
         <line x1={c[0]} y1={c[1]} x2={tip[0]} y2={tip[1]} stroke={COLOURS[handle]} strokeWidth={2.5} />
         <path d={head} fill={COLOURS[handle]} />
-        <text className="tooth-gimbal-label" x={tip[0] + ux * 26} y={tip[1] + uy * 26} textAnchor="middle" dominantBaseline="middle" fill={COLOURS[handle]}>{t(`toothGimbal.axis.${handle}`)}</text>
+        {dir > 0 ? <text className="tooth-gimbal-label" x={tip[0] + ux * 26} y={tip[1] + uy * 26} textAnchor="middle" dominantBaseline="middle" fill={COLOURS[handle]}>{t(`toothGimbal.axis.${handle}`)}</text> : null}
       </g>
     );
   };
   const ring = (handle: "turn" | "tip" | "torque", index: number) => {
     const d = ringPath(index);
     const dim = active && active !== handle;
+    // Build 112 (as CEREC's curved arrows): an arrowhead each way round the ring - held, the tooth turns that way.
+    const head = (k: number, dir: number) => {
+      const p = at(RING_AT + index * (RING_STEPS + 1) + k), q = at(RING_AT + index * (RING_STEPS + 1) + k + dir);
+      const vx = q[0] - p[0], vy = q[1] - p[1], l = Math.hypot(vx, vy) || 1, ux = vx / l, uy = vy / l;
+      // The point on the screen that way round: anticlockwise there is +1 for this handle when the ring's parameter runs anticlockwise.
+      const cw = Math.sign((p[0] - c[0]) * uy - (p[1] - c[1]) * ux) || 1;
+      return (
+        <g key={`${handle}${dir}`} className="tooth-gimbal-turnhead" {...handlers(handle, -cw)}>
+          <circle cx={p[0]} cy={p[1]} r={11} fill="transparent" />
+          <path d={`M${p[0] + ux * 9},${p[1] + uy * 9} L${p[0] - uy * 6},${p[1] + ux * 6} L${p[0] + uy * 6},${p[1] - ux * 6} Z`} fill={COLOURS[handle]} stroke="#1f2328" strokeWidth={0.8} />
+        </g>
+      );
+    };
+    const at1 = Math.round(RING_STEPS * 0.15), at2 = Math.round(RING_STEPS * 0.35);
     return (
-      <g key={handle} className={`tooth-gimbal-handle${active === handle ? " active" : ""}`} opacity={dim ? 0.25 : 0.9} {...handlers(handle)}>
+      <g key={handle} opacity={dim ? 0.25 : 0.9}>
+        <g className={`tooth-gimbal-handle${active === handle ? " active" : ""}`} {...handlers(handle)}>
+          <title>{t(`toothGimbal.${handle}`)}</title>
+          <path d={d} fill="none" stroke="transparent" strokeWidth={14} />
+          <path d={d} fill="none" stroke={COLOURS[handle]} strokeWidth={active === handle ? 3 : 1.8} />
+        </g>
+        {head(at1, 1)}
+        {head(at2, -1)}
+      </g>
+    );
+  };
+  /** Build 112 (as CEREC's Scale): a double arrow along each of the tooth's directions, and a ball in the middle for the whole tooth. */
+  const sizeArrow = (handle: "wider" | "longer" | "thicker", index: number) => {
+    const p = at(EXTRA + index), dim = active && active !== handle;
+    const vx = p[0] - c[0], vy = p[1] - c[1], l = Math.hypot(vx, vy) || 1, ux = vx / l, uy = vy / l;
+    const tri = (x: number, y: number, sx: number, sy: number) => `M${x + sx * 8},${y + sy * 8} L${x - sy * 5},${y + sx * 5} L${x + sy * 5},${y - sx * 5} Z`;
+    const o = [c[0] - ux * l, c[1] - uy * l];
+    return (
+      <g key={handle} className={`tooth-gimbal-handle${active === handle ? " active" : ""}`} opacity={dim ? 0.35 : 1}>
         <title>{t(`toothGimbal.${handle}`)}</title>
-        <path d={d} fill="none" stroke="transparent" strokeWidth={14} />
-        <path d={d} fill="none" stroke={COLOURS[handle]} strokeWidth={active === handle ? 3 : 1.8} />
+        <line x1={o[0]} y1={o[1]} x2={p[0]} y2={p[1]} stroke="#f5f5f5" strokeWidth={2} strokeDasharray="3 3" />
+        <g {...handlers(handle, 1)}><circle cx={p[0]} cy={p[1]} r={11} fill="transparent" /><path d={tri(p[0], p[1], ux, uy)} fill="#f5f5f5" stroke="#1f2328" strokeWidth={1.2} /></g>
+        <g {...handlers(handle, -1)}><circle cx={p[0] - ux * 26} cy={p[1] - uy * 26} r={10} fill="transparent" /><path d={tri(p[0] - ux * 24, p[1] - uy * 24, -ux, -uy)} fill="#f5f5f5" stroke="#1f2328" strokeWidth={1.2} /></g>
       </g>
     );
   };
@@ -412,16 +482,31 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
   return (
     <>
       <svg ref={svgRef} className={`tooth-gimbal${disabled ? " disabled" : ""}`} aria-label={t("toothGimbal.label")} role="group" style={handles ? undefined : { display: "none" }}>
+        {only === "scale" ? null : (<>
         {ring("turn", 0)}
         {ring("tip", 1)}
         {ring("torque", 2)}
         {arrow("mesial", 1)}
         {arrow("out", 2)}
         {arrow("up", 3)}
+        {arrow("mesial", 1, -1)}
+        {arrow("out", 2, -1)}
+        {arrow("up", 3, -1)}
+        </>)}
+        {only === "scale" ? (<>
+        {sizeArrow("wider", 3)}
+        {sizeArrow("longer", 4)}
+        {sizeArrow("thicker", 5)}
+        <g className={`tooth-gimbal-handle${active === "size" ? " active" : ""}`} {...handlers("size")}>
+          <title>{t("toothGimbal.size")}</title>
+          <circle cx={c[0]} cy={c[1]} r={12} fill="#f2c94c" stroke="#1f2328" strokeWidth={1.5} />
+        </g>
+        </>) : only === "position" ? null : (<>
         {square("wider", 4)}
         {square("longer", 5)}
         {square("thicker", 6)}
         {square("size", 7)}
+        </>)}
         <circle cx={c[0]} cy={c[1]} r={3} fill="#1f2328" stroke="#fff" strokeWidth={1} />
       </svg>
       {bare ? null : <div className="tooth-gimbal-panel" style={{ left: c[0] + 22, top: c[1] - 48 }}>

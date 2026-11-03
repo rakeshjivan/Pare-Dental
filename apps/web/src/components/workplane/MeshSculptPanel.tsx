@@ -130,6 +130,8 @@ export function MeshSculptPanel({
   onSoftEnd,
   onPreset,
   waxup = false,
+  simple = false,
+  onMore,
   brushLassoOnly = false,
 }: {
   targetName: string;
@@ -208,6 +210,9 @@ export function MeshSculptPanel({
   onPreset?: (preset: SculptPreset) => void;
   /** Build 108: Wax-up Studio's Sculpt step - its brushes and presets only, one page, no tabs. */
   waxup?: boolean;
+  /** Build 112: Wax-up Studio's Sculpt - only the brush's size and strength (the brush is picked outside), and More tools. */
+  simple?: boolean;
+  onMore?: () => void;
   /** Build 108: Wax-up Studio's Trim - Brush and Lasso only (no Group). */
   brushLassoOnly?: boolean;
 }) {
@@ -601,6 +606,20 @@ export function MeshSculptPanel({
       </>) : null}
 
   </>);
+  if (simple && !trim) return (
+    <div className="edge-modifier-panel mesh-sculpt-panel wax-sculpt-simple" aria-label={title}>
+      {preparing ? <p className="edge-modifier-selection-help sculpt-preparing" role="status"><LoaderCircle className="edge-modifier-spinner" size={16} aria-hidden="true" /> {t("sculpt.preparing")}</p> : null}
+      {SIZE_SLIDER}
+      <EdgeModifierSlider label={t("sculpt.strength")} title={t("sculpt.tip.strength")} value={Math.round(strength * 100)} min={1} max={100} step={1} workspace={workspace} disabled={busy} onChange={(value) => onStrength(value / 100)} />
+      {onUndo || onRedo ? (
+        <div className="dental-trim-buttons sculpt-history" role="group" aria-label={t("sculpt.history")}>
+          <button type="button" disabled={busy || !canUndo} title={t("sculpt.undoHint")} onClick={onUndo}><Undo2 size={16} aria-hidden="true" /> {t("sculpt.undo")}</button>
+          <button type="button" disabled={busy || !canRedo} title={t("sculpt.redoHint")} onClick={onRedo}><Redo2 size={16} aria-hidden="true" /> {t("sculpt.redo")}</button>
+        </div>
+      ) : null}
+      {onMore ? <button type="button" className="link-button" onClick={onMore}>{t("waxup.brush.more")}</button> : null}
+    </div>
+  );
   return (
     <MovableToolPanel className={`edge-modifier-panel mesh-sculpt-panel${besideDental ? " beside-dental" : ""}`} ariaLabel={title}>
       {(handleProps) => (<>
@@ -655,6 +674,7 @@ export function MeshSculptPanel({
           <button type="button" disabled={busy || !canRedo} title={t("sculpt.redoHint")} onClick={onRedo}><Redo2 size={16} aria-hidden="true" /> {t("sculpt.redo")}</button>
         </div>
       ) : null}
+      {waxup && onMore ? <button type="button" className="link-button" onClick={onMore}>{t("waxup.brush.less")}</button> : null}
       {tab === "brush" ? (<>
         <p className="edge-modifier-selection-help">{t("sculpt.help")}</p>
         <div className="dental-trim-mode dental-area-tools sculpt-tools" role="radiogroup" aria-label={t("sculpt.brushes")}>
