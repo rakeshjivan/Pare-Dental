@@ -12439,7 +12439,10 @@ export function LayerlingEditor({
     stopsShown.current = true;
     // Only the arch being marked is shown (the other, in the bite, stands in front of the palatal side).
     const state = dentalStudioRef.current;
-    if (state) setDentalHidden(Object.values(state.slots).filter((id): id is string => Boolean(id) && id !== state.slots[waxup.slot]));
+    if (state) {
+      const others = Object.values(state.slots).filter((id): id is string => Boolean(id) && id !== state.slots[waxup.slot]);
+      setDentalHidden([...others, ...shapesRef.current.filter((shape) => shape.dental === "wax" && shape.waxFor && others.includes(shape.waxFor)).map((shape) => shape.id)]);
+    }
     showStops(waxupRef.current);
   }, [stopsStep, waxup.slot, waxup.stops, showStops]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!stopsStep && waxupRef.current.stopPick) setWaxup({ ...waxupRef.current, stopPick: null }); }, [stopsStep]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -12485,6 +12488,26 @@ export function LayerlingEditor({
     stopBlendCache.current.set(tooth, { key: stop.key, soup });
     return soup;
   };
+  // Build 109: for checks - each wax tooth's blend: how many corners moved, the most, and how many of those on its labial half.
+  useEffect(() => {
+    (window as unknown as { layerlingStopCheck?: () => unknown }).layerlingStopCheck = () => shapesRef.current.filter((shape) => shape.dental === "wax" && shape.waxTooth && !shape.hidden).map((tooth) => {
+      const blended = stopBlended(tooth), own = worldTriangles(tooth), toWorld = localToWorld(tooth);
+      if (!blended || !toWorld) return { fdi: tooth.waxTooth!.fdi, moved: 0 };
+      const f = moveFrame(tooth.waxTooth!.frame, toWorld);
+      const l = Math.hypot(...f.out) || 1;
+      let moved = 0, most = 0, labial = 0, depthMin = Infinity, depthMax = -Infinity;
+      for (let i = 0; i + 2 < own.length; i += 3) {
+        const d = Math.hypot(blended[i] - own[i], blended[i + 1] - own[i + 1], blended[i + 2] - own[i + 2]);
+        if (d < 1e-4) continue;
+        moved += 1; most = Math.max(most, d);
+        const o = ((own[i] - f.origin[0]) * f.out[0] + (own[i + 1] - f.origin[1]) * f.out[1] + (own[i + 2] - f.origin[2]) * f.out[2]) / l;
+        depthMin = Math.min(depthMin, o); depthMax = Math.max(depthMax, o);
+        if (o > -0.5) labial += 1;
+      }
+      return { fdi: tooth.waxTooth!.fdi, corners: own.length / 3, moved, most: +most.toFixed(2), labialMoved: labial, outRange: [+depthMin.toFixed(1), +depthMax.toFixed(1)] };
+    });
+    return () => { delete (window as unknown as { layerlingStopCheck?: unknown }).layerlingStopCheck; };
+  }); // eslint-disable-line react-hooks/exhaustive-deps
   /** A wax tooth as it is made and shown: blended to its stop line when it has one. */
   const waxTrianglesOf = (tooth: WorkplaneShape): ArrayLike<number> => stopBlended(tooth) ?? worldTriangles(tooth);
   const stopShown = (tooth: WorkplaneShape): WorkplaneShape => {

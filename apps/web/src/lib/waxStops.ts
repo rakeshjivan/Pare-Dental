@@ -16,7 +16,7 @@ export type Vec3 = [number, number, number];
 /** How far before (coronal of) the line the wax starts easing down onto the tooth, mm. */
 export const STOP_BAND = 1;
 /** How far under the patient's surface the wax is tucked past the line, mm (a clean join, no shared faces). */
-export const STOP_TUCK = 0.05;
+export const STOP_TUCK = 0.15;
 /** How far past each end of the line the stop fades out, mm (the line wraps a little into the proximal surfaces). */
 export const STOP_END = 0.8;
 /** Wax this far behind the line's surface (through the tooth, on its labial side) is never moved, mm. */
