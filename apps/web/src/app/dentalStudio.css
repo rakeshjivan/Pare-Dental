@@ -798,3 +798,6 @@
 }
 .studio-dental .dental-studio-panel .dental-slot label > span { white-space: nowrap; min-width: 104px; }
 .studio-dental .dental-studio-panel .dental-slot.with-extra .dental-swap { margin: 0; flex: 0 0 auto; min-height: 30px; padding: 0 7px; }
+
+/* Build 110: Keep & erase - the brush over the 3D view. */
+body.wax-painting .workplane-plane canvas, body.wax-painting .three-workplane-host canvas { cursor: crosshair; }

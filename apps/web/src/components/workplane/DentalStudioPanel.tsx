@@ -71,7 +71,7 @@ export type DentalAreaTool = "paint" | "erase" | "lassoAdd" | "lassoRemove";
 
 /** Fork (build 47): Dental Studio - raw intraoral scans to printable models, one arch or a pair with its bite. */
 type ModelStepId = "scans" | "prepare" | "model" | "base" | "articulator" | "label";
-type WaxStepId = "scans" | "trim" | "bite" | "stops" | "gum" | "select" | "teeth" | "find" | "choose" | "set" | "place" | "adjust" | "occlusion" | "sculpt" | "make";
+type WaxStepId = "scans" | "trim" | "bite" | "keep" | "gum" | "select" | "teeth" | "find" | "choose" | "set" | "place" | "adjust" | "occlusion" | "sculpt" | "make";
 
 /** Build 106: a step's explanation, kept behind a small (?) - shown on hover or focus. */
 /**
@@ -370,10 +370,9 @@ export function DentalStudioPanel({
    * first library set for the arch, placed on the teeth): you adjust from there.
    */
   // Build 103: as Meshmixer (manual) - the teeth positioned, then sculpted, then the model made; nothing fitted for you.
-  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), "stops", "set", "place", "sculpt", "gum", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
+  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), "set", "place", "keep", "sculpt", "gum", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
   const [waxStepId, setWaxStepId] = useState<WaxStepId>("scans");
-  // Build 109: the stops are palatal on an upper, lingual on a lower.
-  const waxStepName = (id: WaxStepId) => t(id === "stops" ? (waxStudio?.arches === "lower" ? "waxStudio.step.stopsLower" : waxStudio?.arches === "both" ? "waxStudio.step.stopsBoth" : "waxStudio.step.stops") : `waxStudio.step.${id}` as "waxStudio.step.scans");
+  const waxStepName = (id: WaxStepId) => t(`waxStudio.step.${id}` as "waxStudio.step.scans");
   const waxStep = waxSteps ? (waxSteps.includes(waxStepId) ? waxStepId : "make") : null;
   const wv = waxup?.view;
   const waxSetsHere = wv ? wv.builtIn.filter((set) => !set.arch || set.arch === wv.slot) : [];
@@ -417,7 +416,7 @@ export function DentalStudioPanel({
   useEffect(() => {
     if (!waxStep || !waxup) return;
     // (As Meshmixer, Sculpt and Make show the teeth solid and still; nothing is fitted - see placeWaxup.)
-    const adapted = ["adjust", "occlusion", "sculpt", "gum", "make"].includes(waxStep);
+    const adapted = ["adjust", "occlusion", "keep", "sculpt", "gum", "make"].includes(waxStep);
     if ((waxup.view.stage === "adapted") !== adapted) waxup.actions.onStage(adapted ? "adapted" : "position");
   }, [waxStep]); // eslint-disable-line react-hooks/exhaustive-deps
   // Straight through from Find teeth to the teeth placed, once per arch.
@@ -428,7 +427,7 @@ export function DentalStudioPanel({
     if (!waxStep || !wv || !waxup) return;
     // The other arch chosen further on, with nothing placed on it yet: back to Find teeth for it.
     // Build 107: in Wax-up Studio (as Meshmixer) back to Library - and Library itself is never "past" it.
-    const past = (wv.manual ? ["place", "adjust", "occlusion", "sculpt", "gum", "make"] : ["set", "place", "adjust", "occlusion", "sculpt", "make"]).includes(waxStep);
+    const past = (wv.manual ? ["place", "adjust", "occlusion", "keep", "sculpt", "gum", "make"] : ["set", "place", "adjust", "occlusion", "sculpt", "make"]).includes(waxStep);
     // Build 108: both arches waxed, the other arch's set already chosen - its teeth are placed here instead.
     // (Once an arch has been through Library - its set picked there - Position is no jump ahead for it.)
     if (past && !wv.placed.length && !waxAutoDone.current.has(wv.slot)) {
@@ -466,16 +465,6 @@ export function DentalStudioPanel({
     waxPlacedWith.current[wv.slot] = wv.setId;
     if (was && was !== wv.setId) waxup.actions.onDropAgain?.();
   }, [waxStep, wv?.slot, wv?.setId, wv?.placed.length, wv?.busy]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Build 109: Palatal stops opens drawing the first tooth with no line yet (once each time the step is entered).
-  const stopsOpened = useRef<string | null>(null);
-  useEffect(() => {
-    if (waxStep !== "stops" || !wv || !waxup) { stopsOpened.current = null; return; }
-    if (stopsOpened.current === wv.slot || wv.stopPick || busy) return;
-    stopsOpened.current = wv.slot;
-    const lines = wv.stops?.[wv.slot]?.lines ?? {};
-    const first = defaultMarkTeeth(wv.slot).slice().sort((a, b) => archOrder(a) - archOrder(b)).find((fdi) => !lines[fdi]);
-    if (first !== undefined) window.setTimeout(() => waxup.actions.onStopTooth?.(first), 120);
-  }, [waxStep, wv?.slot, busy]); // eslint-disable-line react-hooks/exhaustive-deps
   const waxStepper = waxSteps && waxStep && wv && waxup ? (
     <div className="wax-stepper">
       <ol className="wax-steps" aria-label={t("waxStudio.steps")}>
@@ -793,43 +782,35 @@ export function DentalStudioPanel({
         {wv.bite?.busy ? <p className="dental-status" role="status"><LoaderCircle className="edge-modifier-spinner" size={15} aria-hidden="true" /> {t("waxup.biteWorking")}</p> : null}
         {(wv.bite?.raise ?? 0) > PIN_WARN ? <p className="blend-hint warn">{t("dental.pinRaiseWarn", { max: PIN_WARN })}</p> : <p className="blend-hint">{t("waxup.biteHint")}</p>}
       </>)) : null}
-      {/* Build 109: Palatal stops - a line on the palatal (lingual) side of each of the patient's teeth, drawn tooth
-          by tooth before any wax tooth is placed; every wax tooth then blends onto its tooth past the line,
-          wherever it is moved or sculpted. */}
-      {waxSteps && waxStep === "stops" && wv && waxup ? card(3, waxStepName("stops"), true, t("waxStudio.stepHint.stops"), null, (() => {
-        const teeth = defaultMarkTeeth(wv.slot).slice().sort((a, b) => archOrder(a) - archOrder(b));
-        const lines = wv.stops?.[wv.slot]?.lines ?? {};
-        const pick = wv.stopPick ?? null;
-        const done = teeth.filter((fdi) => (lines[fdi]?.length ?? 0) >= 2);
+      {/* Build 110: Keep & erase - paint the wax to keep on each tooth, then erase the rest: it goes just under the
+          patient's surface. An Erase brush does the same where it is brushed; kept wax is never erased. */}
+      {waxSteps && waxStep === "keep" && wv && waxup ? card(7, waxStepName("keep"), true, t("waxStudio.stepHint.keep"), null, (() => {
+        const teeth = wv.placed;
+        const painted = teeth.filter((tooth) => (wv.erase?.[tooth.id]?.keep.length ?? 0) > 0);
+        const erased = teeth.filter((tooth) => wv.erase?.[tooth.id]?.rest);
+        const brush = wv.eraseBrush ?? { tool: "keep" as const, size: 1.5 };
         return (<>
           {bothArches ? (
             <div className="dental-trim-mode" role="radiogroup" aria-label={t("waxup.arch")}>
               {(["upper", "lower"] as const).map((slot) => (
-                <button key={slot} type="button" role="radio" aria-checked={wv.slot === slot} className={wv.slot === slot ? "active" : ""} disabled={busy} onClick={() => { waxup.actions.onStopCancel?.(); waxup.actions.onSlot(slot); }}>{t(slot === "upper" ? "dental.upper" : "dental.lower")}</button>
+                <button key={slot} type="button" role="radio" aria-checked={wv.slot === slot} className={wv.slot === slot ? "active" : ""} disabled={busy || wv.busy} onClick={() => waxup.actions.onSlot(slot)}>{t(slot === "upper" ? "dental.upper" : "dental.lower")}</button>
               ))}
             </div>
           ) : null}
-          <div className="waxup-teeth waxup-found wax-landmark-teeth" role="group" aria-label={t("waxup.stopTeeth")}>
-            {teeth.map((fdi) => {
-              const has = done.includes(fdi), current = pick?.fdi === fdi;
-              return (
-                <button key={fdi} type="button" aria-current={current ? "step" : undefined} className={`waxup-tooth${current ? " current" : ""}${has ? " active" : ""}`} title={t(has ? "waxup.stopRedraw" : "waxup.stopDraw", { fdi })} disabled={busy} onClick={() => waxup.actions.onStopTooth?.(fdi)}>
-                  {has && !current ? <Check size={12} aria-hidden="true" /> : null}{fdi}
-                </button>
-              );
-            })}
+          <div className="studio-mm-choice two wax-erase-tools" role="radiogroup" aria-label={t("waxup.erase.brush")}>
+            {(["keep", "unkeep", "erase", "unerase"] as const).map((tool) => (
+              <button key={tool} type="button" role="radio" aria-checked={brush.tool === tool} className={brush.tool === tool ? "active" : ""} title={t(`waxup.erase.${tool}Hint`)} onClick={() => waxup.actions.onEraseBrush?.(tool)}>{t(`waxup.erase.${tool}`)}</button>
+            ))}
           </div>
-          <p className="blend-hint wax-landmarks-count" role="status">{pick ? t("waxup.stopDrawing", { fdi: pick.fdi, n: pick.points.length }) : t("waxup.stopCount", { done: done.length, all: teeth.length })}</p>
-          {pick ? (
-            <div className="dental-trim-buttons">
-              <button type="button" className="primary" disabled={pick.points.length < 2} onClick={() => waxup.actions.onStopDone?.()}>{t("waxup.stopKeep")}</button>
-              <button type="button" className="secondary" disabled={!pick.points.length} onClick={() => waxup.actions.onStopUndo?.()}>{t("waxup.stopUndo")}</button>
-              {pick.points.length || (lines[pick.fdi]?.length ?? 0) ? <button type="button" className="secondary" onClick={() => waxup.actions.onStopClear?.(pick.fdi)}>{t("waxup.stopClear")}</button> : null}
-              <button type="button" className="secondary" onClick={() => waxup.actions.onStopCancel?.()}>{t("waxup.stopCancel")}</button>
-            </div>
-          ) : (
-            <p className="blend-hint">{t(done.length ? "waxup.stopAfter" : "waxup.stopNone")}</p>
-          )}
+          <p className="blend-hint" role="status">{t(`waxup.erase.${brush.tool}Hint`)}</p>
+          <EdgeModifierSlider label={t("waxup.erase.size")} value={brush.size} min={0.5} max={4} step={0.25} workspace={workspace} length onChange={(value) => waxup.actions.onEraseSize?.(value)} />
+          <p className="blend-hint wax-landmarks-count" role="status">{t("waxup.erase.count", { painted: painted.length, all: teeth.length })}</p>
+          <div className="dental-trim-buttons">
+            <button type="button" className="primary" disabled={!painted.length || busy} onClick={() => waxup.actions.onEraseRest?.(true)}>{t("waxup.erase.rest")}</button>
+            {erased.length ? <button type="button" className="secondary" disabled={busy} onClick={() => waxup.actions.onEraseRest?.(false)}>{t("waxup.erase.back")}</button> : null}
+            {painted.length || teeth.some((tooth) => wv.erase?.[tooth.id]) ? <button type="button" className="secondary" disabled={busy} onClick={() => waxup.actions.onEraseClear?.()}>{t("waxup.erase.clear")}</button> : null}
+          </div>
+          <p className="blend-hint">{t(erased.length ? "waxup.erase.after" : "waxup.erase.before")}</p>
         </>);
       })()) : null}
       {/* Build 108: Gum line - how the wax teeth meet the gum: the patient's gum as it is, or an even, mirrored line

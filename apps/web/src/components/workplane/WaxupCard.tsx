@@ -48,9 +48,9 @@ export type WaxupView = {
   gum?: { mode: import("@/lib/waxGum").GumMode; keep: Record<string, number> };
   /** Build 108: Open the bite - the opening at the incisors (mm), the hinge once worked out, and whether it is being worked out. */
   bite?: { raise: number; busy: boolean; hinge: import("@/lib/waxOcclusion").BiteHinge | null };
-  /** Build 109: Palatal stops - each tooth's line (studio coordinates; the scan it was drawn on), and the line being drawn. */
-  stops?: Partial<Record<"upper" | "lower", { scan: string; lines: Record<number, Array<[number, number, number]>> }>>;
-  stopPick?: { fdi: number; points: Array<[number, number, number]> } | null;
+  /** Build 110: Keep & erase - each wax tooth's paint (by its id), and the brush in hand. */
+  erase?: Record<string, import("@/lib/waxErase").ToothErase>;
+  eraseBrush?: { tool: "keep" | "unkeep" | "erase" | "unerase"; size: number };
   /** Build 108: wax teeth placed on either arch (changing the bite's opening then asks first). */
   anyWax?: boolean;
   /** Build 108: wax teeth put out of view in Case objects - their buttons cannot pick them. */
@@ -168,12 +168,11 @@ export type WaxupActions = {
   onDropAgain?: () => void;
   /** Build 108: back to Library for another set (its teeth then dropped in place of these). */
   onChangeSet?: () => void;
-  /** Build 109: Palatal stops - draw a tooth's line (from scratch, or its kept line again), keep it, take back a point, clear it, stop drawing. */
-  onStopTooth?: (fdi: number) => void;
-  onStopDone?: () => void;
-  onStopUndo?: () => void;
-  onStopClear?: (fdi: number) => void;
-  onStopCancel?: () => void;
+  /** Build 110: Keep & erase - the brush, its size, erase the rest (or bring it back), clear all the paint. */
+  onEraseBrush?: (tool: "keep" | "unkeep" | "erase" | "unerase") => void;
+  onEraseSize?: (size: number) => void;
+  onEraseRest?: (on: boolean) => void;
+  onEraseClear?: () => void;
   onSet: (files: File[]) => void;
   onBuiltIn: (id: string) => void;
   onSlot: (slot: "upper" | "lower") => void;
