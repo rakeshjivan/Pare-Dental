@@ -596,6 +596,17 @@ export function DentalStudioPanel({
     trimOpened.current = true;
     onSculpt(arch, "trim");
   }, [waxStep, framed, trimSlot, busy, analysis]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Build 116: Model Builder's Trim step opens the trim tool the same way - on the upper (the lower with only a lower),
+  // once each time the step is entered, and not over an arch already being trimmed.
+  const mbTrimOpened = useRef(false);
+  useEffect(() => {
+    if (mbStep !== "prepare" || !framed) { mbTrimOpened.current = false; return; }
+    if (mbTrimOpened.current || trimSlot || busy || !analysis || !onSculpt) return;
+    const arch = slots.upper ? "upper" : slots.lower ? "lower" : null;
+    if (!arch) return;
+    mbTrimOpened.current = true;
+    onSculpt(arch, "trim");
+  }, [mbStep, framed, trimSlot, busy, analysis]); // eslint-disable-line react-hooks/exhaustive-deps
   const frameStep = (key: string, label: string, n: number, state: "done" | "auto" | "current" | "", disabled: boolean, onClick: () => void) => (
     <button key={key} type="button" className={`studio-step ${state}`} aria-current={state === "current" ? "step" : undefined} disabled={disabled} onClick={onClick}>
       <span className="studio-step-n" aria-hidden="true">{state === "done" || state === "auto" ? <Check size={13} strokeWidth={3} /> : n}</span>
@@ -998,11 +1009,6 @@ export function DentalStudioPanel({
         {framed ? (<>
           <h4 className="dental-group">{t("studio.modelOptions")}</h4>
           <div className="studio-toggle-buttons" role="group" aria-label={t("studio.modelOptions")}>
-            {options.baseStyle !== "articulator" ? (
-              <button type="button" aria-pressed={options.bevel !== false} className={options.bevel !== false ? "active" : ""} disabled={busy} title={t("dental.bevelHint")} onClick={() => onOptionsChange({ bevel: options.bevel === false })}>
-                {options.bevel !== false ? <Check size={15} aria-hidden="true" /> : null}{t("studio.bevel")}
-              </button>
-            ) : null}
             {options.baseStyle === "clean" ? (
               <button type="button" aria-pressed={options.notches !== false} className={options.notches !== false ? "active" : ""} disabled={busy} title={t("dental.notchesHint")} onClick={() => onOptionsChange({ notches: options.notches === false })}>
                 {options.notches !== false ? <Check size={15} aria-hidden="true" /> : null}{t("studio.notches")}
@@ -1020,12 +1026,6 @@ export function DentalStudioPanel({
             ) : null}
           </div>
         </>) : null}
-        {!framed && options.baseStyle !== "articulator" ? (
-          <label className="edge-modifier-check" title={t("dental.bevelHint")}>
-            <input type="checkbox" checked={options.bevel !== false} disabled={busy} onChange={(event) => onOptionsChange({ bevel: event.currentTarget.checked })} />
-            <span>{t("dental.bevel")}</span>
-          </label>
-        ) : null}
         {!framed && (options.baseStyle === "clean" || options.baseStyle === "articulator") ? (
           <>
             {options.baseStyle === "clean" ? (

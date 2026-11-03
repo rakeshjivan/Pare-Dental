@@ -16,7 +16,7 @@
 import * as THREE from "three";
 import { getManifoldRuntime } from "@/lib/editorMeshCore";
 import { alignToBite, archFrame, biteResidual, contacts, vertexNormals, canineWidth, cleanScan, frontOf, isPartialArch, marginUp, pairFrame, palateScore, type CleanArch, type CleanReport } from "@/lib/dentalArch";
-import { ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, bevelCutter, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
+import { ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
@@ -262,26 +262,6 @@ export const LOOSE_TAG_VOLUME = 150;
  * each is under LOOSE_TAG_VOLUME and a twentieth of the biggest piece. Anything bigger stays, and is
  * reported as loose.
  */
-/**
- * Build 116: a model made ready to save - edges shorter than TIDY_TOLERANCE collapsed. Cuts that meet almost
- * exactly (the bevel's steps against a wall, say) leave corners a few hundred-thousandths of a millimetre apart;
- * written to an STL they become one point, and the triangles between them have no area and an edge used four
- * times, so the file is not watertight. Collapsing them moves nothing by more than the tolerance (1 micron, far under a print layer). If it fails, or
- * changes the volume by more than a trace, the model is saved exactly as it was.
- */
-export const TIDY_TOLERANCE = 1e-3;
-export function tidyForPrint(solid: ManifoldSolid, toFree?: ManifoldSolid[]): ManifoldSolid {
-  try {
-    const tidy = solid.simplify(TIDY_TOLERANCE);
-    const before = solid.volume(), after = tidy.volume();
-    if (tidy.status() !== "NoError" || tidy.isEmpty() || Math.abs(after - before) > Math.max(1e-3, Math.abs(before) * 1e-6)) { tidy.delete(); return solid; }
-    toFree?.push(tidy);
-    return tidy;
-  } catch {
-    return solid;
-  }
-}
-
 export function withoutTags(runtime: ManifoldRuntime, solid: ManifoldSolid): { solid: ManifoldSolid; dropped: number } {
   const split = solid.decompose();
   if (split.length < 2) { split.forEach((piece) => piece.delete()); return { solid, dropped: 0 }; }
@@ -951,11 +931,7 @@ function buildArch(
   {
     for (const cutter of drainCutters) solid = keepSolid(runtime.Manifold.difference(solid, cutter));
   }
-  // Build 62: a bevel round the foot, so the model comes off the build plate easily.
-  if (options.bevel !== false && options.baseStyle !== "articulator") {
-    const cutter = bevelCutter(runtime, footprint, floor);
-    if (cutter) solid = keepSolid(runtime.Manifold.difference(solid, keepSolid(cutter)));
-  }
+  // Build 116: no bevel round the foot - its stepped cut met the base's walls almost exactly and left the STL not watertight.
   // Build 102: the crowns the wax-up replaces, cut back to the margin first - their facial side.
   const cutShells: Float32Array[] = [];
   const rotation = new THREE.Matrix3().setFromMatrix4(arch.frame);
@@ -1378,7 +1354,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     if (stop && Number.isFinite(parts.pinY) && options.pinStyle === "set") {
       const raises = [...new Set([...PIN_SET, raise])].sort((a, b) => a - b);
       const set = incisalPins(runtime, raises, parts.axleY, parts.pinY, parts.bossTop);
-      pinSet = { positions: solidPositions(tidyForPrint(set)), raises };
+      pinSet = { positions: solidPositions(set), raises };
       set.delete();
     }
     solids = built.map(({ arch }, i) => {
@@ -1471,7 +1447,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
         offsetX += box.max[0] - box.min[0] + 8;
       }
     }
-    out.push({ id: arch.id, role: arch.role, positions: solidPositions(tidyForPrint(solid, toFree)), height: own.max[2] - own.min[2], volume: solid.volume(), ...(pair ? { toBite: laid.clone().invert().toArray() } : {}) });
+    out.push({ id: arch.id, role: arch.role, positions: solidPositions(solid), height: own.max[2] - own.min[2], volume: solid.volume(), ...(pair ? { toBite: laid.clone().invert().toArray() } : {}) });
     toFree.push(solid);
   });
   if (pair && options.layout === "print") {
