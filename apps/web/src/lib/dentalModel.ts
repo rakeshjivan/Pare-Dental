@@ -16,7 +16,7 @@
 import * as THREE from "three";
 import { getManifoldRuntime } from "@/lib/editorMeshCore";
 import { alignToBite, archFrame, biteResidual, contacts, vertexNormals, canineWidth, cleanScan, frontOf, isPartialArch, marginUp, pairFrame, palateScore, type CleanArch, type CleanReport } from "@/lib/dentalArch";
-import { ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
+import { ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, bevelCutter, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
@@ -282,7 +282,7 @@ export { CUT_FRONT, CUT_BEYOND } from "@/lib/dentalMesh";
 export const CUT_SIDE = 2;
 /** Build 103: the band below the ideal tooth's edge from which the patient's tooth is cut whole (palatally too), mm. */
 export const CUT_EDGE_BAND = 1.5;
-import { CUT_FRONT, CUT_BEYOND } from "@/lib/dentalMesh";
+import { CUT_FRONT, CUT_BEYOND, cleanStlSoup } from "@/lib/dentalMesh";
 /** Gum kept below the teeth by a clean base when none is set, mm. */
 export const CLEAN_GUM = 3;
 /** Rounds of smoothing the margin's line gets along the surface before the cut (build 52). */
@@ -931,7 +931,11 @@ function buildArch(
   {
     for (const cutter of drainCutters) solid = keepSolid(runtime.Manifold.difference(solid, cutter));
   }
-  // Build 116: no bevel round the foot - its stepped cut met the base's walls almost exactly and left the STL not watertight.
+  // Build 62: a bevel round the foot, so the model comes off the build plate easily.
+  if (options.bevel !== false && options.baseStyle !== "articulator") {
+    const cutter = bevelCutter(runtime, footprint, floor);
+    if (cutter) solid = keepSolid(runtime.Manifold.difference(solid, keepSolid(cutter)));
+  }
   // Build 102: the crowns the wax-up replaces, cut back to the margin first - their facial side.
   const cutShells: Float32Array[] = [];
   const rotation = new THREE.Matrix3().setFromMatrix4(arch.frame);
@@ -1354,7 +1358,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     if (stop && Number.isFinite(parts.pinY) && options.pinStyle === "set") {
       const raises = [...new Set([...PIN_SET, raise])].sort((a, b) => a - b);
       const set = incisalPins(runtime, raises, parts.axleY, parts.pinY, parts.bossTop);
-      pinSet = { positions: solidPositions(set), raises };
+      pinSet = { positions: cleanStlSoup(solidPositions(set)), raises };
       set.delete();
     }
     solids = built.map(({ arch }, i) => {
@@ -1447,7 +1451,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
         offsetX += box.max[0] - box.min[0] + 8;
       }
     }
-    out.push({ id: arch.id, role: arch.role, positions: solidPositions(solid), height: own.max[2] - own.min[2], volume: solid.volume(), ...(pair ? { toBite: laid.clone().invert().toArray() } : {}) });
+    out.push({ id: arch.id, role: arch.role, positions: cleanStlSoup(solidPositions(solid)), height: own.max[2] - own.min[2], volume: solid.volume(), ...(pair ? { toBite: laid.clone().invert().toArray() } : {}) });
     toFree.push(solid);
   });
   if (pair && options.layout === "print") {

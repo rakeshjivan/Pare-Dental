@@ -1009,6 +1009,11 @@ export function DentalStudioPanel({
         {framed ? (<>
           <h4 className="dental-group">{t("studio.modelOptions")}</h4>
           <div className="studio-toggle-buttons" role="group" aria-label={t("studio.modelOptions")}>
+            {options.baseStyle !== "articulator" ? (
+              <button type="button" aria-pressed={options.bevel !== false} className={options.bevel !== false ? "active" : ""} disabled={busy} title={t("dental.bevelHint")} onClick={() => onOptionsChange({ bevel: options.bevel === false })}>
+                {options.bevel !== false ? <Check size={15} aria-hidden="true" /> : null}{t("studio.bevel")}
+              </button>
+            ) : null}
             {options.baseStyle === "clean" ? (
               <button type="button" aria-pressed={options.notches !== false} className={options.notches !== false ? "active" : ""} disabled={busy} title={t("dental.notchesHint")} onClick={() => onOptionsChange({ notches: options.notches === false })}>
                 {options.notches !== false ? <Check size={15} aria-hidden="true" /> : null}{t("studio.notches")}
@@ -1026,6 +1031,12 @@ export function DentalStudioPanel({
             ) : null}
           </div>
         </>) : null}
+        {!framed && options.baseStyle !== "articulator" ? (
+          <label className="edge-modifier-check" title={t("dental.bevelHint")}>
+            <input type="checkbox" checked={options.bevel !== false} disabled={busy} onChange={(event) => onOptionsChange({ bevel: event.currentTarget.checked })} />
+            <span>{t("dental.bevel")}</span>
+          </label>
+        ) : null}
         {!framed && (options.baseStyle === "clean" || options.baseStyle === "articulator") ? (
           <>
             {options.baseStyle === "clean" ? (
