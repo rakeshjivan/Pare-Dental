@@ -108,7 +108,9 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
       // the tooth to under the gum would cross it in the air (a fringe round the neck), so near the margin the wax
       // goes deeper - under the gum outside it and under the tooth inside it.
       const deep = at ? MARGIN_SINK * (1 - smoothstep01(at.gum / MARGIN_SINK_REACH)) : 0;
-      if (at && !at.inside) { erased = 1; tuck = ERASE_TUCK + deep; }
+      // Build 116: only wax over the gum is erased - wax over a neighbouring tooth (or over the patient's own tooth that the
+      // tooth finder gave another number) is kept; it is tooth there, not gum.
+      if (at && !at.inside && at.overGum) { erased = 1; tuck = ERASE_TUCK + deep; }
       else if (at) {
         const target = (above > 0 ? softCap(above, taperLimit(at.gum)) : above) - deep;
         if (target < above) capped = (target - above) * kept;

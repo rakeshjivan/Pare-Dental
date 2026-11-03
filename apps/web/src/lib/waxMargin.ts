@@ -354,7 +354,7 @@ export function pastMargin(line: MarginLine, c: ArrayLike<number>, nc: ArrayLike
  * and the line itself. A wax vertex whose nearest point on the patient's surface is outside the margin is erased;
  * inside, within MARGIN_BAND of the line, it eases down onto the tooth so the wax meets it at the margin.
  */
-export type ClosedMargin = { surface: NearestSurface; inside: Uint8Array; line: Vec3[]; gum?: Vec3[]; /** Build 116: the gum alone (no tooth), to push wax under. */ gumSurface?: NearestSurface };
+export type ClosedMargin = { surface: NearestSurface; inside: Uint8Array; line: Vec3[]; gum?: Vec3[]; /** Build 116: the gum alone (no tooth), to push wax under. */ gumSurface?: NearestSurface; /** Build 116: each triangle of `surface` that is gum (not a tooth); without it, everything outside is taken as gum. */ onGum?: Uint8Array };
 /**
  * Build 116: the wax's cervical taper - how thick (mm, above the patient's tooth) the wax may be at a distance d
  * (mm) from the gum margin, on the tooth. Measured on a professional anterior wax-up: about 0.06 mm within 0.25 mm
@@ -410,11 +410,12 @@ export function gumLinePoint(m: ClosedMargin, c: ArrayLike<number>): Vec3 | null
   gumDistance(m.gum ?? m.line, c, at);
   return at[3] ? [at[0], at[1], at[2]] : null;
 }
-export function closedMarginAt(m: ClosedMargin, c: ArrayLike<number>): { inside: boolean; gum: number } | null {
+export function closedMarginAt(m: ClosedMargin, c: ArrayLike<number>): { inside: boolean; gum: number; overGum: boolean } | null {
   const q = [0, 0, 0];
   if (m.surface.nearest(c[0], c[1], c[2], q) === Infinity || m.surface.lastTriangle < 0) return null;
-  const inside = m.inside[m.surface.lastTriangle] === 1;
-  return { inside, gum: gumDistance(m.gum ?? m.line, c) };
+  const t = m.surface.lastTriangle;
+  const inside = m.inside[t] === 1;
+  return { inside, gum: gumDistance(m.gum ?? m.line, c), overGum: !inside && (!m.onGum || m.onGum[t] === 1) };
 }
 export function closedMarginWeight(m: ClosedMargin, c: ArrayLike<number>): number {
   const q = [0, 0, 0];
@@ -465,5 +466,7 @@ export function marginFromLabels(scan: ArrayLike<number>, labels: ArrayLike<numb
   picked.forEach((t, i) => { if (!labels[t]) gumTris.push(i); });
   const gumSoup = new Float32Array(gumTris.length * 9);
   gumTris.forEach((i, k) => { for (let j = 0; j < 9; j += 1) gumSoup[k * 9 + j] = soup[i * 9 + j]; });
-  return { surface: new NearestSurface(soup, 3), inside, line, gum: gum.length ? gum : line, ...(gumTris.length >= 40 ? { gumSurface: new NearestSurface(gumSoup, 3) } : {}) };
+  const onGum = new Uint8Array(picked.length);
+  picked.forEach((t, i) => { if (!labels[t]) onGum[i] = 1; });
+  return { surface: new NearestSurface(soup, 3), inside, line, gum: gum.length ? gum : line, onGum, ...(gumTris.length >= 40 ? { gumSurface: new NearestSurface(gumSoup, 3) } : {}) };
 }
