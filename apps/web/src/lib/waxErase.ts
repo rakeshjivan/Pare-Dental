@@ -24,6 +24,10 @@ export type ToothAxes = { origin: Vec3; mesial: Vec3; up: Vec3; out: Vec3 };
 export const ERASE_BAND = 0.8;
 /** How far under the patient's surface erased wax is tucked, mm. */
 export const ERASE_TUCK = 0.15;
+/** Build 116: how much deeper the wax goes right at a closed margin, mm, and over what distance from it that eases off. */
+export const MARGIN_SINK = 0.25;
+export const MARGIN_SINK_REACH = 0.5;
+const smoothstep01 = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 /** The brush's radius by default, mm. */
 export const ERASE_BRUSH = 1.5;
 
@@ -97,12 +101,17 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
     // Build 111: and past the palatal (lingual) margin line, judged where the vertex meets the patient's surface.
     // Build 116: with a closed margin, wax over the gum (outside it) is erased; on the tooth (inside it) the wax is
     // kept but tapered - no thicker than taperLimit at its distance from the gum margin, so it ends as a feather edge.
-    let erased = brushed, capped = 0;
+    let erased = brushed, capped = 0, tuck = ERASE_TUCK;
     if (margin && "inside" in margin) {
       const at = closedMarginAt(margin, q);
-      if (at && !at.inside) erased = 1;
-      else if (at && above > 0) {
-        capped = (softCap(above, taperLimit(at.gum)) - above) * kept;
+      // Build 116: right at the margin the gum meets the tooth in a hollow corner; a wax triangle spanning it from
+      // the tooth to under the gum would cross it in the air (a fringe round the neck), so near the margin the wax
+      // goes deeper - under the gum outside it and under the tooth inside it.
+      const deep = at ? MARGIN_SINK * (1 - smoothstep01(at.gum / MARGIN_SINK_REACH)) : 0;
+      if (at && !at.inside) { erased = 1; tuck = ERASE_TUCK + deep; }
+      else if (at) {
+        const target = (above > 0 ? softCap(above, taperLimit(at.gum)) : above) - deep;
+        if (target < above) capped = (target - above) * kept;
       }
     } else if (margin) erased = Math.max(brushed, pastMargin(margin, q, [nx, ny, nz]));
     const w = kept * erased;
@@ -110,10 +119,10 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
     const px = p[0] + nx * capped, py = p[1] + ny * capped, pz = p[2] + nz * capped;
     out[v * 3] = px; out[v * 3 + 1] = py; out[v * 3 + 2] = pz;
     moved += 1;
-    if (w <= 1e-3 || above + capped < -ERASE_TUCK) continue; // already under the patient's surface
+    if (w <= 1e-3 || above + capped < -tuck) continue; // already under the patient's surface
     // Build 116: pushed along the surface's normal, not onto its nearest point - near a corner of the scan many
     // vertices share one nearest point, and landing on it together folded the tooth so Make could not join it.
-    const sink = above + capped + ERASE_TUCK;
+    const sink = above + capped + tuck;
     const tx = px - nx * sink, ty = py - ny * sink, tz = pz - nz * sink;
     out[v * 3] = px + w * (tx - px); out[v * 3 + 1] = py + w * (ty - py); out[v * 3 + 2] = pz + w * (tz - pz);
     weight[v] = w;
