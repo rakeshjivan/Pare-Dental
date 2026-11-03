@@ -11884,7 +11884,7 @@ export function LayerlingEditor({
   }, []);
   // Build 79: the digital wax-up - a tooth set over an arch's anterior teeth, from three landmarks.
   const WAX_COLOR = "#f1e7d0";
-  type WaxupState = Omit<WaxupView, "marked" | "selected" | "mirror" | "found" | "chosen" | "confirmed" | "markTeeth" | "markedTeeth" | "markPick" | "scanSeeThrough"> & { /** Build 103: confirmed teeth (FDI), each held at its whole change as confirmed. */ locks: Record<number, ToothAdjust>; landmarks: WaxLandmarks | null; guessed: boolean; marks: Array<[number, number, number]>; /** Build 102: each tooth's own adjustment (by FDI number), kept through every placing. */ adjust: Record<number, ToothAdjust>;
+  type WaxupState = Omit<WaxupView, "marked" | "selected" | "mirror" | "found" | "chosen" | "confirmed" | "markTeeth" | "markedTeeth" | "markPick" | "scanSeeThrough"> & { /** Build 103: confirmed teeth (FDI), each held at its whole change as confirmed. */ locks: Record<number, ToothAdjust>; /** Build 116: teeth locked at their gum level (zenith), by FDI. */ zenith?: Record<number, boolean>; landmarks: WaxLandmarks | null; guessed: boolean; marks: Array<[number, number, number]>; /** Build 102: each tooth's own adjustment (by FDI number), kept through every placing. */ adjust: Record<number, ToothAdjust>;
     /** Build 105: the four marks on each tooth (FDI; scan's input coordinates), those the finder made (not yet checked by hand), the teeth to wax up, and the marking under way (teeth still to mark, the points of the one being marked). */
     toothMarks: Record<number, ToothMarks>; /** Build 107: each tooth's three anchors (studio coordinates) and each arch's three arch dots. */ anchors: Record<number, ToothAnchors>; archDots: { upper: Array<[number, number, number]>; lower: Array<[number, number, number]> }; lateralShorter: number; autoMarked: number[]; markTeeth: number[] | null; toothPick: { queue: number[]; points: Array<[number, number, number]> } | null;
     /** Build 106: the teeth laid along the arch line (through the incisal marks to the canine tips), and its curve (1 = the patient's). */
@@ -12558,6 +12558,7 @@ export function LayerlingEditor({
   }, [marginStep, waxup.slot, waxup.margins, waxFound]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!marginStep) marginViewed.current = false; if (!marginStep && waxupRef.current.marginPick) setWaxup({ ...waxupRef.current, marginPick: null }); }, [marginStep]); // eslint-disable-line react-hooks/exhaustive-deps
   /** A wax tooth's margin line in the scene (its drawn path), or null. */
+  const marginForRef = useRef<((tooth: WorkplaneShape) => { region: object } | null) | null>(null);
   const marginFor = (tooth: WorkplaneShape) => {
     const studio = dentalStudioRef.current;
     if (!waxupRef.current.marginOn || !studio || !tooth.waxTooth || !tooth.waxFor) return null;
@@ -12590,6 +12591,7 @@ export function LayerlingEditor({
     }
     return region ? { curve, region, key } : null;
   };
+  marginForRef.current = marginFor;
   const marginRegions = useRef(new Map<string, ClosedMargin | null>());
   /**
    * Build 114: a tooth with no margin drawn takes its margin from the tooth finder (Find margins) - the scan's own
@@ -13420,6 +13422,36 @@ export function LayerlingEditor({
   /** Changes kept on the patient's teeth but not yet placed: the preview shows them until the teeth are placed again with them. */
   const waxPreviewHeld = useRef<string | null>(null);
   const waxHeldChange = useRef<ToothAdjust>({});
+  /**
+   * Build 116: how far below a wax tooth's edge its zenith is, mm - the most apical point of the patient's gum margin
+   * round that tooth on its labial side (its found or drawn margin), or near its own cervical end with no margin.
+   */
+  const zenithDepthOf = (shape: WorkplaneShape): number => {
+    const tooth = shape.waxTooth;
+    const toWorld = tooth ? localToWorld(shape) : null;
+    if (!tooth || !toWorld) return 0;
+    const frame = moveFrame(tooth.frame, toWorld);
+    let region: ClosedMargin | null = null;
+    try { const m = marginForRef.current?.(shape); region = m && "inside" in m.region ? (m.region as ClosedMargin) : null; } catch { region = null; }
+    const points = region ? region.gum ?? region.line : [];
+    let deepest = -Infinity;
+    for (const p of points) {
+      const d = [p[0] - frame.origin[0], p[1] - frame.origin[1], p[2] - frame.origin[2]];
+      const m = d[0] * frame.mesial[0] + d[1] * frame.mesial[1] + d[2] * frame.mesial[2];
+      const o = d[0] * frame.out[0] + d[1] * frame.out[1] + d[2] * frame.out[2];
+      const u = d[0] * frame.up[0] + d[1] * frame.up[1] + d[2] * frame.up[2];
+      if (Math.abs(m) > tooth.width * 0.35 || o < -2) continue; // the labial gum, over the middle of the tooth
+      if (-u > deepest) deepest = -u;
+    }
+    return Number.isFinite(deepest) ? Math.max(tooth.length * 0.4, Math.min(tooth.length * 1.2, deepest)) : tooth.length * 0.85;
+  };
+  /** Build 116: a change to a tooth locked at its gum level - no up and down - and the depth it turns about (undefined: free). */
+  const zenithPinned = (shape: WorkplaneShape | undefined, change: ToothAdjust): { change: ToothAdjust; pivot?: number } => {
+    if (!shape?.waxTooth || !waxupRef.current.zenith?.[shape.waxTooth.fdi]) return { change };
+    const rest: ToothAdjust = { ...change };
+    delete rest.up;
+    return { change: rest, pivot: zenithDepthOf(shape) };
+  };
   const previewWaxTooth = useCallback((id: string, change: ToothAdjust | null) => {
     if (waxPreviewHeld.current === id && change) change = composeAdjust(waxHeldChange.current, change);
     else if (waxPreviewHeld.current === id) change = waxHeldChange.current;
@@ -13432,7 +13464,8 @@ export function LayerlingEditor({
     const toWorld = shape ? localToWorld(shape) : null;
     if (!shape?.waxTooth || !toWorld) return;
     if (waxPreviewBase.current?.id !== id) waxPreviewBase.current = { id, triangles: Float32Array.from(worldTriangles(shape)) };
-    const move = adjustMatrix(moveFrame(shape.waxTooth.frame, toWorld), shape.waxTooth.width, shape.waxTooth.length, change);
+    const pin = zenithPinned(shape, change);
+    const move = adjustMatrix(moveFrame(shape.waxTooth.frame, toWorld), shape.waxTooth.width, shape.waxTooth.length, pin.change, pin.pivot);
     const base = waxPreviewBase.current.triangles;
     const moved = new Float32Array(base.length);
     const v = new THREE.Vector3();
@@ -13492,12 +13525,14 @@ export function LayerlingEditor({
       ? archTeeth.filter((shape) => !movedTeeth.includes(shape) && movedTeeth.some((m) => Math.floor(m.waxTooth!.fdi / 10) === Math.floor(shape.waxTooth!.fdi / 10) && shape.waxTooth!.fdi % 10 > m.waxTooth!.fdi % 10))
       : [];
     const changed = new Map<string, WorkplaneShape>();
-    for (const [shape, own] of [...movedTeeth.map((m) => [m, change] as const), ...chained.map((c) => [c, { mesial: change.mesial } as ToothAdjust] as const)]) {
+    for (const [shape, given] of [...movedTeeth.map((m) => [m, change] as const), ...chained.map((c) => [c, { mesial: change.mesial } as ToothAdjust] as const)]) {
       const tooth = shape.waxTooth!;
       const toWorld = localToWorld(shape);
       if (!toWorld) continue;
       const frame = moveFrame(tooth.frame, toWorld);
-      const move = adjustMatrix(frame, tooth.width, tooth.length, own);
+      const pin = zenithPinned(shape, given);
+      const own = pin.change;
+      const move = adjustMatrix(frame, tooth.width, tooth.length, own, pin.pivot);
       const triangles = worldTriangles(shape);
       const v = new THREE.Vector3();
       for (let i = 0; i + 2 < triangles.length; i += 3) {
@@ -14164,7 +14199,8 @@ export function LayerlingEditor({
     const deg = (key: "turn" | "tip" | "torque") => (Math.abs(a[key] ?? 0) >= 0.05 ? `${t(`toothGimbal.short.${key}`)} ${a[key]! >= 0 ? "+" : ""}${a[key]!.toFixed(1)}°` : null);
     const w = shape.waxTooth.width, l = shape.waxTooth.length;
     const totals = [`${shape.waxTooth.fdi}`, mm("mesial"), mm("out"), mm("up"), deg("turn"), deg("tip"), deg("torque"), `${w.toFixed(1)} × ${l.toFixed(1)} mm (${Math.round((w / Math.max(0.1, l)) * 100)}%)`].filter(Boolean).join(" · ");
-    return { id: shape.id, totals, tooth: { frame: moveFrame(shape.waxTooth.frame, toWorld), width: w, length: l } };
+    const pinned = Boolean(waxup.zenith?.[shape.waxTooth.fdi]);
+    return { id: shape.id, fdi: shape.waxTooth.fdi, totals, pinned, pivotDepth: pinned ? zenithDepthOf(shape) : undefined, tooth: { frame: moveFrame(shape.waxTooth.frame, toWorld), width: w, length: l } };
   })();
   // Build 103: entering Position with the teeth placed, the view frames the front teeth from the front
   // (their average labial direction) - close enough to place a tooth precisely.
@@ -21094,6 +21130,9 @@ export function LayerlingEditor({
           totals={waxGimbal.totals}
           bare={Boolean(dentalStudio?.waxStudio)}
           only={studioWaxSculpt ? waxGimbalPart : undefined}
+          pinned={waxGimbal.pinned}
+          pivotDepth={waxGimbal.pivotDepth}
+          onPin={dentalStudio?.waxStudio && waxup.marginOn ? () => setWaxup((current) => ({ ...current, zenith: { ...(current.zenith ?? {}), [waxGimbal.fdi]: !current.zenith?.[waxGimbal.fdi] } })) : undefined}
           disabled={waxup.busy || Boolean(shapes.find((shape) => shape.id === waxGimbal.id)?.waxTooth && waxup.locks[shapes.find((shape) => shape.id === waxGimbal.id)!.waxTooth!.fdi])}
           onPreview={(change) => previewWaxTooth(waxGimbal.id, change)}
           onCommit={(change) => adjustWaxToothBy(waxGimbal.id, change)}

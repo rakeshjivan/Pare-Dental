@@ -1027,8 +1027,24 @@ export type ToothNudge = "out" | "mesial" | "longer" | "wider" | "turn" | "thick
 export type ToothAdjust = { mesial?: number; out?: number; up?: number; turn?: number; tip?: number; torque?: number; wider?: number; longer?: number; thicker?: number };
 export const isIdentityAdjust = (a: ToothAdjust) => !a.mesial && !a.out && !a.up && !a.turn && !a.tip && !a.torque && (a.wider ?? 1) === 1 && (a.longer ?? 1) === 1 && (a.thicker ?? 1) === 1;
 /** The move an adjustment makes, for a tooth with this frame, width and length. */
-export function adjustMatrix(frame: ToothFrame, width: number, length: number, a: ToothAdjust): THREE.Matrix4 {
+export function adjustMatrix(frame: ToothFrame, width: number, length: number, a: ToothAdjust, pivotDepth?: number): THREE.Matrix4 {
   void width;
+  // Build 116: a tooth locked at its gum level (zenith) turns, sizes and lengthens about that point - pivotDepth
+  // below the edge - and is not moved up or down.
+  if (pivotDepth !== undefined) {
+    const o = new THREE.Vector3(...frame.origin), out = new THREE.Vector3(...frame.out), mesial = new THREE.Vector3(...frame.mesial), up = new THREE.Vector3(...frame.up);
+    const basis = new THREE.Matrix4().makeBasis(mesial, out, up).setPosition(o);
+    const rad = THREE.MathUtils.degToRad;
+    const z = -pivotDepth;
+    const local = new THREE.Matrix4().makeTranslation(a.mesial ?? 0, a.out ?? 0, 0)
+      .multiply(new THREE.Matrix4().makeTranslation(0, 0, z))
+      .multiply(new THREE.Matrix4().makeRotationZ(rad(a.turn ?? 0)))
+      .multiply(new THREE.Matrix4().makeRotationY(rad(a.tip ?? 0)))
+      .multiply(new THREE.Matrix4().makeRotationX(rad(a.torque ?? 0)))
+      .multiply(new THREE.Matrix4().makeScale(a.wider ?? 1, a.thicker ?? 1, a.longer ?? 1))
+      .multiply(new THREE.Matrix4().makeTranslation(0, 0, -z));
+    return basis.clone().multiply(local).multiply(basis.clone().invert());
+  }
   const o = new THREE.Vector3(...frame.origin), out = new THREE.Vector3(...frame.out), mesial = new THREE.Vector3(...frame.mesial), up = new THREE.Vector3(...frame.up);
   const basis = new THREE.Matrix4().makeBasis(mesial, out, up).setPosition(o);
   const inverse = basis.clone().invert();

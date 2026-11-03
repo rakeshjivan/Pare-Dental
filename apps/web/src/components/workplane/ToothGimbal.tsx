@@ -83,7 +83,7 @@ const gainOf = (event: { shiftKey: boolean; altKey: boolean }) => (event.shiftKe
 
 export type GimbalTooth = { frame: ToothFrame; width: number; length: number };
 
-export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = false, only, onPreview, onCommit }: {
+export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = false, only, pinned = false, pivotDepth, onPin, onPreview, onCommit }: {
   tooth: GimbalTooth;
   /** Build 103: false - only the readout and the keys (the tooth itself is dragged). */
   handles?: boolean;
@@ -94,6 +94,12 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
   bare?: boolean;
   /** Build 112: only the arrows and rings (position), or only the size squares (scale). */
   only?: "position" | "scale";
+  /** Build 116: the tooth locked at its gum level (zenith) - no up and down, and the gimbal drawn about that point. */
+  pinned?: boolean;
+  /** How far below the edge the zenith is, mm (where the gimbal stands while pinned). */
+  pivotDepth?: number;
+  /** The padlock pressed: lock or free the gum level. */
+  onPin?: () => void;
   /** The change so far while it is being moved (null: nothing is). */
   onPreview: (change: ToothAdjust | null) => void;
   /** The change, kept. */
@@ -234,7 +240,7 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
   const { frame, width, length } = tooth;
   const { mesial, out, up } = frame;
   // The middle of the crown: half its length below the edge.
-  const centre = add(frame.origin, up, -length / 2);
+  const centre = add(frame.origin, up, pinned && pivotDepth !== undefined ? -pivotDepth : -length / 2);
   // Grown when the view is far out, so the handles stay big enough to take.
   const probe = project(Float32Array.from([...centre, ...add(centre, up, ARROW), ...add(centre, mesial, ARROW), ...add(centre, out, ARROW)]));
   const span = Math.max(...[1, 2, 3].map((i) => Math.hypot(probe[i * 2] - probe[0], probe[i * 2 + 1] - probe[1])));
@@ -497,10 +503,10 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
         {ring("torque", 2)}
         {arrow("mesial", 1)}
         {arrow("out", 2)}
-        {arrow("up", 3)}
+        {pinned ? null : arrow("up", 3)}
         {arrow("mesial", 1, -1)}
         {arrow("out", 2, -1)}
-        {arrow("up", 3, -1)}
+        {pinned ? null : arrow("up", 3, -1)}
         {ringHeads("turn", 0)}
         {ringHeads("tip", 1)}
         {ringHeads("torque", 2)}
@@ -519,7 +525,15 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
         {square("thicker", 6)}
         {square("size", 7)}
         </>)}
-        <circle cx={c[0]} cy={c[1]} r={3} fill="#1f2328" stroke="#fff" strokeWidth={1} />
+        <circle cx={c[0]} cy={c[1]} r={pinned ? 4.5 : 3} fill={pinned ? "#f2c94c" : "#1f2328"} stroke="#fff" strokeWidth={1} />
+        {onPin ? (
+          <g className={`tooth-gimbal-handle tooth-gimbal-pin${pinned ? " on" : ""}`} onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); }} onClick={(event) => { event.stopPropagation(); onPin(); }}>
+            <title>{t(pinned ? "toothGimbal.unpin" : "toothGimbal.pin")}</title>
+            <circle cx={c[0] + 26} cy={c[1] + 26} r={12} fill={pinned ? "#f2c94c" : "#ffffff"} stroke="#1f2328" strokeWidth={1.2} />
+            <rect x={c[0] + 21} y={c[1] + 25} width={10} height={7} rx={1.5} fill="#1f2328" />
+            <path d={pinned ? `M${c[0] + 23},${c[1] + 25} v-2.5 a3,3 0 0 1 6,0 v2.5` : `M${c[0] + 23},${c[1] + 25} v-2.5 a3,3 0 0 1 6,0 v-1`} fill="none" stroke="#1f2328" strokeWidth={1.6} />
+          </g>
+        ) : null}
       </svg>
       {bare ? null : <div className="tooth-gimbal-panel" style={{ left: c[0] + 22, top: c[1] - 48 }}>
         {typing ? (

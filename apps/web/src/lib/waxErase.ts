@@ -10,7 +10,7 @@
  * is kept in the tooth's own frame, so it goes with the tooth.
  */
 import type { NearestSurface } from "@/lib/nearestSurface";
-import { closedMarginAt, pastMargin, softCap, taperLimit, type ClosedMargin, type MarginLine } from "@/lib/waxMargin";
+import { closedMarginAt, gumLinePoint, pastMargin, softCap, taperLimit, type ClosedMargin, type MarginLine } from "@/lib/waxMargin";
 
 export type Vec3 = [number, number, number];
 /** A brush dab in a tooth's frame: along mesial, towards the incisal edge, labial (mm), and its radius (mm). */
@@ -85,7 +85,7 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
   const count = xyz.length / 3;
   const weight = new Float32Array(count);
   const out = Float64Array.from(xyz);
-  const q = [0, 0, 0], nt = [0, 0, 0];
+  const q = [0, 0, 0], nt = [0, 0, 0], gq = [0, 0, 0], gn = [0, 0, 0];
   let moved = 0;
   for (let v = 0; v < count; v += 1) {
     const p = [xyz[v * 3], xyz[v * 3 + 1], xyz[v * 3 + 2]];
@@ -108,6 +108,22 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
       // the tooth to under the gum would cross it in the air (a fringe round the neck), so near the margin the wax
       // goes deeper - under the gum outside it and under the tooth inside it.
       const deep = at ? MARGIN_SINK * (1 - smoothstep01(at.gum / MARGIN_SINK_REACH)) : 0;
+      // Build 116: wax apical to the gum margin (below it along the tooth) is over the gum, whatever surface it is
+      // nearest - the library tooth's neck hangs in front of the gum there, often nearer the tooth just above the
+      // margin. It is pushed under the gum itself.
+      const g = gumLinePoint(margin, p);
+      const apical = g ? (p[0] - g[0]) * axes.up[0] + (p[1] - g[1]) * axes.up[1] + (p[2] - g[2]) * axes.up[2] < 0 : false;
+      if (apical && margin.gumSurface && margin.gumSurface.nearest(p[0], p[1], p[2], gq) !== Infinity && margin.gumSurface.lastTriangle >= 0) {
+        margin.gumSurface.triangleNormal(margin.gumSurface.lastTriangle, gn);
+        const gx = gn[0] * sign, gy = gn[1] * sign, gz = gn[2] * sign;
+        const over = (p[0] - gq[0]) * gx + (p[1] - gq[1]) * gy + (p[2] - gq[2]) * gz;
+        const sink = over + ERASE_TUCK + MARGIN_SINK;
+        if (sink > 0 && kept > 1e-3) {
+          out[v * 3] = p[0] - gx * sink * kept; out[v * 3 + 1] = p[1] - gy * sink * kept; out[v * 3 + 2] = p[2] - gz * sink * kept;
+          weight[v] = Math.min(0.999, kept); moved += 1;
+        }
+        continue;
+      }
       if (at && !at.inside) { erased = 1; tuck = ERASE_TUCK + deep; }
       else if (at) {
         const target = (above > 0 ? softCap(above, taperLimit(at.gum)) : above) - deep;

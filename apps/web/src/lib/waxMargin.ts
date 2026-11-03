@@ -354,7 +354,7 @@ export function pastMargin(line: MarginLine, c: ArrayLike<number>, nc: ArrayLike
  * and the line itself. A wax vertex whose nearest point on the patient's surface is outside the margin is erased;
  * inside, within MARGIN_BAND of the line, it eases down onto the tooth so the wax meets it at the margin.
  */
-export type ClosedMargin = { surface: NearestSurface; inside: Uint8Array; line: Vec3[]; gum?: Vec3[] };
+export type ClosedMargin = { surface: NearestSurface; inside: Uint8Array; line: Vec3[]; gum?: Vec3[]; /** Build 116: the gum alone (no tooth), to push wax under. */ gumSurface?: NearestSurface };
 /**
  * Build 116: the wax's cervical taper - how thick (mm, above the patient's tooth) the wax may be at a distance d
  * (mm) from the gum margin, on the tooth. Measured on a professional anterior wax-up: about 0.06 mm within 0.25 mm
@@ -378,7 +378,7 @@ export const GUM_LOOK = 4;
 const GUM_CELL = 1;
 const gumGrids = new WeakMap<Vec3[], Map<string, Vec3[]>>();
 /** The distance from a point to the nearest of `points`, looked for only within GUM_LOOK (GUM_LOOK if none is). */
-function gumDistance(points: Vec3[], c: ArrayLike<number>): number {
+function gumDistance(points: Vec3[], c: ArrayLike<number>, nearest?: number[]): number {
   let grid = gumGrids.get(points);
   if (!grid) {
     grid = new Map();
@@ -399,10 +399,16 @@ function gumDistance(points: Vec3[], c: ArrayLike<number>): number {
       if (Math.max(Math.abs(x - cx), Math.abs(y - cy), Math.abs(z - cz)) !== r) continue;
       const list = grid.get(`${x},${y},${z}`);
       if (!list) continue;
-      for (const p of list) { const d = (c[0] - p[0]) ** 2 + (c[1] - p[1]) ** 2 + (c[2] - p[2]) ** 2; if (d < best) best = d; }
+      for (const p of list) { const d = (c[0] - p[0]) ** 2 + (c[1] - p[1]) ** 2 + (c[2] - p[2]) ** 2; if (d < best) { best = d; if (nearest) { nearest[0] = p[0]; nearest[1] = p[1]; nearest[2] = p[2]; nearest[3] = 1; } } }
     }
   }
   return Math.sqrt(best);
+}
+/** Build 116: the nearest point of a closed margin's gum line to a point (within GUM_LOOK), or null. */
+export function gumLinePoint(m: ClosedMargin, c: ArrayLike<number>): Vec3 | null {
+  const at = [0, 0, 0, 0];
+  gumDistance(m.gum ?? m.line, c, at);
+  return at[3] ? [at[0], at[1], at[2]] : null;
 }
 export function closedMarginAt(m: ClosedMargin, c: ArrayLike<number>): { inside: boolean; gum: number } | null {
   const q = [0, 0, 0];
@@ -454,5 +460,10 @@ export function marginFromLabels(scan: ArrayLike<number>, labels: ArrayLike<numb
     if (e.gum) gum.push(mid); // the gum margin, not where the tooth touches the one beside it
   }
   if (!line.length) return null;
-  return { surface: new NearestSurface(soup, 3), inside, line, gum: gum.length ? gum : line };
+  // The gum alone: what is not a tooth there (labelled 0).
+  const gumTris: number[] = [];
+  picked.forEach((t, i) => { if (!labels[t]) gumTris.push(i); });
+  const gumSoup = new Float32Array(gumTris.length * 9);
+  gumTris.forEach((i, k) => { for (let j = 0; j < 9; j += 1) gumSoup[k * 9 + j] = soup[i * 9 + j]; });
+  return { surface: new NearestSurface(soup, 3), inside, line, gum: gum.length ? gum : line, ...(gumTris.length >= 40 ? { gumSurface: new NearestSurface(gumSoup, 3) } : {}) };
 }

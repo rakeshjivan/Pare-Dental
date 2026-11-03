@@ -5085,6 +5085,8 @@ export const MESSAGES_EN = {
   "waxup.adapting": "Seating the teeth on the gum and cutting the model back…",
   "waxup.adapted": "{count} teeth seated on the gum: each kept as you positioned it, its cervical end drawn down just past the gingival margin.",
   "waxup.adaptHint": "To move a tooth, go Back to Position: the teeth are whole again there, and fitted again when you confirm.",
+  "toothGimbal.pin": "Lock the gum level - the tooth then lengthens, widens, tilts and turns about its zenith, and does not move up or down",
+  "toothGimbal.unpin": "Gum level locked - press to free it",
   "toothGimbal.label": "Move the tooth",
   "waxup.helpers": "One click",
   "waxup.helper.level": "Level the centrals",
