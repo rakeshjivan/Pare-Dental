@@ -545,6 +545,8 @@ type WorkplaneViewportProps = {
   onGimbalDrop?: () => void;
   /** Build 104 (gimbal 2): names for the gimbal's directions - in Dental Studio, the mouth's (left-right, front-back, occlusal). */
   gimbalAxisLabels?: Partial<Record<RotationAxis, string>>;
+  /** Build 109: no distance/angle readout beside the gimbal while it is dragged (Wax-up Studio). */
+  gimbalQuiet?: boolean;
   /** Build 104: Dental Studio - the gimbal moves and turns finely, never in steps. */
   gimbalFree?: boolean;
   /** Build 104: Meshmixer's free rotate - the view turns freely about the screen's axes (Dental Studio). */
@@ -3549,6 +3551,7 @@ export function WorkplaneViewport({
   onGimbalLayFlat,
   onGimbalDrop,
   gimbalAxisLabels,
+  gimbalQuiet,
   gimbalFree = false,
   freeRotate = false,
   dentalView = false,
@@ -11113,7 +11116,7 @@ export function WorkplaneViewport({
               height={transformOverlay.height}
               active={gimbalActive}
               viewTurn={gimbalViewTurn}
-              readout={rotationReadout}
+              readout={gimbalQuiet ? null : rotationReadout}
               locked={selectionLocked}
               onMove={beginGimbalMove}
               onTurn={beginGimbalTurn}

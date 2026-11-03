@@ -9594,7 +9594,7 @@ export function LayerlingEditor({
     // Build 109: a wax tooth sculpted from its blended form keeps that blend (not blended again where it stands).
     const stop = shape.dental === "wax" ? stopFor(shape) : null;
     const rebuilt = canonicalizeShape(shapeWithWorldPositions(shape, Array.from(positions)));
-    const next = stop && rebuilt.waxTooth ? { ...rebuilt, waxTooth: { ...rebuilt.waxTooth, stopBaked: stop.key } } : rebuilt;
+    const next = stop && rebuilt.waxTooth ? { ...rebuilt, waxTooth: { ...rebuilt.waxTooth, stopBaked: stop.key.slice(stop.key.indexOf("|") + 1) } } : rebuilt;
     commitShapes(shapesRef.current.map((candidate) => (candidate.id === shape.id ? next : candidate)), next.id, message);
     // Build 76: one more step the panel's Undo can take back; a new step ends what Redo could do again.
     setSculptTool((current) => current ? { ...current, panelSteps: (current.panelSteps ?? 0) + 1, panelRedo: 0 } : current);
@@ -12451,7 +12451,18 @@ export function LayerlingEditor({
    * a new world soup, or null when it has no line or nothing of it lies past the line. Kept per version of the
    * tooth, its scan and the line, so a tooth not moved is never blended again.
    */
-  const stopBlendCache = useRef(new WeakMap<WorkplaneShape, { key: string; soup: Float32Array | null; shown?: WorkplaneShape }>());
+  // Build 109: kept by tooth (its id), for the version of its geometry, its line and where it stands - a copy of the
+  // tooth drawn tinted shares the blend of the tooth itself.
+  const stopBlendCache = useRef(new Map<string, { key: string; soup: Float32Array | null; shown: WeakMap<WorkplaneShape, WorkplaneShape> }>());
+  const stopMeshVersions = useRef(new WeakMap<object, number>());
+  const stopMeshNext = useRef(1);
+  const meshVersionOf = (shape: WorkplaneShape) => {
+    const mesh = shape.importedMesh as object | undefined;
+    if (!mesh) return shapeVersionKey(shape);
+    let v = stopMeshVersions.current.get(mesh);
+    if (!v) { v = stopMeshNext.current++; stopMeshVersions.current.set(mesh, v); }
+    return `m${v}`;
+  };
   const stopFor = (tooth: WorkplaneShape) => {
     const studio = dentalStudioRef.current;
     if (!studio?.waxStudio || tooth.dental !== "wax" || !tooth.waxTooth || !tooth.waxFor) return null;
@@ -12464,13 +12475,15 @@ export function LayerlingEditor({
     // The key: the line, the scan, and where the tooth stands (a tooth sculpted where it stands is already blended).
     const f = moveFrame(tooth.waxTooth.frame, toWorld);
     const at = [...f.origin, ...f.up, ...f.out].map((v) => v.toFixed(3)).join(",");
-    return { scan, line, toScene: toInput.clone().invert(), key: `${stopKey(line)}|${shapeVersionKey(scan)}|${toInput.toArray().map((v) => v.toFixed(3)).join(",")}|${at}` };
+    return { scan, line, toScene: toInput.clone().invert(), key: `${meshVersionOf(tooth)}|${stopKey(line)}|${shapeVersionKey(scan)}|${toInput.toArray().map((v) => v.toFixed(3)).join(",")}|${at}` };
   };
-  const stopBlended = (tooth: WorkplaneShape): Float32Array | null => {
+  const stopBlended = (tooth: WorkplaneShape, compute = true): Float32Array | null => {
     const stop = stopFor(tooth);
-    if (!stop || tooth.waxTooth?.stopBaked === stop.key) return null;
-    const cached = stopBlendCache.current.get(tooth);
+    if (!stop || tooth.waxTooth?.stopBaked === stop.key.slice(stop.key.indexOf("|") + 1)) return null;
+    const cached = stopBlendCache.current.get(tooth.id);
     if (cached?.key === stop.key) return cached.soup;
+    // Drawn in the view: worked out a moment after the tooth stops moving (the teeth move freely meanwhile).
+    if (!compute) { scheduleStop(tooth.id); return null; }
     let soup: Float32Array | null = null;
     const toWorld = localToWorld(tooth);
     if (toWorld) {
@@ -12485,8 +12498,27 @@ export function LayerlingEditor({
         soup = ready ? blendToStop(own, ready, surface) : null;
       }
     }
-    stopBlendCache.current.set(tooth, { key: stop.key, soup });
+    stopBlendCache.current.set(tooth.id, { key: stop.key, soup, shown: new WeakMap() });
     return soup;
+  };
+  const stopQueue = useRef<{ timer: number | null; ids: Set<string> }>({ timer: null, ids: new Set() });
+  const [stopTick, setStopTick] = useState(0);
+  const runStops = () => {
+    const queue = stopQueue.current;
+    queue.timer = null;
+    const id = queue.ids.values().next().value as string | undefined;
+    if (id === undefined) return;
+    queue.ids.delete(id);
+    const tooth = shapesRef.current.find((shape) => shape.id === id);
+    if (tooth) stopBlended(tooth, true);
+    if (queue.ids.size) queue.timer = window.setTimeout(runStops, 0);
+    else setStopTick((n) => n + 1);
+  };
+  const scheduleStop = (id: string) => {
+    const queue = stopQueue.current;
+    queue.ids.add(id);
+    if (queue.timer) window.clearTimeout(queue.timer);
+    queue.timer = window.setTimeout(runStops, 350);
   };
   // Build 109: for checks - each wax tooth's blend: how many corners moved, the most, and how many of those on its labial half.
   useEffect(() => {
@@ -12511,11 +12543,12 @@ export function LayerlingEditor({
   /** A wax tooth as it is made and shown: blended to its stop line when it has one. */
   const waxTrianglesOf = (tooth: WorkplaneShape): ArrayLike<number> => stopBlended(tooth) ?? worldTriangles(tooth);
   const stopShown = (tooth: WorkplaneShape): WorkplaneShape => {
-    const soup = stopBlended(tooth);
+    const soup = stopBlended(tooth, false);
     if (!soup) return tooth;
-    const cached = stopBlendCache.current.get(tooth)!;
-    if (!cached.shown) cached.shown = { ...shapeWithWorldPositions(tooth, Array.from(soup)), id: tooth.id };
-    return cached.shown;
+    const cached = stopBlendCache.current.get(tooth.id)!;
+    let shown = cached.shown.get(tooth);
+    if (!shown) { shown = { ...shapeWithWorldPositions(tooth, Array.from(soup)), id: tooth.id }; cached.shown.set(tooth, shown); }
+    return shown;
   };
   const dotPicking = Boolean(waxup.toothPick);
   // Build 107: each tooth turned to face the view when its turn comes (the arch dots: straight on).
@@ -19296,7 +19329,7 @@ export function LayerlingEditor({
   // Build 107: and Wax-up's Import step the same - the scans are looked at and trimmed there, not moved.
   const handlesAway = Boolean(sculptTool) || waxToothSelected || (studioShellOn && (!dentalStudio?.waxStudio || studioWaxStep === "scans" || studioWaxStep === "trim" || studioWaxStep === "bite" || studioWaxStep === "stops" || studioWaxStep === "teeth" || studioWaxStep === "set" || studioWaxStep === "gum"));
   // Build 109: each wax tooth shown blended to its palatal (lingual) stop line.
-  const stoppedViewportShapes = useMemo(() => (dentalStudio?.waxStudio && (waxup.stops?.upper || waxup.stops?.lower) ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? stopShown(shape) : shape)) : viewportShapes), [viewportShapes, waxup.stops, dentalStudio]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stoppedViewportShapes = useMemo(() => (dentalStudio?.waxStudio && (waxup.stops?.upper || waxup.stops?.lower) ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? stopShown(shape) : shape)) : viewportShapes), [viewportShapes, waxup.stops, dentalStudio, stopTick]); // eslint-disable-line react-hooks/exhaustive-deps
   const heldViewportShapes = historyView.shapes ?? stoppedViewportShapes;
   useEffect(() => { window.layerlingTransformHandles?.(handlesHidden || handlesAway); }, [handlesHidden, handlesAway]);
   // Build 101: closing Dental Studio puts the view back as it should be - handles as chosen, no drag left held.
@@ -20016,6 +20049,7 @@ export function LayerlingEditor({
         onGimbalLayFlat={toggleLayFlat}
         onGimbalDrop={dropSelectedToWorkplane}
         gimbalAxisLabels={dentalWorkspace ? DENTAL_GIMBAL_LABELS : undefined}
+        gimbalQuiet={Boolean(dentalStudio?.waxStudio)}
         gimbalFree={dentalWorkspace}
         freeRotate={dentalWorkspace && freeRotateOn}
         dentalView={dentalWorkspace}
