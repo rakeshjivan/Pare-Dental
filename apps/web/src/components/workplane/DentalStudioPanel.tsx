@@ -17,7 +17,7 @@ import { GuideHelpLink } from "@/components/GuideHelpLink";
 import { MovableToolPanel } from "@/components/workplane/MovableToolPanel";
 import { EdgeModifierSlider, SmoothSliders } from "@/components/workplane/EdgeModifierPanel";
 import { ArticulatorPicture, ArticulatorSidesPicture, BaseStylePicture, ModelHeightPicture } from "@/components/workplane/DentalPictures";
-import { WaxupCard, waxupSummary, type WaxupActions, type WaxupPart, type WaxupView } from "@/components/workplane/WaxupCard";
+import { WaxupCard, archOrder, defaultMarkTeeth, waxupSummary, type WaxupActions, type WaxupPart, type WaxupView } from "@/components/workplane/WaxupCard";
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/lib/useLanguage";
 import {
@@ -71,7 +71,7 @@ export type DentalAreaTool = "paint" | "erase" | "lassoAdd" | "lassoRemove";
 
 /** Fork (build 47): Dental Studio - raw intraoral scans to printable models, one arch or a pair with its bite. */
 type ModelStepId = "scans" | "prepare" | "model" | "base" | "articulator" | "label";
-type WaxStepId = "scans" | "trim" | "bite" | "gum" | "select" | "teeth" | "find" | "choose" | "set" | "place" | "adjust" | "occlusion" | "sculpt" | "make";
+type WaxStepId = "scans" | "trim" | "bite" | "stops" | "gum" | "select" | "teeth" | "find" | "choose" | "set" | "place" | "adjust" | "occlusion" | "sculpt" | "make";
 
 /** Build 106: a step's explanation, kept behind a small (?) - shown on hover or focus. */
 /**
@@ -370,8 +370,10 @@ export function DentalStudioPanel({
    * first library set for the arch, placed on the teeth): you adjust from there.
    */
   // Build 103: as Meshmixer (manual) - the teeth positioned, then sculpted, then the model made; nothing fitted for you.
-  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), "set", "place", "sculpt", "gum", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
+  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), "stops", "set", "place", "sculpt", "gum", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
   const [waxStepId, setWaxStepId] = useState<WaxStepId>("scans");
+  // Build 109: the stops are palatal on an upper, lingual on a lower.
+  const waxStepName = (id: WaxStepId) => t(id === "stops" ? (waxStudio?.arches === "lower" ? "waxStudio.step.stopsLower" : waxStudio?.arches === "both" ? "waxStudio.step.stopsBoth" : "waxStudio.step.stops") : `waxStudio.step.${id}` as "waxStudio.step.scans");
   const waxStep = waxSteps ? (waxSteps.includes(waxStepId) ? waxStepId : "make") : null;
   const wv = waxup?.view;
   const waxSetsHere = wv ? wv.builtIn.filter((set) => !set.arch || set.arch === wv.slot) : [];
@@ -464,6 +466,16 @@ export function DentalStudioPanel({
     waxPlacedWith.current[wv.slot] = wv.setId;
     if (was && was !== wv.setId) waxup.actions.onDropAgain?.();
   }, [waxStep, wv?.slot, wv?.setId, wv?.placed.length, wv?.busy]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Build 109: Palatal stops opens drawing the first tooth with no line yet (once each time the step is entered).
+  const stopsOpened = useRef<string | null>(null);
+  useEffect(() => {
+    if (waxStep !== "stops" || !wv || !waxup) { stopsOpened.current = null; return; }
+    if (stopsOpened.current === wv.slot || wv.stopPick || busy) return;
+    stopsOpened.current = wv.slot;
+    const lines = wv.stops?.[wv.slot]?.lines ?? {};
+    const first = defaultMarkTeeth(wv.slot).slice().sort((a, b) => archOrder(a) - archOrder(b)).find((fdi) => !lines[fdi]);
+    if (first !== undefined) window.setTimeout(() => waxup.actions.onStopTooth?.(first), 120);
+  }, [waxStep, wv?.slot, busy]); // eslint-disable-line react-hooks/exhaustive-deps
   const waxStepper = waxSteps && waxStep && wv && waxup ? (
     <div className="wax-stepper">
       <ol className="wax-steps" aria-label={t("waxStudio.steps")}>
@@ -473,14 +485,14 @@ export function DentalStudioPanel({
             <li key={id}>
               <button type="button" aria-current={id === waxStep ? "step" : undefined} className={`${id === waxStep ? "current" : ""}${i < waxIndex && waxStepDone(id) ? " done" : ""}`} disabled={!reachable || stage === "making"} onClick={() => { setWaxAuto(false); goWax(id); }}>
                 <span className="wax-step-number" aria-hidden="true">{i < waxIndex && waxStepDone(id) ? <Check size={11} strokeWidth={3} /> : i + 1}</span>
-                <span className="wax-step-label">{t(`waxStudio.step.${id}` as "waxStudio.step.scans")}</span>
+                <span className="wax-step-label">{waxStepName(id)}</span>
               </button>
             </li>
           );
         })}
       </ol>
       <div className="wax-step-head">
-        <strong>{t("waxStudio.stepOf", { n: waxIndex + 1, count: waxSteps.length, name: t(`waxStudio.step.${waxStep}` as "waxStudio.step.scans") })}</strong>
+        <strong>{t("waxStudio.stepOf", { n: waxIndex + 1, count: waxSteps.length, name: waxStepName(waxStep) })}</strong>
         <span className="wax-step-undo">
           <button type="button" className="icon-button" title={t("waxup.undo")} aria-label={t("waxup.undo")} disabled={!wv.canUndo || wv.busy} onClick={waxup.actions.onUndo}><Undo2 size={16} /></button>
           <button type="button" className="icon-button" title={t("waxup.redo")} aria-label={t("waxup.redo")} disabled={!wv.canRedo || wv.busy} onClick={waxup.actions.onRedo}><Redo2 size={16} /></button>
@@ -591,7 +603,7 @@ export function DentalStudioPanel({
       <span className="studio-step-label">{label}</span>
     </button>
   );
-  const waxName = (id: WaxStepId) => t(`waxStudio.step.${id}` as "waxStudio.step.scans");
+  const waxName = waxStepName;
   const waxAutoStep = (id: WaxStepId) => Boolean(wv) && (id === "teeth" ? wv!.autoMarked.some((fdi) => wv!.markTeeth.includes(fdi)) : (id === "select" || id === "set") && waxAutoDone.current.has(wv!.slot));
   const frameSteps = !framed ? null : waxSteps && waxStep && wv ? waxSteps.map((id, i) => {
     const reachable = i <= waxIndex || waxSteps.slice(0, i).every((prev) => waxStepDone(prev));
@@ -781,6 +793,45 @@ export function DentalStudioPanel({
         {wv.bite?.busy ? <p className="dental-status" role="status"><LoaderCircle className="edge-modifier-spinner" size={15} aria-hidden="true" /> {t("waxup.biteWorking")}</p> : null}
         {(wv.bite?.raise ?? 0) > PIN_WARN ? <p className="blend-hint warn">{t("dental.pinRaiseWarn", { max: PIN_WARN })}</p> : <p className="blend-hint">{t("waxup.biteHint")}</p>}
       </>)) : null}
+      {/* Build 109: Palatal stops - a line on the palatal (lingual) side of each of the patient's teeth, drawn tooth
+          by tooth before any wax tooth is placed; every wax tooth then blends onto its tooth past the line,
+          wherever it is moved or sculpted. */}
+      {waxSteps && waxStep === "stops" && wv && waxup ? card(3, waxStepName("stops"), true, t("waxStudio.stepHint.stops"), null, (() => {
+        const teeth = defaultMarkTeeth(wv.slot).slice().sort((a, b) => archOrder(a) - archOrder(b));
+        const lines = wv.stops?.[wv.slot]?.lines ?? {};
+        const pick = wv.stopPick ?? null;
+        const done = teeth.filter((fdi) => (lines[fdi]?.length ?? 0) >= 2);
+        return (<>
+          {bothArches ? (
+            <div className="dental-trim-mode" role="radiogroup" aria-label={t("waxup.arch")}>
+              {(["upper", "lower"] as const).map((slot) => (
+                <button key={slot} type="button" role="radio" aria-checked={wv.slot === slot} className={wv.slot === slot ? "active" : ""} disabled={busy} onClick={() => { waxup.actions.onStopCancel?.(); waxup.actions.onSlot(slot); }}>{t(slot === "upper" ? "dental.upper" : "dental.lower")}</button>
+              ))}
+            </div>
+          ) : null}
+          <div className="waxup-teeth waxup-found wax-landmark-teeth" role="group" aria-label={t("waxup.stopTeeth")}>
+            {teeth.map((fdi) => {
+              const has = done.includes(fdi), current = pick?.fdi === fdi;
+              return (
+                <button key={fdi} type="button" aria-current={current ? "step" : undefined} className={`waxup-tooth${current ? " current" : ""}${has ? " active" : ""}`} title={t(has ? "waxup.stopRedraw" : "waxup.stopDraw", { fdi })} disabled={busy} onClick={() => waxup.actions.onStopTooth?.(fdi)}>
+                  {has && !current ? <Check size={12} aria-hidden="true" /> : null}{fdi}
+                </button>
+              );
+            })}
+          </div>
+          <p className="blend-hint wax-landmarks-count" role="status">{pick ? t("waxup.stopDrawing", { fdi: pick.fdi, n: pick.points.length }) : t("waxup.stopCount", { done: done.length, all: teeth.length })}</p>
+          {pick ? (
+            <div className="dental-trim-buttons">
+              <button type="button" className="primary" disabled={pick.points.length < 2} onClick={() => waxup.actions.onStopDone?.()}>{t("waxup.stopKeep")}</button>
+              <button type="button" className="secondary" disabled={!pick.points.length} onClick={() => waxup.actions.onStopUndo?.()}>{t("waxup.stopUndo")}</button>
+              {pick.points.length || (lines[pick.fdi]?.length ?? 0) ? <button type="button" className="secondary" onClick={() => waxup.actions.onStopClear?.(pick.fdi)}>{t("waxup.stopClear")}</button> : null}
+              <button type="button" className="secondary" onClick={() => waxup.actions.onStopCancel?.()}>{t("waxup.stopCancel")}</button>
+            </div>
+          ) : (
+            <p className="blend-hint">{t(done.length ? "waxup.stopAfter" : "waxup.stopNone")}</p>
+          )}
+        </>);
+      })()) : null}
       {/* Build 108: Gum line - how the wax teeth meet the gum: the patient's gum as it is, or an even, mirrored line
           (gum trimmed back, never added). The wax teeth show the patient's gum line on them in red; with the even
           line, the gum that goes in amber and the new margin in green. */}

@@ -765,7 +765,7 @@ export type WorkplaneShape = {
   /** Build 106: a made model's move from where it stands (laid out to print) to where it sits in the bite. */
   dentalBite?: number[];
   dentalSource?: { slots: { upper: string | null; lower: string | null; bite: string | null; bite2?: string | null }; wax: string[]; made: string[]; options: Record<string, unknown>; preset: string; patientDetails: "keep" | "remove"; rolesChosen: boolean; biteMode?: "auto" | "fit"; waxStudio?: { flow: "waxup" | "imt"; arches: "upper" | "lower" | "both" } };
-  waxTooth?: { fdi: number; width: number; length: number; frame: { origin: [number, number, number]; out: [number, number, number]; mesial: [number, number, number]; up: [number, number, number] } };
+  waxTooth?: { fdi: number; width: number; length: number; frame: { origin: [number, number, number]; out: [number, number, number]; mesial: [number, number, number]; up: [number, number, number] }; /** Build 109: the stop blend its shape already has (sculpted from its blended form, where it stands). */ stopBaked?: string };
   name: string;
   kind: ShapeKind;
   color: string;

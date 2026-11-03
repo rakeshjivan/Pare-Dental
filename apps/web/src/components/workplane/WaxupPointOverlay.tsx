@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { passToView } from "./DentalTrimOverlay";
 
-export function WaxupPointOverlay({ hint, onPick, onCancel, onUndo }: { hint: string; onPick: (x: number, y: number) => void; onCancel: () => void; /** Build 105: Backspace takes back the last point. */ onUndo?: () => void }) {
+export function WaxupPointOverlay({ hint, onPick, onCancel, onUndo, onDone }: { hint: string; onPick: (x: number, y: number) => void; onCancel: () => void; /** Build 105: Backspace takes back the last point. */ onUndo?: () => void; /** Build 109: Enter finishes (a line). */ onDone?: () => void }) {
   const [host, setHost] = useState<HTMLElement | null>(null);
   useEffect(() => {
     setHost(document.querySelector<HTMLElement>(".workplane-plane"));
@@ -17,6 +17,10 @@ export function WaxupPointOverlay({ hint, onPick, onCancel, onUndo }: { hint: st
         event.preventDefault();
         event.stopPropagation();
         onCancel();
+      } else if (event.key === "Enter" && onDone) {
+        event.preventDefault();
+        event.stopPropagation();
+        onDone();
       } else if (event.key === "Backspace" && onUndo) {
         event.preventDefault();
         event.stopPropagation();
@@ -25,7 +29,7 @@ export function WaxupPointOverlay({ hint, onPick, onCancel, onUndo }: { hint: st
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [onCancel, onUndo]);
+  }, [onCancel, onUndo, onDone]);
   if (!host) return null;
   return createPortal(
     <div
