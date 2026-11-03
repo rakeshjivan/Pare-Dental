@@ -10,6 +10,8 @@ export class NearestSurface {
   private readonly q = new Float64Array(3);
   /** Build 105: the triangle the last nearest() found (its index in the soup), -1 for none. */
   lastTriangle = -1;
+  /** Build 116: the triangles it was built from (to hand to a worker). */
+  get triangles(): Float32Array { return this.soup; }
   constructor(private readonly soup: Float32Array, readonly reach: number) {
     // Build 107: a fine grid searched outward ring by ring (below) - a 4 mm grid on a dense full-arch scan
     // held thousands of triangles per query, and Attract at full strength froze the page.

@@ -78,7 +78,7 @@ import { exocadSets } from "@/lib/exocadLibrary";
 import { composeAdjust, ToothGimbal } from "@/components/workplane/ToothGimbal";
 import { WaxToothDrag, type DragTooth, type WaxRestrict } from "@/components/workplane/WaxToothDrag";
 import { contactColors, type BiteContactStats } from "@/lib/biteContacts";
-import { adaptWaxInBackground, biteHingeInBackground, waxContactsInBackground } from "@/lib/meshJobs";
+import { adaptWaxInBackground, biteHingeInBackground, recycleMeshWorkers, waxContactsInBackground } from "@/lib/meshJobs";
 import { alignToPlate, bridgeChoice, expandConnected, extrudeChoice, invertConnected, optimizeBoundary, shrinkChoice, smoothChoice } from "@/lib/meshEditTools";
 import { adjustMatrix, isIdentityAdjust, mirrorAdjust, setMoveAdjust, waxedNeighbourSides, ARC_DEPTH_DEFAULT, SMILE_LATERAL_STEP, CENTRAL_RATIO, contralateral, crownCutter, imtFirstInjection, moveFrame, nudgeMatrix, rigidMoveBetween, type ToothNudge, type ToothAdjust, fdiNumber, parseObj, splitShells, librarySet, type WaxLandmarks, marksFromTeeth, marksFromNeighbours, TOOTH_MARK_ORDER, type ToothMarks } from "@/lib/dentalWaxup";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
@@ -169,6 +169,7 @@ import { worldTriangles } from "@/lib/blend";
 import { eggshellTooth } from "@/lib/dentalEggshell";
 import { NearestSurface, DeviationProbe, rayMeetsSoup, soupBoxOf, soupWithin } from "@/lib/nearestSurface";
 import { ERASE_BRUSH, eraseKey, eraseTooth, keptCorners, surfaceSign, toFrame, type ToothAxes } from "@/lib/waxErase";
+import { closeEraseWorkers, eraseInBackground, type EraseJob } from "@/lib/waxEraseJobs";
 import { ScanPatch, closedMarginAt, marginFromLabels, patchBox, resample, type ClosedMargin } from "@/lib/waxMargin";
 import { gumPaint, gumPair, gumSides, idealLevels, moveGumCut, visibleLength, zenithShift, type GumCut, type GumMode } from "@/lib/waxGum";
 import { repairStlPositions } from "@/lib/stlRepair";
@@ -11834,6 +11835,8 @@ export function LayerlingEditor({
         const heights = result.parts.map((part) => part.height.toFixed(1)).join(" / ");
         const kind = t(state.options.inside === "solid" ? "dental.doneSolid" : state.options.inside === "open" ? "dental.doneHollow" : "dental.doneClosed", { wall: state.options.wall.toFixed(1) });
         commitShapes(next, madeIds, t(result.parts.length > 1 ? "dental.donePair" : "dental.done", { height: heights, kind }));
+        // Build 116: the workers that made them closed a moment later, so the memory the making took is given back.
+        window.setTimeout(() => { recycleMeshWorkers(); closeEraseWorkers(); }, 2000);
         // Build 106: in the studio frame the panel says the models are made - no message over the view.
         if (STUDIO_SHELL && dentalWorkspace) dismissNotice();
         setMeshCheck(null);
@@ -12719,16 +12722,47 @@ export function LayerlingEditor({
   };
   const eraseQueue = useRef<{ timer: number | null; ids: Set<string> }>({ timer: null, ids: new Set() });
   const [eraseTick, setEraseTick] = useState(0);
+  /** Build 116: trims under way in the workers, by tooth: the key they were started for, and when they end. */
+  const eraseInFlight = useRef(new Map<string, { key: string; done: Promise<void> }>());
+  /** Build 116: a tooth's trim as plain data for a worker (null: nothing to trim, or a margin a worker cannot take). */
+  const eraseJobOf = (tooth: WorkplaneShape): { key: string; job: EraseJob } | null => {
+    const job = eraseFor(tooth);
+    if (!job) return null;
+    const own = Float32Array.from(worldTriangles(tooth));
+    const near = soupWithin(scanTrianglesOf(job.scan), soupBoxOf(own, 6));
+    if (!near.length) return null;
+    const region = job.margin ? job.margin.region : null;
+    if (region && !("inside" in region)) return null;
+    const margin = region ? { soup: region.surface.triangles, inside: region.inside, line: region.line, ...(region.gum ? { gum: region.gum } : {}), ...(region.onGum ? { onGum: region.onGum } : {}), ...(region.gumSurface ? { gumSoup: region.gumSurface.triangles } : {}) } : null;
+    return { key: job.key, job: { own, axes: job.axes, paint: job.paint, near, margin } };
+  };
+  /** Build 116: a tooth trimmed in a worker (or here, where none can run), its result kept if the tooth has not moved since. */
+  const eraseInWorker = (tooth: WorkplaneShape): Promise<void> => {
+    const prepared = eraseJobOf(tooth);
+    if (!prepared) { erasedSoup(tooth, true); return Promise.resolve(); }
+    const cached = eraseCache.current.get(tooth.id);
+    if (cached?.key === prepared.key) return Promise.resolve();
+    const flying = eraseInFlight.current.get(tooth.id);
+    if (flying?.key === prepared.key) return flying.done;
+    const done = eraseInBackground(prepared.job).then((soup) => {
+      if (eraseFor(shapesRef.current.find((shape) => shape.id === tooth.id) ?? tooth)?.key === prepared.key) eraseCache.current.set(tooth.id, { key: prepared.key, soup, shown: new WeakMap() });
+    }, () => { const now = shapesRef.current.find((shape) => shape.id === tooth.id); if (now) erasedSoup(now, true); }).finally(() => {
+      if (eraseInFlight.current.get(tooth.id)?.done === done) eraseInFlight.current.delete(tooth.id);
+    });
+    eraseInFlight.current.set(tooth.id, { key: prepared.key, done });
+    return done;
+  };
+  /** Build 116: every wax tooth's trim worked out (in the workers, at once) - before Make takes them. */
+  const eraseAllNow = () => Promise.all(shapesRef.current.filter((shape) => shape.dental === "wax" && shape.waxTooth && !shape.hidden).map((tooth) => eraseInWorker(tooth))).then(() => undefined);
   const runErases = () => {
     const queue = eraseQueue.current;
     queue.timer = null;
-    const id = queue.ids.values().next().value as string | undefined;
-    if (id === undefined) return;
-    queue.ids.delete(id);
-    const tooth = shapesRef.current.find((shape) => shape.id === id);
-    if (tooth) erasedSoup(tooth, true);
-    if (queue.ids.size) queue.timer = window.setTimeout(runErases, 0);
-    else setEraseTick((n) => n + 1);
+    const ids = [...queue.ids];
+    queue.ids.clear();
+    const teeth = ids.flatMap((id) => shapesRef.current.filter((shape) => shape.id === id));
+    if (!teeth.length) return;
+    // All at once, each in a worker of its own; the view is redrawn as each comes back.
+    for (const tooth of teeth) void eraseInWorker(tooth).then(() => setEraseTick((n) => n + 1));
   };
   const scheduleErase = (id: string) => {
     const queue = eraseQueue.current;
@@ -14201,6 +14235,8 @@ export function LayerlingEditor({
   // Build 101: Make in Wax-up Studio fits the wax to the bite first, unless that was just done for this
   // wax and this opening - at the patient's own bite unless the bite was opened on purpose.
   const makeDentalModels = async () => {
+    // Build 116: the wax teeth's trims finished first, in the workers, so Make does not work them out on the page.
+    if (dentalStudioRef.current?.waxStudio) { try { await eraseAllNow(); } catch { /* worked out on the page as before */ } }
     const state = dentalStudioRef.current;
     const occlusion = waxupRef.current.occlusion;
     const waxed = shapesRef.current.some((shape) => shape.dental === "wax" && !shape.hidden);

@@ -105,6 +105,23 @@ function meshWorker(): Worker | null {
   }
 }
 
+/**
+ * Build 116: the mesh workers closed once nothing is waiting on them - a big job (making the models) leaves their
+ * WebAssembly memory grown, and a worker only gives it back by closing. They start again with the next job.
+ * Returns whether they were closed (not while a job is under way).
+ */
+export function recycleMeshWorkers(): boolean {
+  if (pending.size) return false;
+  try { worker?.terminate(); } catch { /* gone */ }
+  try { helper?.terminate(); } catch { /* gone */ }
+  worker = null;
+  helper = null;
+  helperJobs.clear();
+  // The tooth finder's weights went with the worker: sent again with the next search.
+  finderSent = false;
+  return true;
+}
+
 async function roundHere(positions: ArrayLike<number>, radius: number, mode: MeshRoundMode) {
   const { roundMeshPositions } = await import("@/lib/meshRound");
   return roundMeshPositions(positions, radius, mode);
