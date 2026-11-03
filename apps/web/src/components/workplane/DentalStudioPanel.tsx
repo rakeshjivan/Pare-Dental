@@ -799,8 +799,15 @@ export function DentalStudioPanel({
         const teeth = defaultMarkTeeth(wv.slot).slice().sort((a, b) => archOrder(a) - archOrder(b));
         const lines = wv.margins?.[wv.slot]?.lines ?? {};
         const pick = wv.marginPick ?? null;
-        const done = teeth.filter((fdi) => (lines[fdi]?.length ?? 0) >= 3);
+        const found = new Set((wv.found ?? []).map((tooth) => tooth.fdi));
+        const done = teeth.filter((fdi) => (lines[fdi]?.length ?? 0) >= 3 || found.has(fdi));
+        // Build 114: the margins found by the tooth finder (each tooth's own surface on the scan), drawn by hand only to correct one.
+        const finding = Boolean(wv.finder?.busy);
         return (<>
+          <div className="dental-trim-buttons">
+            <button type="button" className="primary" disabled={busy || finding || Boolean(pick)} title={t("waxup.marginFindHint")} onClick={() => waxup.actions.onFindTeeth?.()}>{finding ? <LoaderCircle className="edge-modifier-spinner" size={15} aria-hidden="true" /> : null} {t(found.size ? "waxup.marginFindAgain" : "waxup.marginFind")}</button>
+          </div>
+          {finding ? <p className="dental-status" role="status">{t("waxup.marginFinding", { n: Math.round((wv.finder?.progress ?? 0) * 100) })}</p> : found.size ? <p className="blend-hint" role="status">{t("waxup.marginFound", { n: teeth.filter((fdi) => found.has(fdi)).length })}</p> : null}
           {bothArches ? (
             <div className="dental-trim-mode" role="radiogroup" aria-label={t("waxup.arch")}>
               {(["upper", "lower"] as const).map((slot) => (

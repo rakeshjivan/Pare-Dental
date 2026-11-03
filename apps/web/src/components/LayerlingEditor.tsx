@@ -169,7 +169,7 @@ import { worldTriangles } from "@/lib/blend";
 import { eggshellTooth } from "@/lib/dentalEggshell";
 import { NearestSurface, DeviationProbe, rayMeetsSoup, soupBoxOf, soupWithin } from "@/lib/nearestSurface";
 import { ERASE_BRUSH, eraseKey, eraseTooth, keptCorners, surfaceSign, toFrame, type ToothAxes } from "@/lib/waxErase";
-import { ScanPatch, patchBox, resample, type ClosedMargin } from "@/lib/waxMargin";
+import { ScanPatch, marginFromLabels, patchBox, resample, type ClosedMargin } from "@/lib/waxMargin";
 import { gumPaint, gumPair, gumSides, idealLevels, moveGumCut, visibleLength, zenithShift, type GumCut, type GumMode } from "@/lib/waxGum";
 import { repairStlPositions } from "@/lib/stlRepair";
 import { checkForPrinting, type PrintIssue } from "@/lib/printCheck";
@@ -12405,6 +12405,13 @@ export function LayerlingEditor({
       for (const p of resample(marginCurveOf(arch.shape, back, line, line.length >= 3), 0.12)) put(p, 0x1f8fe0, 0.22);
       for (const p of line) put(new THREE.Vector3(...p).applyMatrix4(back).toArray() as [number, number, number], 0x1f8fe0, 0.55);
     }
+    // Build 114: the margins the tooth finder found (teeth with no margin drawn), in green.
+    const toInput = waxArchInput(arch.shape);
+    if (toInput && waxupRef.current.marginOn) for (const fdi of marginTeethOf(arch.slot)) {
+      if (lines[fdi] || pick?.fdi === fdi) continue;
+      const found = foundMarginFor(fdi, arch.shape, toInput);
+      if (found) for (const p of found.region.line) put(p, 0x2fb6a0, 0.16);
+    }
     if (pick) {
       const scene = pick.points.map((p) => new THREE.Vector3(...p).applyMatrix4(back).toArray() as [number, number, number]);
       for (const p of resample(marginCurveOf(arch.shape, back, pick.points), 0.12)) put(p, 0xe0322f, 0.22);
@@ -12543,7 +12550,7 @@ export function LayerlingEditor({
       setDentalHidden([...others, ...shapesRef.current.filter((shape) => shape.dental === "wax" && shape.waxFor && (others.includes(shape.waxFor) || shape.waxFor === state.slots[waxup.slot])).map((shape) => shape.id)]);
     }
     showMargins(waxupRef.current);
-  }, [marginStep, waxup.slot, waxup.margins]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [marginStep, waxup.slot, waxup.margins, waxFound]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!marginStep && waxupRef.current.marginPick) setWaxup({ ...waxupRef.current, marginPick: null }); }, [marginStep]); // eslint-disable-line react-hooks/exhaustive-deps
   /** A wax tooth's margin line in the scene (its drawn path), or null. */
   const marginFor = (tooth: WorkplaneShape) => {
@@ -12553,6 +12560,7 @@ export function LayerlingEditor({
     const line = slot ? marginLinesOf(waxupRef.current, slot)[tooth.waxTooth.fdi] : undefined;
     const scan = shapesRef.current.find((shape) => shape.id === tooth.waxFor);
     const toInput = scan ? waxArchInput(scan) : null;
+    if ((!line || line.length < 3) && scan && toInput) return foundMarginFor(tooth.waxTooth.fdi, scan, toInput);
     if (!line || line.length < 3 || !scan || !toInput) return null;
     const toScene = toInput.clone().invert();
     const curve = marginCurveOf(scan, toScene, line, true);
@@ -12570,7 +12578,7 @@ export function LayerlingEditor({
       // Seeded from the patient's surface nearest the middle of the margin (inside the crown), not the wax tooth (it may stand off to one side).
       const mid = [0, 1, 2].map((k) => curve.reduce((sum, p) => sum + p[k], 0) / Math.max(1, curve.length)) as [number, number, number];
       const inside = origin && axes ? patch.inside(curve, axes.up, (x, y, z) => { const m = along(x, y, z); return m >= lo && m <= hi; }) : null;
-      region = inside ? { patch, inside, line: resample(curve, 0.1) } : null;
+      region = inside ? { surface: patch.surface, inside, line: resample(curve, 0.1) } : null;
       marginWhy.current[tooth.waxTooth.fdi] = `${patch.why}; seed ${origin ? "yes" : "no"}; curve ${curve.length}`;
       if (marginRegions.current.size > 40) marginRegions.current.clear();
       marginRegions.current.set(key, region);
@@ -12578,6 +12586,31 @@ export function LayerlingEditor({
     return region ? { curve, region, key } : null;
   };
   const marginRegions = useRef(new Map<string, ClosedMargin | null>());
+  /**
+   * Build 114: a tooth with no margin drawn takes its margin from the tooth finder (Find margins) - the scan's own
+   * triangles of that tooth, cut off from the gum, the palate and its neighbours.
+   */
+  const foundLabels = useRef(new Map<string, { key: string; labels: Uint8Array }>());
+  const foundMarginFor = (fdi: number, scan: WorkplaneShape, toInput: THREE.Matrix4) => {
+    const found = waxFoundRef.current[scan.id];
+    if (!found || !fdi || !found.teeth.some((t) => t.fdi === fdi)) return null;
+    const world = scanTrianglesOf(scan);
+    const labelKey = `${found.key}:${world.length}:${shapeVersionKey(scan)}`;
+    let labels = foundLabels.current.get(scan.id);
+    if (!labels || labels.key !== labelKey) { labels = { key: labelKey, labels: transferLabels(found.input, found.fdi, transformSoup(world, toInput)) }; foundLabels.current.set(scan.id, labels); }
+    const key = `found|${labelKey}|${fdi}`;
+    let region = marginRegions.current.get(key);
+    if (region === undefined) {
+      // The scan round the tooth's own triangles (8 mm about them).
+      const box = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+      for (let t = 0; t < labels.labels.length; t += 1) if (labels.labels[t] === fdi) for (let k = 0; k < 9; k += 1) { const v = world[t * 9 + k], j = k % 3; if (v - 8 < box[j]) box[j] = v - 8; if (v + 8 > box[j + 3]) box[j + 3] = v + 8; }
+      region = Number.isFinite(box[0]) ? marginFromLabels(world, labels.labels, fdi, box) : null;
+      marginWhy.current[fdi] = region ? `found: ${region.line.length} margin points` : "found: none";
+      if (marginRegions.current.size > 40) marginRegions.current.clear();
+      marginRegions.current.set(key, region);
+    }
+    return region ? { curve: region.line, region, key } : null;
+  };
   const marginWhy = useRef<Record<number, string>>({});
   useEffect(() => { (window as unknown as { layerlingMarginWhy?: () => unknown }).layerlingMarginWhy = () => ({ ...marginWhy.current, on: waxupRef.current.marginOn, lines: Object.fromEntries(Object.entries(waxupRef.current.margins ?? {}).map(([k, v]) => [k, Object.keys(v?.lines ?? {})])) }); }, []);
   /** A wax tooth's frame in the scene, its axes unit length. */

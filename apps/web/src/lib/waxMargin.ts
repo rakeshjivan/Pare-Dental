@@ -354,13 +354,46 @@ export function pastMargin(line: MarginLine, c: ArrayLike<number>, nc: ArrayLike
  * and the line itself. A wax vertex whose nearest point on the patient's surface is outside the margin is erased;
  * inside, within MARGIN_BAND of the line, it eases down onto the tooth so the wax meets it at the margin.
  */
-export type ClosedMargin = { patch: ScanPatch; inside: Uint8Array; line: Vec3[] };
+export type ClosedMargin = { surface: NearestSurface; inside: Uint8Array; line: Vec3[] };
 export function closedMarginWeight(m: ClosedMargin, c: ArrayLike<number>): number {
   const q = [0, 0, 0];
-  if (m.patch.surface.nearest(c[0], c[1], c[2], q) === Infinity || m.patch.surface.lastTriangle < 0) return 0;
-  const inside = m.inside[m.patch.surface.lastTriangle] === 1;
+  if (m.surface.nearest(c[0], c[1], c[2], q) === Infinity || m.surface.lastTriangle < 0) return 0;
+  const inside = m.inside[m.surface.lastTriangle] === 1;
   if (!inside) return 1;
   let best = Infinity;
   for (const p of m.line) { const d = (c[0] - p[0]) ** 2 + (c[1] - p[1]) ** 2 + (c[2] - p[2]) ** 2; if (d < best) best = d; }
   return 1 - smooth01(Math.sqrt(best) / MARGIN_BAND);
+}
+
+/**
+ * Build 114: a tooth's margin from the tooth finder - the scan's triangles labelled with its number are the tooth,
+ * the edge between them and the rest (gum, palate, the teeth beside it) is its margin, all the way round.
+ * `scan` is a world soup, `labels` each of its triangles' FDI number; only what lies in `box` is used.
+ */
+export function marginFromLabels(scan: ArrayLike<number>, labels: ArrayLike<number>, fdi: number, box: number[]): ClosedMargin | null {
+  const picked: number[] = [];
+  const inBox = (x: number, y: number, z: number) => x >= box[0] && y >= box[1] && z >= box[2] && x <= box[3] && y <= box[4] && z <= box[5];
+  for (let t = 0; t < labels.length; t += 1) {
+    const o = t * 9;
+    if (inBox(scan[o], scan[o + 1], scan[o + 2]) || inBox(scan[o + 3], scan[o + 4], scan[o + 5]) || inBox(scan[o + 6], scan[o + 7], scan[o + 8])) picked.push(t);
+  }
+  const soup = new Float32Array(picked.length * 9);
+  const inside = new Uint8Array(picked.length);
+  let count = 0;
+  picked.forEach((t, i) => { for (let k = 0; k < 9; k += 1) soup[i * 9 + k] = scan[t * 9 + k]; if (labels[t] === fdi) { inside[i] = 1; count += 1; } });
+  if (count < 40) return null;
+  // The margin itself: the edges where a tooth triangle meets one that is not (welded corners), as points along them.
+  const key = (i: number, k: number) => `${Math.round(soup[i * 9 + k * 3] * 1e4)},${Math.round(soup[i * 9 + k * 3 + 1] * 1e4)},${Math.round(soup[i * 9 + k * 3 + 2] * 1e4)}`;
+  const edges = new Map<string, { a: number; b: number; inside: number; outside: number }>();
+  for (let i = 0; i < picked.length; i += 1) for (let k = 0; k < 3; k += 1) {
+    const ka = key(i, k), kb = key(i, (k + 1) % 3);
+    const e = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+    let entry = edges.get(e);
+    if (!entry) { entry = { a: i * 9 + k * 3, b: i * 9 + ((k + 1) % 3) * 3, inside: 0, outside: 0 }; edges.set(e, entry); }
+    if (inside[i]) entry.inside += 1; else entry.outside += 1;
+  }
+  const line: Vec3[] = [];
+  for (const e of edges.values()) if (e.inside && e.outside) line.push([(soup[e.a] + soup[e.b]) / 2, (soup[e.a + 1] + soup[e.b + 1]) / 2, (soup[e.a + 2] + soup[e.b + 2]) / 2]);
+  if (!line.length) return null;
+  return { surface: new NearestSurface(soup, 3), inside, line };
 }
