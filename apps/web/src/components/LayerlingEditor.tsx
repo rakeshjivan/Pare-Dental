@@ -12569,7 +12569,7 @@ export function LayerlingEditor({
       const lo = Math.min(...ms) - 0.3, hi = Math.max(...ms) + 0.3;
       // Seeded from the patient's surface nearest the middle of the margin (inside the crown), not the wax tooth (it may stand off to one side).
       const mid = [0, 1, 2].map((k) => curve.reduce((sum, p) => sum + p[k], 0) / Math.max(1, curve.length)) as [number, number, number];
-      const inside = origin ? patch.inside(curve, mid, (x, y, z) => { const m = along(x, y, z); return m >= lo && m <= hi; }) : null;
+      const inside = origin && axes ? patch.inside(curve, axes.up, (x, y, z) => { const m = along(x, y, z); return m >= lo && m <= hi; }) : null;
       region = inside ? { patch, inside, line: resample(curve, 0.1) } : null;
       marginWhy.current[tooth.waxTooth.fdi] = `${patch.why}; seed ${origin ? "yes" : "no"}; curve ${curve.length}`;
       if (marginRegions.current.size > 40) marginRegions.current.clear();

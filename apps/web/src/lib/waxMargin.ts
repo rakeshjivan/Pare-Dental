@@ -173,7 +173,7 @@ export class ScanPatch {
    * Build 113: the patch's triangles inside a closed margin (1), as a flood from the triangle nearest `seed`
    * that never crosses the line; null if it leaks round (the line not closed on the scan).
    */
-  inside(loop: Vec3[], seed: ArrayLike<number>, within?: (x: number, y: number, z: number) => boolean): Uint8Array | null {
+  inside(loop: Vec3[], up: ArrayLike<number>, within?: (x: number, y: number, z: number) => boolean): Uint8Array | null {
     const triCount = this.tri.length / 3;
     const wall = new Uint8Array(triCount);
     const q = [0, 0, 0];
@@ -186,49 +186,51 @@ export class ScanPatch {
       const v = this.nearestVertex(p);
       if (v >= 0 && Math.hypot(this.xyz[v * 3] - p[0], this.xyz[v * 3 + 1] - p[1], this.xyz[v * 3 + 2] - p[2]) < 0.25) for (const t of byVertex[v]) wall[t] = 1;
     }
-    let seedAt = this.surface.nearest(seed[0], seed[1], seed[2], q);
-    if (seedAt === Infinity) {
-      // Further than the surface's reach: the nearest vertex instead, and its first triangle.
-      const v = this.nearestVertex(seed);
-      const t = v >= 0 ? this.tri.indexOf(v) : -1;
-      if (t < 0) { this.why = "seed off the scan"; return null; }
-      this.surface.lastTriangle = Math.floor(t / 3); seedAt = 0;
-    }
-    if (this.surface.lastTriangle < 0) { this.why = "seed off the scan"; return null; }
-    const start = this.surface.lastTriangle;
-    if (wall[start]) { this.why = "seed on the line"; return null; }
+    const x = this.xyz;
+    const centre = (t: number, k: number) => (x[this.tri[t * 3] * 3 + k] + x[this.tri[t * 3 + 1] * 3 + k] + x[this.tri[t * 3 + 2] * 3 + k]) / 3;
+    const allowed = new Uint8Array(triCount);
+    for (let t = 0; t < triCount; t += 1) allowed[t] = wall[t] ? 0 : !within || within(centre(t, 0), centre(t, 1), centre(t, 2)) ? 1 : 0;
     // Triangles beside each other across an edge.
     const byEdge = new Map<number, number[]>();
-    const count = this.xyz.length / 3;
+    const count = x.length / 3;
     for (let t = 0; t < triCount; t += 1) for (let j = 0; j < 3; j += 1) {
       const a = this.tri[t * 3 + j], b = this.tri[t * 3 + (j + 1) % 3];
       const k = a < b ? a * count + b : b * count + a;
       const list = byEdge.get(k);
       if (list) list.push(t); else byEdge.set(k, [t]);
     }
-    const inside = new Uint8Array(triCount);
-    const stack = [start];
-    inside[start] = 1;
-    let filled = 1;
-    while (stack.length) {
-      const t = stack.pop()!;
-      for (let j = 0; j < 3; j += 1) {
-        const a = this.tri[t * 3 + j], b = this.tri[t * 3 + (j + 1) % 3];
-        for (const u of byEdge.get(a < b ? a * count + b : b * count + a) ?? []) {
-          if (inside[u] || wall[u]) continue;
-          // Build 113: never past the tooth's own mesial and distal limits - its neighbours touch it at the contacts.
-          if (within) {
-            const i0 = this.tri[u * 3] * 3, i1 = this.tri[u * 3 + 1] * 3, i2 = this.tri[u * 3 + 2] * 3, x = this.xyz;
-            if (!within((x[i0] + x[i1] + x[i2]) / 3, (x[i0 + 1] + x[i1 + 1] + x[i2 + 1]) / 3, (x[i0 + 2] + x[i1 + 2] + x[i2 + 2]) / 3)) continue;
+    // Build 113: the patch split at the line into pieces; the crown is the piece standing furthest towards the incisal edge
+    // (the gum round it lies apical of the margin) - no seed to land on the line.
+    const piece = new Int32Array(triCount).fill(-1);
+    const pieces: Array<{ size: number; up: number }> = [];
+    for (let s0 = 0; s0 < triCount; s0 += 1) {
+      if (!allowed[s0] || piece[s0] >= 0) continue;
+      const id = pieces.length;
+      let size = 0, height = 0;
+      const stack = [s0];
+      piece[s0] = id;
+      while (stack.length) {
+        const t = stack.pop()!;
+        size += 1; height += centre(t, 0) * up[0] + centre(t, 1) * up[1] + centre(t, 2) * up[2];
+        for (let j = 0; j < 3; j += 1) {
+          const a = this.tri[t * 3 + j], b = this.tri[t * 3 + (j + 1) % 3];
+          for (const u of byEdge.get(a < b ? a * count + b : b * count + a) ?? []) {
+            if (!allowed[u] || piece[u] >= 0) continue;
+            piece[u] = id; stack.push(u);
           }
-          inside[u] = 1; filled += 1; stack.push(u);
         }
       }
+      pieces.push({ size, up: height / Math.max(1, size) });
     }
-    // The wall counts as inside (the margin itself is the tooth's).
-    for (let t = 0; t < triCount; t += 1) if (wall[t]) inside[t] = 1;
-    this.why = `${filled} of ${triCount} inside${filled > triCount * 0.6 ? " (leaked)" : ""}`;
-    return filled > triCount * 0.6 ? null : inside;
+    let best = -1;
+    for (let i = 0; i < pieces.length; i += 1) if (pieces[i].size >= 40 && (best < 0 || pieces[i].up > pieces[best].up)) best = i;
+    if (best < 0) { this.why = `no piece (${pieces.length} pieces)`; return null; }
+    const inside = new Uint8Array(triCount);
+    let filled = 0;
+    for (let t = 0; t < triCount; t += 1) if (piece[t] === best || wall[t]) { inside[t] = 1; if (piece[t] === best) filled += 1; }
+    const big = pieces.filter((p) => p.size >= 40).length;
+    this.why = `${filled} of ${triCount} inside, ${big} pieces${big < 2 ? " (the line does not close)" : ""}`;
+    return big < 2 ? null : inside;
   }
 }
 
