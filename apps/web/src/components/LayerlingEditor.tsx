@@ -12717,6 +12717,18 @@ export function LayerlingEditor({
       }
       return { fdi: tooth.waxTooth!.fdi, corners: own.length / 3, moved, most: +most.toFixed(2), labialMoved: labial, keep: paint?.keep.length ?? 0 };
     });
+    // Build 116 (debug): one wax tooth - as placed and as erased - and the scan round it, for a section.
+    (window as unknown as { layerlingDumpTooth?: (fdi: number) => unknown }).layerlingDumpTooth = (fdi: number) => {
+      const tooth = shapesRef.current.find((shape) => shape.dental === "wax" && shape.waxTooth?.fdi === fdi && !shape.hidden);
+      if (!tooth) return null;
+      const job = eraseFor(tooth);
+      const own = Float32Array.from(worldTriangles(tooth));
+      const erased = erasedSoup(tooth);
+      const near = job ? soupWithin(scanTrianglesOf(job.scan), soupBoxOf(own, 3)) : new Float32Array();
+      const region = job?.margin?.region;
+      const gum = region && "inside" in region ? (region.gum ?? region.line) : [];
+      return { own: Array.from(own), erased: erased ? Array.from(erased) : null, scan: Array.from(near), gum, axes: toothAxesOf(tooth) };
+    };
     // Build 116: each wax tooth as Make will take it - its open or over-used edges once its corners are joined.
     (window as unknown as { layerlingWaxClosed?: () => unknown }).layerlingWaxClosed = () => shapesRef.current.filter((shape) => shape.dental === "wax" && shape.waxTooth && !shape.hidden).map((tooth) => {
       const count = (soup: ArrayLike<number>) => {
