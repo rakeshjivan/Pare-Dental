@@ -10,6 +10,7 @@
  * is kept in the tooth's own frame, so it goes with the tooth.
  */
 import type { NearestSurface } from "@/lib/nearestSurface";
+import { pastMargin, type MarginLine } from "@/lib/waxMargin";
 
 export type Vec3 = [number, number, number];
 /** A brush dab in a tooth's frame: along mesial, towards the incisal edge, labial (mm), and its radius (mm). */
@@ -65,8 +66,8 @@ export function surfaceSign(a: ToothAxes, surface: NearestSurface): 1 | -1 {
  * The wax tooth (a scene soup, 9 numbers a triangle) with its paint applied: the wax not kept, where erased,
  * pushed under the patient's surface. A new soup, or null when nothing of it moved.
  */
-export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: ToothErase, surface: NearestSurface, sign: 1 | -1): Float32Array | null {
-  if (!paint.rest && !paint.erase.length) return null;
+export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: ToothErase, surface: NearestSurface, sign: 1 | -1, margin: MarginLine | null = null): Float32Array | null {
+  if (!paint.rest && !paint.erase.length && !margin) return null;
   const index = new Map<string, number>();
   const corner = new Int32Array(soup.length / 3);
   const xyz: number[] = [];
@@ -87,12 +88,15 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
     const [m, u, o] = toFrame(axes, p);
     const kept = smooth01(outside(paint.keep, m, u, o) / ERASE_BAND);
     if (kept <= 1e-3) continue;
-    const erased = paint.rest ? 1 : 1 - smooth01(outside(paint.erase, m, u, o) / ERASE_BAND);
-    const w = kept * erased;
-    if (w <= 1e-3) continue;
+    const brushed = paint.rest ? 1 : paint.erase.length ? 1 - smooth01(outside(paint.erase, m, u, o) / ERASE_BAND) : 0;
+    if (brushed * kept <= 1e-3 && !margin) continue;
     if (surface.nearest(p[0], p[1], p[2], q) === Infinity || surface.lastTriangle < 0) continue;
     surface.triangleNormal(surface.lastTriangle, nt);
     const nx = nt[0] * sign, ny = nt[1] * sign, nz = nt[2] * sign;
+    // Build 111: and past the palatal (lingual) margin line, judged where the vertex meets the patient's surface.
+    const erased = margin ? Math.max(brushed, pastMargin(margin, q, [nx, ny, nz])) : brushed;
+    const w = kept * erased;
+    if (w <= 1e-3) continue;
     const above = (p[0] - q[0]) * nx + (p[1] - q[1]) * ny + (p[2] - q[2]) * nz;
     if (above < -ERASE_TUCK) continue; // already under the patient's surface
     const tx = q[0] - nx * ERASE_TUCK, ty = q[1] - ny * ERASE_TUCK, tz = q[2] - nz * ERASE_TUCK;

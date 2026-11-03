@@ -51,6 +51,10 @@ export type WaxupView = {
   /** Build 110: Keep & erase - each wax tooth's paint (by its id), and the brush in hand. */
   erase?: Record<string, import("@/lib/waxErase").ToothErase>;
   eraseBrush?: { tool: "keep" | "unkeep" | "erase" | "unerase"; size: number };
+  /** Build 111: the palatal (lingual) margin line - on (the second way of working) or off; each tooth's line (studio coordinates, the scan it was drawn on); the line being drawn. */
+  marginOn?: boolean;
+  margins?: Partial<Record<"upper" | "lower", { scan: string; lines: Record<number, Array<[number, number, number]>> }>>;
+  marginPick?: { fdi: number; points: Array<[number, number, number]> } | null;
   /** Build 108: wax teeth placed on either arch (changing the bite's opening then asks first). */
   anyWax?: boolean;
   /** Build 108: wax teeth put out of view in Case objects - their buttons cannot pick them. */
@@ -173,6 +177,13 @@ export type WaxupActions = {
   onEraseSize?: (size: number) => void;
   onEraseRest?: (on: boolean) => void;
   onEraseClear?: () => void;
+  /** Build 111: the margin line - on or off, draw a tooth's line, keep it, take back a point, clear it, stop drawing. */
+  onMarginOn?: (on: boolean) => void;
+  onMarginTooth?: (fdi: number) => void;
+  onMarginDone?: () => void;
+  onMarginUndo?: () => void;
+  onMarginClear?: (fdi: number) => void;
+  onMarginCancel?: () => void;
   onSet: (files: File[]) => void;
   onBuiltIn: (id: string) => void;
   onSlot: (slot: "upper" | "lower") => void;

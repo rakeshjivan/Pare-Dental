@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { passToView } from "./DentalTrimOverlay";
 
-export function WaxupPointOverlay({ hint, onPick, onCancel, onUndo, onDone }: { hint: string; onPick: (x: number, y: number) => void; onCancel: () => void; /** Build 105: Backspace takes back the last point. */ onUndo?: () => void; /** Build 109: Enter finishes (a line). */ onDone?: () => void }) {
+export function WaxupPointOverlay({ hint, onPick, onCancel, onUndo, onDone, onHover }: { hint: string; onPick: (x: number, y: number) => void; onCancel: () => void; /** Build 105: Backspace takes back the last point. */ onUndo?: () => void; /** Build 109: Enter finishes (a line). */ onDone?: () => void; /** Build 111: the pointer over the view (page pixels), once a frame. */ onHover?: (x: number, y: number) => void }) {
   const [host, setHost] = useState<HTMLElement | null>(null);
   useEffect(() => {
     setHost(document.querySelector<HTMLElement>(".workplane-plane"));
@@ -38,6 +38,13 @@ export function WaxupPointOverlay({ hint, onPick, onCancel, onUndo, onDone }: { 
       aria-label={hint}
       onWheel={passToView.wheel}
       onContextMenu={(event) => event.preventDefault()}
+      onPointerMove={onHover ? (event) => {
+        if (event.buttons) return;
+        const x = event.clientX, y = event.clientY;
+        const self = event.currentTarget as HTMLElement & { hoverFrame?: number };
+        if (self.hoverFrame) return;
+        self.hoverFrame = window.requestAnimationFrame(() => { self.hoverFrame = 0; onHover(x, y); });
+      } : undefined}
       onPointerDown={(event) => {
         if (passToView.pointerDown(event)) return;
         if (event.button !== 0) return;
