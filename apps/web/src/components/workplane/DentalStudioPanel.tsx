@@ -799,7 +799,7 @@ export function DentalStudioPanel({
         const teeth = defaultMarkTeeth(wv.slot).slice().sort((a, b) => archOrder(a) - archOrder(b));
         const lines = wv.margins?.[wv.slot]?.lines ?? {};
         const pick = wv.marginPick ?? null;
-        const done = teeth.filter((fdi) => (lines[fdi]?.length ?? 0) >= 2);
+        const done = teeth.filter((fdi) => (lines[fdi]?.length ?? 0) >= 3);
         return (<>
           {bothArches ? (
             <div className="dental-trim-mode" role="radiogroup" aria-label={t("waxup.arch")}>
@@ -821,7 +821,7 @@ export function DentalStudioPanel({
           <p className="blend-hint wax-landmarks-count" role="status">{pick ? t("waxup.marginDrawing", { fdi: pick.fdi, n: pick.points.length }) : t("waxup.marginCount", { done: done.length, all: teeth.length })}</p>
           {pick ? (
             <div className="dental-trim-buttons">
-              <button type="button" className="primary" disabled={pick.points.length < 2} onClick={() => waxup.actions.onMarginDone?.()}>{t("waxup.marginKeep")}</button>
+              <button type="button" className="primary" disabled={pick.points.length < 3} onClick={() => waxup.actions.onMarginDone?.()}>{t("waxup.marginKeep")}</button>
               <button type="button" className="secondary" disabled={!pick.points.length} onClick={() => waxup.actions.onMarginUndo?.()}>{t("waxup.marginUndo")}</button>
               {pick.points.length || (lines[pick.fdi]?.length ?? 0) ? <button type="button" className="secondary" onClick={() => waxup.actions.onMarginClear?.(pick.fdi)}>{t("waxup.marginClear")}</button> : null}
               <button type="button" className="secondary" onClick={() => waxup.actions.onMarginCancel?.()}>{t("waxup.marginCancel")}</button>

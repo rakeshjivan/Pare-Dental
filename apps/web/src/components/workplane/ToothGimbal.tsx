@@ -359,6 +359,8 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
     if (d.hold) window.clearTimeout(d.hold.timer);
     const change = d.hold && d.hold.amount > 0 ? clampAdjustChange(holdAmount(d)) : d.hold && !d.hold.moved ? {} : clampAdjustChange(composeAdjust(d.base, current(d, event.clientX, event.clientY)));
     // Kept first, so the tooth can stay where it was moved while it is placed again.
+    // For checks: the last change let go (the handle, which way it was held).
+    (window as unknown as { layerlingGimbalLast?: unknown }).layerlingGimbalLast = { handle: d.handle, dir: d.hold?.dir, held: d.hold?.amount, change };
     if (!isEmpty(change) && event.type !== "pointercancel") onCommit(change);
     onPreview(null);
   };
@@ -424,7 +426,7 @@ export function ToothGimbal({ tooth, disabled, totals, handles = true, bare = fa
       // The point on the screen that way round: anticlockwise there is +1 for this handle when the ring's parameter runs anticlockwise.
       const cw = Math.sign((p[0] - c[0]) * uy - (p[1] - c[1]) * ux) || 1;
       return (
-        <g key={`${handle}${dir}`} className="tooth-gimbal-turnhead" {...handlers(handle, -cw)}>
+        <g key={`${handle}${dir}`} className={`tooth-gimbal-handle tooth-gimbal-turnhead${active === handle ? " active" : ""}`} {...handlers(handle, -cw)}>
           <circle cx={p[0]} cy={p[1]} r={11} fill="transparent" />
           <path d={`M${p[0] + ux * 9},${p[1] + uy * 9} L${p[0] - uy * 6},${p[1] + ux * 6} L${p[0] + uy * 6},${p[1] - ux * 6} Z`} fill={COLOURS[handle]} stroke="#1f2328" strokeWidth={0.8} />
         </g>

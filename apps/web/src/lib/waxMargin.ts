@@ -21,6 +21,10 @@ export class ScanPatch {
   readonly surface: NearestSurface;
   private readonly index: Map<number, number[]>;
   readonly box: number[];
+  /** The patch's triangles (vertex indices, 3 a triangle), in the order of its surface's soup. */
+  readonly tri: Int32Array;
+  /** Build 113: how much each vertex lies in a crease (the gum meeting the tooth), 0 none to 1 deep - the magnetic line's pull. */
+  readonly crease: Float32Array;
   constructor(scan: ArrayLike<number>, box: number[]) {
     this.box = box;
     const soup = soupWithin(scan, box);
@@ -36,6 +40,7 @@ export class ScanPatch {
       tri.push(v);
     }
     this.xyz = Float64Array.from(pts);
+    this.tri = Int32Array.from(tri);
     const count = pts.length / 3;
     const edges: Array<[number, number]> = [];
     const seen = new Set<number>();
@@ -53,6 +58,40 @@ export class ScanPatch {
       this.next[fill[a]] = b; this.cost[fill[a]] = l; fill[a] += 1;
       this.next[fill[b]] = a; this.cost[fill[b]] = l; fill[b] += 1;
     }
+    // Build 113: each vertex's crease - how far its neighbours stand out along its normal (a valley: the gingival
+    // margin, the cingulum's edge), over the length of its edges.
+    const normal = new Float64Array(count * 3);
+    for (let i = 0; i + 2 < tri.length; i += 3) {
+      const a = tri[i] * 3, b = tri[i + 1] * 3, c = tri[i + 2] * 3;
+      const ux = pts[b] - pts[a], uy = pts[b + 1] - pts[a + 1], uz = pts[b + 2] - pts[a + 2];
+      const vx = pts[c] - pts[a], vy = pts[c + 1] - pts[a + 1], vz = pts[c + 2] - pts[a + 2];
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+      for (const k of [a, b, c]) { normal[k] += nx; normal[k + 1] += ny; normal[k + 2] += nz; }
+    }
+    const raw = new Float32Array(count);
+    for (let v = 0; v < count; v += 1) {
+      const l = Math.hypot(normal[v * 3], normal[v * 3 + 1], normal[v * 3 + 2]) || 1;
+      let mx = 0, my = 0, mz = 0, edge = 0;
+      const n = this.start[v + 1] - this.start[v];
+      if (!n) continue;
+      for (let k = this.start[v]; k < this.start[v + 1]; k += 1) { const u = this.next[k]; mx += pts[u * 3]; my += pts[u * 3 + 1]; mz += pts[u * 3 + 2]; edge += this.cost[k]; }
+      mx = mx / n - pts[v * 3]; my = my / n - pts[v * 3 + 1]; mz = mz / n - pts[v * 3 + 2];
+      raw[v] = ((mx * normal[v * 3] + my * normal[v * 3 + 1] + mz * normal[v * 3 + 2]) / l) / Math.max(1e-6, edge / n);
+    }
+    // Teeth are mostly convex: if most of the patch reads as a valley, its triangles are wound inwards.
+    let mean = 0;
+    for (let v = 0; v < count; v += 1) mean += raw[v];
+    if (mean > 0) for (let v = 0; v < count; v += 1) raw[v] = -raw[v];
+    // Eased over the neighbours (a scan's facets are noisy), then scaled: the top few per cent count as deep.
+    const eased = Float32Array.from(raw);
+    for (let pass = 0; pass < 2; pass += 1) {
+      const from = Float32Array.from(eased);
+      for (let v = 0; v < count; v += 1) { let sum = from[v], n = 1; for (let k = this.start[v]; k < this.start[v + 1]; k += 1) { sum += from[this.next[k]]; n += 1; } eased[v] = sum / n; }
+    }
+    const sorted = Array.from(eased).filter((x) => x > 0).sort((a, b) => a - b);
+    const deep = sorted.length ? sorted[Math.floor(sorted.length * 0.9)] || 1 : 1;
+    this.crease = new Float32Array(count);
+    for (let v = 0; v < count; v += 1) this.crease[v] = Math.max(0, Math.min(1, eased[v] / deep));
     // A coarse grid of vertices for the nearest-vertex look-up.
     this.index = new Map();
     for (let v = 0; v < count; v += 1) {
@@ -82,7 +121,7 @@ export class ScanPatch {
     return best;
   }
   /** The shortest way over the surface from a to b (both on it), as points from a to b. */
-  path(a: Vec3, b: Vec3): Vec3[] {
+  path(a: Vec3, b: Vec3, magnetic = true): Vec3[] {
     const s = this.nearestVertex(a), e = this.nearestVertex(b);
     if (s < 0 || e < 0) return [a, b];
     if (s === e) return [a, b];
@@ -92,13 +131,14 @@ export class ScanPatch {
     const heap = new MinHeap();
     dist[s] = 0; heap.push(s, 0);
     const ex = this.xyz[e * 3], ey = this.xyz[e * 3 + 1], ez = this.xyz[e * 3 + 2];
-    const h = (v: number) => Math.hypot(this.xyz[v * 3] - ex, this.xyz[v * 3 + 1] - ey, this.xyz[v * 3 + 2] - ez);
+    const h = (v: number) => Math.hypot(this.xyz[v * 3] - ex, this.xyz[v * 3 + 1] - ey, this.xyz[v * 3 + 2] - ez) * (magnetic ? 0.2 : 1);
     while (heap.size) {
       const [v] = heap.pop();
       if (v === e) break;
       const dv = dist[v];
       for (let k = this.start[v]; k < this.start[v + 1]; k += 1) {
-        const u = this.next[k], d = dv + this.cost[k];
+        // Build 113 (as exocad's magnetic margin): a step along a crease costs as little as a fifth.
+        const u = this.next[k], d = dv + this.cost[k] * (magnetic ? 1 - 0.8 * this.crease[u] : 1);
         if (d < dist[u]) { dist[u] = d; prev[u] = v; heap.push(u, d + h(u)); }
       }
     }
@@ -116,15 +156,58 @@ export class ScanPatch {
     }
     return line;
   }
-  /** The whole line through the clicked points, stretch by stretch. */
-  line(points: Vec3[]): Vec3[] {
+  /** The whole line through the clicked points, stretch by stretch (closed: back to the first point too). */
+  line(points: Vec3[], closed = false, magnetic = true): Vec3[] {
     if (points.length < 2) return points.slice();
     const out: Vec3[] = [];
-    for (let i = 0; i + 1 < points.length; i += 1) {
-      const part = this.path(points[i], points[i + 1]);
+    const stops = closed && points.length >= 3 ? [...points, points[0]] : points;
+    for (let i = 0; i + 1 < stops.length; i += 1) {
+      const part = this.path(stops[i], stops[i + 1], magnetic);
       out.push(...(i ? part.slice(1) : part));
     }
     return out;
+  }
+  /**
+   * Build 113: the patch's triangles inside a closed margin (1), as a flood from the triangle nearest `seed`
+   * that never crosses the line; null if it leaks round (the line not closed on the scan).
+   */
+  inside(loop: Vec3[], seed: ArrayLike<number>): Uint8Array | null {
+    const triCount = this.tri.length / 3;
+    const wall = new Uint8Array(triCount);
+    const q = [0, 0, 0];
+    // Every triangle the line runs through (sampled finely), and those it passes within a hair of.
+    for (const p of resample(loop, 0.03)) {
+      if (this.surface.nearest(p[0], p[1], p[2], q) < 0.15 && this.surface.lastTriangle >= 0) wall[this.surface.lastTriangle] = 1;
+    }
+    if (this.surface.nearest(seed[0], seed[1], seed[2], q) === Infinity || this.surface.lastTriangle < 0) return null;
+    const start = this.surface.lastTriangle;
+    if (wall[start]) return null;
+    // Triangles beside each other across an edge.
+    const byEdge = new Map<number, number[]>();
+    const count = this.xyz.length / 3;
+    for (let t = 0; t < triCount; t += 1) for (let j = 0; j < 3; j += 1) {
+      const a = this.tri[t * 3 + j], b = this.tri[t * 3 + (j + 1) % 3];
+      const k = a < b ? a * count + b : b * count + a;
+      const list = byEdge.get(k);
+      if (list) list.push(t); else byEdge.set(k, [t]);
+    }
+    const inside = new Uint8Array(triCount);
+    const stack = [start];
+    inside[start] = 1;
+    let filled = 1;
+    while (stack.length) {
+      const t = stack.pop()!;
+      for (let j = 0; j < 3; j += 1) {
+        const a = this.tri[t * 3 + j], b = this.tri[t * 3 + (j + 1) % 3];
+        for (const u of byEdge.get(a < b ? a * count + b : b * count + a) ?? []) {
+          if (inside[u] || wall[u]) continue;
+          inside[u] = 1; filled += 1; stack.push(u);
+        }
+      }
+    }
+    // The wall counts as inside (the margin itself is the tooth's).
+    for (let t = 0; t < triCount; t += 1) if (wall[t]) inside[t] = 1;
+    return filled > triCount * 0.6 ? null : inside;
   }
 }
 
@@ -241,4 +324,20 @@ export function pastMargin(line: MarginLine, c: ArrayLike<number>, nc: ArrayLike
   // On the line's side of the tooth (its surface facing the same way), not round on the labial.
   const side = smooth01((dot(nc, line.n[i]) + 0.1) / 0.5);
   return smooth01((past + MARGIN_BAND) / MARGIN_BAND) * (1 - smooth01(beyondEnd / MARGIN_END)) * side;
+}
+
+/**
+ * Build 113: a closed margin made ready to erase a tooth by: the patch it was drawn on, the triangles inside it,
+ * and the line itself. A wax vertex whose nearest point on the patient's surface is outside the margin is erased;
+ * inside, within MARGIN_BAND of the line, it eases down onto the tooth so the wax meets it at the margin.
+ */
+export type ClosedMargin = { patch: ScanPatch; inside: Uint8Array; line: Vec3[] };
+export function closedMarginWeight(m: ClosedMargin, c: ArrayLike<number>): number {
+  const q = [0, 0, 0];
+  if (m.patch.surface.nearest(c[0], c[1], c[2], q) === Infinity || m.patch.surface.lastTriangle < 0) return 0;
+  const inside = m.inside[m.patch.surface.lastTriangle] === 1;
+  if (!inside) return 1;
+  let best = Infinity;
+  for (const p of m.line) { const d = (c[0] - p[0]) ** 2 + (c[1] - p[1]) ** 2 + (c[2] - p[2]) ** 2; if (d < best) best = d; }
+  return 1 - smooth01(Math.sqrt(best) / MARGIN_BAND);
 }

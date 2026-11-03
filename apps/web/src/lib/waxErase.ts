@@ -10,7 +10,7 @@
  * is kept in the tooth's own frame, so it goes with the tooth.
  */
 import type { NearestSurface } from "@/lib/nearestSurface";
-import { pastMargin, type MarginLine } from "@/lib/waxMargin";
+import { closedMarginWeight, pastMargin, type ClosedMargin, type MarginLine } from "@/lib/waxMargin";
 
 export type Vec3 = [number, number, number];
 /** A brush dab in a tooth's frame: along mesial, towards the incisal edge, labial (mm), and its radius (mm). */
@@ -66,7 +66,7 @@ export function surfaceSign(a: ToothAxes, surface: NearestSurface): 1 | -1 {
  * The wax tooth (a scene soup, 9 numbers a triangle) with its paint applied: the wax not kept, where erased,
  * pushed under the patient's surface. A new soup, or null when nothing of it moved.
  */
-export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: ToothErase, surface: NearestSurface, sign: 1 | -1, margin: MarginLine | null = null): Float32Array | null {
+export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: ToothErase, surface: NearestSurface, sign: 1 | -1, margin: MarginLine | ClosedMargin | null = null): Float32Array | null {
   if (!paint.rest && !paint.erase.length && !margin) return null;
   const index = new Map<string, number>();
   const corner = new Int32Array(soup.length / 3);
@@ -94,7 +94,7 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
     surface.triangleNormal(surface.lastTriangle, nt);
     const nx = nt[0] * sign, ny = nt[1] * sign, nz = nt[2] * sign;
     // Build 111: and past the palatal (lingual) margin line, judged where the vertex meets the patient's surface.
-    const erased = margin ? Math.max(brushed, pastMargin(margin, q, [nx, ny, nz])) : brushed;
+    const erased = margin ? Math.max(brushed, "inside" in margin ? closedMarginWeight(margin, q) : pastMargin(margin, q, [nx, ny, nz])) : brushed;
     const w = kept * erased;
     if (w <= 1e-3) continue;
     const above = (p[0] - q[0]) * nx + (p[1] - q[1]) * ny + (p[2] - q[2]) * nz;

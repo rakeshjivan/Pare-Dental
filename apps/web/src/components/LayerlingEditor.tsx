@@ -169,7 +169,7 @@ import { worldTriangles } from "@/lib/blend";
 import { eggshellTooth } from "@/lib/dentalEggshell";
 import { NearestSurface, DeviationProbe, rayMeetsSoup, soupBoxOf, soupWithin } from "@/lib/nearestSurface";
 import { ERASE_BRUSH, eraseKey, eraseTooth, keptCorners, surfaceSign, toFrame, type ToothAxes } from "@/lib/waxErase";
-import { ScanPatch, patchBox, prepareMargin, resample } from "@/lib/waxMargin";
+import { ScanPatch, patchBox, resample, type ClosedMargin } from "@/lib/waxMargin";
 import { gumPaint, gumPair, gumSides, idealLevels, moveGumCut, visibleLength, zenithShift, type GumCut, type GumMode } from "@/lib/waxGum";
 import { repairStlPositions } from "@/lib/stlRepair";
 import { checkForPrinting, type PrintIssue } from "@/lib/printCheck";
@@ -12380,12 +12380,12 @@ export function LayerlingEditor({
   };
   /** A line's drawn path in the scene (cached by its points and the scan). */
   const marginCurves = useRef(new Map<string, Array<[number, number, number]>>());
-  const marginCurveOf = (scan: WorkplaneShape, toScene: THREE.Matrix4, points: Array<[number, number, number]>) => {
+  const marginCurveOf = (scan: WorkplaneShape, toScene: THREE.Matrix4, points: Array<[number, number, number]>, closed = false) => {
     const scene = points.map((p) => new THREE.Vector3(...p).applyMatrix4(toScene).toArray() as [number, number, number]);
-    const key = `${shapeVersionKey(scan)}|${toScene.toArray().map((v) => v.toFixed(3)).join(",")}|${eraseKeyOf(scene)}`;
+    const key = `${shapeVersionKey(scan)}|${toScene.toArray().map((v) => v.toFixed(3)).join(",")}|${eraseKeyOf(scene)}|${closed ? "c" : "o"}`;
     const known = marginCurves.current.get(key);
     if (known) return known;
-    const curve = scene.length >= 2 ? patchFor(scan, scene).line(scene) : scene;
+    const curve = scene.length >= 2 ? patchFor(scan, scene).line(scene, closed) : scene;
     if (marginCurves.current.size > 200) marginCurves.current.clear();
     marginCurves.current.set(key, curve);
     return curve;
@@ -12402,7 +12402,7 @@ export function LayerlingEditor({
     const pick = state.marginPick;
     for (const [fdi, line] of Object.entries(lines)) {
       if (pick?.fdi === Number(fdi)) continue;
-      for (const p of resample(marginCurveOf(arch.shape, back, line), 0.12)) put(p, 0x1f8fe0, 0.22);
+      for (const p of resample(marginCurveOf(arch.shape, back, line, line.length >= 3), 0.12)) put(p, 0x1f8fe0, 0.22);
       for (const p of line) put(new THREE.Vector3(...p).applyMatrix4(back).toArray() as [number, number, number], 0x1f8fe0, 0.55);
     }
     if (pick) {
@@ -12446,6 +12446,13 @@ export function LayerlingEditor({
     const current = waxupRef.current;
     const pick = current.marginPick;
     const arch = waxArch();
+    // Build 113: a click back on the first point closes the margin round the tooth (and keeps it).
+    if (pick && arch && pick.points.length >= 3 && window.layerlingProjectPoints) {
+      const first = new THREE.Vector3(...pick.points[0]).applyMatrix4(arch.sceneToInput.clone().invert());
+      const at = window.layerlingProjectPoints(Float32Array.from([first.x, first.y, first.z]));
+      const plane = document.querySelector(".workplane-plane")?.getBoundingClientRect();
+      if (plane && Math.hypot(at[0] + plane.left - x, at[1] + plane.top - y) < 14) { finishMargin(); return; }
+    }
     const hit = markSurfaceAt(x, y);
     if (!pick || !arch || !hit) return;
     const inInput = new THREE.Vector3(...hit).applyMatrix4(arch.sceneToInput).toArray() as [number, number, number];
@@ -12475,7 +12482,7 @@ export function LayerlingEditor({
     if (!pick || !arch) return;
     const lines = { ...marginLinesOf(current, arch.slot) };
     const before = JSON.stringify(lines[pick.fdi] ?? null);
-    if (pick.points.length >= 2) lines[pick.fdi] = pick.points; else delete lines[pick.fdi];
+    if (pick.points.length >= 3) lines[pick.fdi] = pick.points; else delete lines[pick.fdi];
     if (JSON.stringify(lines[pick.fdi] ?? null) !== before) waxRecordRef.current();
     const teeth = marginTeethOf(arch.slot);
     const after = teeth.slice(teeth.indexOf(pick.fdi) + 1).find((fdi) => !lines[fdi]);
@@ -12483,7 +12490,7 @@ export function LayerlingEditor({
     const next = { ...waxupRef.current, margins: { ...current.margins, [arch.slot]: { scan: arch.shape.id, lines } }, marginPick: null };
     setWaxup(next);
     showMargins(next);
-    if (after !== undefined && pick.points.length >= 2) window.setTimeout(() => startMargin(after), 0);
+    if (after !== undefined && pick.points.length >= 3) window.setTimeout(() => startMargin(after), 0);
   };
   const cancelMargin = () => {
     marginHover.current = null;
@@ -12546,10 +12553,23 @@ export function LayerlingEditor({
     const line = slot ? marginLinesOf(waxupRef.current, slot)[tooth.waxTooth.fdi] : undefined;
     const scan = shapesRef.current.find((shape) => shape.id === tooth.waxFor);
     const toInput = scan ? waxArchInput(scan) : null;
-    if (!line || line.length < 2 || !scan || !toInput) return null;
-    const curve = marginCurveOf(scan, toInput.clone().invert(), line);
-    return { curve, key: eraseKeyOf(curve.filter((_, i) => i % 8 === 0)) };
+    if (!line || line.length < 3 || !scan || !toInput) return null;
+    const toScene = toInput.clone().invert();
+    const curve = marginCurveOf(scan, toScene, line, true);
+    const key = `${shapeVersionKey(scan)}|${eraseKeyOf(curve.filter((_, i) => i % 8 === 0))}`;
+    // Build 113: the scan inside the closed margin - flooded from the patient's surface nearest the wax tooth's incisal point.
+    let region = marginRegions.current.get(key);
+    if (region === undefined) {
+      const patch = new ScanPatch(scanTrianglesOf(scan), patchBox(curve.filter((_, i) => i % 4 === 0)));
+      const origin = toothAxesOf(tooth)?.origin;
+      const inside = origin ? patch.inside(curve, origin) : null;
+      region = inside ? { patch, inside, line: resample(curve, 0.1) } : null;
+      if (marginRegions.current.size > 40) marginRegions.current.clear();
+      marginRegions.current.set(key, region);
+    }
+    return region ? { curve, region, key } : null;
   };
+  const marginRegions = useRef(new Map<string, ClosedMargin | null>());
   /** A wax tooth's frame in the scene, its axes unit length. */
   const toothAxesOf = (tooth: WorkplaneShape): ToothAxes | null => {
     const toWorld = tooth.waxTooth ? localToWorld(tooth) : null;
@@ -12595,7 +12615,7 @@ export function LayerlingEditor({
     if (near.length) {
       const surface = new NearestSurface(near, 6);
       const sign = surfaceSign(job.axes, surface);
-      const margin = job.margin ? prepareMargin(job.margin.curve, surface, sign, job.axes.up) : null;
+      const margin = job.margin ? job.margin.region : null;
       soup = eraseTooth(own, job.axes, job.paint, surface, sign, margin);
     }
     eraseCache.current.set(tooth.id, { key: job.key, soup, shown: new WeakMap() });
