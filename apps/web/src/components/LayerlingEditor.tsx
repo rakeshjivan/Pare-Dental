@@ -12566,7 +12566,7 @@ export function LayerlingEditor({
     const line = slot ? marginLinesOf(waxupRef.current, slot)[tooth.waxTooth.fdi] : undefined;
     const scan = shapesRef.current.find((shape) => shape.id === tooth.waxFor);
     const toInput = scan ? waxArchInput(scan) : null;
-    if ((!line || line.length < 3) && scan && toInput) return foundMarginFor(tooth.waxTooth.fdi, scan, toInput);
+    if ((!line || line.length < 3) && scan && toInput) return foundMarginFor(tooth.waxTooth.fdi, scan, toInput, tooth);
     if (!line || line.length < 3 || !scan || !toInput) return null;
     const toScene = toInput.clone().invert();
     const curve = marginCurveOf(scan, toScene, line, true);
@@ -12598,13 +12598,59 @@ export function LayerlingEditor({
    * triangles of that tooth, cut off from the gum, the palate and its neighbours.
    */
   const foundLabels = useRef(new Map<string, { key: string; labels: Uint8Array }>());
-  const foundMarginFor = (fdi: number, scan: WorkplaneShape, toInput: THREE.Matrix4) => {
+  /** Build 116: which segmented tooth lies under a wax tooth where it stands (null: none whole). */
+  const foundMatch = useRef(new Map<string, number | null>());
+  const foundMarginFor = (asked: number, scan: WorkplaneShape, toInput: THREE.Matrix4, tooth?: WorkplaneShape) => {
     const found = waxFoundRef.current[scan.id];
-    if (!found || !fdi || !found.teeth.some((t) => t.fdi === fdi)) return null;
+    if (!found || !asked) return null;
     const world = scanTrianglesOf(scan);
     const labelKey = `${found.key}:${world.length}:${shapeVersionKey(scan)}`;
     let labels = foundLabels.current.get(scan.id);
     if (!labels || labels.key !== labelKey) { labels = { key: labelKey, labels: transferLabels(found.input, found.fdi, transformSoup(world, toInput)) }; foundLabels.current.set(scan.id, labels); }
+    // Build 116: for a wax tooth, the segmented tooth under its own neck - whatever number the finder gave it (on some
+    // scans it numbers teeth one off, or splits one) - and only if it is the size of a whole tooth; otherwise none, and
+    // the tooth is left whole (its margin can be drawn by hand).
+    let fdi = asked;
+    const axes = tooth ? toothAxesOf(tooth) : null;
+    const matchKey = tooth?.waxTooth && axes ? `${labelKey}|${asked}|${axes.origin.map((v) => Math.round(v * 2)).join(",")}|${axes.up.map((v) => Math.round(v * 20)).join(",")}` : "";
+    const matched = matchKey ? foundMatch.current.get(matchKey) : undefined;
+    if (matched !== undefined) { if (matched === null) return null; fdi = matched; }
+    else if (tooth?.waxTooth && axes) {
+      if (foundMatch.current.size > 200) foundMatch.current.clear();
+      foundMatch.current.set(matchKey, null);
+      const votes = new Map<number, number>();
+      const len = tooth.waxTooth.length;
+      for (const share of [0.35, 0.5, 0.65, 0.8]) for (const side of [-0.25, 0, 0.25]) {
+        const px = axes.origin[0] - axes.up[0] * len * share + axes.mesial[0] * tooth.waxTooth.width * side;
+        const py = axes.origin[1] - axes.up[1] * len * share + axes.mesial[1] * tooth.waxTooth.width * side;
+        const pz = axes.origin[2] - axes.up[2] * len * share + axes.mesial[2] * tooth.waxTooth.width * side;
+        let best = 9, label = 0;
+        for (let t = 0; t < labels.labels.length; t += 1) {
+          const l = labels.labels[t];
+          if (!l) continue;
+          const o = t * 9;
+          const cx = (world[o] + world[o + 3] + world[o + 6]) / 3 - px, cy = (world[o + 1] + world[o + 4] + world[o + 7]) / 3 - py, cz = (world[o + 2] + world[o + 5] + world[o + 8]) / 3 - pz;
+          const d = cx * cx + cy * cy + cz * cz;
+          if (d < best) { best = d; label = l; }
+        }
+        if (label) votes.set(label, (votes.get(label) ?? 0) + 1);
+      }
+      let top = 0, count = 0;
+      for (const [l, n] of votes) if (n > count) { top = l; count = n; }
+      if (!top || count < 4) { marginWhy.current[asked] = "found: no segmented tooth under it"; return null; }
+      fdi = top;
+      // The size of a whole crown: across most of the wax tooth's width and down a good part of its length.
+      let mlo = Infinity, mhi = -Infinity, ulo = Infinity, uhi = -Infinity;
+      for (let t = 0; t < labels.labels.length; t += 1) {
+        if (labels.labels[t] !== fdi) continue;
+        const o = t * 9;
+        const dx = (world[o] + world[o + 3] + world[o + 6]) / 3 - axes.origin[0], dy = (world[o + 1] + world[o + 4] + world[o + 7]) / 3 - axes.origin[1], dz = (world[o + 2] + world[o + 5] + world[o + 8]) / 3 - axes.origin[2];
+        const m = dx * axes.mesial[0] + dy * axes.mesial[1] + dz * axes.mesial[2], u = dx * axes.up[0] + dy * axes.up[1] + dz * axes.up[2];
+        if (m < mlo) mlo = m; if (m > mhi) mhi = m; if (u < ulo) ulo = u; if (u > uhi) uhi = u;
+      }
+      if (!(mhi - mlo >= tooth.waxTooth.width * 0.6 && uhi - ulo >= len * 0.45)) { marginWhy.current[asked] = `found: tooth ${fdi} under it too small (${(mhi - mlo).toFixed(1)} x ${(uhi - ulo).toFixed(1)} mm)`; return null; }
+      foundMatch.current.set(matchKey, fdi);
+    } else if (!found.teeth.some((t) => t.fdi === fdi)) return null;
     const key = `found|${labelKey}|${fdi}`;
     let region = marginRegions.current.get(key);
     if (region === undefined) {
