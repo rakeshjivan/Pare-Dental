@@ -138,18 +138,29 @@ export function mandiblePose(move: Movement, opening: number, incisal: [number, 
     const pivot = condyles[0].clone().add(t);
     return open(pivot, new THREE.Vector3(1, 0, 0)).multiply(new THREE.Matrix4().makeTranslation(t.x, t.y, t.z));
   }
-  // Lateral towards `toward` (+1: +x): the working condyle on that side turns in place; the other
-  // travels forward, down and towards the midline.
+  // Lateral towards `toward` (+1: +x): the non-working condyle travels its path - forward, down and towards the midline
+  // at the Bennett angle - its full distance; the mandible stays rigid, so the working condyle is carried outwards
+  // (the Bennett movement) by just what keeps the intercondylar distance. Build 116: it was held in place, which
+  // turned the jaw about it instead - the non-working condyle then missed its path (about 1 mm at 15 degrees) and
+  // the Bennett setting barely acted (about 1.5 degrees in effect whatever was set).
   const working = move.toward > 0 ? condyles[0] : condyles[1], other = move.toward > 0 ? condyles[1] : condyles[0];
   const medial = -Math.sign(other.x);
   const path = new THREE.Vector3(medial * Math.sin(b), -Math.cos(b) * Math.cos(g), -Math.cos(b) * Math.sin(g)).normalize();
   const moved = other.clone().addScaledVector(path, move.travel);
-  const from = other.clone().sub(working).normalize(), to = moved.clone().sub(working).normalize();
+  const span = other.distanceTo(working);
+  // The working condyle's shift outwards along the condylar axis, s >= 0: |moved - (working + out * s)| = span.
+  const out = working.clone().sub(other).setY(0).setZ(0).normalize();
+  const rel = moved.clone().sub(working);
+  const along = rel.dot(out), disc = along * along - rel.lengthSq() + span * span;
+  // (Slightly negative at a Bennett angle near 0: going forward lengthens the span a little, so the working condyle comes in a hair.)
+  const shift = disc >= 0 ? along + Math.sqrt(disc) : 0;
+  const workingNow = working.clone().addScaledVector(out, shift);
+  const from = other.clone().sub(working).normalize(), to = moved.clone().sub(workingNow).normalize();
   const align = new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(from, to));
-  const turn = new THREE.Matrix4().makeTranslation(working.x, working.y, working.z).multiply(align).multiply(new THREE.Matrix4().makeTranslation(-working.x, -working.y, -working.z));
+  const turn = new THREE.Matrix4().makeTranslation(workingNow.x, workingNow.y, workingNow.z).multiply(align).multiply(new THREE.Matrix4().makeTranslation(-working.x, -working.y, -working.z));
   // The axis has turned; the opening is about the new axis (sign kept: +x-ward axis opens as at rest).
   const axis = to.clone().multiplyScalar(Math.sign(to.x) || 1);
-  return open(working, axis).multiply(turn);
+  return open(workingNow, axis).multiply(turn);
 }
 
 /** Point-to-plane signed distance of each of `pts` (moved by `m`) to `surface` (nearest centre), Infinity beyond reach. */

@@ -22,10 +22,25 @@ describe("virtual articulator", () => {
     expect(d.length()).toBeCloseTo(2, 4);
     expect(Math.atan2(-d.z, -d.y) * 180 / Math.PI).toBeCloseTo(AVERAGE_ARTICULATOR.condylarGuidance, 3);
   });
-  it("turns about the working condyle in a lateral excursion; the other goes forward, down and in", () => {
+  it("in a lateral excursion the non-working condyle runs its whole path at the Bennett angle; the working one shifts out", () => {
     const { condyles } = articulatorPoints(incisal);
+    // Build 116: the working condyle was held in place, so the Bennett setting barely acted - now it is the set angle.
+    for (const bennett of [0, 15, 30]) {
+      const a = { ...AVERAGE_ARTICULATOR, bennett };
+      const pose = mandiblePose({ kind: "lateral", toward: 1, travel: 5 }, 0, incisal, a);
+      const nw = condyles[1].clone().applyMatrix4(pose), w = condyles[0].clone().applyMatrix4(pose);
+      const d = nw.clone().sub(condyles[1]);
+      // Its whole travel, along its path: the angle from the sagittal plane (seen from above) is the Bennett angle.
+      expect(d.length()).toBeCloseTo(5, 3);
+      expect((Math.atan2(Math.abs(d.x), Math.hypot(d.y, d.z)) * 180) / Math.PI).toBeCloseTo(bennett, 1);
+      // Rigid: the condyles the same distance apart; the working one moved only outwards along the axis.
+      expect(nw.distanceTo(w)).toBeCloseTo(condyles[0].distanceTo(condyles[1]), 4);
+      const ws = w.clone().sub(condyles[0]);
+      expect(Math.hypot(ws.y, ws.z)).toBeLessThan(1e-6);
+      expect(ws.x).toBeGreaterThan(-0.2);
+      if (bennett >= 15) expect(ws.x).toBeGreaterThan(0.5);
+    }
     const pose = mandiblePose({ kind: "lateral", toward: 1, travel: 3 }, 0, incisal);
-    expect(condyles[0].clone().applyMatrix4(pose).distanceTo(condyles[0])).toBeLessThan(1e-6);
     const other = condyles[1].clone().applyMatrix4(pose).sub(condyles[1]);
     expect(other.y).toBeLessThan(0); expect(other.z).toBeLessThan(0); expect(other.x).toBeGreaterThan(0);
     // The incisors move towards the working side.
