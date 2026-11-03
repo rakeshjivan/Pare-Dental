@@ -816,7 +816,7 @@ export function DentalStudioPanel({
         const finding = Boolean(wv.finder?.busy);
         return (<>
           <div className="dental-trim-buttons">
-            <button type="button" className="primary" disabled={busy || finding || Boolean(pick)} title={t("waxup.marginFindHint")} onClick={() => waxup.actions.onFindTeeth?.()}>{finding ? <LoaderCircle className="edge-modifier-spinner" size={15} aria-hidden="true" /> : null} {t(found.size ? "waxup.marginFindAgain" : "waxup.marginFind")}</button>
+            <button type="button" className="primary" disabled={busy || finding} title={t("waxup.marginFindHint")} onClick={() => { if (pick) waxup.actions.onMarginCancel?.(); waxup.actions.onFindTeeth?.(); }}>{finding ? <LoaderCircle className="edge-modifier-spinner" size={15} aria-hidden="true" /> : null} {t(found.size ? "waxup.marginFindAgain" : "waxup.marginFind")}</button>
           </div>
           {finding ? <p className="dental-status" role="status">{t("waxup.marginFinding", { n: Math.round((wv.finder?.progress ?? 0) * 100) })}</p> : found.size ? <p className="blend-hint" role="status">{t("waxup.marginFound", { n: teeth.filter((fdi) => found.has(fdi)).length })}</p> : null}
           {bothArches ? (
