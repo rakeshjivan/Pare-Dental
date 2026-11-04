@@ -1,6 +1,7 @@
 "use client";
 
 import type { BiteContactStats } from "@/lib/biteContacts";
+import { SNAP_GRIPS, snapGrip } from "@/lib/dentalSnapHinge";
 import { CUP_FIT, HINGE_FITS, PIN_CLEAR, PIN_GAP_MAX, PIN_MAX, PIN_STEP, PIN_WARN, articulatorPinPatch } from "@/lib/dentalArticulator";
 import { biteOpenings } from "@/lib/waxOcclusion";
 
@@ -1228,6 +1229,26 @@ export function DentalStudioPanel({
                 {options.risers ? <p className="blend-hint">{t("studio.risersHint")}</p> : null}
               </>) : null}
             </>) : null}
+            {/* Build 119 (on test): the hinge - the drop-in cups, or the snap hinge on the smooth base. */}
+            <h4 className="dental-group">{t("studio.hingeStyle")}</h4>
+            <div className="studio-mm-choice" role="radiogroup" aria-label={t("studio.hingeStyle")}>
+              {(["standard", "snap"] as const).map((style) => {
+                const on = (options.hingeStyle ?? "standard") === style;
+                return <button key={style} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} onClick={() => onOptionsChange({ hingeStyle: style })}>{t(style === "snap" ? "studio.hingeSnap" : "studio.hingeStandard")}</button>;
+              })}
+            </div>
+            <p className="blend-hint">{t(options.hingeStyle === "snap" ? "studio.hingeSnapHint" : "studio.hingeStandardHint")}</p>
+            {options.hingeStyle === "snap" ? (<>
+              {/* Build 119: the snap's grip - how much narrower than the ball the throat is. */}
+              <h4 className="dental-group">{t("studio.snapGrip")}</h4>
+              <div className="studio-mm-choice" role="radiogroup" aria-label={t("studio.snapGrip")}>
+                {SNAP_GRIPS.map((grip, index) => {
+                  const on = Math.abs(snapGrip(options.snapGrip) - grip) < 1e-6;
+                  return <button key={grip} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} title={t("studio.snapGripHint")} onClick={() => onOptionsChange({ snapGrip: grip })}>{`${t((["studio.snapGripLighter", "studio.hingeFitStandard", "studio.snapGripFirmer"] as const)[index])} ${grip.toFixed(2)} mm`}</button>;
+                })}
+              </div>
+              <p className="blend-hint">{t("studio.snapGripHint")}</p>
+            </>) : (<>
             {/* Build 117: the ball-and-socket's fit - tighter, standard or looser, the clearance all round the ball. */}
             <h4 className="dental-group">{t("studio.hingeFit")}</h4>
             <div className="studio-mm-choice" role="radiogroup" aria-label={t("studio.hingeFit")}>
@@ -1237,6 +1258,7 @@ export function DentalStudioPanel({
               })}
             </div>
             <p className="blend-hint">{t("studio.hingeFitHint")}</p>
+            </>)}
             {/* Build 117: the dental midline, marked by the dentist - the models, the front pin and the side posts centred on it. */}
             {onMidlinePick && slots.upper ? (<>
               <h4 className="dental-group">{t("studio.midline")}</h4>

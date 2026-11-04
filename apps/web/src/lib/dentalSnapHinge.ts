@@ -56,6 +56,15 @@ export function snapFit(fit: number | undefined) {
   return Number.isFinite(fit) ? Math.max(SNAP_FIT_MIN, Math.min(SNAP_FIT_MAX, fit as number)) : SNAP.fit;
 }
 
+/**
+ * The snap's grip: how much narrower than the ball the throat is, each side, mm (the ball pushes the cheeks
+ * apart by this much going in). Lighter, standard and firmer - for resins that are stiffer or more flexible.
+ */
+export const SNAP_GRIPS = [0.055, SNAP.ball - SNAP.throat, 0.155] as const;
+export function snapGrip(grip: number | undefined) {
+  return Number.isFinite(grip) ? Math.max(0.02, Math.min(0.25, grip as number)) : SNAP.ball - SNAP.throat;
+}
+
 type P2 = [number, number];
 /** The beak's side profile (y, z), the stem's top inside it. */
 export const ARM_PROFILE: P2[] = [[SNAP.front - 2, 16.6], [-9, 16.57], [-5, 15.6], [-1, 13.7], [1.6, 11.8], [3.0, 10.7], [2.4, 9.95], [0.4, 10.3], [-3, 9.84], [-5.2, 8.9], [-7.4, 7.6], [SNAP.front - 2, 7.4]];
@@ -127,14 +136,14 @@ export function upperField() {
 }
 
 /** The post's distance field (negative inside) with its slot, pocket (fit as given) and throat cut. */
-export function lowerField(fit: number = SNAP.fit) {
+export function lowerField(fit: number = SNAP.fit, throatRadius: number = SNAP.throat) {
   const post = extruded(profileField(POST_PROFILE, [SNAP.front - 3, -20], [8, 10]), SNAP.postHalf, SNAP.postRound);
   const lean = (SNAP.slotLean * Math.PI) / 180, ny = Math.cos(lean), nz = Math.sin(lean);
   const slot = (x: number, y: number, z: number) => Math.max(Math.abs(x) - SNAP.slotHalf, -((y - SNAP.slotFront) * ny + z * nz), SNAP.slotFloor - z);
   const pocket = (x: number, y: number, z: number) => Math.hypot(x, y, z) - (SNAP.ball + fit);
   const throat = (x: number, y: number, z: number) => {
     if (y < 0) return Infinity;
-    const r = y < SNAP.throatRun ? SNAP.throat : SNAP.throat + (SNAP.lead - SNAP.throat) * Math.min(1, (y - SNAP.throatRun) / 4.4);
+    const r = y < SNAP.throatRun ? throatRadius : throatRadius + (SNAP.lead - throatRadius) * Math.min(1, (y - SNAP.throatRun) / 4.4);
     return Math.hypot(x, z) - r;
   };
   return (x: number, y: number, z: number) => Math.max(smax(post(x, y, z), -Math.min(slot(x, y, z), pocket(x, y, z), throat(x, y, z)), SNAP.cutRound), SNAP.front - y);
@@ -148,9 +157,10 @@ const made = new Map<string, { upper: ManifoldSolid; lower: ManifoldSolid }>();
  * One side's hinge in its own frame (made once for each fit and kept): the upper's beak, stem and ball,
  * and the lower's post. The caller moves copies into place (translate makes a new solid) and never frees these.
  */
-export function snapHinge(runtime: ManifoldRuntime, fitGiven?: number) {
+export function snapHinge(runtime: ManifoldRuntime, fitGiven?: number, gripGiven?: number) {
   const fit = snapFit(fitGiven);
-  const key = fit.toFixed(3);
+  const grip = snapGrip(gripGiven);
+  const key = `${fit.toFixed(3)}|${grip.toFixed(3)}`;
   const kept = made.get(key);
   if (kept) return kept;
   const { Manifold } = runtime;
@@ -161,7 +171,7 @@ export function snapHinge(runtime: ManifoldRuntime, fitGiven?: number) {
   const upper = Manifold.union(shaped, ball);
   shaped.delete();
   ball.delete();
-  const lower = field(lowerField(fit), [-6, SNAP.front, -19], [6, 7.5, 9.5]);
+  const lower = field(lowerField(fit, SNAP.ball - grip), [-6, SNAP.front, -19], [6, 7.5, 9.5]);
   const both = { upper, lower };
   made.set(key, both);
   return both;

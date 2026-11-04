@@ -17,6 +17,7 @@
  */
 import type { ManifoldRuntime, ManifoldSolid } from "@/lib/dentalMesh";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
+import { SNAP, snapHinge } from "@/lib/dentalSnapHinge";
 
 const deg = Math.PI / 180;
 
@@ -228,11 +229,14 @@ export function incisalPins(runtime: ManifoldRuntime, raises: number[], axisY: n
 }
 
 /** Build 117: more of the articulator - the cups' fit (mm, CUP_FIT when left out) and the dental midline's x, to centre it on. */
-export type ArticulatorMore = { fit?: number; centre?: number; /** Build 117: the side posts grooved for the risers' click. */ riserGroove?: boolean };
+export type ArticulatorMore = { fit?: number; centre?: number; /** Build 117: the side posts grooved for the risers' click. */ riserGroove?: boolean; /** Build 119: the snap hinge (lib/dentalSnapHinge) instead of the drop-in cups, with its grip. */ snap?: { grip?: number } };
 /**
  * Build 117: a side post as built - its x, its place in the upper's frame (y, the dome's centre zc
  * above the plane, the models closed), where the lower half stands (restY) and the top of its arm.
  */
+/** Build 119: how far forward into its base the snap hinge's heel reaches, mm. */
+export const SNAP_HEEL = 6;
+
 export type ArticulatorPost = { x: number; y: number; restY: number; zc: number; armTop: number };
 
 /**
@@ -257,7 +261,9 @@ export function articulatorParts(
 ) {
   const R = CONDYLE_RADIUS;
   const fit = hingeFit(more.fit);
-  const ay = condyleAxisY(back);
+  const snap = more.snap ?? null;
+  // Build 119: the snap hinge's ball stands SNAP.behind behind the bases' (straight) backs.
+  const ay = snap ? back + SNAP.behind : condyleAxisY(back);
   const known = Number.isFinite(xMin) && Number.isFinite(xMax);
   // Build 117: on the dental midline when it was found - the condyles either side of it alike, as far
   // out as the wider side reaches - else in the middle of the heels.
@@ -265,9 +271,10 @@ export function articulatorParts(
   const cx = centred ? more.centre! : known ? (xMin + xMax) / 2 : 0;
   const half = Math.max(CUP_HALF_X, centred ? Math.max(cx - xMin, xMax - cx) : known ? (xMax - xMin) / 2 : 14);
   // As wide as the models allow: the cups' outer edges at the heels' outer edges.
-  const centres = half >= 2 * CUP_HALF_X + 2
-    ? [cx - half + CUP_HALF_X, cx + half - CUP_HALF_X]
-    : [cx - CUP_HALF_X - 1, cx + CUP_HALF_X + 1];
+  const sideHalf = snap ? SNAP.postHalf + 1 : CUP_HALF_X;
+  const centres = half >= 2 * sideHalf + 2
+    ? [cx - half + sideHalf, cx + half - sideHalf]
+    : [cx - sideHalf - 1, cx + sideHalf + 1];
   const made: ManifoldSolid[] = [];
   const keep = <T extends ManifoldSolid>(solid: T) => { made.push(solid); return solid; };
   const yBack = ay + CUP_HALF_Y;
@@ -281,7 +288,8 @@ export function articulatorParts(
     return [Math.min(...xs), Math.max(...xs)];
   };
   const backOf = (heels: ArticulatorHeel[] | undefined) => (heels?.length ? Math.max(...heels.map((heel) => heel.y)) : back);
-  for (const [heels, parts, z0, z1] of [[backs?.lower, lowerParts, floorLower, floorLower + 4], [backs?.upper, upperParts, floorUpper - 4, floorUpper]] as const) {
+  // Build 119: the snap hinge needs no bar - each part stands on its base's own back corner.
+  if (!snap) for (const [heels, parts, z0, z1] of [[backs?.lower, lowerParts, floorLower, floorLower + 4], [backs?.upper, upperParts, floorUpper - 4, floorUpper]] as const) {
     const [x0, x1] = span(heels);
     parts.push(keep(box(runtime, x0, x1, Math.min(back, backOf(heels)) - 4, yBack, z0, z1)));
     for (const heel of heels ?? []) parts.push(keep(box(runtime, heel.x - 4, heel.x + 4, heel.y - 4, yBack, z0, z1)));
@@ -301,7 +309,27 @@ export function articulatorParts(
       pinY = Math.min(pinY, limit - Math.max(0, restY - pinY));
     }
   }
-  centres.forEach((c) => {
+  if (snap) {
+    // Build 119: each side, the beak and ball on the upper and the post on the lower (lib/dentalSnapHinge), each cut
+    // at its base's floor, and the heel each stands on: its base's back corner carried to the part, SNAP_HEEL forward.
+    const hinge = snapHinge(runtime, undefined, snap.grip);
+    const round = (x0: number, x1: number, y0: number, y1: number, z0: number, z1: number) => {
+      const r = 1;
+      const plan = runtime.CrossSection.square([x1 - x0 - 2 * r, y1 - y0 - 2 * r]).translate([x0 + r, y0 + r]).offset(r, "Round", 2, 24);
+      const solid = plan.extrude(Math.max(0.01, z1 - z0)).translate([0, 0, z0]);
+      plan.delete();
+      return solid;
+    };
+    centres.forEach((c) => {
+      const upperAt = keep(hinge.upper.translate([c, ay, 0]));
+      const lowerAt = keep(hinge.lower.translate([c, ay, 0]));
+      upperParts.push(keep(upperAt.intersect(keep(box(runtime, c - 20, c + 20, ay - 40, ay + 40, -20, floorUpper)))));
+      lowerParts.push(keep(lowerAt.intersect(keep(box(runtime, c - 20, c + 20, ay - 40, ay + 40, floorLower, 20)))));
+      const armTop = Math.min(floorUpper, 7.7), postTop = Math.max(floorLower, -11.5);
+      if (floorUpper > armTop) upperParts.push(keep(round(c - SNAP.armHalf + 0.2, c + SNAP.armHalf - 0.2, back - SNAP_HEEL, back + 0.5, armTop, floorUpper)));
+      if (postTop > floorLower) lowerParts.push(keep(round(c - SNAP.postHalf + 0.2, c + SNAP.postHalf - 0.2, back - SNAP_HEEL, back + 0.5, floorLower, postTop)));
+    });
+  } else centres.forEach((c) => {
     // The lower: a pedestal from its bar, a neck and the ball, centred on the axis (y = ay, z = 0).
     // The pedestal stops below where the cup's block swings down past it as the models open.
     lowerParts.push(

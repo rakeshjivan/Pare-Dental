@@ -68,3 +68,19 @@ describe("the snap hinge's parts", () => {
     expect(snapHinge(runtime)).toBe(snapHinge(runtime, SNAP.fit));
   }, 120000);
 });
+
+describe("the snap hinge in the articulator", () => {
+  it("stands its ball behind the bases' backs, clear of the post closed and opened", async () => {
+    const { articulatorParts } = await import("@/lib/dentalArticulator");
+    const heels = [{ x: -22, y: 20 }, { x: 22, y: 20 }];
+    const a = articulatorParts(runtime as never, 20, -27, 27, 21, -21, null, 0, { upper: heels, lower: heels }, "fused", { snap: {} });
+    expect(a.axleY).toBeCloseTo(20 + SNAP.behind, 6);
+    // As wide as the bases allow: each post's outer side inside the bases' width.
+    expect(Math.max(...a.centres.map(Math.abs)) + SNAP.postHalf).toBeLessThanOrEqual(27);
+    const touching = runtime.Manifold.intersection(a.upper, a.lower);
+    expect(touching.volume()).toBeLessThan(1e-3);
+    // Opened about the axis: nothing of the upper's hinge meets the lower's posts (the ball turns in its pocket).
+    const open = a.upper.translate([0, -a.axleY, 0]).rotate([-90, 0, 0]).translate([0, a.axleY, 0]);
+    expect(runtime.Manifold.intersection(open, a.lower).volume()).toBeLessThan(1e-3);
+  }, 120000);
+});

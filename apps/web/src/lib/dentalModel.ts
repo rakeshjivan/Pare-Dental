@@ -21,6 +21,7 @@ import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
 import { GUM_REACH, marginRegion, moveGumCut, type GumCut } from "@/lib/waxGum";
+import { smoothBase as makeSmoothBase, SMOOTH, withoutTags as withoutTissueTags } from "@/lib/dentalSmoothBase";
 import { articulatorParts, incisalPins, pinRisers, PIN, PIN_BAND, PIN_CLEAR, PIN_HALF, PIN_MAX, PIN_SET, POST_BACK, restAngle, type ArticulatorSides, type PinStyle } from "@/lib/dentalArticulator";
 import {
   applyMatrix, boundaryLoops, cloneMesh, transformSoup, convexHull, cutAlongField, cutBelow, dropFragments, smoothField, faceArea, loopLength, surfaceKept, pinchedEdges, PointGrid, solidPositions, toManifold, upwardness, weld,
@@ -153,6 +154,12 @@ export type DentalStudioOptions = {
   pinGap?: number;
   /** Build 117: the ball-and-socket's clearance all round the ball, mm (lib/dentalArticulator hingeFit) - CUP_FIT when left out. */
   hingeFit?: number;
+  /** Build 119 (on test): the hinge - the drop-in cups ("standard", when left out) or the snap hinge (lib/dentalSnapHinge), which comes on the smooth base (lib/dentalSmoothBase). */
+  hingeStyle?: "standard" | "snap";
+  /** Build 119: the snap hinge's grip, mm each side (lib/dentalSnapHinge snapGrip). */
+  snapGrip?: number;
+  /** Build 119: set by the studio, not the panel - this arch on the smooth base (the snap hinge's). */
+  smoothBase?: boolean;
   /** Build 117: with the posts either side, also the bite-opening risers (1 to 5 mm, two of each), printed as a part of their own. Off unless true. */
   risers?: boolean;
   /** Build 117: the dental midline the dentist marked on the upper scan (`midlineScan`), in the studio's coordinates; the articulated pair is centred on it. */
@@ -825,6 +832,11 @@ function buildArch(
   const fringe = distanceFromEdge(cut, EDGE_FRINGE);
   for (const i of new Set(cut.f)) if (fringe[i] > EDGE_FRINGE) keptKeys.add(`${cut.v[i * 3]},${cut.v[i * 3 + 1]},${cut.v[i * 3 + 2]}`);
   // Build 101: High unless chosen otherwise - the edge alone moves (the teeth are kept), shrink-free.
+  // Build 119: on the smooth base, tags of tissue standing up at the scan's edge are trimmed off, as from a cast.
+  if (options.smoothBase) {
+    const untagged = withoutTissueTags(cut, teeth);
+    if (untagged !== cut) { cut.f = untagged.f; dropFragments(cut, 0.05, teeth); }
+  }
   smoothEdge(cut, SMOOTH_ROUNDS[options.smooth ?? "high"], teeth);
   let closed;
   try {
@@ -859,7 +871,20 @@ function buildArch(
   let buried = -Infinity;
   // The outline whose front face carries the label (orthodontic and articulator bases).
   let labelRing: Ring | null = options.baseStyle === "ortho" ? ortho : null;
-  if (options.baseStyle === "ortho" && ortho) {
+  let smoothCavity: ManifoldSolid | null = null;
+  if (options.smoothBase && ortho) {
+    // Build 119: the smooth base - the scan exact, the drape, fillet, ledge and flat wall a field round it (lib/dentalSmoothBase),
+    // cut to the orthodontic outline, an even shell open underneath.
+    const base = makeSmoothBase(runtime, { scan: cut, teeth, outline: ortho, floor, open: true });
+    keepSolid(base.outer);
+    solid = keepSolid(runtime.Manifold.union(solid, base.outer));
+    solid = keepSolid(runtime.Manifold.intersection(solid, keepSolid(prism(runtime, ortho, floor, top + 5))));
+    if (base.cavity) smoothCavity = keepSolid(base.cavity);
+    buried = floor + SMOOTH.ledge;
+    footprint = [ortho];
+    trimRings = [ortho];
+    labelRing = ortho;
+  } else if (options.baseStyle === "ortho" && ortho) {
     const block = keepSolid(prism(runtime, ortho, floor, floor + Math.max(DENTAL_MIN_BASE, options.base)));
     buried = floor + Math.max(DENTAL_MIN_BASE, options.base);
     solid = keepSolid(runtime.Manifold.union(solid, block));
@@ -931,7 +956,12 @@ function buildArch(
   let hollowWall = 0;
   /** Build 108: what the hollowing took out (the cavity, less any honeycomb) - taken out of the wax-up too. */
   let hollowTaken: ManifoldSolid | null = null;
-  if (options.inside !== "solid" && options.baseStyle !== "articulator") {
+  if (smoothCavity) {
+    unhollowed = solid;
+    hollowWall = SMOOTH.wall;
+    hollowTaken = smoothCavity;
+    solid = keepSolid(runtime.Manifold.difference(solid, smoothCavity));
+  } else if (options.inside !== "solid" && options.baseStyle !== "articulator") {
     const open = options.inside === "open";
     const wall = Math.max(DENTAL_MIN_WALL, Math.min(DENTAL_MAX_WALL, options.wall));
     unhollowed = solid;
@@ -1217,6 +1247,9 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
   if ((options.margin === "manual" || options.baseStyle === "clean") && (options.gum === null || options.gum === undefined)) options = { ...options, gum: CLEAN_GUM };
   const apart = Boolean(prep.analysis.pair?.apart);
   if (apart) options = { ...options, layout: "print", hinge: false };
+  // Build 119 (on test): the snap hinge stands on the smooth base - an orthodontic outline (a straight back for the
+  // hinge), open underneath, its ledge SMOOTH.ledge above the rim, so the base is at least that tall.
+  if (options.hinge && prep.arches.length === 2 && options.hingeStyle === "snap") options = { ...options, baseStyle: "ortho", inside: "open", smoothBase: true, base: Math.max(options.base, SMOOTH.ledge) };
   const runtime = given ?? (await getManifoldRuntime());
   const base = Math.max(DENTAL_MIN_BASE, Math.min(DENTAL_MAX_BASE, options.base));
   const keeps = prep.arches.map((arch) => keptDepthFor(arch, options));
@@ -1418,7 +1451,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     // Build 78: the one articulator - kinematic seats and the incisal pin (lib/dentalArticulator).
     const raise = options.incisalPin === false ? 0 : Math.max(0, Math.min(PIN_MAX, options.pinRaise ?? 0));
     // Build 117: the cups' fit as chosen; on the dental midline (x = 0 here) when it was found.
-    const parts = articulatorParts(runtime, back, xMin, xMax, depth, -depth, stop, raise, { upper: heelsOf("upper"), lower: heelsOf("lower") }, options.pinStyle ?? "fused", { fit: options.hingeFit, riserGroove: Boolean(options.risers), ...(midline !== null ? { centre: 0 } : {}) });
+    const parts = articulatorParts(runtime, back, xMin, xMax, depth, -depth, stop, raise, { upper: heelsOf("upper"), lower: heelsOf("lower") }, options.pinStyle ?? "fused", { fit: options.hingeFit, riserGroove: Boolean(options.risers), ...(midline !== null ? { centre: 0 } : {}), ...(options.smoothBase ? { snap: { grip: options.snapGrip } } : {}) });
     if (stop && Number.isFinite(parts.pinY)) pinGeometry = { axleY: parts.axleY, pinY: parts.pinY };
     if (stop && Number.isFinite(parts.pinY) && options.pinStyle === "set") {
       const raises = [...new Set([...PIN_SET, raise])].sort((a, b) => a - b);
