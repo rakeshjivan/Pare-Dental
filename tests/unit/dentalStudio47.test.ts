@@ -259,12 +259,26 @@ describe("Dental Studio (build 47)", () => {
   it("starts each preset from the settings the evidence points to", () => {
     expect(dentalPreset("study", 16, false)).toMatchObject({ inside: "open", baseStyle: "clean", keep: null });
     const aligner = dentalPreset("aligner", 16, false);
-    expect(aligner.inside).toBe("solid");
+    // Build 118: every preset hollow (2.5 mm, over the 2 mm thermoforming needs) on a honeycomb base.
+    expect(aligner).toMatchObject({ inside: "open", infill: "base", wall: 2.5 });
     expect(aligner.keep! + aligner.base).toBeGreaterThanOrEqual(15);
     expect(aligner.keep! + aligner.base).toBeLessThanOrEqual(20);
     expect(dentalPreset("crown", 16, false)).toMatchObject({ inside: "solid", baseStyle: "plate" });
-    expect(dentalPreset("ortho", 16, true)).toMatchObject({ baseStyle: "ortho", inside: "solid", layout: "occlusion", base: 8 });
+    expect(dentalPreset("ortho", 16, true)).toMatchObject({ baseStyle: "ortho", inside: "open", infill: "base", layout: "occlusion", base: 8 });
   });
+
+  it("makes every preset hollow, open or honeycomb underneath, as a closed solid (build 118)", async () => {
+    const input = { arches: [{ id: "a", positions: syntheticArch({ teethDown: true }) }] };
+    for (const preset of ["study", "ortho", "aligner"] as const) {
+      for (const infill of ["none", "base"] as const) {
+        const options = { ...dentalPreset(preset, 16, false), infill };
+        const result = await makeDentalStudio(input, options, runtime as never);
+        expect(result.warnings).not.toContain("teeth");
+        expect(pinchedEdges(result.parts[0].positions)).toBe(0);
+        expect(closedVolume(runtime, result.parts[0].positions).status).toBe("NoError");
+      }
+    }
+  }, 120000);
 
   it("writes labels in its own font", () => {
     expect(labelText("Bonnie ünd 23/10")).toBe("BONNIE ND 23/10");

@@ -48,13 +48,16 @@ export function dentalPreset(preset: DentalPreset, depth: number, pair: boolean,
   if (preset === "ortho") {
     // The trimmed base is about a third of the model's height (the art portion), the anatomy two thirds.
     // Build 78: records keep the scans whole - no soft tissue trimmed (the ABO counts any change as altered records).
-    return { ...common, keep: null, base: Math.round(Math.max(6, Math.min(15, depth / 2))), baseStyle: "ortho", inside: "solid", layout: pair ? "occlusion" : "print", relief: false };
+    // Build 118: hollow (honeycomb base by default), standing on its trimmed back - no articulator.
+    return { ...common, keep: null, base: Math.round(Math.max(6, Math.min(15, depth / 2))), baseStyle: "ortho", inside: "open", infill: "base", layout: pair ? "occlusion" : "print", relief: false };
   }
   if (preset === "aligner") {
     // Thermoforming: solid, 15-20 mm in all (Formlabs' thermoforming guide) - floor to the tallest
     // tooth about 18 mm, never keeping less than the teeth.
     const keep = Math.max(teeth, Math.min(depth, 15 - above));
-    return { ...common, keep, base: Math.max(3, 18 - keep - above), baseStyle: "follow", inside: "solid" };
+    // Build 118: hollow with the honeycomb base (stiff under the forming pressure; 2.5 mm walls, over the 2 mm hollow
+    // models need for thermoforming), at its own height - no articulator.
+    return { ...common, keep, base: Math.max(3, 18 - keep - above), baseStyle: "follow", inside: "open", infill: "base" };
   }
   if (preset === "crown") {
     // Crown and bridge: solid with a plate across the arch - the most accurate (Shin 2020, Wan 2026).
@@ -1065,11 +1068,12 @@ export function DentalStudioPanel({
               honeycomb base; or solid. The wall is HOLLOW_WALL; no full honeycomb, no separate wall or underside choice. */}
           <h4 className="dental-group">{t("studio.body")} <HelpTip text={t("studio.bodyHint")} /></h4>
           {(() => {
-            const body = options.inside === "solid" ? "solid" : options.infill === "none" ? "open" : "honeycombBase";
-            const pick = (value: "open" | "honeycombBase" | "solid") => onOptionsChange(value === "solid" ? { inside: "solid" } : { inside: "open", infill: value === "open" ? "none" : "base", wall: HOLLOW_WALL });
+            // Build 118: every model hollow - its base open or honeycomb (a case saved solid shows neither until one is picked).
+            const body = options.inside === "solid" ? null : options.infill === "none" ? "open" : "honeycombBase";
+            const pick = (value: "open" | "honeycombBase") => onOptionsChange({ inside: "open", infill: value === "open" ? "none" : "base", wall: HOLLOW_WALL });
             return (
-              <div className="studio-pic-choice" role="radiogroup" aria-label={t("studio.body")}>
-                {(["open", "honeycombBase", "solid"] as const).map((value) => (
+              <div className="studio-pic-choice two" role="radiogroup" aria-label={t("studio.body")}>
+                {(["open", "honeycombBase"] as const).map((value) => (
                   <button key={value} type="button" role="radio" aria-checked={body === value} className={body === value ? "active" : ""} disabled={busy} title={t(`studio.base3.${value}Hint` as "studio.base3.openHint")} onClick={() => pick(value)}>
                     <BodyPictureSvg kind={value} />
                     <span>{t(`studio.base3.${value}` as "studio.base3.open")}</span>
@@ -1166,7 +1170,8 @@ export function DentalStudioPanel({
         </>) : null}
       </>)) : null}
 
-      {pair && inMb("label") ? card(n(6), t("dental.step4"), options.hinge, t("dental.step4Hint"), articSummary, framed ? (() => {
+      {/* Build 118: the articulator for study models only (ortho stands on its back; aligners are formed one arch at a time). */}
+      {pair && inMb("label") && (preset === "study" || options.hinge) ? card(n(6), t("dental.step4"), options.hinge, t("dental.step4Hint"), articSummary, framed ? (() => {
         // Build 106: separate or articulated; articulated - the picture, then pin or no pin; with a pin,
         // where it stands, how far from the teeth, and how much it opens the bite (OVD).
         const pinOn = options.incisalPin !== false;
