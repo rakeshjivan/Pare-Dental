@@ -21819,8 +21819,13 @@ export function LayerlingEditor({
                   if (teeth) single[arch] = [...teeth].sort((a, b) => archOrder(a) - archOrder(b)); else delete single[arch];
                   return { ...current, single };
                 });
-                // Teeth already placed: placed again with only those (or the whole set).
-                if (waxPlacedNow.length) window.setTimeout(() => void placeWaxupRef.current(), 80);
+                // That arch's teeth already placed (a set is placed as it is chosen): placed again with only those (or
+                // the whole set) - the arch made the one worked on first.
+                const scanId = dentalStudioRef.current?.slots[arch];
+                if (scanId && waxTeethOf(scanId).length) {
+                  if (waxupRef.current.slot !== arch) switchWaxSlotRef.current(arch);
+                  window.setTimeout(() => void placeWaxupRef.current(), 700);
+                }
               },
               onSlot: (slot) => switchWaxSlot(slot),
               onMark: startWaxPicking,
