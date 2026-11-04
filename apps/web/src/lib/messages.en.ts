@@ -4975,7 +4975,7 @@ export const MESSAGES_EN = {
   "dental.reliefOff": "The scans are kept exactly as captured, as orthodontic records require. Soft tissue that meets the other model may hold the models open.",
   "dental.pinSet": "Incisal pins",
   "dental.pinRisers": "Pin risers",
-  "dental.risersMade": "Pin risers made, two each of {heights} mm (one for each post; notches round the top tell the height). Each is a tube that clicks over a lower post - a ring inside it snaps into the groove round the post - and holds the models open by that much at the posts.",
+  "dental.risersMade": "Pin risers made, two each of {heights} mm (one for each post; each has its height engraved on two sides). Each is a tube that clicks over a lower post - a ring inside it snaps into the groove round the post - and holds the models open by that much at the posts.",
   "dental.warn.risers": "The posts are too short for the pin risers, so none were made. A thicker base gives them room.",
   "dental.onMidline": "Centred on the dental midline, where the upper central incisors meet ({mm} mm from the middle of the arch).",
   "export.dentalLayers": "Print dental models at a 25-50 micron (0.025-0.05 mm) layer height on the resin printer. Coarser layers leave layer lines across the tooth surfaces; a silicone index copies them, and composite injected for IMT then needs a lot of smoothing by hand.",
