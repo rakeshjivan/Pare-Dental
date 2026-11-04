@@ -5759,10 +5759,12 @@ export function LayerlingEditor({
 
       if (projectInteractionActiveRef.current) {
         setShapes((current) => {
-          const { changed, next } = applyPatch(current);
+          const { changed, next: moved } = applyPatch(current);
           if (!changed) {
             return current;
           }
+          // Build 117: Wax-up's magnet during a drag too - the wax teeth follow their model as it moves.
+          const next = withWaxMagnet(moved);
           interactionHistoryChangedRef.current = true;
           shapesRef.current = next;
           return next;
@@ -14562,10 +14564,12 @@ export function LayerlingEditor({
   const WAX_POSITION_GHOST = 0.6;
   const waxGhostIds = dentalStudio?.waxStudio ? shapes.filter((shape) => shape.dental === "wax" && !shape.hidden).map((shape) => shape.id).join(",") : "";
   useEffect(() => {
-    // Build 103: in Position the whole library teeth are see-through over the patient's.
-    const opacity = waxup.stage === "position" ? Math.min(waxup.ghost, WAX_POSITION_GHOST) : waxup.ghost;
+    // Build 103: in Position the whole library teeth were see-through over the patient's. Build 117: solid, as in
+    // Meshmixer - so a tooth placed into the patient's tooth, gum or palate is hidden where it is inside them and
+    // shows only where it stands proud; the ghost view slider still makes them see-through when wanted.
+    const opacity = studioShellOn ? waxup.ghost : waxup.stage === "position" ? Math.min(waxup.ghost, WAX_POSITION_GHOST) : waxup.ghost;
     window.layerlingGhost?.(waxGhostIds ? waxGhostIds.split(",") : [], waxGhostIds ? opacity : 1);
-  }, [waxGhostIds, waxup.ghost, waxup.stage]);
+  }, [waxGhostIds, waxup.ghost, waxup.stage, studioShellOn]);
   // The teeth still there (one deleted or undone drops off the list).
   // Build 101: with the teeth placed, a slider places them again by itself (a moment after it stops),
   // so what it does is seen at once; each change is a step of the wax-up's Undo.
