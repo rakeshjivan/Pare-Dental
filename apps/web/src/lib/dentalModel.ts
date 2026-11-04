@@ -948,7 +948,9 @@ function buildArch(
       solid = keepSolid(runtime.Manifold.difference(solid, hollowTaken));
       // Build 107: three drain slots through the outer wall at the cavity's floor - the middle of the arch and each heel.
       const outerRing = footprint.reduce<Ring | null>((best, ring) => (!best || Math.abs(signedRing(ring)) > Math.abs(signedRing(best)) ? ring : best), null);
-      if (outerRing) {
+      // Build 117 (Ian Meyers' prints): not with an open underside or a honeycomb - the resin drains through the
+      // open floor or the honeycomb's cells - only for a closed, empty hollow.
+      if (outerRing && !open && infill === "none") {
         const bottom = open ? floor : Math.max(floor, cavity.solid.boundingBox().min[2]);
         const avoidX = options.baseStyle === "ortho" && labelText(labelLine) ? 1 : 0;
         // The front locator notch (clean base) sits on the middle of the front with a collar of solid round it: the slot goes beside it.

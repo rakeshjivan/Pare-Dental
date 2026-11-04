@@ -41,7 +41,7 @@ function pocketsAt(positions: Float32Array, z: number) {
 }
 
 describe("build 107: drain slots in hollow models, at the floor", () => {
-  it("opens three arch-shaped slots through the outer wall where the hollow meets the platform", async () => {
+  it("opens three arch-shaped slots through the outer wall of a closed, empty hollow (none when open or with a honeycomb)", async () => {
     const input = { arches: [{ id: "a", positions: syntheticArch() }] };
     const solid = await makeDentalStudio(input, base, runtime as never);
     const open = await makeDentalStudio(input, { ...base, inside: "open", infill: "base" }, runtime as never);
@@ -53,7 +53,9 @@ describe("build 107: drain slots in hollow models, at the floor", () => {
     // Without slots the hollow is a pocket shut in by the wall at the floor; with them it opens to the outside -
     // open underneath at the platform, closed on the floor a wall up - and every honeycomb cell with it.
     expect(pocketsAt(solid.parts[0].positions, 0.6)).toBe(0);
-    expect(pocketsAt(open.parts[0].positions, 0.6)).toBe(0);
+    // Build 117: open underneath (or with a honeycomb) no slots are cut - the resin drains through the open floor -
+    // so the wall at the floor is whole and the hollow shows as a pocket there.
+    expect(pocketsAt(open.parts[0].positions, 0.6)).toBeGreaterThan(0);
     expect(pocketsAt(closed.parts[0].positions, 3 + 0.6)).toBe(0);
     // Above the slots the wall is whole again: the hollow shows as a pocket there.
     expect(pocketsAt(closed.parts[0].positions, 3 + DRAIN_SLOT.height + 1)).toBeGreaterThan(0);
