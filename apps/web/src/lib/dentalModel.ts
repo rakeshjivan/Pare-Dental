@@ -1402,7 +1402,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     // Build 78: the one articulator - kinematic seats and the incisal pin (lib/dentalArticulator).
     const raise = options.incisalPin === false ? 0 : Math.max(0, Math.min(PIN_MAX, options.pinRaise ?? 0));
     // Build 117: the cups' fit as chosen; on the dental midline (x = 0 here) when it was found.
-    const parts = articulatorParts(runtime, back, xMin, xMax, depth, -depth, stop, raise, { upper: heelsOf("upper"), lower: heelsOf("lower") }, options.pinStyle ?? "fused", { fit: options.hingeFit, ...(midline !== null ? { centre: 0 } : {}) });
+    const parts = articulatorParts(runtime, back, xMin, xMax, depth, -depth, stop, raise, { upper: heelsOf("upper"), lower: heelsOf("lower") }, options.pinStyle ?? "fused", { fit: options.hingeFit, riserGroove: Boolean(options.risers), ...(midline !== null ? { centre: 0 } : {}) });
     if (stop && Number.isFinite(parts.pinY)) pinGeometry = { axleY: parts.axleY, pinY: parts.pinY };
     if (stop && Number.isFinite(parts.pinY) && options.pinStyle === "set") {
       const raises = [...new Set([...PIN_SET, raise])].sort((a, b) => a - b);

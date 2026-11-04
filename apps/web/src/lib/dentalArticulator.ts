@@ -228,7 +228,7 @@ export function incisalPins(runtime: ManifoldRuntime, raises: number[], axisY: n
 }
 
 /** Build 117: more of the articulator - the cups' fit (mm, CUP_FIT when left out) and the dental midline's x, to centre it on. */
-export type ArticulatorMore = { fit?: number; centre?: number };
+export type ArticulatorMore = { fit?: number; centre?: number; /** Build 117: the side posts grooved for the risers' click. */ riserGroove?: boolean };
 /**
  * Build 117: a side post as built - its x, its place in the upper's frame (y, the dome's centre zc
  * above the plane, the models closed), where the lower half stands (restY) and the top of its arm.
@@ -339,7 +339,11 @@ export function articulatorParts(
       const [ux0, ux1] = inward(bases.upper[side] + (side === 0 ? 3 : -3));
       // Build 84: the split pin, each half on a 5 mm arm into its own base.
       const pin = splitPin(runtime, x, y, rest, ay, floorUpper, floorLower, keep);
-      built.push({ x, y, restY: pin.restY, zc: pin.zc, armTop: floorLower + 3 });
+      const post: ArticulatorPost = { x, y, restY: pin.restY, zc: pin.zc, armTop: floorLower + 3 };
+      built.push(post);
+      // Build 117: the groove round the post the risers click into.
+      const socket = more.riserGroove ? riserSocket(post) : null;
+      if (socket !== null) lowerCut(keep(clickRing(runtime, x, pin.restY, riserClickAt(socket), PIN_RADIUS, PIN_RADIUS + 1, PIN_RADIUS - RISER_CLICK)));
       lowerParts.push(keep(box(runtime, lx0, lx1, pin.restY - PIN_RADIUS, pin.restY + PIN_RADIUS, floorLower, floorLower + 3)), ...pin.lower);
       upperParts.push(keep(box(runtime, ux0, ux1, y - PIN_RADIUS, y + PIN_RADIUS, floorUpper - 3, floorUpper)), ...pin.upper);
       lowerCut(pin.cut);
@@ -394,7 +398,8 @@ export function articulatorParts(
  *
  * - The socket is the post, the fit larger all round (HINGE_FIT), as deep as RISER_SOCKET (less on a
  *   short post: never down to the arm), its ceiling resting on the post's top - so the height is the
- *   riser's own - with a boss inside that fills the post's dish the fit short, centring it.
+ *   riser's own. Build 117 (Rakesh): a plain tube that clicks on - a ring inside the bore snaps into a
+ *   groove round the post (RISER_CLICK deep), made in the post when the risers are made.
  * - Its top is a dish like the post's, wider and as shallow: opened, the dome comes down a little
  *   further back (it turns about the condyles), and a riser can be put on either way round, so the dish
  *   is round and wide enough to take the dome wherever it lands. Each riser's top is set so the dome's
@@ -409,6 +414,30 @@ export const RISER_MIN_SOCKET = 2;
 /** The riser's top dish: the sphere it is cut by (radius) and its depth, mm. */
 export const RISER_DISH = 6;
 export const RISER_DISH_DEPTH = 0.6;
+/** Build 117: the click - a ring round inside the riser's socket and a groove round the post it snaps into: how deep, how tall, and how far up the socket, mm. */
+export const RISER_CLICK = 0.25;
+export const RISER_CLICK_HIGH = 0.8;
+export const RISER_CLICK_UP = 1.2;
+/** The height (z) of the click on a post whose riser socket is `socket` deep. */
+export function riserClickAt(socket: number) { return PIN_DISH_DEPTH - socket + RISER_CLICK_UP; }
+/**
+ * Build 117: a ring round (x, y) at height z: solid between radius `outer` and a V whose edges are at `edge` and
+ * whose point (at z) is at `point` - cut from a post, the groove; added inside a riser's bore, the ring that clicks into it.
+ */
+function clickRing(runtime: ManifoldRuntime, x: number, y: number, z: number, edge: number, outer: number, point: number) {
+  const half = RISER_CLICK_HIGH / 2;
+  const band = runtime.Manifold.cylinder(RISER_CLICK_HIGH, outer, outer, RISER_SIDES).translate([x, y, z - half]);
+  // The V, carried on past the band at both ends (its faces never lie on the band's: no slivers between them).
+  const hole = runtime.Manifold.union([
+    runtime.Manifold.cylinder(0.3, edge, edge, RISER_SIDES).translate([x, y, z - half - 0.3]),
+    runtime.Manifold.cylinder(half, edge, point, RISER_SIDES).translate([x, y, z - half]),
+    runtime.Manifold.cylinder(half, point, edge, RISER_SIDES).translate([x, y, z]),
+    runtime.Manifold.cylinder(0.3, edge, edge, RISER_SIDES).translate([x, y, z + half]),
+  ]);
+  const out = edge > point ? runtime.Manifold.difference(band, hole) : runtime.Manifold.intersection(band, hole);
+  band.delete(); hole.delete();
+  return out;
+}
 /** The notches telling the height: across, into the wall and down from the top, mm. */
 export const RISER_NOTCH = { wide: 0.8, deep: 0.5, high: 1 } as const;
 const RISER_SIDES = 96;
@@ -492,20 +521,17 @@ export function riserOnPost(runtime: ManifoldRuntime, post: ArticulatorPost, top
     cuts.push(keep(notch.rotate([0, 0, 90 + k * 36]).translate([x, y, 0])));
   }
   riser = keep(runtime.Manifold.difference(riser, keep(runtime.Manifold.union(cuts))));
-  // The boss in the post's dish, the fit short of it: the post's dish is cut by a sphere of PIN_DISH (grown by its facets' depth).
-  const postDish = PIN_DISH / Math.cos(Math.PI / 64);
-  const boss = keep(runtime.Manifold.intersection(
-    keep(runtime.Manifold.sphere(Math.max(0.5, PIN_DISH - fit), 64).translate([x, y, postDish - 0.01])),
-    keep(runtime.Manifold.cylinder(PIN_DISH_DEPTH + 0.01, PIN_RADIUS, PIN_RADIUS, RISER_SIDES).translate([x, y, 0])),
-  ));
-  const out = runtime.Manifold.union(riser, boss);
+  // Build 117: a plain tube - the ring inside its bore clicks into the post's groove (the fit short of the groove's bottom).
+  // (Its band reaches a little into the wall, so the two are one solid.)
+  const ring = keep(clickRing(runtime, x, y, riserClickAt(socket), bore + 0.25, bore + 0.2, PIN_RADIUS - RISER_CLICK + fit));
+  const out = runtime.Manifold.union(riser, ring);
   made.forEach((solid) => solid.delete());
   return out;
 }
 
 /**
  * Build 117: the risers for the side posts, two of each height (RISER_HEIGHTS), laid out to print
- * standing on their open ends in a row joined by snap-off bars - one part. `posts`, `axisY` and `rest`
+ * standing on their open ends in a row, each its own piece. `posts`, `axisY` and `rest`
  * (radians) as the articulator was built. Null when the posts are too short for a riser.
  */
 export function pinRisers(runtime: ManifoldRuntime, posts: ArticulatorPost[], axisY: number, rest: number, fit?: number, heights: readonly number[] = RISER_HEIGHTS) {
@@ -524,7 +550,7 @@ export function pinRisers(runtime: ManifoldRuntime, posts: ArticulatorPost[], ax
     const one = keep(riserOnPost(runtime, post, top, socket, fit, Math.round(raise)));
     for (let copy = 0; copy < 2; copy += 1, at += 1) pieces.push(keep(one.translate([at * spacing - post.x, -post.restY, socket - PIN_DISH_DEPTH])));
   }
-  for (let i = 0; i + 1 < at; i += 1) pieces.push(keep(box(runtime, i * spacing + outer - 0.3, (i + 1) * spacing - outer + 0.3, -0.6, 0.6, 0, 1)));
+  // Build 117: ten tubes side by side, each a piece of its own (no bars to snap off).
   const set = runtime.Manifold.union(pieces);
   made.forEach((solid) => solid.delete());
   return { set, socket, risers: solved.map(({ raise, top, rest: turn }) => ({ raise, top, rest: turn })) };

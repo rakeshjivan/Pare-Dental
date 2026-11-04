@@ -2,7 +2,7 @@ import manifoldModule, { type ManifoldToplevel } from "manifold-3d";
 import { beforeAll, describe, expect, it } from "vitest";
 import { makeDentalStudio, type DentalStudioOptions } from "@/lib/dentalModel";
 import {
-  articulatorParts, CONDYLE_RADIUS, CUP_FIT, HINGE_FIT_MAX, HINGE_FITS, hingeFit, PIN_DISH_DEPTH, PIN_DOME, PIN_RADIUS, pinRisers, RISER_HEIGHTS, RISER_WALL, riserOnPost, riserSocket, riserTop,
+  articulatorParts, CONDYLE_RADIUS, CUP_FIT, HINGE_FIT_MAX, HINGE_FITS, hingeFit, PIN_DISH_DEPTH, PIN_DOME, PIN_RADIUS, pinRisers, RISER_CLICK, RISER_CLICK_HIGH, RISER_HEIGHTS, RISER_WALL, riserClickAt, riserOnPost, riserSocket, riserTop,
   type ArticulatorSides,
 } from "@/lib/dentalArticulator";
 import { centralsContact } from "@/lib/toothSegment";
@@ -182,7 +182,7 @@ describe("The articulator on the dental midline (build 117)", () => {
 describe("Bite-opening risers for the side posts (build 117)", () => {
   it.each([0, 3])("fit over each post, rest on its top and hold the upper open by their height at the posts (pin raised %i mm)", (raise) => {
     const fit = 0.1;
-    const a = articulatorParts(runtime as never, 20, -25, 25, 18, -18, { ...front, sides }, raise, { upper: heels, lower: heels }, "fused", { fit });
+    const a = articulatorParts(runtime as never, 20, -25, 25, 18, -18, { ...front, sides }, raise, { upper: heels, lower: heels }, "fused", { fit, riserGroove: true });
     expect(a.posts.length).toBe(2);
     const socket = riserSocket(a.posts[0])!;
     expect(socket).toBeGreaterThanOrEqual(2);
@@ -195,7 +195,7 @@ describe("Bite-opening risers for the side posts (build 117)", () => {
       const { top, rest: turn } = riserTop(h, a.posts[0], a.axleY, rest);
       const risers = a.posts.map((post) => riserOnPost(runtime as never, post, top, socket, fit, h));
       for (const riser of risers) {
-        // A closed solid that slips over the post: clear of it and its arm, and resting on its top.
+        // A closed solid that clicks over the post (its ring in the post's groove): clear of it and its arm, and resting on its top.
         expect(riser.status()).toBe("NoError");
         expect(riser.genus()).toBe(0);
         expect(runtime.Manifold.intersection(riser, a.lower).volume()).toBeLessThan(1e-6);
@@ -216,11 +216,16 @@ describe("Bite-opening risers for the side posts (build 117)", () => {
 
   it("have a socket the post's size with the fit all round", () => {
     for (const fit of [0.05, 0.2]) {
-      const a = articulatorParts(runtime as never, 20, -25, 25, 18, -18, { ...front, sides }, 0, { upper: heels, lower: heels }, "fused", { fit });
+      const a = articulatorParts(runtime as never, 20, -25, 25, 18, -18, { ...front, sides }, 0, { upper: heels, lower: heels }, "fused", { fit, riserGroove: true });
       const post = a.posts[0];
       const socket = riserSocket(post)!;
       const riser = riserOnPost(runtime as never, post, PIN_DISH_DEPTH + 2, socket, fit, 2);
-      const inSocket = (radius: number) => runtime.Manifold.intersection(riser, runtime.Manifold.cylinder(socket - 0.8, radius, radius, 128).translate([post.x, post.restY, PIN_DISH_DEPTH - socket + 0.2])).volume();
+      // Above the click ring (which stands into the post's groove, RISER_CLICK in).
+      const above = riserClickAt(socket) + RISER_CLICK_HIGH / 2 + 0.1;
+      const inSocket = (radius: number) => runtime.Manifold.intersection(riser, runtime.Manifold.cylinder(PIN_DISH_DEPTH - 0.6 - above, radius, radius, 128).translate([post.x, post.restY, above])).volume();
+      expect(runtime.Manifold.intersection(riser, runtime.Manifold.cylinder(0.2, PIN_RADIUS - RISER_CLICK + fit + 0.05, PIN_RADIUS - RISER_CLICK + fit + 0.05, 128).translate([post.x, post.restY, riserClickAt(socket) - 0.1])).volume()).toBeGreaterThan(0);
+      // Clear of the grooved post all round, the ring included.
+      expect(runtime.Manifold.intersection(riser, a.lower).volume()).toBeLessThan(1e-6);
       expect(inSocket(PIN_RADIUS + fit - 0.02)).toBeLessThan(1e-6);
       expect(inSocket(PIN_RADIUS + fit + 0.03)).toBeGreaterThan(0);
       // Its wall round the socket.
@@ -229,12 +234,12 @@ describe("Bite-opening risers for the side posts (build 117)", () => {
     }
   });
 
-  it("come as one printable part of two of each height, standing on the plate", () => {
+  it("come as ten tubes, two of each height, standing on the plate", () => {
     const a = articulatorParts(runtime as never, 20, -25, 25, 18, -18, { ...front, sides }, 0, { upper: heels, lower: heels });
     const made = pinRisers(runtime as never, a.posts, a.axleY, 0)!;
     expect(made.risers.map((r) => r.raise)).toEqual([...RISER_HEIGHTS]);
     expect(made.set.status()).toBe("NoError");
-    expect(made.set.decompose().length).toBe(1);
+    expect(made.set.decompose().length).toBe(10);
     expect(made.set.boundingBox().min[2]).toBeCloseTo(0, 6);
     // Each riser's top stands about its height above where the post's top is (a little over: the dome lands further back on it).
     made.risers.forEach((r) => { expect(r.top - PIN_DISH_DEPTH).toBeGreaterThan(r.raise - 0.2); expect(r.top - PIN_DISH_DEPTH).toBeLessThan(r.raise + 0.5); });
@@ -252,7 +257,7 @@ describe("Bite-opening risers for the side posts (build 117)", () => {
     expect(result.risers?.heights).toEqual([...RISER_HEIGHTS]);
     const solid = toManifold(runtime as never, weld(result.risers!.positions));
     expect(solid.status()).toBe("NoError");
-    expect(solid.decompose().length).toBe(1);
+    expect(solid.decompose().length).toBe(10);
     expect(result.pieces).toEqual([1, 1]);
     // Off unless asked.
     const without = await makeDentalStudio({ arches: [{ id: "l", positions: lower }, { id: "u", positions: upper }] }, { ...options, risers: false }, runtime as never);
