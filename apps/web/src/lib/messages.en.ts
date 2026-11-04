@@ -5509,6 +5509,7 @@ export const MESSAGES_EN = {
   "studio.magnetOff": "Magnet off: the wax-up stays put when its model moves (click to make it move with the model)",
   "studio.magnetOnNotice": "Magnet on - the wax-up now moves with its model.",
   "studio.magnetOffNotice": "Magnet off - moving a model leaves its wax-up where it is.",
+  "studio.snapMade": "Models put back as they were made",
   "studio.snapOcclusion": "Snap to occlusion",
   "studio.snapOcclusionHint": "Put the upper and lower back in the bite they were scanned in - if one was moved by accident or out of the way. The wax-up teeth go with their arch.",
   "studio.caseObjects": "Case objects",

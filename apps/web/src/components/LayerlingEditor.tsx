@@ -11928,7 +11928,7 @@ export function LayerlingEditor({
         const madeIds = [...made.values()].map((shape) => shape.id);
         // Build 117: with where the pin stood, so a case opened again keeps it whatever the default becomes.
         const source: NonNullable<WorkplaneShape["dentalSource"]> = { slots: { ...state.slots }, wax: waxUsed, made: madeIds, options: { ...state.options, pinPlace } as Record<string, unknown>, preset: state.preset, patientDetails: state.patientDetails, rolesChosen: state.rolesChosen, ...(state.biteMode ? { biteMode: state.biteMode } : {}), ...(state.waxStudio ? { waxStudio: state.waxStudio } : {}) };
-        next = next.map((shape) => (madeIds.includes(shape.id) ? { ...shape, dentalSource: source } : shape));
+        next = next.map((shape) => (madeIds.includes(shape.id) ? { ...shape, dentalSource: source, dentalMadeAt: localToWorld(shape)?.toArray() } : shape));
         const heights = result.parts.map((part) => part.height.toFixed(1)).join(" / ");
         const kind = t(state.options.inside === "solid" ? "dental.doneSolid" : state.options.inside === "open" ? "dental.doneHollow" : "dental.doneClosed", { wall: state.options.wall.toFixed(1) });
         commitShapes(next, madeIds, t(result.parts.length > 1 ? "dental.donePair" : "dental.done", { height: heights, kind }));
@@ -19192,6 +19192,17 @@ export function LayerlingEditor({
     }
   };
   const [exportNoticeOpen, setExportNoticeOpen] = useState(false);
+  /** Build 117: after Make, Snap to occlusion puts the models back where they were made (so Occlusion shows them in the bite again). */
+  const snapMadeModels = () => {
+    const ids = dentalStudioRef.current?.made ?? [];
+    const moved = new Map<string, WorkplaneShape>();
+    for (const shape of shapesRef.current) {
+      if (!ids.includes(shape.id) || !shape.dentalMadeAt) continue;
+      const fields = placementFor(shape, new THREE.Matrix4().fromArray(shape.dentalMadeAt));
+      if (fields) moved.set(shape.id, { ...shape, ...fields });
+    }
+    if (moved.size) commitShapes(shapesRef.current.map((shape) => moved.get(shape.id) ?? shape), selectedIdsRef.current, t("studio.snapMade"));
+  };
   /** Build 117: Model Builder's articulator - the dental midline marked with a click on the upper (studio coordinates). */
   const [midlinePicking, setMidlinePicking] = useState(false);
   const midlineGrid = useRef<{ key: string; grid: RayGrid } | null>(null);
@@ -21671,7 +21682,7 @@ export function LayerlingEditor({
             colour={studioWax && waxup.placed.length ? { on: waxColourful, onChange: setWaxColourful } : null}
             dark={{ on: studioDark, onChange: (on) => { setStudioDarkState(on); setStudioDark(on); } }}
             layoutView={dentalStudio.stage === "made" && shapes.some((shape) => shape.dentalBite && dentalStudio.made?.includes(shape.id)) ? { occlusion: studioOccView, onChange: setStudioOccView } : null}
-            snap={dentalStudio.slots.upper && dentalStudio.slots.lower && dentalStudio.analysis && dentalStudio.stage === "ready" && !dentalStudio.analysis.pair?.apart ? { onSnap: () => layOutDentalScans("occlusion") } : null}
+            snap={dentalStudio.stage === "made" && shapes.some((shape) => shape.dentalMadeAt && dentalStudio.made?.includes(shape.id)) ? { onSnap: snapMadeModels } : dentalStudio.slots.upper && dentalStudio.slots.lower && dentalStudio.analysis && dentalStudio.stage === "ready" && !dentalStudio.analysis.pair?.apart ? { onSnap: () => layOutDentalScans("occlusion") } : null}
             chart={studioWax && arches.length ? {
               arch: waxSlot,
               arches: [...arches],

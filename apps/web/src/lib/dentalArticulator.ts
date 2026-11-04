@@ -438,6 +438,9 @@ function clickRing(runtime: ManifoldRuntime, x: number, y: number, z: number, ed
   band.delete(); hole.delete();
   return out;
 }
+/** Build 117: the height's number engraved on the tube's side - how tall (at most) and how deep, mm. */
+export const RISER_LABEL = 3.2;
+export const RISER_ENGRAVE = 0.45;
 /** The notches telling the height: across, into the wall and down from the top, mm. */
 export const RISER_NOTCH = { wide: 0.8, deep: 0.5, high: 1 } as const;
 const RISER_SIDES = 96;
@@ -519,6 +522,21 @@ export function riserOnPost(runtime: ManifoldRuntime, post: ArticulatorPost, top
   for (let k = 0; k < notches; k += 1) {
     const notch = keep(runtime.Manifold.cube([RISER_NOTCH.deep + 1, RISER_NOTCH.wide, RISER_NOTCH.high + 1]).translate([outer - RISER_NOTCH.deep, -RISER_NOTCH.wide / 2, top - RISER_NOTCH.high]));
     cuts.push(keep(notch.rotate([0, 0, 90 + k * 36]).translate([x, y, 0])));
+  }
+  // Build 117: the height engraved large on two sides of the tube (the notches alone were too small to read).
+  const label = labelText(String(notches));
+  if (notches > 0 && label) {
+    const tall = top - bottom;
+    const height = Math.min(RISER_LABEL, tall - 2);
+    if (height >= 1.5) {
+      for (const turn of [0, 180]) {
+        const section = labelSection(runtime, label, height);
+        // Text x across the tube, y up it; the cut goes in from the tube's face (-y at turn 0) RISER_ENGRAVE deep.
+        const cut = keep(section.extrude(RISER_ENGRAVE + 1).rotate([90, 0, 0]).translate([0, -outer + RISER_ENGRAVE, bottom + tall * 0.42]).rotate([0, 0, turn]).translate([x, y, 0]));
+        section.delete();
+        cuts.push(cut);
+      }
+    }
   }
   riser = keep(runtime.Manifold.difference(riser, keep(runtime.Manifold.union(cuts))));
   // Build 117: a plain tube - the ring inside its bore clicks into the post's groove (the fit short of the groove's bottom).
