@@ -85,6 +85,8 @@ export function MeshSculptPanel({
   busy,
   preparing = false,
   trim = false,
+  autoDelete = false,
+  onAutoDelete,
   teethWarning = 0,
   warnedAction = "delete",
   canUndo = false,
@@ -150,6 +152,9 @@ export function MeshSculptPanel({
   preparing?: boolean;
   /** Build 75: Trim - the selection brushes and Delete only, for cutting away what is not wanted. */
   trim?: boolean;
+  /** Build 117: Trim - each selection deleted as soon as it is made (no Delete to press). */
+  autoDelete?: boolean;
+  onAutoDelete?: (on: boolean) => void;
   /** Build 75: the chosen triangles hold this many of the teeth - Delete again cuts them anyway. */
   teethWarning?: number;
   /** Build 76: which button the teeth warning is about (Delete or Erase & Fill). */
@@ -536,6 +541,12 @@ export function MeshSculptPanel({
           </button>
         ))}
       </div>
+      {trim && onAutoDelete ? (
+        <label className="edge-modifier-check" title={t("sculpt.autoDeleteHint")}>
+          <input type="checkbox" checked={autoDelete} disabled={busy} onChange={(event) => onAutoDelete(event.currentTarget.checked)} />
+          <span>{t("sculpt.autoDelete")}</span>
+        </label>
+      ) : null}
       {!trim ? (<>
         <strong className="sculpt-subtitle">{t("sculpt.edit")}</strong>
         <EdgeModifierSlider label={t("sculpt.editDistance")} title={t("sculpt.tip.distance")} value={editAmount} min={-10} max={10} step={0.1} workspace={workspace} length disabled={busy} onChange={(value) => onEditAmount?.(value)} />

@@ -16,7 +16,7 @@
 import * as THREE from "three";
 import { getManifoldRuntime } from "@/lib/editorMeshCore";
 import { alignToBite, archFrame, biteResidual, contacts, vertexNormals, canineWidth, cleanScan, frontOf, isPartialArch, marginUp, pairFrame, palateScore, type CleanArch, type CleanReport } from "@/lib/dentalArch";
-import { ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, bevelCutter, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
+import { ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
@@ -138,7 +138,7 @@ export type DentalStudioOptions = {
   incisalPin?: boolean;
   /** Build 78: soft tissue that would meet the other model in the bite is cut back; on unless false. */
   relief?: boolean;
-  /** Build 62: a bevel round the foot of the base for the build plate; on when left out. */
+  /** Build 62: a bevel round the foot of the base. Build 117: no longer made - kept so saved cases still open. */
   bevel?: boolean;
   /** Build 60: the incisal pin raised this much, mm, at the pin (build 71: 0 to PIN_MAX); the occlusion view stands on it and the pin set includes it. 0 when left out. */
   pinRaise?: number;
@@ -931,11 +931,8 @@ function buildArch(
   {
     for (const cutter of drainCutters) solid = keepSolid(runtime.Manifold.difference(solid, cutter));
   }
-  // Build 62: a bevel round the foot, so the model comes off the build plate easily.
-  if (options.bevel !== false && options.baseStyle !== "articulator") {
-    const cutter = bevelCutter(runtime, footprint, floor);
-    if (cutter) solid = keepSolid(runtime.Manifold.difference(solid, keepSolid(cutter)));
-  }
+  // Build 62 put a bevel round the foot for lifting the model off a filament printer's plate; build 117 takes it
+  // away (resin prints stand on supports, and its cut was where some of the foot's bad edges came from).
   // Build 102: the crowns the wax-up replaces, cut back to the margin first - their facial side.
   const cutShells: Float32Array[] = [];
   const rotation = new THREE.Matrix3().setFromMatrix4(arch.frame);

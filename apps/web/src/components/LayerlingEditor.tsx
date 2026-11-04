@@ -71,7 +71,7 @@ import { PIN_MAX, PIN_STEP } from "@/lib/dentalArticulator";
 import { BUILT_IN_FINDER, finderBytes, loadStoredFinder, storeFinder } from "@/lib/toothFinderStore";
 import { toothColour, transferLabels, type ScanTeeth } from "@/lib/toothSegment";
 import { smoothOpenEdges, smoothOpenEdgesOf } from "@/lib/edgeSmooth";
-import { solidPositions, toManifold, transformSoup, weld, type ManifoldSolid, cleanStlBinary } from "@/lib/dentalMesh";
+import { solidPositions, toManifold, transformSoup, weld, type ManifoldSolid, cleanStlBinary, stlBinaryOf, stlSoupOf } from "@/lib/dentalMesh";
 import { WAX_SET_FORMS } from "@/lib/waxSetForms";
 import { BUILT_IN_LIBRARIES, loadToothLibrary, loadToothSet, type ToothLibraryManifest } from "@/lib/toothLibrary";
 import { exocadSets } from "@/lib/exocadLibrary";
@@ -9638,6 +9638,14 @@ export function LayerlingEditor({
     const shape = tool ? shapesRef.current.find((candidate) => candidate.id === tool.shapeId) : undefined;
     return tool && shape ? { tool, shape, state: sculptMeshFor(shape) } : null;
   };
+  /** Build 117: Trim's "Delete as I select" - on, each selection is cut away as soon as it is made. */
+  const [trimAutoDelete, setTrimAutoDelete] = useState(() => { try { return window.localStorage.getItem("pare3d.trimAutoDelete") === "1"; } catch { return false; } });
+  const trimAutoDeleteRef = useRef(trimAutoDelete);
+  trimAutoDeleteRef.current = trimAutoDelete;
+  const autoDeleteAfterSelect = (tool: { trim?: boolean; tool: SculptTool | null }, chosen: number) => {
+    if (!tool.trim || tool.tool !== "select" || !trimAutoDeleteRef.current || chosen <= 0) return;
+    window.setTimeout(() => deleteTrimSelectionRef.current(), 0);
+  };
   /** The Select and Unselect brushes: the whole stroke at once, on the welded copy (build 69/71). */
   const applySculptStroke = useCallback((points: TrimPoint[]) => {
     const target = sculptTarget();
@@ -9660,7 +9668,9 @@ export function LayerlingEditor({
       return;
     }
     brushChoice(selection.mesh, window.layerlingProjectPoints(cornerPositions(selection.mesh)), window.layerlingCameraPosition(), points, tool.size, selection.chosen, tool.tool === "select", tool.reach);
-    setSculptTool((current) => current ? { ...current, chosen: selection.chosen.reduce((a, b) => a + b, 0) } : current);
+    const chosen = selection.chosen.reduce((a, b) => a + b, 0);
+    setSculptTool((current) => current ? { ...current, chosen } : current);
+    autoDeleteAfterSelect(tool, chosen);
   }, [sculptTool]); // eslint-disable-line react-hooks/exhaustive-deps
   /**
    * Build 94: a double-click selects the whole face group under it (Meshmixer): on its own it takes
@@ -9738,7 +9748,9 @@ export function LayerlingEditor({
     if (tool.tool !== "select" && tool.tool !== "unselect") return;
     const selection = sculptSelectionOf(state);
     lassoChoice(selection.mesh, window.layerlingProjectPoints(cornerPositions(selection.mesh)), window.layerlingCameraPosition(), loop, selection.chosen, tool.tool === "unselect" ? "remove" : mode, tool.reach);
-    setSculptTool((current) => current ? { ...current, chosen: selection.chosen.reduce((a, b) => a + b, 0) } : current);
+    const chosen = selection.chosen.reduce((a, b) => a + b, 0);
+    setSculptTool((current) => current ? { ...current, chosen } : current);
+    if (mode !== "remove") autoDeleteAfterSelect(tool, chosen);
   }, [sculptTool]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Build 73: live brushes. A stroke is a stream of dabs along the pointer's path, applied as it moves,
@@ -10224,12 +10236,14 @@ export function LayerlingEditor({
   }, [sculptTool]); // eslint-disable-line react-hooks/exhaustive-deps
   applySculptSelectionRef.current = applySculptSelection;
   /** Build 106: Trim's Delete - the panel shows it working at once, then the cut is made (a second on a full arch). */
+  const deleteTrimSelectionRef = useRef<() => void>(() => {});
   const deleteTrimSelection = () => {
     setSculptTool((current) => current ? { ...current, busy: true } : current);
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => window.setTimeout(() => {
       try { applySculptSelectionRef.current("delete"); } finally { setSculptTool((current) => current ? { ...current, busy: false } : current); }
     }, 0)));
   };
+  deleteTrimSelectionRef.current = deleteTrimSelection;
   // Build 92: Soft Transform - the selection moved, turned or scaled with a soft edge, live on the sculpt copy.
   const softSession = useRef<{ verts: Int32Array; weights: Float32Array; from: Float64Array; pivot: THREE.Vector3; normal: THREE.Vector3; soft: number; core: Int32Array } | null>(null);
   const softMatrix = (session: NonNullable<typeof softSession.current>, params: SoftTransform) => {
@@ -19059,6 +19073,32 @@ export function LayerlingEditor({
    * one) as an STL file of its own, laid out to print, into a folder the dentist chooses (in the app; in
    * a browser, as downloads).
    */
+  /**
+   * Build 117: a model checked as it is written - if it is not a closed, sound solid (a slicer would find bad
+   * edges or holes), CAD Studio's mesh repair is run on it first, and the repaired one is kept if it is sound.
+   */
+  const printReadyStl = async (buffer: ArrayBuffer, which: string): Promise<ArrayBuffer> => {
+    const soup = stlSoupOf(buffer);
+    if (!soup || !soup.length) return buffer;
+    try {
+      if (meshHealth(soup).watertight && (await isManifoldSolid(soup))) return buffer;
+      setNotice(t("studio.repairing", { name: which }), true);
+      const result = await repairStlPositions(soup);
+      // Not if it moved the surface more than a tenth of a millimetre anywhere - the model's accuracy comes first.
+      if (result.unchanged || (result.deviation && result.deviation.max > 0.1) || !(await isManifoldSolid(result.positions))) return buffer;
+      return cleanStlBinary(stlBinaryOf(result.positions, buffer));
+    } catch {
+      return buffer;
+    }
+  };
+  const [exportNoticeOpen, setExportNoticeOpen] = useState(false);
+  /** Build 117: the STL's header says what the model is for (slicers show it). */
+  const stampedForUse = (buffer: ArrayBuffer) => {
+    const header = new Uint8Array(buffer, 0, Math.min(80, buffer.byteLength));
+    const text = new TextEncoder().encode("Pare 3D model - for laboratory and diagnostic use only".padEnd(80, " ").slice(0, 80));
+    header.set(text.subarray(0, header.length));
+    return buffer;
+  };
   const saveExportDentalModels = async () => {
     const state = dentalStudioRef.current;
     if (!state || studioExporting.current) return;
@@ -19081,7 +19121,7 @@ export function LayerlingEditor({
         if (!meshes.length) continue;
         const which = part.id === state.madeFor?.upper ? t("dental.upper") : part.id === state.madeFor?.lower ? t("dental.lower") : displayShapeName(part);
         const name = projectExportFileName([label, which, date].filter(Boolean).join(" - "), "stl");
-        const answer = await saveUserFile(name, new Blob([new Uint8Array(cleanStlBinary(exportMeshesToStl(meshes)))], { type: "model/stl" }), t("files.saveExport"));
+        const answer = await saveUserFile(name, new Blob([new Uint8Array(stampedForUse(await printReadyStl(cleanStlBinary(exportMeshesToStl(meshes)), which)))], { type: "model/stl" }), t("files.saveExport"));
         if (answer === "cancelled") return;
         saved.push(name);
       }
@@ -21805,7 +21845,7 @@ export function LayerlingEditor({
           shell={studioShellOn}
           onMbStep={setStudioMbStep}
           onWaxStep={setStudioWaxStep}
-          onSaveExport={studioShellOn ? () => void saveExportDentalModels() : undefined}
+          onSaveExport={studioShellOn ? () => setExportNoticeOpen(true) : undefined}
           exporting={studioExportBusy}
           onExit={studioExported && onHome ? () => leaveToDashboard() : undefined}
           trimSlot={sculptTool?.trim ? (sculptTool.shapeId === dentalStudio.slots.upper ? "upper" : sculptTool.shapeId === dentalStudio.slots.lower ? "lower" : null) : null}
@@ -21828,6 +21868,17 @@ export function LayerlingEditor({
           onApply={applyMeshRound}
           onCancel={() => setMeshRoundTool(null)}
         />
+      ) : null}
+      {/* Build 117: before the models are written - what they may be used for (no TGA pathway for anything printed to stay in the mouth). */}
+      {exportNoticeOpen ? (
+        <div className="new-version-notice large-mesh-notice studio-export-notice" role="alertdialog" aria-labelledby="export-notice-title" aria-describedby="export-notice-body">
+          <strong id="export-notice-title">{t("studio.useNotice.title")}</strong>
+          <p id="export-notice-body">{t("studio.useNotice.body")}</p>
+          <div className="new-version-notice-actions">
+            <button type="button" className="secondary" onClick={() => setExportNoticeOpen(false)}>{t("studio.useNotice.cancel")}</button>
+            <button type="button" className="primary" autoFocus onClick={() => { setExportNoticeOpen(false); void saveExportDentalModels(); }}>{t("studio.useNotice.agree")}</button>
+          </div>
+        </div>
       ) : null}
       {/* Build 104: not in Dental Studio - full-arch scans are its everyday work, and its tools handle them. */}
       {largeMeshOffer && !dentalWorkspace ? (
@@ -21883,6 +21934,8 @@ export function LayerlingEditor({
           onSymmetry={(symmetry) => setSculptTool((current) => current ? { ...current, symmetry } : current)}
           onStrength={(strength) => setSculptTool((current) => current ? { ...current, strength: Math.max(0.01, Math.min(1, Math.round(strength * 100) / 100)) } : current)}
           onSelection={(action) => (action === "delete" && sculptTool.trim ? deleteTrimSelection() : applySculptSelection(action))}
+          autoDelete={trimAutoDelete}
+          onAutoDelete={(on) => { setTrimAutoDelete(on); try { window.localStorage.setItem("pare3d.trimAutoDelete", on ? "1" : "0"); } catch { /* this visit */ } }}
           frozen={sculptTool.frozen ?? 0}
           soft={sculptTool.soft ?? null}
           deviation={sculptTool.deviation ?? null}
