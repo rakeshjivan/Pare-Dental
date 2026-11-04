@@ -2779,6 +2779,30 @@ export default function Home() {
    * Bindung an eine Serverdatei, denn die gehoert dem Original, und das
    * Kartenbild als blosse Adresse - das bekommt sie als eigenes Bild.
    */
+  /**
+   * Build 117: Make in Dental Studio - the models made, as a case of their own ("<case> - models", made again:
+   * replaced), beside the case they were made from, which stays as it was so it can be opened and changed.
+   */
+  const saveFinishedCase = async (sourceId: string, name: string, shapes: WorkplaneShape[], dental: DentalCaseSummary) => {
+    const source = projects.find((project) => project.id === sourceId);
+    if (!source) return;
+    try {
+      const now = Date.now();
+      const existing = projects.find((project) => project.id !== sourceId && project.name === name && project.dental?.made);
+      const { sharedProject: _bound, ...carried } = source;
+      const copy: DashboardProject = existing
+        ? { ...existing, updatedAt: now, revision: now, dental, shapes: shapes.length }
+        : { ...carried, id: createLocalId("project"), name, createdAt: now, updatedAt: now, revision: now, thumbnailUrl: null, thumbnailVersion: undefined, dental, shapes: shapes.length };
+      const entry = projectShapeCacheEntry(now, shapes, undefined, undefined, []);
+      await saveProjectShapes(copy.id, entry, projectShapeSaveContext(copy));
+      setProjectShapesById((current) => ({ ...current, [copy.id]: entry }));
+      setProjects((current) => existing ? current.map((project) => (project.id === copy.id ? copy : project)) : [copy, ...current]);
+    } catch {
+      // The case the models were made in still has them; only the separate copy is missing.
+    }
+  };
+  const saveFinishedCaseRef = useRef(saveFinishedCase);
+  saveFinishedCaseRef.current = saveFinishedCase;
   const duplicateProject = async (projectId: string) => {
     const source = projects.find((project) => project.id === projectId);
     if (!source) return;
@@ -3107,6 +3131,7 @@ export default function Home() {
               onProjectShapesChange={updateProjectShapes}
               onProjectSnapshot={updateProjectSnapshot}
               onDentalSummary={updateDentalSummary}
+              onFinishedCase={(sourceId, name, shapes, dental) => void saveFinishedCaseRef.current(sourceId, name, shapes, dental)}
               isProjectThumbnailMissing={isProjectThumbnailMissing}
               projectSaveFailure={projectSaveFailure}
               onProjectWorkspaceChange={updateProjectWorkspace}

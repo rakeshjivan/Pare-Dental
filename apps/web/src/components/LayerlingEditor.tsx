@@ -1918,6 +1918,7 @@ export function LayerlingEditor({
   onProjectShapesChange,
   onProjectSnapshot,
   onDentalSummary,
+  onFinishedCase,
   isProjectThumbnailMissing,
   projectSaveFailure,
   onProjectWorkspaceChange,
@@ -1967,6 +1968,8 @@ export function LayerlingEditor({
   onProjectSnapshot?: (snapshot: { image: string; projectId: string; shapes: number }, signal?: AbortSignal) => Promise<void> | void;
   /** Build 106: the case card's summary (workflow, made, patient, step) as the case changes. */
   onDentalSummary?: (projectId: string, summary: DentalCaseSummary) => void;
+  /** Build 117: the models just made, to be kept as a case of their own beside this one (which keeps the design). */
+  onFinishedCase?: (sourceProjectId: string, name: string, shapes: WorkplaneShape[], summary: DentalCaseSummary) => void;
   /** Whether the design's card has no picture; the editor then takes one once the design is open. */
   isProjectThumbnailMissing?: (projectId: string) => Promise<boolean>;
   /** The last failed autosave, so the editor can say so; `at` makes a repeat failure show again. */
@@ -2399,6 +2402,8 @@ export function LayerlingEditor({
   const placementWorkplaneRef = useRef(placementWorkplane);
   const noticeRef = useRef(notice);
   const projectInfoRef = useRef({ projectId: projectId ?? null, projectName, projectCreatedAt });
+  const onFinishedCaseRef = useRef(onFinishedCase);
+  onFinishedCaseRef.current = onFinishedCase;
   const historyIndexRef = useRef(historyIndex);
   const historyRef = useRef(history);
   // What undo and redo would take back or bring again, named on their buttons (#1023). Worked out when the
@@ -10596,6 +10601,8 @@ export function LayerlingEditor({
 
   // Fork (build 46, Dental Studio in build 47): raw intraoral scans to printable models.
   type DentalStudioState = {
+    /** Build 117: a case of finished models (made in another case, which keeps their design): shown made, to save and export. */
+    finishedCase?: boolean;
     slots: Record<DentalSlot, string | null>;
     stage: "analysing" | "ready" | "making" | "trimming" | "made";
     analysis: DentalAnalysis | null;
@@ -11272,7 +11279,27 @@ export function LayerlingEditor({
     }
     // Build 79: a model Dental Studio made, selected: its design opens again.
     const madeSelected = selectedShapes.find((shape) => shape.dentalSource);
-    if (madeSelected && editDentalDesign([madeSelected.id])) return;
+    if (madeSelected && !madeSelected.dentalSource?.finished && editDentalDesign([madeSelected.id])) return;
+    // Build 117: in Dental Studio's frame a case with models made in it opens on their design (to change and
+    // make again); a case of finished models opens on the models, ready to save and export.
+    if (STUDIO_SHELL && dentalWorkspace && !madeSelected) {
+      const madeHere = shapesRef.current.filter((shape) => shape.dental === "model" && shape.dentalSource && !shape.hidden);
+      const finished = madeHere.filter((shape) => shape.dentalSource?.finished);
+      if (madeHere.length && finished.length === madeHere.length) {
+        const source = finished[0].dentalSource!;
+        const upper = finished.find((shape) => shape.dentalSource?.finished === "upper")?.id, lower = finished.find((shape) => shape.dentalSource?.finished === "lower")?.id;
+        setDentalStudio({
+          ...freshDentalState({ upper: null, lower: null, bite: null, bite2: null }, true),
+          preset: source.preset as DentalPreset,
+          options: source.options as unknown as DentalStudioOptions,
+          patientDetails: source.patientDetails,
+          ...(source.waxStudio ? { waxStudio: source.waxStudio } : {}),
+          stage: "made", made: finished.map((shape) => shape.id), madeFor: { upper, lower }, finishedCase: true,
+        });
+        return;
+      }
+      if (madeHere.length && editDentalDesign(madeHere.map((shape) => shape.id))) return;
+    }
     const candidates = dentalCandidates();
     // The selected scans, or all scans in the design when none is selected. With none yet, the
     // studio opens empty and asks for them.
@@ -11885,6 +11912,14 @@ export function LayerlingEditor({
         // Build 79: the studio stays open on the models made: open the design again, or finish.
         const madeFor = { upper: state.slots.upper ? made.get(state.slots.upper)?.id : undefined, lower: state.slots.lower ? made.get(state.slots.lower)?.id : undefined };
         setDentalStudio({ ...state, stage: "made", made: madeIds, madeFor, editing: undefined, error: null, notes: [] });
+        // Build 117: the models also kept as a case of their own ("<case> - models"); this case keeps the design,
+        // so it opens again where it was left and can be changed and made again.
+        const info = projectInfoRef.current;
+        if (STUDIO_SHELL && dentalWorkspace && info.projectId && onFinishedCaseRef.current) {
+          const finished = [...made.values()].map((model) => ({ ...model, dentalSource: { ...source, finished: (model.id === madeFor.upper ? "upper" : model.id === madeFor.lower ? "lower" : "other") as "upper" | "lower" | "other" } }));
+          const summary: DentalCaseSummary = { flow: state.waxStudio ? "wax" : "model", made: true, ...(state.options.hinge ? { articulated: true } : {}), ...(state.patientDetails !== "remove" && state.options.label.trim() ? { patient: state.options.label.trim() } : {}) };
+          onFinishedCaseRef.current(info.projectId, t("studio.finishedCaseName", { name: info.projectName || t("studio.caseUntitled") }), finished, summary);
+        }
       } catch (error) {
         if (run !== dentalMakeRun.current) return;
         setDentalStudio((latest) => latest ? { ...latest, stage: "ready", error: error instanceof Error ? localizedError(error.message) : String(error) } : latest);
@@ -14568,6 +14603,8 @@ export function LayerlingEditor({
     selected: selectedIds.length === 1 ? selectedIds[0] : null,
     selectedAll: waxPlacedNow.length > 1 && waxPlacedNow.every((tooth) => selectedIds.includes(tooth.id)),
     sculptTool: studioWaxSculpt ? waxSculptTool : undefined,
+    pairForBite: Boolean(dentalStudio?.slots.upper && dentalStudio?.slots.lower),
+    biteFitFresh: Boolean(waxup.occlusion.result && waxup.occlusion.result.raise === waxup.occlusion.raise && waxup.occlusion.result.waxKey === projectShapesFingerprint(shapes.filter((shape) => shape.dental === "wax" && !shape.hidden))),
     confirmed: Object.keys(waxup.locks).map(Number),
     manual: waxup.manual,
     colourful: studioWax ? waxColourful : undefined,
@@ -20052,7 +20089,9 @@ export function LayerlingEditor({
   // Build 110: each wax tooth shown with its erase.
   // Build 116: the wax shown erased (to the margins and paint) only once the teeth are placed - from Keep & erase on.
   // While they are being positioned the whole library teeth are shown, and nothing is worked out as they move.
-  const eraseShownStep = !studioWaxStep || ["keep", "sculpt", "gum", "make"].includes(studioWaxStep);
+  // Build 117: in Position too - the trims are worked out in the workers now, a moment after a tooth stops moving, so a
+  // tooth is seen whole while it is dragged and going under the gum once it is let go (as in Meshmixer).
+  const eraseShownStep = !studioWaxStep || ["place", "keep", "sculpt", "gum", "make"].includes(studioWaxStep);
   const erasedViewportShapes = useMemo(() => (dentalStudio?.waxStudio && eraseShownStep && ((waxup.erase && Object.keys(waxup.erase).length) || (waxup.marginOn && (waxup.margins?.upper || waxup.margins?.lower)) || waxup.boundaries?.upper || waxup.boundaries?.lower) ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? erasedShown(shape) : shape)) : viewportShapes), [viewportShapes, waxup.erase, waxup.margins, waxup.boundaries, waxup.marginOn, dentalStudio, eraseTick, eraseShownStep]); // eslint-disable-line react-hooks/exhaustive-deps
   const heldViewportShapes = historyView.shapes ?? erasedViewportShapes;
   // Build 110: in Keep & erase, the paint shown over the teeth (again whenever they or it change); taken away on leaving.
@@ -21814,6 +21853,7 @@ export function LayerlingEditor({
               onAdapt: (what: "bite" | "contacts" | "both") => void adaptWaxTeeth(what),
               onMarksEditing: (on: boolean) => setMarksEditing(on),
               onMirrorShape: mirrorWaxShape,
+              onFitBite: () => { if (sculptToolRef.current) { flushSculpt(); setSculptTool(null); } void workOcclusion(); },
               onBoundaryStart: startBoundary,
               onBoundaryDone: finishBoundary,
               onBoundaryUndo: undoBoundaryPoint,
@@ -21839,7 +21879,7 @@ export function LayerlingEditor({
             if (current?.editing?.length) leaveDentalEdit(current);
             setDentalStudio(null);
           }}
-          onEditDesign={() => { const current = dentalStudioRef.current; if (current?.made?.length) editDentalDesign(current.made); }}
+          onEditDesign={dentalStudio?.finishedCase ? undefined : () => { const current = dentalStudioRef.current; if (current?.made?.length) editDentalDesign(current.made); }}
           onDone={() => setDentalStudio(null)}
           editing={Boolean(dentalStudio.editing?.length)}
           shell={studioShellOn}

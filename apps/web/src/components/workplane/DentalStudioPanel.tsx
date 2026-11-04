@@ -371,7 +371,7 @@ export function DentalStudioPanel({
    */
   // Build 103: as Meshmixer (manual) - the teeth positioned, then sculpted, then the model made; nothing fitted for you.
   const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), ...(waxup.view.marginOn ? ["margin" as const] : []), "set", "place", "keep", "sculpt", "gum", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
-  const [waxStepId, setWaxStepId] = useState<WaxStepId>("scans");
+  const [waxStepId, setWaxStepId] = useState<WaxStepId>(editing ? "make" : "scans");
   const waxStepName = (id: WaxStepId) => t(`waxStudio.step.${id}` as "waxStudio.step.scans");
   const waxStep = waxSteps ? (waxSteps.includes(waxStepId) ? waxStepId : "make") : null;
   const wv = waxup?.view;
@@ -517,7 +517,8 @@ export function DentalStudioPanel({
   // Build 104: the articulator and the label share the last step.
   const mbSteps: ModelStepId[] | null = !waxStudio ? ["scans", "prepare", "model", "base", "label"] : null;
   const mbStepName = (id: ModelStepId) => t(id === "label" && pair ? "modelBuilder.step.finish" : `modelBuilder.step.${id}` as "modelBuilder.step.scans");
-  const [mbStepId, setMbStepId] = useState<ModelStepId>("scans");
+  // Build 117: a design opened again (from a case with models made in it) starts on its last step, ready to make again.
+  const [mbStepId, setMbStepId] = useState<ModelStepId>(editing ? "label" : "scans");
   const mbStep = mbSteps ? (mbSteps.includes(mbStepId) ? mbStepId : "label") : null;
   useEffect(() => { onMbStep?.(mbStep); }, [mbStep, onMbStep]);
   // Build 106: in the frame the scan is used as trimmed - no gum line followed, nothing more cut across
@@ -639,7 +640,7 @@ export function DentalStudioPanel({
     </button>
   );
   const frameNav = !framed ? null : stage === "made" ? (<>
-    <button type="button" className="secondary" onClick={onEditDesign}>{t("dental.editDesign")}</button>
+    {onEditDesign ? <button type="button" className="secondary" onClick={onEditDesign}>{t("dental.editDesign")}</button> : null}
     {onExit && !exporting ? <button type="button" className="primary" onClick={onExit}>{t("studio.exit")} <ArrowRight size={18} /></button> : onSaveExport ? <button type="button" className={`primary${exporting ? " studio-filling" : ""}`} disabled={exporting} aria-busy={exporting} onClick={onSaveExport}><FileDown size={17} /> {t(exporting ? "studio.exporting" : "studio.saveExport")}</button> : <button type="button" className="primary" onClick={onDone}><Check size={17} /> {t("dental.doneButton")}</button>}
   </>) : stage === "making" ? (<>
     <button type="button" className="secondary" onClick={onCancel}>{t("dental.stopMaking")}</button>

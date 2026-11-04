@@ -58,6 +58,10 @@ export type WaxupView = {
   /** Build 117: boundary lines drawn on the patient's teeth in Sculpt (studio coordinates, the scan they were drawn on) - wax is kept on a line's incisal side only; and the line being drawn. */
   boundaries?: Partial<Record<"upper" | "lower", { scan: string; lines: Record<number, Array<Array<[number, number, number]>>> }>>;
   boundaryPick?: { fdi: number; points: Array<[number, number, number]> } | null;
+  /** Build 117: the wax and opening the last fit was worked out for still hold. */
+  biteFitFresh?: boolean;
+  /** Build 117: both arches in the case (a bite to fit to). */
+  pairForBite?: boolean;
   /** Build 108: wax teeth placed on either arch (changing the bite's opening then asks first). */
   anyWax?: boolean;
   /** Build 108: wax teeth put out of view in Case objects - their buttons cannot pick them. */
@@ -176,6 +180,8 @@ export type WaxupActions = {
   onBoundaryUndo?: () => void;
   onBoundaryCancel?: () => void;
   onBoundaryClear?: () => void;
+  /** Build 117: Sculpt - the wax fitted to the opposing teeth now (at the opening set in Open bite), as Make does first. */
+  onFitBite?: () => void;
   /** Build 108: Sculpt - the picked tooth moved, turned and sized (its gimbal), as a double-click on it. */
   /** Build 107: the whole set selected, so the gimbal moves and turns it as one. */
   onSelectSet?: () => void;
@@ -1012,6 +1018,15 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
           </div>
           <p className="blend-hint">{t("waxup.sculptHint")}</p>
           </>)}
+          {/* Build 117: the palatal (and every other surface the opposing teeth reach) fitted to the bite, at the opening set in Open bite. */}
+          {actions.onFitBite && view.pairForBite ? (
+            <div className="waxup-fit-bite" role="group" aria-label={t("waxup.fitBite.title")}>
+              <div className="dental-trim-buttons">
+                <button type="button" className={`secondary${view.occlusion.busy ? " studio-filling" : ""}`} disabled={working || view.occlusion.busy || !view.placed.length} aria-busy={view.occlusion.busy} title={t("waxup.fitBite.hint")} onClick={() => actions.onFitBite?.()}>{t(view.occlusion.busy ? "waxup.fitBite.working" : "waxup.fitBite.button")}</button>
+              </div>
+              <p className="blend-hint" role="status">{view.occlusion.result && view.biteFitFresh ? (view.occlusion.result.carved.length ? t("waxup.carved", { list: view.occlusion.result.carved.map((c) => `${c.fdi} ${c.mm.toFixed(2)}`).join(", ") }) : t("waxup.fitBite.clear")) : t("waxup.fitBite.at", { mm: (view.bite?.raise ?? 0).toFixed(1) })}</p>
+            </div>
+          ) : null}
           {/* Build 117: boundary lines - wax added past one (towards the gum) is taken away, and Smooth finishes at it. */}
           {actions.onBoundaryStart ? (() => {
             const tooth = view.placed.find((candidate) => candidate.id === view.selected);
