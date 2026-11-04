@@ -189,6 +189,7 @@ export function DentalStudioPanel({
   waxup,
   waxStudio,
   onEditDesign,
+  finishedCase = false,
   onDone,
   onSaveExport,
   exporting = false,
@@ -206,6 +207,8 @@ export function DentalStudioPanel({
   stage: "analysing" | "ready" | "making" | "trimming" | "made";
   /** Build 79: after Make - open the design again, or finish. */
   onEditDesign?: () => void;
+  /** Build 117: a case of finished models - nothing to edit here, the design is in the case they were made in. */
+  finishedCase?: boolean;
   onDone?: () => void;
   /** Build 106: the frame's Save & export (in place of Done once the models are made). */
   onSaveExport?: () => void;
@@ -628,7 +631,7 @@ export function DentalStudioPanel({
   const mbHintKey: Record<ModelStepId, string> = { scans: "dental.step1Hint", prepare: "dental.trimHint", model: "dental.step3Hint", base: "dental.stepBaseHint", articulator: "dental.step4Hint", label: pair ? "dental.step4Hint" : "dental.stepNameHint" };
   const longHint = !framed ? null : stage === "made" ? t("dental.madeHint") : waxStep ? t(`waxStudio.stepHint.${waxStep}` as "waxStudio.stepHint.scans") : mbStep ? t(mbHintKey[mbStep] as "dental.step1Hint") : null;
   // The line over the 3D view: what to do now, in a few words; the rest is behind the (?).
-  const frameHint = !framed ? null : stage === "made" ? t("studio.hint.made") : waxStep ? t(`studio.hint.${waxStep}` as "studio.hint.scans") : mbStep ? t(mbStep === "scans" && scansDone ? "studio.hint.mb.scansLoaded" : `studio.hint.mb.${mbStep}` as "studio.hint.mb.scans") : null;
+  const frameHint = !framed ? null : stage === "made" ? t(finishedCase ? "studio.hint.finished" : "studio.hint.made") : waxStep ? t(`studio.hint.${waxStep}` as "studio.hint.scans") : mbStep ? t(mbStep === "scans" && scansDone ? "studio.hint.mb.scansLoaded" : `studio.hint.mb.${mbStep}` as "studio.hint.mb.scans") : null;
   // Build 116: while the models are being made (and, in Wax-up Studio, while the wax is fitted to the bite first) the
   // button stays, fills slowly and says what is happening - the work can hold the screen for a minute.
   const fitting = Boolean(waxup?.view.occlusion.busy);

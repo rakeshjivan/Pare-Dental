@@ -10660,6 +10660,7 @@ export function LayerlingEditor({
     const summary: DentalCaseSummary = {
       flow: wax ? "wax" : "model",
       made: made.length > 0,
+      ...(made.length && made.every((shape) => shape.dentalSource?.finished) ? { finished: true } : {}),
       ...(made.length && options?.hinge ? { articulated: true } : {}),
       ...(patientKept && options?.label?.trim() ? { patient: options.label.trim() } : {}),
       ...(!made.length && (wax ? studioWaxStep : studioMbStep) ? { step: (wax ? studioWaxStep : studioMbStep)! } : {}),
@@ -11917,7 +11918,7 @@ export function LayerlingEditor({
         const info = projectInfoRef.current;
         if (STUDIO_SHELL && dentalWorkspace && info.projectId && onFinishedCaseRef.current) {
           const finished = [...made.values()].map((model) => ({ ...model, dentalSource: { ...source, finished: (model.id === madeFor.upper ? "upper" : model.id === madeFor.lower ? "lower" : "other") as "upper" | "lower" | "other" } }));
-          const summary: DentalCaseSummary = { flow: state.waxStudio ? "wax" : "model", made: true, ...(state.options.hinge ? { articulated: true } : {}), ...(state.patientDetails !== "remove" && state.options.label.trim() ? { patient: state.options.label.trim() } : {}) };
+          const summary: DentalCaseSummary = { flow: state.waxStudio ? "wax" : "model", made: true, finished: true, ...(state.options.hinge ? { articulated: true } : {}), ...(state.patientDetails !== "remove" && state.options.label.trim() ? { patient: state.options.label.trim() } : {}) };
           onFinishedCaseRef.current(info.projectId, t("studio.finishedCaseName", { name: info.projectName || t("studio.caseUntitled") }), finished, summary);
         }
       } catch (error) {
@@ -21879,6 +21880,7 @@ export function LayerlingEditor({
             if (current?.editing?.length) leaveDentalEdit(current);
             setDentalStudio(null);
           }}
+          finishedCase={Boolean(dentalStudio?.finishedCase)}
           onEditDesign={dentalStudio?.finishedCase ? undefined : () => { const current = dentalStudioRef.current; if (current?.made?.length) editDentalDesign(current.made); }}
           onDone={() => setDentalStudio(null)}
           editing={Boolean(dentalStudio.editing?.length)}
