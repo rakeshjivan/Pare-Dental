@@ -12067,6 +12067,8 @@ export function LayerlingEditor({
   }, []);
   const waxupRef = useRef(waxup);
   waxupRef.current = waxup;
+  // For checks: the wax-up's set and arch state.
+  useEffect(() => { (window as unknown as { layerlingWaxupState?: () => unknown }).layerlingWaxupState = () => { const w = waxupRef.current; return { slot: w.slot, setId: w.setId, setIds: w.setIds, setName: w.setName, single: w.single, placed: w.placed.length, busy: w.busy, error: w.error }; }; }, []);
   /**
    * Build 101: Wax-up Studio's own Undo and Redo - every step (placing, the sliders, nudges, the teeth
    * chosen, the set, the occlusion) records the wax-up's settings with the design's place in its history;
