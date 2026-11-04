@@ -10697,6 +10697,7 @@ export function LayerlingEditor({
       flow: wax ? "wax" : "model",
       made: made.length > 0,
       ...(made.length && made.every((shape) => shape.dentalSource?.finished) ? { finished: true } : {}),
+      ...(made.length && source?.madeOn ? { madeOn: source.madeOn } : {}),
       ...(made.length && options?.hinge ? { articulated: true } : {}),
       ...(patientKept && options?.label?.trim() ? { patient: options.label.trim() } : {}),
       ...(!made.length && (wax ? studioWaxStep : studioMbStep) ? { step: (wax ? studioWaxStep : studioMbStep)! } : {}),
@@ -11929,7 +11930,7 @@ export function LayerlingEditor({
         // Build 79: each part made remembers what it was made from, so the design can be opened again.
         const madeIds = [...made.values()].map((shape) => shape.id);
         // Build 117: with where the pin stood, so a case opened again keeps it whatever the default becomes.
-        const source: NonNullable<WorkplaneShape["dentalSource"]> = { slots: { ...state.slots }, wax: waxUsed, made: madeIds, options: { ...state.options, pinPlace } as Record<string, unknown>, preset: state.preset, patientDetails: state.patientDetails, rolesChosen: state.rolesChosen, ...(state.biteMode ? { biteMode: state.biteMode } : {}), ...(state.waxStudio ? { waxStudio: state.waxStudio } : {}) };
+        const source: NonNullable<WorkplaneShape["dentalSource"]> = { madeOn: Date.now(), slots: { ...state.slots }, wax: waxUsed, made: madeIds, options: { ...state.options, pinPlace } as Record<string, unknown>, preset: state.preset, patientDetails: state.patientDetails, rolesChosen: state.rolesChosen, ...(state.biteMode ? { biteMode: state.biteMode } : {}), ...(state.waxStudio ? { waxStudio: state.waxStudio } : {}) };
         next = next.map((shape) => (madeIds.includes(shape.id) ? { ...shape, dentalSource: source, dentalMadeAt: localToWorld(shape)?.toArray() } : shape));
         const heights = result.parts.map((part) => part.height.toFixed(1)).join(" / ");
         const kind = t(state.options.inside === "solid" ? "dental.doneSolid" : state.options.inside === "open" ? "dental.doneHollow" : "dental.doneClosed", { wall: state.options.wall.toFixed(1) });
@@ -11978,7 +11979,7 @@ export function LayerlingEditor({
         const info = projectInfoRef.current;
         if (STUDIO_SHELL && dentalWorkspace && info.projectId && onFinishedCaseRef.current) {
           const finished = [...made.values()].map((model) => ({ ...model, dentalSource: { ...source, finished: (model.id === madeFor.upper ? "upper" : model.id === madeFor.lower ? "lower" : "other") as "upper" | "lower" | "other" } }));
-          const summary: DentalCaseSummary = { flow: state.waxStudio ? "wax" : "model", made: true, finished: true, ...(state.options.hinge ? { articulated: true } : {}), ...(state.patientDetails !== "remove" && state.options.label.trim() ? { patient: state.options.label.trim() } : {}) };
+          const summary: DentalCaseSummary = { flow: state.waxStudio ? "wax" : "model", made: true, finished: true, madeOn: source.madeOn, ...(state.options.hinge ? { articulated: true } : {}), ...(state.patientDetails !== "remove" && state.options.label.trim() ? { patient: state.options.label.trim() } : {}) };
           onFinishedCaseRef.current(info.projectId, t("studio.finishedCaseName", { name: info.projectName || t("studio.caseUntitled") }), finished, summary);
         }
       } catch (error) {

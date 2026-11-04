@@ -766,7 +766,7 @@ export type WorkplaneShape = {
   dentalBite?: number[];
   /** Build 117: where a made model stood when it was made (its local-to-world matrix) - Snap to occlusion puts it back there. */
   dentalMadeAt?: number[];
-  dentalSource?: { slots: { upper: string | null; lower: string | null; bite: string | null; bite2?: string | null }; wax: string[]; made: string[]; options: Record<string, unknown>; preset: string; patientDetails: "keep" | "remove"; rolesChosen: boolean; biteMode?: "auto" | "fit"; waxStudio?: { flow: "waxup" | "imt"; arches: "upper" | "lower" | "both" }; /** Build 117: in a case of finished models (made in another case, which keeps the design): which model it is; its design does not open here. */ finished?: "upper" | "lower" | "other" };
+  dentalSource?: { slots: { upper: string | null; lower: string | null; bite: string | null; bite2?: string | null }; wax: string[]; made: string[]; options: Record<string, unknown>; preset: string; patientDetails: "keep" | "remove"; rolesChosen: boolean; biteMode?: "auto" | "fit"; waxStudio?: { flow: "waxup" | "imt"; arches: "upper" | "lower" | "both" }; /** Build 117: in a case of finished models (made in another case, which keeps the design): which model it is; its design does not open here. */ finished?: "upper" | "lower" | "other"; /** Build 117: when the models were made (ms since 1970). */ madeOn?: number };
   waxTooth?: { fdi: number; width: number; length: number; frame: { origin: [number, number, number]; out: [number, number, number]; mesial: [number, number, number]; up: [number, number, number] }; /** Build 109: the stop blend its shape already has (sculpted from its blended form, where it stands). */ stopBaked?: string };
   name: string;
   kind: ShapeKind;

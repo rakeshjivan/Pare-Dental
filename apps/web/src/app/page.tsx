@@ -4340,7 +4340,7 @@ function Dashboard({
                         {project.studio === "dental" && project.dental ? (
                           <span className={`case-tag ${project.dental.flow}`}>{t(project.dental.flow === "wax" ? "case.tagWax" : "case.tagModel")}</span>
                         ) : null}
-                        <span className="project-card-title" translate="no">{project.studio === "dental" && project.dental?.patient ? project.dental.patient : project.name}</span>
+                        <span className="project-card-title" translate="no">{project.studio === "dental" && project.dental?.patient ? project.dental.patient : project.name}{project.studio === "dental" && project.dental?.made && project.dental.madeOn ? <span className="project-card-made">{` · ${new Date(project.dental.madeOn).toLocaleDateString(language === "en" ? "en-GB" : language, { day: "numeric", month: "short", year: "numeric" })}`}</span> : null}</span>
                         <span className="project-card-meta">
                           {project.studio === "dental" && project.dental
                             ? `${dentalCaseStatus(project.dental)} · ${formatUpdated(project.updatedAt, language)}`
