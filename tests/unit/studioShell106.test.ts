@@ -27,7 +27,8 @@ describe("build 106: the studio frame", () => {
   // Build 107: as Meshmixer - the set dropped whole at Position, no Landmarks step.
   it("runs Wax-up Studio in six steps: Import, Trim, Library, Position, Sculpt, Export (and Open bite with a bite scan, build 108)", () => {
     const panel = src("components/workplane/DentalStudioPanel.tsx");
-    expect(panel).toContain('["scans", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), "set", "place", "sculpt", "gum", "make"]');
+    // Build 116: Margins (with the margin line on) and Keep & erase came in between.
+    expect(panel).toContain('["scans", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), ...(waxup.view.marginOn ? ["margin" as const] : []), "set", "place", "keep", "sculpt", "gum", "make"]');
     expect(messages["waxStudio.step.bite" as keyof typeof messages]).toBe("Open bite");
     const names = ["scans", "trim", "set", "place", "sculpt", "make"].map((id) => messages[`waxStudio.step.${id}` as keyof typeof messages]);
     expect(names).toEqual(["Import", "Trim", "Library", "Position", "Sculpt", "Export"]);

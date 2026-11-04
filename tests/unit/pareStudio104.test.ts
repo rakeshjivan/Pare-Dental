@@ -81,7 +81,8 @@ describe("build 104: Dental Studio's workspace", () => {
     const selectors = css.replace(/\/\*[\s\S]*?\*\//g, "").match(/^[^@{}\n][^{}]*\{/gm) ?? [];
     for (const selector of selectors) {
       if (/^\s*(from|to)\s*\{/.test(selector)) continue;
-      expect(selector, selector).toMatch(/studio-dental|dental-chrome/);
+      // Build 110: body.wax-painting is set only while Keep & erase paints in Wax-up Studio.
+      expect(selector, selector).toMatch(/studio-dental|dental-chrome|body\.wax-painting/);
     }
   });
 });

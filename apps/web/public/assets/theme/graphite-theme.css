@@ -77,7 +77,7 @@
   --editor-toolbar-height: 120px;
   --editor-toolbar-title-height: 44px;
   --editor-toolbar-tools-height: 76px;
-  --editor-footer-height: 30px;
+  --editor-footer-height: 0px;
   --hover-accent-color: #dc3f36;
   --hover-accent-border-color: #ffffff;
   --filament-coral: #ff5a47;
