@@ -294,6 +294,16 @@
   color: #a0a8b4;
 }
 
+/* Build 117: Wax-up's magnet, at the end of its row - green while the wax-up moves with its model. */
+.studio-eye.studio-magnet {
+  margin-left: auto;
+  margin-right: -4px;
+}
+
+.studio-eye.studio-magnet.on {
+  color: var(--studio-accent, #0f766e);
+}
+
 .studio-slide {
   display: grid;
   grid-template-columns: 58px 1fr 40px;

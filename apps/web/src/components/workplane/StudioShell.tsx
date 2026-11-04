@@ -8,7 +8,7 @@
  * panel fills the step bar, Back and Next and the guidance through slots (lib/studioSlots), and every
  * control here calls the same action the studio already has.
  */
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Eye, EyeOff, Home, Moon, Redo2, Undo2, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Eye, EyeOff, Home, Magnet, Moon, Redo2, Undo2, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { GuideHelpLink } from "@/components/GuideHelpLink";
 import { t } from "@/lib/i18n";
@@ -25,6 +25,8 @@ export type StudioCaseObject = {
   /** 0-1; a slider only where the studio can draw it see-through. */
   opacity?: number;
   onOpacity?: (value: number) => void;
+  /** Build 117: Wax-up's magnet - on, the wax teeth move with their scan. */
+  magnet?: { on: boolean; onToggle: () => void };
 };
 
 export type StudioChart = {
@@ -170,6 +172,11 @@ export function StudioShell({
                     {object.shown ? <Eye size={19} aria-hidden="true" /> : <EyeOff size={19} aria-hidden="true" />}
                   </button>
                   <span>{object.name}</span>
+                  {object.magnet ? (
+                    <button type="button" className={`studio-eye studio-magnet${object.magnet.on ? " on" : " off"}`} aria-pressed={object.magnet.on} aria-label={t(object.magnet.on ? "studio.magnetOn" : "studio.magnetOff")} title={t(object.magnet.on ? "studio.magnetOn" : "studio.magnetOff")} onClick={object.magnet.onToggle}>
+                      <Magnet size={18} aria-hidden="true" />
+                    </button>
+                  ) : null}
                 </div>
                 {object.onOpacity ? (
                   <label className="studio-slide">

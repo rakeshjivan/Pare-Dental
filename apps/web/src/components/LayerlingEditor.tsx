@@ -3981,6 +3981,40 @@ export function LayerlingEditor({
   /** The arrow keys' last step in the 3D editor; a run of presses is one step of the history (#370). */
   const keyRunRef = useRef<KeyRun | null>(null);
 
+  /**
+   * Build 117: Wax-up's magnet - on, wax teeth move with the scan they are on: a scan moved or turned (dragged, by its
+   * handles, Snap to occlusion) carries its wax teeth by the same move, unless they were moved in the same change.
+   */
+  const [waxMagnet, setWaxMagnet] = useState(true);
+  const waxMagnetRef = useRef(true);
+  waxMagnetRef.current = waxMagnet;
+  const toggleWaxMagnet = () => { setWaxMagnet((on) => !on); setNotice(t(waxMagnetRef.current ? "studio.magnetOffNotice" : "studio.magnetOnNotice")); };
+  const withWaxMagnet = (next: WorkplaneShape[]): WorkplaneShape[] => {
+    const studio = dentalStudioRef.current;
+    if (!waxMagnetRef.current || !studio?.waxStudio) return next;
+    const before = new Map(shapesRef.current.map((shape) => [shape.id, shape]));
+    const deltas = new Map<string, THREE.Matrix4>();
+    for (const id of [studio.slots.upper, studio.slots.lower]) {
+      if (!id) continue;
+      const was = before.get(id), now = next.find((shape) => shape.id === id);
+      if (!was || !now || was === now) continue;
+      const a = localToWorld(was), b = localToWorld(now);
+      if (!a || !b) continue;
+      if (a.elements.every((v, i) => Math.abs(v - b.elements[i]) < 1e-9)) continue;
+      deltas.set(id, b.clone().multiply(a.clone().invert()));
+    }
+    if (!deltas.size) return next;
+    return next.map((shape) => {
+      const delta = shape.dental === "wax" && shape.waxFor ? deltas.get(shape.waxFor) : undefined;
+      if (!delta || before.get(shape.id) !== shape) return shape;
+      const toWorld = localToWorld(shape);
+      const fields = toWorld ? placementFor(shape, delta.clone().multiply(toWorld)) : null;
+      if (fields) return { ...shape, ...fields };
+      const rebuilt = shapeWithWorldPositions(shape, Array.from(transformSoup(Float32Array.from(worldTriangles(shape)), delta)));
+      const rebuiltAt = localToWorld(rebuilt);
+      return rebuilt && shape.waxTooth && toWorld && rebuiltAt ? { ...rebuilt, waxTooth: { ...shape.waxTooth, frame: moveFrame(moveFrame(shape.waxTooth.frame, delta.clone().multiply(toWorld)), rebuiltAt.clone().invert()) } } : rebuilt;
+    });
+  };
   const commitShapes = useCallback(
     (next: WorkplaneShape[], nextSelection: string | string[] | null = selectedIds, message?: string, keyRunKey?: string, replaceEntry?: unknown) => {
       // Solange der Verlaufsblick offen ist, zeigt die Flaeche nicht den
@@ -3990,7 +4024,7 @@ export function LayerlingEditor({
         setNotice(t("status.historyViewBlocksEdits"));
         return;
       }
-      const canonicalNext = next.map(canonicalizeShape);
+      const canonicalNext = withWaxMagnet(next).map(canonicalizeShape);
       const requestedSelection = Array.isArray(nextSelection) ? nextSelection : nextSelection ? [nextSelection] : [];
       const validSelection = requestedSelection.filter((id, index) => requestedSelection.indexOf(id) === index && canonicalNext.some((shape) => shape.id === id));
       // A note whose body goes away moves to the new body under it, or stays where it stands.
@@ -21608,6 +21642,7 @@ export function LayerlingEditor({
             opacity: studioOpacity[ids[0]] ?? 1,
             onOpacity: (value: number) => setStudioOpacity((current) => ({ ...current, ...Object.fromEntries(ids.map((id) => [id, value])) })),
             onToggle: () => setStudioHidden((current) => (shown ? [...current.filter((entry) => !ids.includes(entry)), ...ids] : current.filter((entry) => !ids.includes(entry)))),
+            magnet: { on: waxMagnet, onToggle: toggleWaxMagnet },
           } as (typeof objects)[number]);
         }
         if (studioWax && waxIds.length && !waxArches.length) {
@@ -21618,6 +21653,7 @@ export function LayerlingEditor({
             shown,
             onToggle: () => setStudioHidden((current) => (shown ? [...current.filter((entry) => !waxIds.includes(entry)), ...waxIds] : current.filter((entry) => !waxIds.includes(entry)))),
             ...({ opacity: waxup.ghost, onOpacity: (ghost: number) => setWaxup((current) => ({ ...current, ghost })) }),
+            magnet: { on: waxMagnet, onToggle: toggleWaxMagnet },
           } as (typeof objects)[number]);
         }
         const arches = (["upper", "lower"] as const).filter((slot) => dentalStudio.slots[slot] && (!dentalStudio.waxStudio || dentalStudio.waxStudio.arches === "both" || dentalStudio.waxStudio.arches === slot));
