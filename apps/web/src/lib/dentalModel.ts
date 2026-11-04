@@ -153,6 +153,8 @@ export type DentalStudioOptions = {
   pinGap?: number;
   /** Build 117: the ball-and-socket's clearance all round the ball, mm (lib/dentalArticulator hingeFit) - CUP_FIT when left out. */
   hingeFit?: number;
+  /** Build 118: the hinge - Pare Passive (drop-in cups, the default) or Pare Captive (balls clicked into cradles) (lib/dentalArticulator). */
+  hingeStyle?: "passive" | "captive";
   /** Build 117: with the posts either side, also the bite-opening risers (1 to 5 mm, two of each), printed as a part of their own. Off unless true. */
   risers?: boolean;
   /** Build 117: the dental midline the dentist marked on the upper scan (`midlineScan`), in the studio's coordinates; the articulated pair is centred on it. */
@@ -172,7 +174,7 @@ export type DentalStudioOptions = {
   /** Fork (build 49/50): what fills a hollow model - a honeycomb all the way up (the default), a
    * honeycomb in the base only (stiff where it matters, empty above), or nothing. */
   infill?: DentalInfill;
-  /** Fork (build 50): half-round notches round the foot of a clean base, for seating it. On unless false. */
+  /** Fork (build 50): half-round notches round the foot of a clean base, for seating it. Build 118: no longer made unless true (and no longer offered). */
   notches?: boolean;
   /** Fork (build 50): a bar joining the back ends of a full arch, so it cannot spread while it prints. */
   tieBar?: boolean;
@@ -954,7 +956,7 @@ function buildArch(
         const bottom = open ? floor : Math.max(floor, cavity.solid.boundingBox().min[2]);
         const avoidX = options.baseStyle === "ortho" && labelText(labelLine) ? 1 : 0;
         // The front locator notch (clean base) sits on the middle of the front with a collar of solid round it: the slot goes beside it.
-        const notchAt = options.baseStyle === "clean" && options.notches !== false ? ringCentroid(outerRing)[0] : null;
+        const notchAt = options.baseStyle === "clean" && options.notches === true ? ringCentroid(outerRing)[0] : null;
         // The hollow itself just above where the slots sit: each slot is aimed at it, so none ends in solid.
         const level = cavity.solid.slice(bottom + DRAIN_SLOT.height / 2);
         const cavityRings = level.toPolygons() as Ring[];
@@ -977,7 +979,7 @@ function buildArch(
       const bar = tieBar(runtime, outer, floor);
       if (bar) solid = keepSolid(runtime.Manifold.union(solid, keepSolid(bar)));
     }
-    if (outer && options.baseStyle === "clean" && options.notches !== false) {
+    if (outer && options.baseStyle === "clean" && options.notches === true) {
       // Build 74: on a hollow model each notch is cut from a collar of solid a wall thick, so the
       // wall round it stays as thick as asked (cut straight into the shell, it was left 1 mm).
       if (unhollowed && hollowWall > 0) {
@@ -1418,7 +1420,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     // Build 78: the one articulator - kinematic seats and the incisal pin (lib/dentalArticulator).
     const raise = options.incisalPin === false ? 0 : Math.max(0, Math.min(PIN_MAX, options.pinRaise ?? 0));
     // Build 117: the cups' fit as chosen; on the dental midline (x = 0 here) when it was found.
-    const parts = articulatorParts(runtime, back, xMin, xMax, depth, -depth, stop, raise, { upper: heelsOf("upper"), lower: heelsOf("lower") }, options.pinStyle ?? "fused", { fit: options.hingeFit, riserGroove: Boolean(options.risers), ...(midline !== null ? { centre: 0 } : {}) });
+    const parts = articulatorParts(runtime, back, xMin, xMax, depth, -depth, stop, raise, { upper: heelsOf("upper"), lower: heelsOf("lower") }, options.pinStyle ?? "fused", { fit: options.hingeFit, riserGroove: Boolean(options.risers), hinge: options.hingeStyle ?? "passive", ...(midline !== null ? { centre: 0 } : {}) });
     if (stop && Number.isFinite(parts.pinY)) pinGeometry = { axleY: parts.axleY, pinY: parts.pinY };
     if (stop && Number.isFinite(parts.pinY) && options.pinStyle === "set") {
       const raises = [...new Set([...PIN_SET, raise])].sort((a, b) => a - b);
