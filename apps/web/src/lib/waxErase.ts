@@ -20,6 +20,12 @@ export type ToothErase = { keep: Dab[]; erase: Dab[]; rest: boolean };
 /** A tooth's frame in the scene: its incisal point on the labial face, and unit directions mesial, incisal, labial. */
 export type ToothAxes = { origin: Vec3; mesial: Vec3; up: Vec3; out: Vec3 };
 
+/**
+ * Build 117: wax over the gum is taken away only where the patient's surface faces the lip: kept where it faces the
+ * palate (its normal's share along the tooth's "out" below -PALATAL_KEEP), easing in over PALATAL_EASE above that.
+ */
+export const PALATAL_KEEP = 0.15;
+export const PALATAL_EASE = 0.3;
 /** The band over which erased wax eases down to the patient's surface from kept wax, mm. */
 export const ERASE_BAND = 0.8;
 /** How far under the patient's surface erased wax is tucked, mm. */
@@ -115,7 +121,12 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
       const deep = at ? MARGIN_SINK * (1 - smoothstep01(at.gum / MARGIN_SINK_REACH)) : 0;
       // Build 116: only wax over the gum is erased - wax over a neighbouring tooth (or over the patient's own tooth that the
       // tooth finder gave another number) is kept; it is tooth there, not gum.
-      if (at && !at.inside && at.overGum) { erased = 1; tuck = ERASE_TUCK + deep; }
+      // Build 117 (as Meshmixer): only on the labial side - palatally the library tooth's form is kept where it reaches
+      // over the gum, running on into the palate (the boundary line limits it where wanted). Eased between by the
+      // patient's surface turning from facing the lip to facing the palate.
+      const facing = nx * axes.out[0] + ny * axes.out[1] + nz * axes.out[2];
+      const labial = smooth01((facing + PALATAL_KEEP) / PALATAL_EASE);
+      if (at && !at.inside && at.overGum && labial > 1e-3) { erased = labial; tuck = ERASE_TUCK + deep; }
       else if (at && CERVICAL_TAPER) {
         const target = (above > 0 ? softCap(above, taperLimit(at.gum)) : above) - deep;
         if (target < above) capped = (target - above) * kept;
