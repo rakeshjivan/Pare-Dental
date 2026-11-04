@@ -11239,7 +11239,9 @@ export function LayerlingEditor({
     analyseDentalStudio({
       ...freshDentalState(slots, source.rolesChosen),
       preset: source.preset as DentalPreset,
-      options: source.options as unknown as DentalStudioOptions,
+      // Build 117: a case made before the pin's place was kept stood where the default then put it -
+      // in front, or either side with a wax-up - and it opens so, though the default is now either side.
+      options: { ...(source.options as unknown as DentalStudioOptions), ...(source.options.pinPlace === undefined ? { pinPlace: source.wax.length ? "sides" as const : "midline" as const } : {}) },
       optionsTouched: true,
       patientDetails: source.patientDetails,
       ...(source.biteMode ? { biteMode: source.biteMode } : {}),
@@ -11718,6 +11720,34 @@ export function LayerlingEditor({
     }, 30);
     stopDentalTrim();
   }, [analyseDentalStudio, commitShapes, dentalTrim, stopDentalTrim]);
+  /**
+   * Build 117: the dental midline on an upper scan (the studio's coordinates): where its central
+   * incisors meet - from the teeth found for a wax-up when they are of this scan, else found now with
+   * the tooth finder (kept per scan). Null when the finder is missing or the centrals are not found.
+   */
+  const dentalMidlines = useRef(new Map<string, { key: string; point: [number, number, number] | null }>());
+  const dentalMidlineOf = useCallback(async (id: string, positions: Float32Array): Promise<[number, number, number] | null> => {
+    let sum = 0;
+    for (let i = 0; i < positions.length; i += Math.max(1, Math.floor(positions.length / 997))) sum += positions[i] * ((i % 7) + 1);
+    const key = `${positions.length}:${sum.toFixed(4)}`;
+    const kept = dentalMidlines.current.get(id);
+    if (kept?.key === key) return kept.point;
+    const { centralsContact } = await import("@/lib/toothSegment");
+    const found = waxFoundRef.current[id];
+    let point: [number, number, number] | null = null;
+    if (found && found.input.length === positions.length) point = centralsContact(positions, found.fdi, "upper");
+    else {
+      try {
+        const teeth = await findTeethInBackground(positions, "upper", finderBytes);
+        point = centralsContact(positions, teeth.fdi, "upper");
+      } catch {
+        // No finder, or stopped: the arch's middle this time; tried again next time.
+        return null;
+      }
+    }
+    dentalMidlines.current.set(id, { key, point });
+    return point;
+  }, []);
   const applyDentalStudio = useCallback((occlusionNow?: { lowerPose?: number[]; raise: number } | null) => {
     const state = dentalStudioRef.current;
     if (!state || !state.analysis) return;
@@ -11765,9 +11795,21 @@ export function LayerlingEditor({
         // Build 71: without the patient's details, no label is engraved and the names are plain.
         const anonymous = state.patientDetails === "remove";
         // Build 79: with a wax-up the pin stands either side, unless chosen otherwise, so the front teeth are clear.
-        const pinPlace = state.options.pinPlace ?? (input.arches.some((arch) => arch.wax?.length) ? "sides" : "midline");
+        // Build 117: the posts either side are the default for every case now (Ian Meyers prefers them).
+        const pinPlace = state.options.pinPlace ?? "sides";
         const makeOptions = { ...state.options, pinPlace, ...(anonymous ? { label: "" } : {}), ...(openedPose ? { pinRaise: 0 } : {}) };
-        const result = await makeDentalStudioInBackground(fixedInput, makeOptions);
+        // Build 117: an articulated pair is centred on the dental midline - where the upper centrals (11
+        // and 21) meet, as the tooth finder finds them (the teeth found for a wax-up, else found now, once
+        // per scan). Not found, the models are centred on the arch's middle as before.
+        let madeInput = fixedInput;
+        const upperId = state.slots.upper;
+        if (state.options.hinge && upperId && state.slots.lower) {
+          const upperArch = fixedInput.arches.find((arch) => arch.id === upperId);
+          const midline = upperArch ? await dentalMidlineOf(upperId, Float32Array.from(upperArch.positions)) : null;
+          if (run !== dentalMakeRun.current) return;
+          if (midline) madeInput = { ...fixedInput, arches: fixedInput.arches.map((arch) => (arch.id === upperId ? { ...arch, midline } : arch)) };
+        }
+        const result = await makeDentalStudioInBackground(madeInput, makeOptions);
         // Build 79: stopped with Cancel while it was making - nothing is changed.
         if (run !== dentalMakeRun.current) return;
         const current = shapesRef.current.filter((shape) => involved.includes(shape.id));
@@ -11830,6 +11872,14 @@ export function LayerlingEditor({
           next = [...next, pins];
           made.set(pins.id, pins);
         }
+        // Build 117: the side posts' bite-opening risers - a part of their own, saved as its own STL.
+        if (result.risers) {
+          const positions = fromZUp(result.risers.positions, offset);
+          if (lift) for (let i = 1; i < positions.length; i += 3) positions[i] += lift;
+          const risers = canonicalizeShape({ ...shapeWithWorldPositions(meshShapeFromPositions(t("dental.pinRisers"), "#6f9fc9", positions), positions), dental: "model" as const });
+          next = [...next, risers];
+          made.set(risers.id, risers);
+        }
         // Build 79: the alternate-tooth model for injection moulding - the waxed arch again, with the wax
         // on the first-injection teeth only, set beside the models.
         // Build 94: with IMT (Wax-up Studio), for each arch waxed: the alternate-tooth model (series 1
@@ -11872,7 +11922,8 @@ export function LayerlingEditor({
         }
         // Build 79: each part made remembers what it was made from, so the design can be opened again.
         const madeIds = [...made.values()].map((shape) => shape.id);
-        const source: NonNullable<WorkplaneShape["dentalSource"]> = { slots: { ...state.slots }, wax: waxUsed, made: madeIds, options: { ...state.options } as Record<string, unknown>, preset: state.preset, patientDetails: state.patientDetails, rolesChosen: state.rolesChosen, ...(state.biteMode ? { biteMode: state.biteMode } : {}), ...(state.waxStudio ? { waxStudio: state.waxStudio } : {}) };
+        // Build 117: with where the pin stood, so a case opened again keeps it whatever the default becomes.
+        const source: NonNullable<WorkplaneShape["dentalSource"]> = { slots: { ...state.slots }, wax: waxUsed, made: madeIds, options: { ...state.options, pinPlace } as Record<string, unknown>, preset: state.preset, patientDetails: state.patientDetails, rolesChosen: state.rolesChosen, ...(state.biteMode ? { biteMode: state.biteMode } : {}), ...(state.waxStudio ? { waxStudio: state.waxStudio } : {}) };
         next = next.map((shape) => (madeIds.includes(shape.id) ? { ...shape, dentalSource: source } : shape));
         const heights = result.parts.map((part) => part.height.toFixed(1)).join(" / ");
         const kind = t(state.options.inside === "solid" ? "dental.doneSolid" : state.options.inside === "open" ? "dental.doneHollow" : "dental.doneClosed", { wall: state.options.wall.toFixed(1) });
@@ -11882,12 +11933,15 @@ export function LayerlingEditor({
         // Build 106: in the studio frame the panel says the models are made - no message over the view.
         if (STUDIO_SHELL && dentalWorkspace) dismissNotice();
         setMeshCheck(null);
-        const notes = result.warnings.map((warning) => t(({ edge: "dental.warn.edge", vents: "dental.warn.vents", apart: "dental.warn.apart", teeth: "dental.warn.teeth", opening: "dental.warn.opening", loose: state.options.hinge ? "dental.warn.loose" : "dental.warn.looseScan", tag: "dental.warn.tag", gum: "dental.warn.gum", wax: "dental.warn.wax", cut: "dental.warn.cut" } as const)[warning as "edge"] ?? "dental.warn.label"));
+        const notes = result.warnings.map((warning) => t(({ edge: "dental.warn.edge", vents: "dental.warn.vents", apart: "dental.warn.apart", teeth: "dental.warn.teeth", opening: "dental.warn.opening", loose: state.options.hinge ? "dental.warn.loose" : "dental.warn.looseScan", tag: "dental.warn.tag", risers: "dental.warn.risers", gum: "dental.warn.gum", wax: "dental.warn.wax", cut: "dental.warn.cut" } as const)[warning as "edge"] ?? "dental.warn.label"));
         (window as unknown as { layerlingLastMake?: unknown }).layerlingLastMake = { warnings: result.warnings, notes };
         // Build 60: how far the printed articulator opens.
         if (result.opening !== undefined && result.opening >= 30) notes.push(t(result.opening >= 90 ? "dental.opensFully" : "dental.opens", { angle: result.opening }));
         // Build 71: how far a raised pin holds the bite open, at the pin and at the teeth.
         if (result.held) notes.push(t("dental.heldOpen", { pin: result.held.pin.toFixed(1), front: result.held.front.toFixed(1), back: result.held.back.toFixed(1) }));
+        // Build 117: centred on the dental midline, and the risers made.
+        if (result.midline !== undefined) notes.push(t("dental.onMidline", { mm: Math.abs(result.midline).toFixed(1) }));
+        if (result.risers) notes.push(t("dental.risersMade", { heights: result.risers.heights.join(", ") }));
         // Build 78: the trueness check on the teeth, the soft tissue relieved, and what the pins do.
         if (result.trueness?.length) {
           const points = result.trueness.reduce((sum, part) => sum + part.points, 0);
@@ -11926,7 +11980,7 @@ export function LayerlingEditor({
         setDentalStudio((latest) => latest ? { ...latest, stage: "ready", error: error instanceof Error ? localizedError(error.message) : String(error) } : latest);
       }
     }, 30);
-  }, [commitShapes, dentalInput]);
+  }, [commitShapes, dentalInput, dentalMidlineOf]);
   /** Build 79: Cancel while the models are being made stops the making; the studio stays as it was. */
   const stopDentalMaking = useCallback(() => {
     if (dentalStudioRef.current?.stage !== "making") return;

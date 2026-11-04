@@ -29,6 +29,19 @@ export const CONDYLE_RADIUS = 5;
  * the height of the bite.
  */
 export const CUP_FIT = 0.1;
+/**
+ * Build 117: the cup's fit can be chosen (Ian Meyers found build 84's ball-and-socket loose in his
+ * prints): the clearance all round the ball, mm - CUP_FIT when left out, kept within these bounds.
+ * The same clearance is the bite-opening risers' fit on the side posts.
+ */
+export const HINGE_FIT_MIN = 0;
+export const HINGE_FIT_MAX = 0.3;
+/** Build 117: the fits the panel offers - tighter, standard (CUP_FIT) and looser, mm. */
+export const HINGE_FITS = [0.05, CUP_FIT, 0.2] as const;
+/** Build 117: a fit as asked, within its bounds; CUP_FIT when not given. */
+export function hingeFit(fit: number | undefined) {
+  return Number.isFinite(fit) ? Math.max(HINGE_FIT_MIN, Math.min(HINGE_FIT_MAX, fit as number)) : CUP_FIT;
+}
 /** The cup's block: its wall beside the ball, how far it reaches in front of and behind the ball's centre, and below its equator, mm. */
 export const CUP_WALL = 2.2;
 export const CUP_HALF_Y = CONDYLE_RADIUS + 3;
@@ -156,6 +169,7 @@ function splitPin(runtime: ManifoldRuntime, x: number, y: number, rest: number, 
     lower: [keep(runtime.Manifold.cylinder(PIN_DISH_DEPTH - floorLower, PIN_RADIUS, PIN_RADIUS, 64).translate([x, restY, floorLower]))],
     cut: keep(runtime.Manifold.sphere(dish, 64).translate([x, restY, dish - 0.01])),
     restY,
+    zc,
   };
 }
 
@@ -213,6 +227,14 @@ export function incisalPins(runtime: ManifoldRuntime, raises: number[], axisY: n
   return set;
 }
 
+/** Build 117: more of the articulator - the cups' fit (mm, CUP_FIT when left out) and the dental midline's x, to centre it on. */
+export type ArticulatorMore = { fit?: number; centre?: number };
+/**
+ * Build 117: a side post as built - its x, its place in the upper's frame (y, the dome's centre zc
+ * above the plane, the models closed), where the lower half stands (restY) and the top of its arm.
+ */
+export type ArticulatorPost = { x: number; y: number; restY: number; zc: number; armTop: number };
+
 /**
  * The articulator in the pair's frame (occlusal plane z = 0, back +y, the upper above): what joins
  * the upper, what joins the lower, the axis (y), the rest angle for `raise` (degrees), and where
@@ -231,12 +253,17 @@ export function articulatorParts(
   raise = 0,
   backs: { upper: ArticulatorHeel[]; lower: ArticulatorHeel[] } | null = null,
   pinStyle: PinStyle = "fused",
+  more: ArticulatorMore = {},
 ) {
   const R = CONDYLE_RADIUS;
+  const fit = hingeFit(more.fit);
   const ay = condyleAxisY(back);
   const known = Number.isFinite(xMin) && Number.isFinite(xMax);
-  const cx = known ? (xMin + xMax) / 2 : 0;
-  const half = Math.max(CUP_HALF_X, known ? (xMax - xMin) / 2 : 14);
+  // Build 117: on the dental midline when it was found - the condyles either side of it alike, as far
+  // out as the wider side reaches - else in the middle of the heels.
+  const centred = known && Number.isFinite(more.centre);
+  const cx = centred ? more.centre! : known ? (xMin + xMax) / 2 : 0;
+  const half = Math.max(CUP_HALF_X, centred ? Math.max(cx - xMin, xMax - cx) : known ? (xMax - xMin) / 2 : 14);
   // As wide as the models allow: the cups' outer edges at the heels' outer edges.
   const centres = half >= 2 * CUP_HALF_X + 2
     ? [cx - half + CUP_HALF_X, cx + half - CUP_HALF_X]
@@ -286,7 +313,8 @@ export function articulatorParts(
     // CUP_UNDER under its equator at the front and sides; the seat, the ball's own shape CUP_FIT larger
     // all round; and the channel the ball drops in by, as wide as the seat, slanting down and back out
     // of the block. A polygon's flats lie inside its sphere: the seat is grown by their depth.
-    const top = (R + CUP_FIT) / Math.cos(Math.PI / 96);
+    // Build 117: the fit as chosen (CUP_FIT when left out).
+    const top = (R + fit) / Math.cos(Math.PI / 96);
     upperParts.push(keep(box(runtime, c - CUP_HALF_X, c + CUP_HALF_X, ay - CUP_HALF_Y, ay + CUP_HALF_Y, -CUP_UNDER, floorUpper)));
     const seat = keep(runtime.Manifold.sphere(top, 96).translate([c, ay, 0]));
     const tilt = DROP_IN_CHANNEL * deg, run = R + CUP_UNDER + 8;
@@ -297,6 +325,7 @@ export function articulatorParts(
   });
   let rest = 0;
   let bossTop = NaN;
+  const built: ArticulatorPost[] = [];
   const lowerCut = (solid: ManifoldSolid) => lowerCuts.push(solid);
   if (front?.sides) {
     // Build 79: the pins either side. The opening is still set at the incisal pin's place in front of
@@ -310,6 +339,7 @@ export function articulatorParts(
       const [ux0, ux1] = inward(bases.upper[side] + (side === 0 ? 3 : -3));
       // Build 84: the split pin, each half on a 5 mm arm into its own base.
       const pin = splitPin(runtime, x, y, rest, ay, floorUpper, floorLower, keep);
+      built.push({ x, y, restY: pin.restY, zc: pin.zc, armTop: floorLower + 3 });
       lowerParts.push(keep(box(runtime, lx0, lx1, pin.restY - PIN_RADIUS, pin.restY + PIN_RADIUS, floorLower, floorLower + 3)), ...pin.lower);
       upperParts.push(keep(box(runtime, ux0, ux1, y - PIN_RADIUS, y + PIN_RADIUS, floorUpper - 3, floorUpper)), ...pin.upper);
       lowerCut(pin.cut);
@@ -354,7 +384,150 @@ export function articulatorParts(
   const upper = runtime.Manifold.difference(upperJoined, keep(runtime.Manifold.union(cuts)));
   const lower = lowerCuts.length ? runtime.Manifold.difference(lowerJoined, keep(runtime.Manifold.union(lowerCuts))) : lowerJoined.translate([0, 0, 0]);
   made.forEach((solid) => solid.delete());
-  return { upper, lower, axleY: ay, rest: rest / deg, pinY, bossTop, centres };
+  return { upper, lower, axleY: ay, rest: rest / deg, pinY, bossTop, centres, posts: built };
+}
+
+/**
+ * Build 117: bite-opening risers for the side posts (Ian Meyers) - printed apart and kept: a cap that
+ * slips over each lower post's top and raises it, so the upper's dome rests on the riser instead and
+ * the models are held open by the riser's height at the posts. Two of each height, one per side.
+ *
+ * - The socket is the post, the fit larger all round (HINGE_FIT), as deep as RISER_SOCKET (less on a
+ *   short post: never down to the arm), its ceiling resting on the post's top - so the height is the
+ *   riser's own - with a boss inside that fills the post's dish the fit short, centring it.
+ * - Its top is a dish like the post's, wider and as shallow: opened, the dome comes down a little
+ *   further back (it turns about the condyles), and a riser can be put on either way round, so the dish
+ *   is round and wide enough to take the dome wherever it lands. Each riser's top is set so the dome's
+ *   centre - and so the upper at the post - stands exactly its height above where it stands on the post.
+ * - Its height is told by notches round its top edge, one a millimetre.
+ */
+export const RISER_HEIGHTS = [1, 2, 3, 4, 5] as const;
+/** The riser's wall round its socket and the socket's depth (the most; at least RISER_MIN_SOCKET), mm. */
+export const RISER_WALL = 1.2;
+export const RISER_SOCKET = 5;
+export const RISER_MIN_SOCKET = 2;
+/** The riser's top dish: the sphere it is cut by (radius) and its depth, mm. */
+export const RISER_DISH = 6;
+export const RISER_DISH_DEPTH = 0.6;
+/** The notches telling the height: across, into the wall and down from the top, mm. */
+export const RISER_NOTCH = { wide: 0.8, deep: 0.5, high: 1 } as const;
+const RISER_SIDES = 96;
+
+/** The dome's centre at a turn (radians) about the axis: (y, z) - the post's dome at (y, zc) in the upper's frame. */
+function domeAt(theta: number, post: ArticulatorPost, axisY: number): [number, number] {
+  const dy = post.y - axisY;
+  return [axisY + dy * Math.cos(theta) + post.zc * Math.sin(theta), -dy * Math.sin(theta) + post.zc * Math.cos(theta)];
+}
+
+/** The lowest the dome's centre may stand over a riser's top at `top` (z), `d` mm off the riser's axis. */
+function riserAllows(top: number, d: number) {
+  const R = RISER_DISH, r = R - PIN_DOME, depth = RISER_DISH_DEPTH;
+  const rim = Math.sqrt(R * R - (R - depth) * (R - depth));
+  let z = -Infinity;
+  // In the dish (when the dome meets it inside its rim), on the rim's edge, or on the flat beyond.
+  if (d < r && (d * R) / r <= rim) z = Math.max(z, top - depth + R - Math.sqrt(r * r - d * d));
+  if (Math.abs(rim - d) < PIN_DOME) z = Math.max(z, top + Math.sqrt(PIN_DOME * PIN_DOME - (rim - d) * (rim - d)));
+  if (d >= rim) z = Math.max(z, top + PIN_DOME);
+  return z;
+}
+
+/**
+ * Build 117: where the upper rests on a riser whose top stands at `top` (z) on the post: its turn about
+ * the axis, radians (from `rest`, where it rests on the post itself, upwards).
+ */
+export function riserRest(top: number, post: ArticulatorPost, axisY: number, rest: number) {
+  const gap = (theta: number) => {
+    const [y, z] = domeAt(theta, post, axisY);
+    return z - riserAllows(top, Math.abs(y - post.restY));
+  };
+  let lo = rest, hi = rest + 0.8;
+  for (let k = 0; k < 60; k += 1) {
+    const mid = (lo + hi) / 2;
+    if (gap(mid) < 0) lo = mid; else hi = mid;
+  }
+  return hi;
+}
+
+/**
+ * Build 117: the top (z) of a riser that holds the upper exactly `raise` mm open at the post - its
+ * dome's centre that much higher than on the post - and the turn it rests at, radians.
+ */
+export function riserTop(raise: number, post: ArticulatorPost, axisY: number, rest: number) {
+  const lift = (top: number) => domeAt(riserRest(top, post, axisY, rest), post, axisY)[1] - PIN_DOME;
+  let lo = PIN_DISH_DEPTH + raise - 1, hi = PIN_DISH_DEPTH + raise + 3;
+  for (let k = 0; k < 50; k += 1) {
+    const mid = (lo + hi) / 2;
+    if (lift(mid) < raise) lo = mid; else hi = mid;
+  }
+  const top = (lo + hi) / 2;
+  return { top, rest: riserRest(top, post, axisY, rest) };
+}
+
+/** Build 117: how deep a riser's socket can go on this post (null: too short a post for one). */
+export function riserSocket(post: ArticulatorPost) {
+  const depth = Math.min(RISER_SOCKET, PIN_DISH_DEPTH - post.armTop - 0.5);
+  return depth >= RISER_MIN_SOCKET ? depth : null;
+}
+
+/**
+ * Build 117: one riser as it stands on its post (the articulator's frame): its top at `top` (z), its
+ * socket `socket` deep, the fit all round; `notches` round its top edge.
+ */
+export function riserOnPost(runtime: ManifoldRuntime, post: ArticulatorPost, top: number, socket: number, fitGiven?: number, notches = 0) {
+  const fit = hingeFit(fitGiven);
+  const made: ManifoldSolid[] = [];
+  const keep = <T extends ManifoldSolid>(solid: T) => { made.push(solid); return solid; };
+  const { x, restY: y } = post;
+  const outer = PIN_RADIUS + fit + RISER_WALL;
+  const bottom = PIN_DISH_DEPTH - socket;
+  let riser: ManifoldSolid = keep(runtime.Manifold.cylinder(top - bottom, outer, outer, RISER_SIDES).translate([x, y, bottom]));
+  // The socket: its facets outside the post's own (a polygon's flats lie inside its circle), ceiling on the post's top.
+  const bore = (PIN_RADIUS + fit) / Math.cos(Math.PI / RISER_SIDES);
+  const cuts: ManifoldSolid[] = [keep(runtime.Manifold.cylinder(socket + 1, bore, bore, RISER_SIDES).translate([x, y, bottom - 1]))];
+  // The top's dish, its facets on the sphere of RISER_DISH (as the post's dish is cut).
+  const dish = RISER_DISH / Math.cos(Math.PI / RISER_SIDES);
+  cuts.push(keep(runtime.Manifold.sphere(dish, RISER_SIDES).translate([x, y, top - RISER_DISH_DEPTH + RISER_DISH])));
+  for (let k = 0; k < notches; k += 1) {
+    const notch = keep(runtime.Manifold.cube([RISER_NOTCH.deep + 1, RISER_NOTCH.wide, RISER_NOTCH.high + 1]).translate([outer - RISER_NOTCH.deep, -RISER_NOTCH.wide / 2, top - RISER_NOTCH.high]));
+    cuts.push(keep(notch.rotate([0, 0, 90 + k * 36]).translate([x, y, 0])));
+  }
+  riser = keep(runtime.Manifold.difference(riser, keep(runtime.Manifold.union(cuts))));
+  // The boss in the post's dish, the fit short of it: the post's dish is cut by a sphere of PIN_DISH (grown by its facets' depth).
+  const postDish = PIN_DISH / Math.cos(Math.PI / 64);
+  const boss = keep(runtime.Manifold.intersection(
+    keep(runtime.Manifold.sphere(Math.max(0.5, PIN_DISH - fit), 64).translate([x, y, postDish - 0.01])),
+    keep(runtime.Manifold.cylinder(PIN_DISH_DEPTH + 0.01, PIN_RADIUS, PIN_RADIUS, RISER_SIDES).translate([x, y, 0])),
+  ));
+  const out = runtime.Manifold.union(riser, boss);
+  made.forEach((solid) => solid.delete());
+  return out;
+}
+
+/**
+ * Build 117: the risers for the side posts, two of each height (RISER_HEIGHTS), laid out to print
+ * standing on their open ends in a row joined by snap-off bars - one part. `posts`, `axisY` and `rest`
+ * (radians) as the articulator was built. Null when the posts are too short for a riser.
+ */
+export function pinRisers(runtime: ManifoldRuntime, posts: ArticulatorPost[], axisY: number, rest: number, fit?: number, heights: readonly number[] = RISER_HEIGHTS) {
+  const post = posts[0];
+  if (!post) return null;
+  const socket = Math.min(...posts.map((one) => riserSocket(one) ?? 0));
+  if (!(socket >= RISER_MIN_SOCKET)) return null;
+  const made: ManifoldSolid[] = [];
+  const keep = <T extends ManifoldSolid>(solid: T) => { made.push(solid); return solid; };
+  const outer = PIN_RADIUS + hingeFit(fit) + RISER_WALL;
+  const spacing = 2 * outer + 3;
+  const solved = heights.map((raise) => ({ raise, ...riserTop(raise, post, axisY, rest) }));
+  const pieces: ManifoldSolid[] = [];
+  let at = 0;
+  for (const { raise, top } of solved) {
+    const one = keep(riserOnPost(runtime, post, top, socket, fit, Math.round(raise)));
+    for (let copy = 0; copy < 2; copy += 1, at += 1) pieces.push(keep(one.translate([at * spacing - post.x, -post.restY, socket - PIN_DISH_DEPTH])));
+  }
+  for (let i = 0; i + 1 < at; i += 1) pieces.push(keep(box(runtime, i * spacing + outer - 0.3, (i + 1) * spacing - outer + 0.3, -0.6, 0.6, 0, 1)));
+  const set = runtime.Manifold.union(pieces);
+  made.forEach((solid) => solid.delete());
+  return { set, socket, risers: solved.map(({ raise, top, rest: turn }) => ({ raise, top, rest: turn })) };
 }
 
 /** Build 82: the pin and the opening, as the panel sets them. */

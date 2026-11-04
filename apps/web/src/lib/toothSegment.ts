@@ -486,6 +486,36 @@ export function landmarksFromTeeth(soup: Float32Array, map: ToothMap, arch: "upp
   return { midline, canines };
 }
 
+/** Build 117: two central incisors only count as touching when their crowns come this close, mm. */
+export const CENTRALS_TOUCH = 1.5;
+
+/**
+ * Build 117: the dental midline - where the two central incisors meet (11 and 21 on an upper, 31 and
+ * 41 on a lower): the middle of the closest two corners of their crowns, in the soup's coordinates.
+ * Null when either central was not found, or they stand apart (a diastema or a missing tooth).
+ */
+export function centralsContact(soup: ArrayLike<number>, fdi: ArrayLike<number>, arch: "upper" | "lower"): [number, number, number] | null {
+  const [a, b] = arch === "upper" ? [11, 21] : [41, 31];
+  const corners = (n: number) => {
+    const out: number[] = [];
+    for (let t = 0; t < fdi.length; t += 1) if (fdi[t] === n) for (let k = 0; k < 9; k += 1) out.push(soup[t * 9 + k]);
+    return Float64Array.from(out);
+  };
+  const pa = corners(a), pb = corners(b);
+  if (pa.length < 9 * 20 || pb.length < 9 * 20) return null;
+  const grid = new CubeGrid(Float32Array.from(pb), 2);
+  const idx = new Int32Array(1), dist = new Float32Array(1);
+  let best = Infinity, at: [number, number, number] | null = null;
+  for (let i = 0; i < pa.length; i += 3) {
+    grid.nearest(pa[i], pa[i + 1], pa[i + 2], 1, idx, dist);
+    if (idx[0] < 0) continue;
+    const j = idx[0] * 3;
+    const d = Math.hypot(pa[i] - pb[j], pa[i + 1] - pb[j + 1], pa[i + 2] - pb[j + 2]);
+    if (d < best) { best = d; at = [(pa[i] + pb[j]) / 2, (pa[i + 1] + pb[j + 1]) / 2, (pa[i + 2] + pb[j + 2]) / 2]; }
+  }
+  return at && best <= CENTRALS_TOUCH ? at : null;
+}
+
 /** A point moved by a matrix, as a tuple. */
 export const movePoint = (p: [number, number, number], m: THREE.Matrix4) => new THREE.Vector3(...p).applyMatrix4(m).toArray() as [number, number, number];
 

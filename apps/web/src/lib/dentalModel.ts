@@ -21,7 +21,7 @@ import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
 import { GUM_REACH, marginRegion, moveGumCut, type GumCut } from "@/lib/waxGum";
-import { articulatorParts, incisalPins, PIN, PIN_BAND, PIN_CLEAR, PIN_HALF, PIN_MAX, PIN_SET, POST_BACK, restAngle, type ArticulatorSides, type PinStyle } from "@/lib/dentalArticulator";
+import { articulatorParts, incisalPins, pinRisers, PIN, PIN_BAND, PIN_CLEAR, PIN_HALF, PIN_MAX, PIN_SET, POST_BACK, restAngle, type ArticulatorSides, type PinStyle } from "@/lib/dentalArticulator";
 import {
   applyMatrix, boundaryLoops, cloneMesh, transformSoup, convexHull, cutAlongField, cutBelow, dropFragments, smoothField, faceArea, loopLength, surfaceKept, pinchedEdges, PointGrid, solidPositions, toManifold, upwardness, weld,
   type ManifoldRuntime, type ManifoldSolid, type Mesh, type Ring,
@@ -71,6 +71,12 @@ export type DentalArchInput = {
     /** Build 103: towards each waxed neighbour (unit directions along the arch): the cut reaches CUT_SIDE that way too, so a patient's tooth wider than the ideal one leaves no wall in the embrasure. */ beside?: Array<[number, number, number]> }> | null;
   /** Build 108: Wax-up Studio's even gum line - the gum over each wax tooth trimmed back to a scalloped margin (lib/waxGum). */
   gum?: GumCut[];
+  /**
+   * Build 117: the dental midline - the contact between the upper central incisors (FDI 11 and 21),
+   * as the tooth finder found them - in the same coordinates as `positions`. An articulated pair is
+   * centred on it (the upper's is used); without it, on the middle of the arch, as before.
+   */
+  midline?: [number, number, number] | null;
 };
 export type DentalStudioInput = {
   arches: DentalArchInput[];
@@ -127,7 +133,8 @@ export type DentalStudioOptions = {
   /**
    * Build 79: where the incisal pin stands - in front of the incisors ("midline", when left out), or
    * as two posts either side in the premolar region ("sides"), which leaves the front teeth clear to
-   * see, photograph and seat an index on.
+   * see, photograph and seat an index on. Build 117: the studio asks for "sides" unless another place
+   * was chosen (Ian Meyers prefers them); here, left out, it is still "midline".
    */
   pinPlace?: "midline" | "sides";
   /**
@@ -144,6 +151,10 @@ export type DentalStudioOptions = {
   pinRaise?: number;
   /** Build 104: how far the pin (or the side posts) stands clear of the teeth, mm - PIN_CLEAR at least. */
   pinGap?: number;
+  /** Build 117: the ball-and-socket's clearance all round the ball, mm (lib/dentalArticulator hingeFit) - CUP_FIT when left out. */
+  hingeFit?: number;
+  /** Build 117: with the posts either side, also the bite-opening risers (1 to 5 mm, two of each), printed as a part of their own. Off unless true. */
+  risers?: boolean;
   /** A pair only: laid out base-down for printing, or upper on lower in occlusion. */
   layout: "print" | "occlusion";
   /** Engraved on the base; U or L goes in front for a pair. Empty for none. */
@@ -171,7 +182,7 @@ const SMOOTH_ROUNDS: Record<DentalSmooth, number> = { off: 0, low: 3, high: 10 }
 
 export type DentalPart = { id: string; role: DentalRole; positions: Float32Array; height: number; volume: number; /** Build 101: of a pair, the move from where the part is laid out back to the bite it was built in (column-major) - to measure the models' contacts wherever they are laid. */ toBite?: number[] };
 /** `surface`: per part, the share of the scan's surface kept above each depth (mm below the occlusal plane). */
-export type DentalStudioResult = { parts: DentalPart[]; worn: number; keptDepth: number[]; voxel: number | null; warnings: string[]; surface: Array<Record<number, number>>; /** Build 60: how far the printed articulator opens, degrees. */ opening?: number; /** Build 65: the solid pieces each part is made of - 1 when it holds together. */ pieces?: number[]; /** Build 71: a raised pin holds the bite open this much, mm: at the pin, the front teeth and the back teeth. */ held?: { pin: number; front: number; back: number }; /** Build 78: the incisal pin set, laid out to print, and what each pin does. */ pins?: { positions: Float32Array; raises: number[] }; pinTable?: Array<{ pin: number; front: number; back: number }>; /** Build 78: per part, how the scan's crowns came through (toothTrueness). */ trueness?: ToothTrueness[]; /** Build 78: per part, soft tissue cut back clear of the other model in the bite, mm². */ relieved?: number[]; /** Build 78: per part, soft tissue the other model's teeth meet in the bite (kept as a contact), mm². */ contactArea?: number[] };
+export type DentalStudioResult = { parts: DentalPart[]; worn: number; keptDepth: number[]; voxel: number | null; warnings: string[]; surface: Array<Record<number, number>>; /** Build 60: how far the printed articulator opens, degrees. */ opening?: number; /** Build 65: the solid pieces each part is made of - 1 when it holds together. */ pieces?: number[]; /** Build 71: a raised pin holds the bite open this much, mm: at the pin, the front teeth and the back teeth. */ held?: { pin: number; front: number; back: number }; /** Build 78: the incisal pin set, laid out to print, and what each pin does. */ pins?: { positions: Float32Array; raises: number[] }; /** Build 117: the side posts' bite-opening risers, laid out to print, and the height each holds the bite open at the posts (mm). */ risers?: { positions: Float32Array; heights: number[] }; /** Build 117: the articulator stands on the dental midline found between the centrals, this far (mm, + the patient's left) from the arch's middle. */ midline?: number; pinTable?: Array<{ pin: number; front: number; back: number }>; /** Build 78: per part, how the scan's crowns came through (toothTrueness). */ trueness?: ToothTrueness[]; /** Build 78: per part, soft tissue cut back clear of the other model in the bite, mm². */ relieved?: number[]; /** Build 78: per part, soft tissue the other model's teeth meet in the bite (kept as a contact), mm². */ contactArea?: number[] };
 
 /** Whether a mesh looks like a raw scan: an open surface with one long open edge. */
 export function looksLikeDentalScan(positions: ArrayLike<number>): boolean {
@@ -429,6 +440,38 @@ function prepared(input: DentalStudioInput): Prepared {
 
 export function analyseDental(input: DentalStudioInput): DentalAnalysis {
   return prepared(input).analysis;
+}
+
+/** Build 117: the dental midline is believed only this close to the arch's middle, mm - further, the centrals were not what was found. */
+export const MIDLINE_REACH = 8;
+
+/**
+ * Build 117: the x of the dental midline in the pair's frame (x = 0 the middle of the arch), from the
+ * upper's centrals (DentalArchInput.midline) - or null, to keep the middle (no centrals given, a
+ * quadrant, scans set up apart, or a point too far off to be the centrals' contact).
+ */
+function midlineOffset(prep: Prepared, input: DentalStudioInput): number | null {
+  if (prep.arches.length !== 2 || prep.analysis.pair?.apart || prep.arches.some((arch) => arch.partial)) return null;
+  const upper = prep.arches.find((arch) => arch.role === "upper");
+  const given = upper ? input.arches.find((arch) => arch.id === upper.id)?.midline : null;
+  if (!upper || !given || !given.every(Number.isFinite)) return null;
+  const point = new THREE.Vector3(...given);
+  // Lined up on a bite scan, the cleaned scan was moved: the point goes with it.
+  const fit = prep.analysis.pair?.bite?.fit?.[upper.id];
+  if (fit) point.applyMatrix4(new THREE.Matrix4().fromArray(fit));
+  // The upper's frame is the pair's turned over (FLIP: x the other way).
+  point.applyMatrix4(upper.frame);
+  const x = -point.x;
+  return Math.abs(x) <= MIDLINE_REACH ? x : null;
+}
+
+/** Build 117: the arches' frames moved across so the dental midline is at x = 0 of the pair's frame (FLIP takes x the other way for the upper). */
+function onMidline(prep: Prepared, x: number): Prepared {
+  if (!x) return prep;
+  return {
+    ...prep,
+    arches: prep.arches.map((arch) => ({ ...arch, frame: new THREE.Matrix4().makeTranslation(arch.role === "upper" ? x : -x, 0, 0).multiply(arch.frame) })),
+  };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1129,7 +1172,12 @@ export function labelledOptions(options: DentalStudioOptions): DentalStudioOptio
 
 async function studio(input: DentalStudioInput, given_options: DentalStudioOptions, given: ManifoldRuntime | undefined, mode: { only?: number; take?: (part: DentalArchPart) => void; remote?: { index: number; part: Promise<DentalArchPart> } }): Promise<DentalStudioResult | null> {
   let options = labelledOptions(given_options);
-  const prep = prepared(input);
+  // Build 117: an articulated pair is built on the dental midline - between the upper centrals - when
+  // they were found (Ian Meyers saw the pin and the models' middle off his midline): the arches' frames
+  // are moved across, so the articulator, the pin and a symmetric base all stand on it.
+  const analysed = prepared(input);
+  const midline = given_options.hinge ? midlineOffset(analysed, input) : null;
+  const prep = midline !== null ? onMidline(analysed, midline) : analysed;
   // Build 53: an approved tooth area, carried from the scan's triangles to the cleaned scan's corners.
   const areaOn = (id: string, mesh: Mesh): Uint8Array | undefined => {
     const given = input.arches.find((entry) => entry.id === id);
@@ -1246,6 +1294,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
   let rest: { degrees: number; axleY: number } | null = null;
   let held: { pin: number; front: number; back: number } | undefined;
   let pinSet: { positions: Float32Array; raises: number[] } | undefined;
+  let riserSet: { positions: Float32Array; heights: number[] } | undefined;
   let pinGeometry: { axleY: number; pinY: number } | null = null;
   let pinTable: Array<{ pin: number; front: number; back: number }> | undefined;
   let solids = built.map(({ arch, built: b }) => {
@@ -1328,7 +1377,9 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
       };
       const upperAcross = across("upper"), lowerAcross = across("lower");
       if (Number.isFinite(left) && Number.isFinite(right) && [...upperAcross, ...lowerAcross].every(Number.isFinite)) {
-        sides = { y, posts: [left - reach, right + reach], bases: { upper: upperAcross, lower: lowerAcross } };
+        // Build 117: on the dental midline, the posts stand either side of it alike - as far out as the wider side needs.
+        const out = Math.max(-left, right) + reach;
+        sides = { y, posts: midline !== null ? [-out, out] : [left - reach, right + reach], bases: { upper: upperAcross, lower: lowerAcross } };
       }
     }
     // Build 78: the incisal pin is one of the articulator's three supports, so it is always there.
@@ -1350,13 +1401,22 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     };
     // Build 78: the one articulator - kinematic seats and the incisal pin (lib/dentalArticulator).
     const raise = options.incisalPin === false ? 0 : Math.max(0, Math.min(PIN_MAX, options.pinRaise ?? 0));
-    const parts = articulatorParts(runtime, back, xMin, xMax, depth, -depth, stop, raise, { upper: heelsOf("upper"), lower: heelsOf("lower") }, options.pinStyle ?? "fused");
+    // Build 117: the cups' fit as chosen; on the dental midline (x = 0 here) when it was found.
+    const parts = articulatorParts(runtime, back, xMin, xMax, depth, -depth, stop, raise, { upper: heelsOf("upper"), lower: heelsOf("lower") }, options.pinStyle ?? "fused", { fit: options.hingeFit, ...(midline !== null ? { centre: 0 } : {}) });
     if (stop && Number.isFinite(parts.pinY)) pinGeometry = { axleY: parts.axleY, pinY: parts.pinY };
     if (stop && Number.isFinite(parts.pinY) && options.pinStyle === "set") {
       const raises = [...new Set([...PIN_SET, raise])].sort((a, b) => a - b);
       const set = incisalPins(runtime, raises, parts.axleY, parts.pinY, parts.bossTop);
       pinSet = { positions: cleanStlSoup(solidPositions(set)), raises };
       set.delete();
+    }
+    // Build 117: the bite-opening risers for the side posts, a part of their own.
+    if (options.risers && stop?.sides && parts.posts.length) {
+      const made = pinRisers(runtime, parts.posts, parts.axleY, (parts.rest * Math.PI) / 180, options.hingeFit);
+      if (made) {
+        riserSet = { positions: cleanStlSoup(solidPositions(made.set)), heights: made.risers.map((riser) => riser.raise) };
+        made.set.delete();
+      } else warnings.push("risers");
     }
     solids = built.map(({ arch }, i) => {
       const joined = runtime.Manifold.union(solids[i], arch.role === "upper" ? parts.upper : parts.lower);
@@ -1471,6 +1531,16 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     const dx = (minX + maxX) / 2 - (px0 + px1) / 2, dy = minY - 10 - py1, dz = minZ - pz0;
     for (let i = 0; i < p.length; i += 3) { p[i] += dx; p[i + 1] += dy; p[i + 2] += dz; }
   }
+  // Build 117: the risers likewise, in front of the models (and of the pin set).
+  if (riserSet && out.length) {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, minZ = Infinity;
+    for (const p of [...out.map((part) => part.positions), ...(pinSet ? [pinSet.positions] : [])]) for (let i = 0; i < p.length; i += 3) { minX = Math.min(minX, p[i]); maxX = Math.max(maxX, p[i]); minY = Math.min(minY, p[i + 1]); minZ = Math.min(minZ, p[i + 2]); }
+    const p = riserSet.positions;
+    let px0 = Infinity, px1 = -Infinity, py1 = -Infinity, pz0 = Infinity;
+    for (let i = 0; i < p.length; i += 3) { px0 = Math.min(px0, p[i]); px1 = Math.max(px1, p[i]); py1 = Math.max(py1, p[i + 1]); pz0 = Math.min(pz0, p[i + 2]); }
+    const dx = (minX + maxX) / 2 - (px0 + px1) / 2, dy = minY - 10 - py1, dz = minZ - pz0;
+    for (let i = 0; i < p.length; i += 3) { p[i] += dx; p[i + 1] += dy; p[i + 2] += dz; }
+  }
   toFree.forEach((solid) => { try { solid.delete(); } catch { /* gone */ } });
   return {
     parts: out,
@@ -1482,6 +1552,8 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     ...(opening !== undefined ? { opening } : {}),
     ...(held ? { held } : {}),
     ...(pinSet ? { pins: pinSet } : {}),
+    ...(riserSet ? { risers: riserSet } : {}),
+    ...(midline !== null ? { midline } : {}),
     ...(pinTable ? { pinTable } : {}),
     trueness,
     relieved: built.map(({ built: b }) => Math.round(b.relieved)),

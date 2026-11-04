@@ -1,7 +1,7 @@
 "use client";
 
 import type { BiteContactStats } from "@/lib/biteContacts";
-import { PIN_CLEAR, PIN_GAP_MAX, PIN_MAX, PIN_STEP, PIN_WARN, articulatorPinPatch } from "@/lib/dentalArticulator";
+import { CUP_FIT, HINGE_FITS, PIN_CLEAR, PIN_GAP_MAX, PIN_MAX, PIN_STEP, PIN_WARN, articulatorPinPatch } from "@/lib/dentalArticulator";
 import { biteOpenings } from "@/lib/waxOcclusion";
 
 /** Build 78: a bite scan further than this from the scanner's bite (mm RMS) is pointed out. */
@@ -1181,7 +1181,7 @@ export function DentalStudioPanel({
         // Build 106: separate or articulated; articulated - the picture, then pin or no pin; with a pin,
         // where it stands, how far from the teeth, and how much it opens the bite (OVD).
         const pinOn = options.incisalPin !== false;
-        const place = options.pinPlace ?? (waxup?.view.placed.length ? "sides" : "midline");
+        const place = options.pinPlace ?? "sides";
         const two = <T extends string>(label: string, value: T, pairs: Array<[T, string, string?]>, onPick: (value: T) => void) => (
           <div className="studio-mm-choice two" role="radiogroup" aria-label={label}>
             {pairs.map(([v, text, tip]) => <button key={v} type="button" role="radio" aria-checked={value === v} className={value === v ? "active" : ""} disabled={busy} title={tip} onClick={() => onPick(v)}>{text}</button>)}
@@ -1205,7 +1205,24 @@ export function DentalStudioPanel({
               <div className="studio-artic-picture"><ArticulatorPicture pinRaise={options.pinRaise ?? 0} pin={place !== "sides"} pinGap={options.pinGap ?? PIN_CLEAR} /></div>
               <EdgeModifierSlider label={t("studio.increaseOvd")} title={t("studio.increaseOvdHint")} value={options.pinRaise ?? 0} min={0} max={PIN_MAX} step={PIN_STEP} workspace={workspace} length disabled={busy} onChange={(value) => onOptionsChange(articulatorPinPatch({ pinRaise: Math.max(0, Math.min(PIN_MAX, Math.round(value / PIN_STEP) * PIN_STEP)) }))} />
               {(options.pinRaise ?? 0) > PIN_WARN ? <p className="blend-hint warn">{t("dental.pinRaiseWarn", { max: PIN_WARN })}</p> : null}
+              {/* Build 117: slip-on risers for the posts either side, to hold the bite open 1 to 5 mm - printed apart. */}
+              {place === "sides" ? (<>
+                <label className="edge-modifier-check" title={t("studio.risersHint")}>
+                  <input type="checkbox" checked={options.risers === true} disabled={busy} onChange={(event) => onOptionsChange({ risers: event.currentTarget.checked })} />
+                  <span>{t("studio.risers")}</span>
+                </label>
+                {options.risers ? <p className="blend-hint">{t("studio.risersHint")}</p> : null}
+              </>) : null}
             </>) : null}
+            {/* Build 117: the ball-and-socket's fit - tighter, standard or looser, the clearance all round the ball. */}
+            <h4 className="dental-group">{t("studio.hingeFit")}</h4>
+            <div className="studio-mm-choice" role="radiogroup" aria-label={t("studio.hingeFit")}>
+              {HINGE_FITS.map((fit, index) => {
+                const on = Math.abs((options.hingeFit ?? CUP_FIT) - fit) < 1e-6;
+                return <button key={fit} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} title={t("studio.hingeFitHint")} onClick={() => onOptionsChange({ hingeFit: fit })}>{`${t((["studio.hingeFitTighter", "studio.hingeFitStandard", "studio.hingeFitLooser"] as const)[index])} ${fit.toFixed(2)} mm`}</button>;
+              })}
+            </div>
+            <p className="blend-hint">{t("studio.hingeFitHint")}</p>
           </>) : null}
         </>);
       })() : (<>
@@ -1217,10 +1234,10 @@ export function DentalStudioPanel({
               <div className="dental-hinge-options">
                 {/* Build 78: the one articulator - two seats on ball condyles and the incisal pin. */}
                 {/* Build 104: the pin either side is drawn from the front; the pictures follow the sliders. */}
-                {options.incisalPin !== false && (options.pinPlace ?? (waxup?.view.placed.length ? "sides" : "midline")) === "sides"
+                {options.incisalPin !== false && (options.pinPlace ?? "sides") === "sides"
                   ? <ArticulatorSidesPicture pinGap={options.pinGap ?? PIN_CLEAR} />
                   : <ArticulatorPicture pinRaise={options.incisalPin === false ? 0 : options.pinRaise ?? 0} pin={options.incisalPin !== false} pinGap={options.pinGap ?? PIN_CLEAR} />}
-                <p className="blend-hint">{t(options.incisalPin === false ? "dental.articulatorHowNoPin" : (options.pinPlace ?? (waxup?.view.placed.length ? "sides" : "midline")) === "sides" ? "dental.articulatorHowSides" : "dental.articulatorHow")}</p>
+                <p className="blend-hint">{t(options.incisalPin === false ? "dental.articulatorHowNoPin" : (options.pinPlace ?? "sides") === "sides" ? "dental.articulatorHowSides" : "dental.articulatorHow")}</p>
                 {/* Build 82: the pin can be left out - the condyles alone, closing to the scanned bite. */}
                 <label className="edge-modifier-check dental-pin-check" title={t("dental.incisalPinHint")}>
                   <input type="checkbox" checked={options.incisalPin !== false} disabled={busy} onChange={(event) => onOptionsChange(articulatorPinPatch({ incisalPin: event.currentTarget.checked }))} />
@@ -1234,8 +1251,8 @@ export function DentalStudioPanel({
                 <p className="blend-hint">{t("dental.pinFusedHint")}</p>
                 {/* Build 79: one pin in front of the incisors, or a post each side in the premolar region - the
                     front teeth clear; the default with a wax-up. */}
-                {choice(t("dental.pinPlace"), options.pinPlace ?? (waxup?.view.placed.length ? "sides" : "midline"), [["midline", t("dental.pinMidline")], ["sides", t("dental.pinSides")]], (pinPlace) => onOptionsChange({ pinPlace }))}
-                <p className="blend-hint">{t((options.pinPlace ?? (waxup?.view.placed.length ? "sides" : "midline")) === "sides" ? "dental.pinSidesHint" : "dental.pinMidlineHint")}</p>
+                {choice(t("dental.pinPlace"), options.pinPlace ?? "sides", [["midline", t("dental.pinMidline")], ["sides", t("dental.pinSides")]], (pinPlace) => onOptionsChange({ pinPlace }))}
+                <p className="blend-hint">{t((options.pinPlace ?? "sides") === "sides" ? "dental.pinSidesHint" : "dental.pinMidlineHint")}</p>
                 {/* Build 104: the pin (or the side posts) can stand further from the teeth than the least. */}
                 <EdgeModifierSlider label={t("dental.pinGap")} value={options.pinGap ?? PIN_CLEAR} min={PIN_CLEAR} max={PIN_GAP_MAX} step={0.5} workspace={workspace} length disabled={busy} onChange={(value) => onOptionsChange({ pinGap: Math.max(PIN_CLEAR, Math.min(PIN_GAP_MAX, Math.round(value * 2) / 2)) })} />
                 </>)}
