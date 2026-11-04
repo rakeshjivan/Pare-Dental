@@ -18,8 +18,8 @@
  * hingeParts are a printed snap-on hinge behind the last molars: two posts with an axle on the
  * lower, a clip on the upper that snaps over it.
  */
-import { closingField, sampler, squaredDistanceTo, voxelise, type Grid } from "@/lib/meshRound";
-import { boundaryLoops, closeWithBase, dropFragments, dropInverted, solidPositions, type ManifoldRuntime, type ManifoldSolid, type Mesh, type Ring } from "@/lib/dentalMesh";
+import { sampler, squaredDistanceTo, voxelise, type Grid } from "@/lib/meshRound";
+import { boundaryLoops, closeWithBase, dropFragments, dropInverted, type ManifoldRuntime, type ManifoldSolid, type Mesh, type Ring } from "@/lib/dentalMesh";
 
 const MAX_HOLLOW_VOXELS = 9_000_000;
 
@@ -952,85 +952,6 @@ function ringArea(ring: Ring) {
 }
 
 /** Rings (as cleanOutline gives them) extruded between two heights. */
-/**
- * Build 118: a clean base's outline made neat, as lab-printed study models are: its outer edge straight sides and
- * chamfered corners (the outline's convex hull, simplified to NEAT_TOLERANCE, a little outside the outline), while a
- * lower's tongue space - the big hollow between the hull and the arch - stays open, following the arch.
- */
-export const NEAT_TOLERANCE = 2.5;
-/** Hollows between the hull and the outline larger than this stay open (a lower's tongue space), mm². */
-export const NEAT_KEEP_OPEN = 120;
-export function neatOutline(runtime: ManifoldRuntime, rings: Ring[]): Ring[] {
-  if (!rings.length) return rings;
-  const made: Array<{ delete(): void }> = [];
-  const keep = <T extends { delete(): void }>(item: T) => { made.push(item); return item; };
-  try {
-    const outline = keep(new runtime.CrossSection(rings, "Positive"));
-    const hull = keep(keep(keep(outline.hull()).simplify(NEAT_TOLERANCE)).offset(NEAT_TOLERANCE * 0.4, "Miter", 2));
-    // The hollows the hull spans: keep the big ones open (with the outline's own edge round them).
-    const between = keep(hull.subtract(outline));
-    let neat = hull;
-    for (const piece of between.decompose()) {
-      keep(piece);
-      if (piece.area() < NEAT_KEEP_OPEN) continue;
-      neat = keep(neat.subtract(piece));
-    }
-    // Never inside the outline anywhere (the scan is trimmed to this).
-    neat = keep(neat.add(outline));
-    const out = (neat.toPolygons() as Array<Array<[number, number]>>).map((ring) => ring.map(([x, y]) => [x, y] as [number, number]));
-    return out.length ? out : rings;
-  } catch {
-    return rings;
-  } finally {
-    made.forEach((item) => item.delete());
-  }
-}
-
-/**
- * Build 118: the foot of the model blended into its base - the inside corner where the scan rises from the base's top
- * (the ledge at `land`) filled with a round of `radius`, as on lab-printed study models: a ball of that radius rolled
- * along the corner (a closing on a voxel grid, lib/meshRound). Only material is added, and only in the band from the
- * ledge to FOOT_BAND radii above it, and below `ceiling` (the lowest tooth) - the teeth and the rest of the scan are as
- * they were.
- */
-export const FOOT_RADIUS = 3;
-export const FOOT_BAND = 2;
-const FOOT_VOXELS = 3_000_000;
-export function footFillet(runtime: ManifoldRuntime, solid: ManifoldSolid, land: number, radius = FOOT_RADIUS, ceiling = Infinity): ManifoldSolid | null {
-  const box = solid.boundingBox();
-  // Never up to the teeth: the band stops below the lowest point of any tooth (`ceiling`).
-  const top = Math.min(land + FOOT_BAND * radius, ceiling);
-  if (!(top > land + 0.3) || !(top > box.min[2]) || !(land < box.max[2])) return null;
-  const made: ManifoldSolid[] = [];
-  const keep = (item: ManifoldSolid) => { made.push(item); return item; };
-  try {
-    // The band, with room above and below so the closing near its edges sees the solid as it is.
-    const z0 = Math.max(box.min[2], land - radius), z1 = Math.min(box.max[2], top + radius);
-    const pad = radius + 1;
-    const slab = keep(runtime.Manifold.cube([box.max[0] - box.min[0] + 2 * pad, box.max[1] - box.min[1] + 2 * pad, z1 - z0]).translate([box.min[0] - pad, box.min[1] - pad, z0]));
-    const crop = keep(runtime.Manifold.intersection(solid, slab));
-    if (crop.isEmpty()) return null;
-    const positions = solidPositions(crop);
-    const sx = box.max[0] - box.min[0] + 2 * pad, sy = box.max[1] - box.min[1] + 2 * pad, sz = z1 - z0 + 2 * pad;
-    const h = Math.max(radius / 6, Math.cbrt((sx * sy * sz) / FOOT_VOXELS));
-    const origin: [number, number, number] = [box.min[0] - pad, box.min[1] - pad, z0 - pad];
-    const grid: Grid = { nx: Math.ceil(sx / h), ny: Math.ceil(sy / h), nz: Math.ceil(sz / h), h, origin };
-    const inside = voxelise(positions, grid);
-    const field = closingField(inside, grid, radius);
-    const bounds = { min: origin, max: [origin[0] + grid.nx * h, origin[1] + grid.ny * h, origin[2] + grid.nz * h] as [number, number, number] };
-    const closed = keep(runtime.Manifold.levelSet(sampler(field, grid, -radius), bounds, h, 0));
-    // Only the fill in the corner: within the band, outside the solid.
-    const band = keep(runtime.Manifold.cube([sx, sy, top - land]).translate([origin[0], origin[1], land]));
-    const fill = keep(runtime.Manifold.difference(keep(runtime.Manifold.intersection(closed, band)), solid));
-    if (fill.isEmpty()) return null;
-    return runtime.Manifold.union(solid, fill);
-  } catch {
-    return null;
-  } finally {
-    made.forEach((item) => item.delete());
-  }
-}
-
 export function prismOf(runtime: ManifoldRuntime, rings: Ring[], bottom: number, top: number): ManifoldSolid {
   const section = new runtime.CrossSection(rings, "Positive");
   const solid = section.extrude(top - bottom).translate([0, 0, bottom]);
@@ -1206,7 +1127,9 @@ export function honeycombIn(runtime: ManifoldRuntime, cavity: ManifoldSolid, flo
   for (let y = y0 + stepY / 5; y <= y1; y += stepY / 2) bars.push(runtime.Manifold.cube([x1 - x0 + 2, 0.7, HONEYCOMB_SLOT + 0.01]).translate([x0 - 1, y, low]));
   // Build 107: open underneath too - printed base-down the platform closes the bottom, so the cells
   // must reach one another (and the drain slots in the outer wall) through these.
-  void open;
+  // Build 118 (Rakesh): not on an open model - its outer wall has no drain slots now (build 117), so these drained
+  // nowhere and only notched the foot of every wall; without them the honeycomb ends flat with the rim.
+  if (open) { bars.forEach((bar) => bar.delete()); return cells; }
   if (!bars.length) return cells;
   const slots = runtime.Manifold.union(bars);
   bars.forEach((bar) => bar.delete());

@@ -9682,7 +9682,8 @@ export function LayerlingEditor({
     return tool && shape ? { tool, shape, state: sculptMeshFor(shape) } : null;
   };
   /** Build 117: Trim's "Delete as I select" - on, each selection is cut away as soon as it is made. */
-  const [trimAutoDelete, setTrimAutoDelete] = useState(() => { try { return window.localStorage.getItem("pare3d.trimAutoDelete") === "1"; } catch { return false; } });
+  // Build 118: on unless turned off (Manual delete).
+  const [trimAutoDelete, setTrimAutoDelete] = useState(() => { try { return window.localStorage.getItem("pare3d.trimAutoDelete") !== "0"; } catch { return true; } });
   const trimAutoDeleteRef = useRef(trimAutoDelete);
   trimAutoDeleteRef.current = trimAutoDelete;
   const autoDeleteAfterSelect = (tool: { trim?: boolean; tool: SculptTool | null }, chosen: number) => {
@@ -10270,10 +10271,27 @@ export function LayerlingEditor({
     commitSculpt(shape, positions, t("sculpt.selectionDone", { action: t(`sculpt.selection.${action}`) }), true);
     // The live copy follows (same triangles, same order). Build 96: the part changed, the selection is
     // done with - it clears (and its bar closes), ready for a new one.
+    // Build 118: made lazily - the cut part is drawn first, and the copy (only needed for the next stroke) is made just
+    // after, or at once if anything asks for it sooner - so the cut shows a few tenths of a second sooner on a full arch.
     const frozen = state.live.frozenPoints();
-    state.live.dispose();
-    state.live = LiveMesh.fromSoup(positions);
-    if (frozen.length) state.live.freezePoints(frozen);
+    const old = state.live;
+    let made: LiveMesh | null = null;
+    const settle = (value: LiveMesh) => Object.defineProperty(state, "live", { value, writable: true, configurable: true, enumerable: true });
+    Object.defineProperty(state, "live", {
+      configurable: true,
+      enumerable: true,
+      get() {
+        if (!made) {
+          old.dispose();
+          made = LiveMesh.fromSoup(positions);
+          if (frozen.length) made.freezePoints(frozen);
+          settle(made);
+        }
+        return made;
+      },
+      set(value: LiveMesh) { if (!made) old.dispose(); made = value; settle(value); },
+    });
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => window.setTimeout(() => { void state.live; }, 0)));
     state.selection = { mesh: selection.mesh, chosen: new Uint8Array(selection.chosen.length), stale: false };
     setSculptTool((current) => current ? { ...current, chosen: 0 } : current);
   }, [sculptTool]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -10282,9 +10300,10 @@ export function LayerlingEditor({
   const deleteTrimSelectionRef = useRef<() => void>(() => {});
   const deleteTrimSelection = () => {
     setSculptTool((current) => current ? { ...current, busy: true } : current);
-    window.requestAnimationFrame(() => window.requestAnimationFrame(() => window.setTimeout(() => {
+    // Build 118: one frame (the panel shows it working), then the cut - not two frames and a timer.
+    window.requestAnimationFrame(() => window.setTimeout(() => {
       try { applySculptSelectionRef.current("delete"); } finally { setSculptTool((current) => current ? { ...current, busy: false } : current); }
-    }, 0)));
+    }, 0));
   };
   deleteTrimSelectionRef.current = deleteTrimSelection;
   // Build 92: Soft Transform - the selection moved, turned or scaled with a soft edge, live on the sculpt copy.

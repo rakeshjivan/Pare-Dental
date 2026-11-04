@@ -534,6 +534,18 @@ export function MeshSculptPanel({
         </div>
       ) : null}
       {teethWarning > 0 ? <p className="dental-status warn sculpt-teeth-warning" role="status" aria-live="assertive">{t("sculpt.trimTeeth", { count: teethWarning.toLocaleString() })}</p> : null}
+      {/* Build 118 (Rakesh): in the studios, Auto delete (the default - each selection cut away as it is made), Manual
+          delete (paint, then press it to cut the selection away) and Clear - no Invert. */}
+      {trim && studioTrim && onAutoDelete ? (<>
+        <div className="dental-trim-buttons sculpt-selection" role="group" aria-label={t("sculpt.selection")}>
+          <button type="button" aria-pressed={autoDelete} className={autoDelete ? "active" : undefined} disabled={busy} title={t("sculpt.autoDeleteHint")} onClick={() => onAutoDelete(true)}>{t("sculpt.trimAuto")}</button>
+          <button type="button" aria-pressed={!autoDelete} className={!autoDelete ? (chosen ? "active danger" : "active") : undefined} disabled={busy || (!autoDelete && !chosen)} title={t("sculpt.trimManualHint")} onClick={() => { if (autoDelete) onAutoDelete(false); else if (chosen) onSelection("delete"); }}>
+            {teethWarning > 0 && warnedAction === "delete" ? t("sculpt.deleteAnyway") : t("sculpt.trimManual")}
+          </button>
+          <button type="button" disabled={busy || !chosen} title={t("sculpt.selection.clearHint")} onClick={() => onSelection("clear")}>{t("sculpt.selection.clear")}</button>
+        </div>
+        <p className="blend-hint" role="status">{t(autoDelete ? "sculpt.trimAutoHint" : "sculpt.trimManualHint")}</p>
+      </>) : (
       <div className="dental-trim-buttons sculpt-selection" role="group" aria-label={t("sculpt.selection")}>
         {(trim ? (studioTrim ? STUDIO_TRIM_ACTIONS : TRIM_ACTIONS) : SCULPT_ACTIONS).map((action) => (
           <button key={action} type="button" className={trim && (action === "delete" || action === "fill") ? "danger" : undefined} title={t(`sculpt.selection.${action}Hint` as "sculpt.selection.fillHint")} disabled={busy || (!chosen && action !== "invert")} onClick={() => onSelection(action)}>
@@ -541,7 +553,8 @@ export function MeshSculptPanel({
           </button>
         ))}
       </div>
-      {trim && onAutoDelete ? (
+      )}
+      {trim && onAutoDelete && !studioTrim ? (
         <label className="edge-modifier-check" title={t("sculpt.autoDeleteHint")}>
           <input type="checkbox" checked={autoDelete} disabled={busy} onChange={(event) => onAutoDelete(event.currentTarget.checked)} />
           <span>{t("sculpt.autoDelete")}</span>

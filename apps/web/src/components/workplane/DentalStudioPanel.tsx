@@ -7,8 +7,6 @@ import { biteOpenings } from "@/lib/waxOcclusion";
 /** Build 78: a bite scan further than this from the scanner's bite (mm RMS) is pointed out. */
 /** Build 79: the bite scan's own error is often 0.2-0.3 mm; only well beyond that is the kept bite questioned. */
 const BITE_KEPT_CHECK = 0.5;
-/** Build 118: the wall of a hollow model (open, or with a honeycomb base), mm - a little over the lab models' own 2.3 mm. */
-const HOLLOW_WALL = 2.5;
 
 import { ArrowLeft, ArrowLeftRight, ArrowRight, Check, ChevronDown, FileDown, FilePlus2, LoaderCircle, Redo2, Undo2, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -40,24 +38,18 @@ export const DENTAL_GUIDE_FILE = "Pare-3D-Model-Builder-Guide.pdf";
 const DENTAL_GUIDE_PDF = `downloads/${DENTAL_GUIDE_FILE}`;
 
 export function dentalPreset(preset: DentalPreset, depth: number, pair: boolean, above = 0, teeth = 0): DentalStudioOptions {
-  // Build 118: 2.5 mm walls when hollow - above the 2.0 mm below which hollow models deform under thermoforming
-  // (Kenning et al. 2021, doi:10.1016/j.ortho.2021.01.005; Bennett & DiGiovanni 2024, doi:10.1002/cre2.827), and a
-  // little over the 2.3 mm of lab-printed study models; hollow shells print within clinical tolerance (Lohfeld et al.
-  // 2024, doi:10.3390/biomimetics9040217).
-  const common = { label: "", hinge: false, layout: "print" as const, wall: HOLLOW_WALL };
+  // Build 107: 3 mm walls when hollow (the accuracy of hollow models falls off below 3 mm - Yurdakurban et al. 2024).
+  const common = { label: "", hinge: false, layout: "print" as const, wall: 3 };
   if (preset === "ortho") {
     // The trimmed base is about a third of the model's height (the art portion), the anatomy two thirds.
     // Build 78: records keep the scans whole - no soft tissue trimmed (the ABO counts any change as altered records).
-    // Build 118: hollow (honeycomb base by default), standing on its trimmed back - no articulator.
-    return { ...common, keep: null, base: Math.round(Math.max(6, Math.min(15, depth / 2))), baseStyle: "ortho", inside: "open", infill: "base", layout: pair ? "occlusion" : "print", relief: false };
+    return { ...common, keep: null, base: Math.round(Math.max(6, Math.min(15, depth / 2))), baseStyle: "ortho", inside: "solid", layout: pair ? "occlusion" : "print", relief: false };
   }
   if (preset === "aligner") {
     // Thermoforming: solid, 15-20 mm in all (Formlabs' thermoforming guide) - floor to the tallest
     // tooth about 18 mm, never keeping less than the teeth.
     const keep = Math.max(teeth, Math.min(depth, 15 - above));
-    // Build 118: hollow with the honeycomb base (stiff under the forming pressure; 2.5 mm walls, over the 2 mm hollow
-    // models need for thermoforming), at its own height - no articulator.
-    return { ...common, keep, base: Math.max(3, 18 - keep - above), baseStyle: "follow", inside: "open", infill: "base" };
+    return { ...common, keep, base: Math.max(3, 18 - keep - above), baseStyle: "follow", inside: "solid" };
   }
   if (preset === "crown") {
     // Crown and bridge: solid with a plate across the arch - the most accurate (Shin 2020, Wan 2026).
@@ -1023,7 +1015,7 @@ export function DentalStudioPanel({
             ["study", t("dental.study"), t("dental.studyHint")],
             ["ortho", t("dental.ortho"), t("dental.orthoHint")],
             ["aligner", t("dental.aligner"), t("dental.alignerHint")],
-            // Build 118: no Crown & bridge (Rakesh) - a case made with it still opens with its settings.
+            ["crown", t("dental.crown"), t("dental.crownHint")],
           ] as const).map(([value, label, hint]) => (
             <button key={value} type="button" role="radio" aria-checked={preset === value} className={preset === value ? (custom ? "active custom" : "active") : ""} disabled={busy} title={framed ? hint : undefined} onClick={() => onPresetChange(value)}>
               {/* Build 66: the base each choice makes, from above. */}
@@ -1039,7 +1031,11 @@ export function DentalStudioPanel({
         {framed ? (<>
           <h4 className="dental-group">{t("studio.modelOptions")}</h4>
           <div className="studio-toggle-buttons" role="group" aria-label={t("studio.modelOptions")}>
-            {/* Build 118: no locator notches round the base (Rakesh) - not offered. */}
+            {options.baseStyle === "clean" ? (
+              <button type="button" aria-pressed={options.notches !== false} className={options.notches !== false ? "active" : ""} disabled={busy} title={t("dental.notchesHint")} onClick={() => onOptionsChange({ notches: options.notches === false })}>
+                {options.notches !== false ? <Check size={15} aria-hidden="true" /> : null}{t("studio.notches")}
+              </button>
+            ) : null}
             {preset === "aligner" ? (
               <button type="button" aria-pressed={following} className={following ? "active" : ""} disabled={busy} title={t("studio.followGumHint")} onClick={() => onOptionsChange(following ? { gum: null, base: alignerBase(null) } : { gum: 2, base: alignerBase(2) })}>
                 {following ? <Check size={15} aria-hidden="true" /> : null}{t("studio.followGum")}
@@ -1054,6 +1050,12 @@ export function DentalStudioPanel({
         </>) : null}
         {!framed && (options.baseStyle === "clean" || options.baseStyle === "articulator") ? (
           <>
+            {options.baseStyle === "clean" ? (
+              <label className="edge-modifier-check" title={t("dental.notchesHint")}>
+                <input type="checkbox" checked={options.notches !== false} disabled={busy} onChange={(event) => onOptionsChange({ notches: event.currentTarget.checked })} />
+                <span>{t("dental.notches")}</span>
+              </label>
+            ) : null}
             <label className="edge-modifier-check" title={t("dental.tieBarHint")}>
               <input type="checkbox" checked={Boolean(options.tieBar)} disabled={busy} onChange={(event) => onOptionsChange({ tieBar: event.currentTarget.checked })} />
               <span>{t("dental.tieBar")}</span>
@@ -1064,24 +1066,43 @@ export function DentalStudioPanel({
         {framed ? (<>
           {/* Build 106: the frame's Model options - what is inside, the wall, and the base underneath. */}
           {custom ? <p className="blend-hint dental-custom">{t("dental.customHint")}</p> : null}
-          {/* Build 118: one choice of three (Rakesh): an open hollow shell, as lab models are printed; hollow with a
-              honeycomb base; or solid. The wall is HOLLOW_WALL; no full honeycomb, no separate wall or underside choice. */}
           <h4 className="dental-group">{t("studio.body")} <HelpTip text={t("studio.bodyHint")} /></h4>
           {(() => {
-            // Build 118: every model hollow - its base open or honeycomb (a case saved solid shows neither until one is picked).
-            const body = options.inside === "solid" ? null : options.infill === "none" ? "open" : "honeycombBase";
-            const pick = (value: "open" | "honeycombBase") => onOptionsChange({ inside: "open", infill: value === "open" ? "none" : "base", wall: HOLLOW_WALL });
+            const body = options.inside === "solid" ? "solid" : options.infill === "honeycomb" ? "honeycomb" : "hollow";
+            const pick = (value: "hollow" | "honeycomb" | "solid") => onOptionsChange(value === "solid" ? { inside: "solid" } : { inside: options.inside === "solid" ? "open" : options.inside, infill: value === "honeycomb" ? "honeycomb" : options.infill === "honeycomb" || !options.infill ? "base" : options.infill });
             return (
-              <div className="studio-pic-choice two" role="radiogroup" aria-label={t("studio.body")}>
-                {(["open", "honeycombBase"] as const).map((value) => (
-                  <button key={value} type="button" role="radio" aria-checked={body === value} className={body === value ? "active" : ""} disabled={busy} title={t(`studio.base3.${value}Hint` as "studio.base3.openHint")} onClick={() => pick(value)}>
+              <div className="studio-pic-choice" role="radiogroup" aria-label={t("studio.body")}>
+                {(["hollow", "honeycomb", "solid"] as const).map((value) => (
+                  <button key={value} type="button" role="radio" aria-checked={body === value} className={body === value ? "active" : ""} disabled={busy} title={t(`studio.body.${value}Hint` as "studio.body.hollowHint")} onClick={() => pick(value)}>
                     <BodyPictureSvg kind={value} />
-                    <span>{t(`studio.base3.${value}` as "studio.base3.open")}</span>
+                    <span>{t(`studio.body.${value}` as "studio.body.hollow")}</span>
                   </button>
                 ))}
               </div>
             );
           })()}
+          {options.inside !== "solid" ? (<>
+            <h4 className="dental-group">{t("dental.wall")}</h4>
+            <div className="studio-mm-choice" role="radiogroup" aria-label={t("dental.wall")}>
+              {[2, 3, 4, 5].map((mm) => (
+                <button key={mm} type="button" role="radio" aria-checked={Math.abs(options.wall - mm) < 0.05} className={Math.abs(options.wall - mm) < 0.05 ? "active" : ""} disabled={busy} onClick={() => onOptionsChange({ wall: mm })}>{`${mm} mm`}</button>
+              ))}
+            </div>
+          </>) : null}
+          {options.inside !== "solid" && options.infill !== "honeycomb" ? (<>
+            <h4 className="dental-group">{t("studio.underside")} <HelpTip text={t("studio.undersideHint")} /></h4>
+            <div className="studio-pic-choice two" role="radiogroup" aria-label={t("studio.underside")}>
+              {([["open", "none"], ["honeycombBase", "base"]] as const).map(([pic, infill]) => {
+                const on = (options.infill ?? "base") === infill;
+                return (
+                  <button key={pic} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} onClick={() => onOptionsChange({ infill })}>
+                    <BodyPictureSvg kind={pic} />
+                    <span>{t(pic === "open" ? "studio.underside.open" : "studio.underside.honeycomb")}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </>) : null}
         </>) : (<>
         <p className="dental-summary" data-testid="dental-summary">{t("dental.summary", { base: baseName(options.baseStyle), inside: insideName, height: height.toFixed(1) })}</p>
         {custom ? <p className="blend-hint dental-custom">{t("dental.customHint")}</p> : null}
@@ -1170,8 +1191,7 @@ export function DentalStudioPanel({
         </>) : null}
       </>)) : null}
 
-      {/* Build 118: the articulator for study models only (ortho stands on its back; aligners are formed one arch at a time). */}
-      {pair && inMb("label") && (preset === "study" || options.hinge) ? card(n(6), t("dental.step4"), options.hinge, t("dental.step4Hint"), articSummary, framed ? (() => {
+      {pair && inMb("label") ? card(n(6), t("dental.step4"), options.hinge, t("dental.step4Hint"), articSummary, framed ? (() => {
         // Build 106: separate or articulated; articulated - the picture, then pin or no pin; with a pin,
         // where it stands, how far from the teeth, and how much it opens the bite (OVD).
         const pinOn = options.incisalPin !== false;
@@ -1208,15 +1228,6 @@ export function DentalStudioPanel({
                 {options.risers ? <p className="blend-hint">{t("studio.risersHint")}</p> : null}
               </>) : null}
             </>) : null}
-            {/* Build 118: the hinge - Pare Passive (the upper rests on its cups) or Pare Captive (the balls click into cradles). */}
-            <h4 className="dental-group">{t("studio.hinge")}</h4>
-            <div className="studio-mm-choice two" role="radiogroup" aria-label={t("studio.hinge")}>
-              {(["passive", "captive"] as const).map((style) => {
-                const on = (options.hingeStyle ?? "passive") === style;
-                return <button key={style} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} onClick={() => onOptionsChange({ hingeStyle: style })}>{t(style === "passive" ? "studio.hingePassive" : "studio.hingeCaptive")}</button>;
-              })}
-            </div>
-            <p className="blend-hint">{t((options.hingeStyle ?? "passive") === "passive" ? "studio.hingePassiveHint" : "studio.hingeCaptiveHint")}</p>
             {/* Build 117: the ball-and-socket's fit - tighter, standard or looser, the clearance all round the ball. */}
             <h4 className="dental-group">{t("studio.hingeFit")}</h4>
             <div className="studio-mm-choice" role="radiogroup" aria-label={t("studio.hingeFit")}>

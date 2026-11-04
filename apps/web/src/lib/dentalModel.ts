@@ -16,7 +16,7 @@
 import * as THREE from "three";
 import { getManifoldRuntime } from "@/lib/editorMeshCore";
 import { alignToBite, archFrame, biteResidual, contacts, vertexNormals, canineWidth, cleanScan, frontOf, isPartialArch, marginUp, pairFrame, palateScore, type CleanArch, type CleanReport } from "@/lib/dentalArch";
-import { footFillet, FOOT_RADIUS, neatOutline, ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
+import { ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
@@ -153,8 +153,6 @@ export type DentalStudioOptions = {
   pinGap?: number;
   /** Build 117: the ball-and-socket's clearance all round the ball, mm (lib/dentalArticulator hingeFit) - CUP_FIT when left out. */
   hingeFit?: number;
-  /** Build 118: the hinge - Pare Passive (drop-in cups, the default) or Pare Captive (balls clicked into cradles) (lib/dentalArticulator). */
-  hingeStyle?: "passive" | "captive";
   /** Build 117: with the posts either side, also the bite-opening risers (1 to 5 mm, two of each), printed as a part of their own. Off unless true. */
   risers?: boolean;
   /** Build 117: the dental midline the dentist marked on the upper scan (`midlineScan`), in the studio's coordinates; the articulated pair is centred on it. */
@@ -174,7 +172,7 @@ export type DentalStudioOptions = {
   /** Fork (build 49/50): what fills a hollow model - a honeycomb all the way up (the default), a
    * honeycomb in the base only (stiff where it matters, empty above), or nothing. */
   infill?: DentalInfill;
-  /** Fork (build 50): half-round notches round the foot of a clean base, for seating it. Build 118: no longer made unless true (and no longer offered). */
+  /** Fork (build 50): half-round notches round the foot of a clean base, for seating it. On unless false. */
   notches?: boolean;
   /** Fork (build 50): a bar joining the back ends of a full arch, so it cannot spread while it prints. */
   tieBar?: boolean;
@@ -892,20 +890,11 @@ function buildArch(
         solid = keepSolid(runtime.Manifold.difference(solid, keepSolid(articulatorPockets(runtime, plate, floor))));
         footprint = [plate];
       } else {
-        // Build 118: as lab-printed study models are - the block's outer edge straight-sided with chamfered corners
-        // (a lower's tongue space left open), the scan trimmed to its own smooth outline inside it, so a ledge runs
-        // round the foot; and the foot blended into the ledge with a round.
-        const neat = neatOutline(runtime, rings);
-        const block = keepSolid(prismOf(runtime, neat, floor, blockTop));
+        const block = keepSolid(prismOf(runtime, rings, floor, blockTop));
+        solid = keepSolid(runtime.Manifold.union(solid, block));
         const trim = keepSolid(prismOf(runtime, rings, floor - 0.001, top + 5));
         solid = keepSolid(runtime.Manifold.intersection(solid, trim));
-        solid = keepSolid(runtime.Manifold.union(solid, block));
-        let toothLow = Infinity;
-        for (let i = 0; i < scanTeeth.length; i += 1) if (scanTeeth[i]) toothLow = Math.min(toothLow, m.v[i * 3 + 2]);
-        const blended = footFillet(runtime, solid, blockTop, FOOT_RADIUS, toothLow - 0.5);
-        if (blended) solid = keepSolid(blended);
-        footprint = neat.filter((ring) => signedRing(ring) > 0);
-        trimRings = neat;
+        footprint = rings.filter((ring) => signedRing(ring) > 0);
       }
     }
   } else if (options.baseStyle === "plate") {
@@ -965,7 +954,7 @@ function buildArch(
         const bottom = open ? floor : Math.max(floor, cavity.solid.boundingBox().min[2]);
         const avoidX = options.baseStyle === "ortho" && labelText(labelLine) ? 1 : 0;
         // The front locator notch (clean base) sits on the middle of the front with a collar of solid round it: the slot goes beside it.
-        const notchAt = options.baseStyle === "clean" && options.notches === true ? ringCentroid(outerRing)[0] : null;
+        const notchAt = options.baseStyle === "clean" && options.notches !== false ? ringCentroid(outerRing)[0] : null;
         // The hollow itself just above where the slots sit: each slot is aimed at it, so none ends in solid.
         const level = cavity.solid.slice(bottom + DRAIN_SLOT.height / 2);
         const cavityRings = level.toPolygons() as Ring[];
@@ -988,7 +977,7 @@ function buildArch(
       const bar = tieBar(runtime, outer, floor);
       if (bar) solid = keepSolid(runtime.Manifold.union(solid, keepSolid(bar)));
     }
-    if (outer && options.baseStyle === "clean" && options.notches === true) {
+    if (outer && options.baseStyle === "clean" && options.notches !== false) {
       // Build 74: on a hollow model each notch is cut from a collar of solid a wall thick, so the
       // wall round it stays as thick as asked (cut straight into the shell, it was left 1 mm).
       if (unhollowed && hollowWall > 0) {
@@ -1429,7 +1418,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     // Build 78: the one articulator - kinematic seats and the incisal pin (lib/dentalArticulator).
     const raise = options.incisalPin === false ? 0 : Math.max(0, Math.min(PIN_MAX, options.pinRaise ?? 0));
     // Build 117: the cups' fit as chosen; on the dental midline (x = 0 here) when it was found.
-    const parts = articulatorParts(runtime, back, xMin, xMax, depth, -depth, stop, raise, { upper: heelsOf("upper"), lower: heelsOf("lower") }, options.pinStyle ?? "fused", { fit: options.hingeFit, riserGroove: Boolean(options.risers), hinge: options.hingeStyle ?? "passive", ...(midline !== null ? { centre: 0 } : {}) });
+    const parts = articulatorParts(runtime, back, xMin, xMax, depth, -depth, stop, raise, { upper: heelsOf("upper"), lower: heelsOf("lower") }, options.pinStyle ?? "fused", { fit: options.hingeFit, riserGroove: Boolean(options.risers), ...(midline !== null ? { centre: 0 } : {}) });
     if (stop && Number.isFinite(parts.pinY)) pinGeometry = { axleY: parts.axleY, pinY: parts.pinY };
     if (stop && Number.isFinite(parts.pinY) && options.pinStyle === "set") {
       const raises = [...new Set([...PIN_SET, raise])].sort((a, b) => a - b);

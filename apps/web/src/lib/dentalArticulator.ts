@@ -227,28 +227,8 @@ export function incisalPins(runtime: ManifoldRuntime, raises: number[], axisY: n
   return set;
 }
 
-/**
- * Build 118: the hinge's two kinds, named for how they hold.
- * - "passive" (Pare Passive): the ball condyles on the lower drop into cups under the upper (build 84's); the upper
- *   rests on them and lifts straight off.
- * - "captive" (Pare Captive): an 8 mm ball on a slim stem under each side of the upper's back, clicked into a cradle on
- *   a post of the lower - a pocket CUP_FIT (the fit chosen) round the ball, reached from behind by a slot CAPTIVE_GRIP
- *   narrower than the ball between two thin arms that spring apart as it goes in, so the pair stays together opened,
- *   closed or turned over. Same axis as Passive (the occlusal plane, behind the models), so the pins, risers and the
- *   bite opening are as they were.
- */
-export type HingeStyle = "passive" | "captive";
-/** Build 118: Pare Captive's ball radius (8 mm across), its stem's radius, how much narrower the slot is than the ball, the arms' thickness beside it, and the post's wall in front of the pocket, mm. */
-export const CAPTIVE_BALL = 4;
-export const CAPTIVE_STEM = 2.6;
-export const CAPTIVE_GRIP = 0.2;
-export const CAPTIVE_ARM = 1.3;
-export const CAPTIVE_FRONT = 1.8;
-/** Build 118: how far above the ball's centre the cradle's post stands (it holds the ball from lifting out), and the lead-in at the slot's mouth, mm. */
-export const CAPTIVE_TOP = 2.6;
-export const CAPTIVE_LEAD = 2;
 /** Build 117: more of the articulator - the cups' fit (mm, CUP_FIT when left out) and the dental midline's x, to centre it on. */
-export type ArticulatorMore = { fit?: number; centre?: number; /** Build 117: the side posts grooved for the risers' click. */ riserGroove?: boolean; /** Build 118: Pare Passive (the default) or Pare Captive. */ hinge?: HingeStyle };
+export type ArticulatorMore = { fit?: number; centre?: number; /** Build 117: the side posts grooved for the risers' click. */ riserGroove?: boolean };
 /**
  * Build 117: a side post as built - its x, its place in the upper's frame (y, the dome's centre zc
  * above the plane, the models closed), where the lower half stands (restY) and the top of its arm.
@@ -321,29 +301,7 @@ export function articulatorParts(
       pinY = Math.min(pinY, limit - Math.max(0, restY - pinY));
     }
   }
-  if (more.hinge === "captive") centres.forEach((c) => {
-    // Build 118: Pare Captive - the ball on the upper, on a stem down from its bar, centred on the axis (y = ay, z = 0).
-    const Rb = CAPTIVE_BALL;
-    upperParts.push(
-      keep(runtime.Manifold.cylinder(Math.max(0.5, floorUpper - 1), CAPTIVE_STEM, CAPTIVE_STEM, 48).translate([c, ay, 0.5])),
-      keep(runtime.Manifold.sphere(Rb, 96).translate([c, ay, 0])),
-    );
-    // The cradle on the lower: a post from its bar, as wide as the slot and an arm either side.
-    const pocket = (Rb + fit) / Math.cos(Math.PI / 96);
-    const slot = 2 * Rb - CAPTIVE_GRIP;
-    const halfX = slot / 2 + CAPTIVE_ARM;
-    const y0 = ay - pocket - CAPTIVE_FRONT, y1 = ay + Rb + 1.5;
-    lowerParts.push(keep(box(runtime, c - halfX, c + halfX, y0, y1, floorLower, CAPTIVE_TOP)));
-    // The pocket, and the slot to it from behind - narrower than the ball, open at the top for the stem (and its swing
-    // back as the models open), down to the pocket's floor - with a lead-in at its mouth.
-    lowerCuts.push(keep(runtime.Manifold.sphere(pocket, 96).translate([c, ay, 0])));
-    lowerCuts.push(keep(box(runtime, c - slot / 2, c + slot / 2, ay, y1 + 1, -pocket, CAPTIVE_TOP + 1)));
-    lowerCuts.push(keep(runtime.Manifold.hull([
-      keep(box(runtime, c - slot / 2, c + slot / 2, y1 - CAPTIVE_LEAD, y1 - CAPTIVE_LEAD + 0.01, -pocket, CAPTIVE_TOP + 1)),
-      keep(box(runtime, c - Rb - 0.3, c + Rb + 0.3, y1 + 0.01, y1 + 0.02, -pocket, CAPTIVE_TOP + 1)),
-    ])));
-  });
-  else centres.forEach((c) => {
+  centres.forEach((c) => {
     // The lower: a pedestal from its bar, a neck and the ball, centred on the axis (y = ay, z = 0).
     // The pedestal stops below where the cup's block swings down past it as the models open.
     lowerParts.push(
