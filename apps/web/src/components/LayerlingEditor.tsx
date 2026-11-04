@@ -20090,9 +20090,9 @@ export function LayerlingEditor({
   // Build 110: each wax tooth shown with its erase.
   // Build 116: the wax shown erased (to the margins and paint) only once the teeth are placed - from Keep & erase on.
   // While they are being positioned the whole library teeth are shown, and nothing is worked out as they move.
-  // Build 117: in Position too - the trims are worked out in the workers now, a moment after a tooth stops moving, so a
-  // tooth is seen whole while it is dragged and going under the gum once it is let go (as in Meshmixer).
-  const eraseShownStep = !studioWaxStep || ["place", "keep", "sculpt", "gum", "make"].includes(studioWaxStep);
+  // (Build 117 tried Position too: working out what the trims need - each tooth's margin and key - as the set moved
+  // stalled the page for seconds at a time, so Position shows the whole teeth as before.)
+  const eraseShownStep = !studioWaxStep || ["keep", "sculpt", "gum", "make"].includes(studioWaxStep);
   const erasedViewportShapes = useMemo(() => (dentalStudio?.waxStudio && eraseShownStep && ((waxup.erase && Object.keys(waxup.erase).length) || (waxup.marginOn && (waxup.margins?.upper || waxup.margins?.lower)) || waxup.boundaries?.upper || waxup.boundaries?.lower) ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? erasedShown(shape) : shape)) : viewportShapes), [viewportShapes, waxup.erase, waxup.margins, waxup.boundaries, waxup.marginOn, dentalStudio, eraseTick, eraseShownStep]); // eslint-disable-line react-hooks/exhaustive-deps
   const heldViewportShapes = historyView.shapes ?? erasedViewportShapes;
   // Build 110: in Keep & erase, the paint shown over the teeth (again whenever they or it change); taken away on leaving.
