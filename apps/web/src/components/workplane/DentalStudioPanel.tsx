@@ -378,7 +378,8 @@ export function DentalStudioPanel({
    * first library set for the arch, placed on the teeth): you adjust from there.
    */
   // Build 103: as Meshmixer (manual) - the teeth positioned, then sculpted, then the model made; nothing fitted for you.
-  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), ...(waxup.view.marginOn ? ["margin" as const] : []), "set", "place", "keep", "sculpt", "gum", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
+  // Build 118: no Keep & erase step - the whole library tooth is kept and its palatal pressed on (Gum line); boundary lines are in Sculpt.
+  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), ...(waxup.view.marginOn ? ["margin" as const] : []), "set", "place", "sculpt", "gum", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
   const [waxStepId, setWaxStepId] = useState<WaxStepId>(editing ? "make" : "scans");
   const waxStepName = (id: WaxStepId) => t(`waxStudio.step.${id}` as "waxStudio.step.scans");
   const waxStep = waxSteps ? (waxSteps.includes(waxStepId) ? waxStepId : "make") : null;
@@ -746,8 +747,8 @@ export function DentalStudioPanel({
           {/* Build 108: which arches are waxed - asked first, before the scans (none chosen until the dentist picks). */}
           {choice(t("waxStudio.arches"), (archesChosen ? waxStudio.arches : "") as "upper" | "lower" | "both", [["upper", t("dental.upper")], ["lower", t("dental.lower")], ["both", t("waxStudio.both")]], waxStudio.onArches)}
           {!archesChosen ? <p className="dental-status warn" role="status">{t("waxStudio.archesFirst")}</p> : null}
-          {/* Build 111: two ways of working, side by side while they are tried - Keep & erase alone, or with a palatal margin line first. */}
-          {waxup && waxStudio.flow !== "imt" ? choice(t("waxStudio.margin"), waxup.view.marginOn ? "on" : "off", [["off", t("waxStudio.marginOff")], ["on", t("waxStudio.marginOnLabel")]], (value) => waxup.actions.onMarginOn?.(value === "on"), t("waxStudio.marginHint")) : null}
+          {/* Build 111: two ways of working were tried side by side; build 118 keeps one - Keep & erase, with the library
+              tooth's palatal (Gum line) - so there is no Margins choice. A design made with a margin line still opens with it. */}
           <p className="blend-hint">{t(waxStudio.flow === "imt" ? "waxStudio.imtHint" : "waxStudio.waxupHint")}</p>
         </div>
       ) : null}
