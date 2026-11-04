@@ -21813,13 +21813,14 @@ export function LayerlingEditor({
               onBuiltIn: (id) => void chooseBuiltInSet(id),
               onSingle: (arch: "upper" | "lower", teeth: number[] | null) => {
                 waxRecord(true);
-                const single = { ...waxupRef.current.single };
-                if (teeth) single[arch] = [...teeth].sort((a, b) => archOrder(a) - archOrder(b)); else delete single[arch];
-                const next = { ...waxupRef.current, single };
-                setWaxup(next);
-                waxupRef.current = next;
+                // On the latest settings (a set just chosen may not have reached waxupRef yet - it would be lost).
+                setWaxup((current) => {
+                  const single = { ...current.single };
+                  if (teeth) single[arch] = [...teeth].sort((a, b) => archOrder(a) - archOrder(b)); else delete single[arch];
+                  return { ...current, single };
+                });
                 // Teeth already placed: placed again with only those (or the whole set).
-                if (waxPlacedNow.length) window.setTimeout(() => void placeWaxupRef.current(), 0);
+                if (waxPlacedNow.length) window.setTimeout(() => void placeWaxupRef.current(), 80);
               },
               onSlot: (slot) => switchWaxSlot(slot),
               onMark: startWaxPicking,
