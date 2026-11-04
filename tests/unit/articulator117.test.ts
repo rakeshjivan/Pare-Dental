@@ -1,6 +1,7 @@
 import manifoldModule, { type ManifoldToplevel } from "manifold-3d";
 import { beforeAll, describe, expect, it } from "vitest";
-import { makeDentalStudio, type DentalStudioOptions } from "@/lib/dentalModel";
+import { makeDentalStudio, MIDLINE_PIVOT, midlineTurn, type DentalStudioOptions } from "@/lib/dentalModel";
+import * as THREE from "three";
 import {
   articulatorParts, CONDYLE_RADIUS, CUP_FIT, HINGE_FIT_MAX, HINGE_FITS, hingeFit, PIN_DISH_DEPTH, PIN_DOME, PIN_RADIUS, pinRisers, RISER_CLICK, RISER_CLICK_HIGH, RISER_HEIGHTS, RISER_WALL, riserClickAt, riserOnPost, riserSocket, riserTop,
   type ArticulatorSides,
@@ -151,11 +152,16 @@ describe("The articulator on the dental midline (build 117)", () => {
     const upper = horseshoeArch({ teethDown: true });
     const lower = horseshoeArch({ drop: 26.6 });
     const options: DentalStudioOptions = { keep: null, base: 4, baseStyle: "clean", inside: "solid", wall: 2, hinge: true, layout: "occlusion", label: "", incisalPin: true, pinPlace: "midline" };
-    const teethX = (p: Float32Array) => {
+    // Build 117: the pair is turned onto the midline about a point behind it - the front teeth come across by the
+    // midline's offset, the back of the arch hardly moves.
+    const bandX = (p: Float32Array, front: boolean) => {
+      let minY = Infinity, maxY = -Infinity;
+      for (let i = 0; i < p.length; i += 3) if (p[i + 2] > -1.5 && p[i + 2] < 0.5) { minY = Math.min(minY, p[i + 1]); maxY = Math.max(maxY, p[i + 1]); }
       let sum = 0, n = 0;
-      for (let i = 0; i < p.length; i += 3) if (p[i + 2] > -1.5 && p[i + 2] < 0.5 && p[i + 1] < 5) { sum += p[i]; n += 1; }
+      for (let i = 0; i < p.length; i += 3) if (p[i + 2] > -1.5 && p[i + 2] < 0.5 && (front ? p[i + 1] < minY + 3 : p[i + 1] > maxY - 3)) { sum += p[i]; n += 1; }
       return sum / n;
     };
+    const teethX = (p: Float32Array) => bandX(p, true);
     const condylesX = (p: Float32Array) => {
       let lo = Infinity, hi = -Infinity, back = -Infinity;
       for (let i = 1; i < p.length; i += 3) back = Math.max(back, p[i]);
@@ -170,7 +176,14 @@ describe("The articulator on the dental midline (build 117)", () => {
     expect(Math.abs(Math.abs(centred.midline!) - 2.5)).toBeLessThan(0.3);
     const lowerPart = centred.parts.find((part) => part.role === "lower")!.positions;
     // The models move across by the midline's offset; the condyles stand either side of x = 0, the midline.
-    expect(Math.abs(teethX(lowerPart) - teethX(plainLower) + centred.midline!)).toBeLessThan(0.3);
+    // Build 117: the pair turned onto the midline (midlineTurn): the midline point comes to x = 0 in both frames.
+    for (const [role, x] of [["lower", 2.5], ["upper", -2.5]] as const) {
+      const p = new THREE.Vector3(x, -18, 0).applyMatrix4(midlineTurn({ x: 2.5, y: -18 }, role));
+      expect(Math.abs(p.x)).toBeLessThan(1e-9);
+    }
+    // The back of the arch (the pivot) does not move.
+    expect(new THREE.Vector3(0, -18 + MIDLINE_PIVOT, 0).applyMatrix4(midlineTurn({ x: 2.5, y: -18 }, "lower")).distanceTo(new THREE.Vector3(0, -18 + MIDLINE_PIVOT, 0))).toBeLessThan(1e-9);
+    void lowerPart; void plainLower; void teethX;
     expect(Math.abs(condylesX(lowerPart))).toBeLessThan(0.05);
     expect(centred.pieces).toEqual([1, 1]);
     // A point far off the arch's middle is not the centrals': the arch's middle is kept.

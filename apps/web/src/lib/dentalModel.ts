@@ -453,7 +453,7 @@ export const MIDLINE_REACH = 8;
  * upper's centrals (DentalArchInput.midline) - or null, to keep the middle (no centrals given, a
  * quadrant, scans set up apart, or a point too far off to be the centrals' contact).
  */
-function midlineOffset(prep: Prepared, input: DentalStudioInput): number | null {
+function midlineOffset(prep: Prepared, input: DentalStudioInput): { x: number; y: number } | null {
   if (prep.arches.length !== 2 || prep.analysis.pair?.apart || prep.arches.some((arch) => arch.partial)) return null;
   const upper = prep.arches.find((arch) => arch.role === "upper");
   const given = upper ? input.arches.find((arch) => arch.id === upper.id)?.midline : null;
@@ -465,16 +465,27 @@ function midlineOffset(prep: Prepared, input: DentalStudioInput): number | null 
   // The upper's frame is the pair's turned over (FLIP: x the other way).
   point.applyMatrix4(upper.frame);
   const x = -point.x;
-  return Math.abs(x) <= MIDLINE_REACH ? x : null;
+  return Math.abs(x) <= MIDLINE_REACH ? { x, y: point.y } : null;
 }
 
-/** Build 117: the arches' frames moved across so the dental midline is at x = 0 of the pair's frame (FLIP takes x the other way for the upper). */
-function onMidline(prep: Prepared, x: number): Prepared {
-  if (!x) return prep;
-  return {
-    ...prep,
-    arches: prep.arches.map((arch) => ({ ...arch, frame: new THREE.Matrix4().makeTranslation(arch.role === "upper" ? x : -x, 0, 0).multiply(arch.frame) })),
-  };
+/** Build 117: the pair is turned about a point this far behind the midline (about the first molars), mm. */
+export const MIDLINE_PIVOT = 35;
+
+/**
+ * Build 117: the arches' frames turned (about the vertical, through a point MIDLINE_PIVOT behind the midline on
+ * the arch's middle) so the dental midline comes onto x = 0 of the pair's frame - the back of the arch stays where
+ * it was and the front comes round to the articulator's middle (Ian Meyers: the models looked turned off it).
+ * The upper's frame is the pair's turned over (FLIP), so it turns the other way.
+ */
+/** Build 117: the turn (about z, through the pivot) that takes a pair-frame point (x, y) onto x = 0 - for the lower's frame (the pair's own); the upper's is the opposite turn (FLIP). */
+export function midlineTurn(at: { x: number; y: number }, role: "upper" | "lower") {
+  const pivotY = at.y + MIDLINE_PIVOT;
+  const angle = Math.atan2(at.x, pivotY - at.y);
+  return new THREE.Matrix4().makeTranslation(0, pivotY, 0).multiply(new THREE.Matrix4().makeRotationZ(role === "upper" ? angle : -angle)).multiply(new THREE.Matrix4().makeTranslation(0, -pivotY, 0));
+}
+function onMidline(prep: Prepared, at: { x: number; y: number }): Prepared {
+  if (!at.x) return prep;
+  return { ...prep, arches: prep.arches.map((arch) => ({ ...arch, frame: midlineTurn(at, arch.role === "upper" ? "upper" : "lower").multiply(arch.frame) })) };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1556,7 +1567,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     ...(held ? { held } : {}),
     ...(pinSet ? { pins: pinSet } : {}),
     ...(riserSet ? { risers: riserSet } : {}),
-    ...(midline !== null ? { midline } : {}),
+    ...(midline !== null ? { midline: midline.x } : {}),
     ...(pinTable ? { pinTable } : {}),
     trueness,
     relieved: built.map(({ built: b }) => Math.round(b.relieved)),
