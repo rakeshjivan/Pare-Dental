@@ -14,6 +14,7 @@ import { projectSectionPoint, type SectionBody, type SectionLoop, type SectionPo
 import { normalizeSectionCutFace, SECTION_CUT_FACES, sectionCapMesh, sectionHatchSpacing, sectionHatchTexture, sectionHatchTurned, sectionHatchUvs, type SectionCutFace } from "@/lib/sectionCaps";
 import { circleOfLoop, sectionMeasurement, sectionPointToWorld, snapSectionPoint, type SectionSnap } from "@/lib/sectionMeasure";
 import * as THREE from "three";
+import { addPalatalLayer, palatalLayerOn, setPalatalLayers } from "@/components/workplane/palatalLayer";
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from "three-mesh-bvh";
 import { enableLazyMeshPicking, geometryTriangleCount } from "@/lib/lazyMeshPicking";
 import { groupShowsPartColors } from "@/lib/groupColors";
@@ -724,6 +725,7 @@ declare global {
     layerlingSculptLive?: (shapeId: string, geometry: THREE.BufferGeometry | null, color?: string) => void;
     /** Build 84: parts drawn with per-corner colours in place of their own (the bite contacts map); null clears. */
     layerlingColorOverlay?: (items: Array<{ shapeId: string; positions: Float32Array; colors: Float32Array }> | null) => void;
+    layerlingPalatalXray?: (on: boolean) => void;
     /** Build 73: draw the next frame (after the live Sculpt geometry changed). */
     layerlingRedraw?: () => void;
     /** Build 85: the view's look - the workplane, no workplane, or Meshmixer's dark background. */
@@ -9782,6 +9784,8 @@ export function WorkplaneViewport({
       state.needsRender = true;
     };
     window.layerlingRedraw = () => { const state = threeRef.current; if (state) state.needsRender = true; };
+    // Build 118: the wax teeth's palatal drawn whole over the scan (Wax-up Studio with the library palatal).
+    window.layerlingPalatalXray = (on) => { const state = threeRef.current; if (!state) { palatalLayerOn.value = on; return; } if (palatalLayerOn.value === on) return; setPalatalLayers(state.scene, on); state.needsRender = true; };
     viewLook = readViewLook();
     applyViewLook(threeRef.current);
     window.layerlingViewLook = (look) => { viewLook = look; applyViewLook(threeRef.current); };
@@ -9826,7 +9830,7 @@ export function WorkplaneViewport({
       if (state && id) state.scene.traverse((object) => { if (object !== mesh && object.userData.shapeId === id && object.visible) showing += 1; });
       return { drawn: Boolean(mesh), inScene: Boolean(mesh?.parent), hidden: hidden.length, showing, triangles: mesh ? (mesh.geometry.getAttribute("position") as THREE.BufferAttribute).count / 3 : 0 };
     };
-    return () => { clear(); clearOverlay(); delete window.layerlingSculptPreview; delete window.layerlingSculptLive; delete window.layerlingColorOverlay; delete window.layerlingPartOpacity; delete window.layerlingRedraw; delete window.layerlingViewLook; delete window.layerlingStrokeMotion; delete window.layerlingOnFrame; beforeFrame = null; delete window.layerlingScreenRay; };
+    return () => { clear(); clearOverlay(); delete window.layerlingSculptPreview; delete window.layerlingSculptLive; delete window.layerlingColorOverlay; delete window.layerlingPalatalXray; delete window.layerlingPartOpacity; delete window.layerlingRedraw; delete window.layerlingViewLook; delete window.layerlingStrokeMotion; delete window.layerlingOnFrame; beforeFrame = null; delete window.layerlingScreenRay; };
   }, []);
   // Build 107: Wax-up's landmark dots - one instanced ball, its instances moved in place.
   useEffect(() => {
@@ -15849,8 +15853,10 @@ function createShapeObject(
       break;
   }
 
+  // Build 118: a wax tooth's palatal drawn whole over the patient's scan (shown with the library palatal).
+  if (shape.dental === "wax" && shape.waxTooth && !shape.hole) addPalatalLayer(group, shape);
   group.traverse((child) => {
-    child.userData.shapeId = shape.id;
+    if (!child.userData.palatalLayer) child.userData.shapeId = shape.id;
   });
   setObjectRenderLayer(group, RENDER_LAYER_SHAPES);
   freezeStaticObjectMatrices(group);

@@ -48,3 +48,15 @@ describe("pressPalatal", () => {
     expect(pressPalatal(sheet(-9.2), [tooth]).moved).toBe(0);
   });
 });
+
+describe("pressPalatal on a mirrored frame (the other side of the arch)", () => {
+  it("presses the palatal and never moves anything sideways", () => {
+    const mirrored = { ...tooth, mesial: [-1, 0, 0] };
+    const scan = sheet(-6.4);
+    const { positions, moved } = pressPalatal(scan, [mirrored]);
+    expect(moved).toBeGreaterThan(0);
+    expect(at(positions, 0, -4)).toBeCloseTo(-6 + PALATAL_SINK, 1);
+    // Never along the tooth's mesial direction (x): every corner's x as scanned.
+    for (let i = 0; i + 2 < scan.length; i += 3) { expect(positions[i]).toBeCloseTo(scan[i], 5); }
+  });
+});

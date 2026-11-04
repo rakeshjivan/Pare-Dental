@@ -13060,19 +13060,20 @@ export function LayerlingEditor({
     if (!shown) { shown = { ...shapeWithWorldPositions(tooth, Array.from(soup)), id: tooth.id }; cached.shown.set(tooth, shown); }
     return shown;
   };
-  // Build 118: the library tooth's palatal form shown live - each arch's scan with its palatal pressed onto its wax teeth
-  // (as Make will make it), worked out in the background a moment after the teeth last moved. Shown in place of the scan
-  // from Position to Export, and what the opposing wax teeth bite on (contacts, Fit to the bite).
+  // Build 118: the library tooth's palatal form, from Position to Export. On screen each wax tooth's palatal is drawn whole
+  // over the scan (components/workplane/palatalLayer) and the scan is never changed. What the opposing wax teeth bite on
+  // (contacts, Fit to the bite) is each arch as Make will make it - its palatal pressed onto its wax teeth - worked out in
+  // the background a moment after the teeth last moved while the contacts are shown, else when it is asked for.
   const palatalLive = Boolean(dentalStudio?.waxStudio) && (waxup.palatal ?? "library") === "library" && dentalStudio?.stage !== "made" && ["place", "adjust", "occlusion", "keep", "sculpt", "gum", "make"].includes(studioWaxStep ?? "");
   const palatalLiveRef = useRef(false);
   palatalLiveRef.current = palatalLive;
-  const palatalCache = useRef(new Map<string, { key: string; scanKey: string; soup: Float32Array | null; shown?: WorkplaneShape; from?: WorkplaneShape }>());
+  const palatalCache = useRef(new Map<string, { key: string; scanKey: string; soup: Float32Array | null }>());
   const [palatalTick, setPalatalTick] = useState(0);
   const palatalRun = useRef(0);
   const palatalTeethOf = (scan: WorkplaneShape) => shapesRef.current.filter((tooth) => tooth.dental === "wax" && tooth.waxFor === scan.id && !tooth.hidden && tooth.waxTooth);
   const palatalKeyOf = (scan: WorkplaneShape) => projectShapesFingerprint([scan, ...palatalTeethOf(scan)]);
   useEffect(() => {
-    if (!palatalLive || !dentalStudio) return;
+    if (!palatalLive || !dentalStudio || !waxup.contacts.on) return;
     const run = ++palatalRun.current;
     const timer = window.setTimeout(async () => {
       for (const id of [dentalStudio.slots.upper, dentalStudio.slots.lower]) {
@@ -13092,20 +13093,25 @@ export function LayerlingEditor({
       }
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [palatalLive, shapes, dentalStudio?.slots.upper, dentalStudio?.slots.lower]); // eslint-disable-line react-hooks/exhaustive-deps
-  /** The scan as shown with the library palatal (its last pressing while the scan itself has not moved), else the scan. */
-  const palatalShown = (scan: WorkplaneShape): WorkplaneShape => {
-    const entry = palatalCache.current.get(scan.id);
-    if (!entry?.soup || entry.scanKey !== projectShapesFingerprint([scan])) return scan;
-    if (!entry.shown || entry.from !== scan) { entry.shown = { ...shapeWithWorldPositions(scan, Array.from(entry.soup)), id: scan.id }; entry.from = scan; }
-    return entry.shown;
-  };
+  }, [palatalLive, waxup.contacts.on, shapes, dentalStudio?.slots.upper, dentalStudio?.slots.lower]); // eslint-disable-line react-hooks/exhaustive-deps
   /** The scan's world triangles with the library palatal, for what the opposing wax bites on; null to use the scan. */
   const palatalWorld = (scan: WorkplaneShape): Float32Array | null => {
     if (!palatalLiveRef.current) return null;
+    const key = palatalKeyOf(scan);
     const entry = palatalCache.current.get(scan.id);
-    return entry?.soup && entry.scanKey === projectShapesFingerprint([scan]) ? entry.soup : null;
+    if (entry && entry.key === key) return entry.soup;
+    // Not worked out for the teeth as they stand (Fit to the bite pressed): worked out now.
+    const teeth = palatalTeethOf(scan).flatMap((tooth) => {
+      const axes = toothAxesOf(tooth);
+      return axes ? [{ soup: Float32Array.from(erasedSoup(tooth, false) ?? worldTriangles(tooth)), origin: axes.origin, up: axes.up, out: axes.out, mesial: axes.mesial }] : [];
+    });
+    const pressed = teeth.length ? pressPalatal(Float32Array.from(worldTriangles(scan)), teeth) : null;
+    const soup = pressed?.moved ? pressed.positions : null;
+    palatalCache.current.set(scan.id, { key, scanKey: projectShapesFingerprint([scan]), soup });
+    return soup;
   };
+  /** Whether the opposing arch's pressed palatal is still being worked out for the teeth as they stand (the contacts wait for it). */
+  const palatalPending = (scan: WorkplaneShape) => palatalLiveRef.current && palatalTeethOf(scan).length > 0 && palatalCache.current.get(scan.id)?.key !== palatalKeyOf(scan);
   // For checks: each wax tooth's erase - how many corners moved, the most, and how many of those near its labial face.
   useEffect(() => {
     (window as unknown as { layerlingEraseCheck?: () => unknown }).layerlingEraseCheck = () => shapesRef.current.filter((shape) => shape.dental === "wax" && shape.waxTooth && !shape.hidden).map((tooth) => {
@@ -14522,6 +14528,10 @@ export function LayerlingEditor({
     if (waxContactsDrawn.current === key) return;
     const run = ++waxContactsRun.current;
     const timer = window.setTimeout(async () => {
+      // Build 118: measured once the opposing arch's library palatal is worked out for the teeth as they stand (it comes back as a tick).
+      const otherId = dentalStudioRef.current?.slots[waxupRef.current.slot === "upper" ? "lower" : "upper"];
+      const otherScan = otherId ? shapesRef.current.find((shape) => shape.id === otherId) : undefined;
+      if (otherScan && palatalPending(otherScan)) return;
       const input = waxBiteInput();
       if (!input) { setWaxup((current) => ({ ...current, contacts: { ...current.contacts, busy: false } })); return; }
       setWaxup((current) => ({ ...current, contacts: { ...current.contacts, busy: true } }));
@@ -20294,9 +20304,9 @@ export function LayerlingEditor({
   // stalled the page for seconds at a time, so Position shows the whole teeth as before.)
   const eraseShownStep = !studioWaxStep || ["keep", "sculpt", "gum", "make"].includes(studioWaxStep);
   const erasedViewportShapes = useMemo(() => (dentalStudio?.waxStudio && eraseShownStep && ((waxup.erase && Object.keys(waxup.erase).length) || (waxup.marginOn && (waxup.margins?.upper || waxup.margins?.lower)) || waxup.boundaries?.upper || waxup.boundaries?.lower) ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? erasedShown(shape) : shape)) : viewportShapes), [viewportShapes, waxup.erase, waxup.margins, waxup.boundaries, waxup.marginOn, dentalStudio, eraseTick, eraseShownStep]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Build 118: the scans with the library palatal, live.
-  const palatalViewportShapes = useMemo(() => (palatalLive && dentalStudio ? erasedViewportShapes.map((shape) => (shape.id === dentalStudio.slots.upper || shape.id === dentalStudio.slots.lower ? palatalShown(shape) : shape)) : erasedViewportShapes), [erasedViewportShapes, palatalLive, palatalTick, dentalStudio]); // eslint-disable-line react-hooks/exhaustive-deps
-  const heldViewportShapes = historyView.shapes ?? palatalViewportShapes;
+  const heldViewportShapes = historyView.shapes ?? erasedViewportShapes;
+  // Build 118: with the library palatal, each wax tooth's palatal drawn whole over the scan - the scan itself never changed.
+  useEffect(() => { window.layerlingPalatalXray?.(palatalLive); }, [palatalLive]);
   // Build 110: in Keep & erase, the paint shown over the teeth (again whenever they or it change); taken away on leaving.
   useEffect(() => {
     if (keepStep) { showKeepPaint(); return; }

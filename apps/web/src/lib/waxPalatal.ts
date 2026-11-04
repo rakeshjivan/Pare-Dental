@@ -7,7 +7,8 @@
  * and showed the library tooth only labially and at the new edge.
  *
  * "library": before the wax is joined, the patient's surface standing palatal of a wax tooth (within
- * PALATAL_REACH of its palatal face) is pressed down onto it, just inside it, so the whole reference tooth
+ * PALATAL_REACH of its palatal face) is pressed onto it - in the tooth's own labio-palatal plane, never sideways towards a
+ * neighbour - just inside it, so the whole reference tooth
  * forms the palatal surface - as a technician reduces the palatal of a model to the set-up. The press fades out
  * over PALATAL_FADE towards the palatal gum and the palate, towards the tooth's cervical end and at its
  * mesial and distal edges, so the patient's surface runs on smoothly into the library tooth with no step.
@@ -15,6 +16,7 @@
  * gum the gum ramps down to it rather than being dug out behind it. The gum labially, below the tooth and between
  * the teeth beyond the fade is never moved.
  */
+
 import { NearestSurface } from "@/lib/nearestSurface";
 
 export type PalatalForm = "patient" | "library";
@@ -62,7 +64,7 @@ export function pressPalatal(scan: Float32Array, teeth: PalatalTooth[]): { posit
       const d = [x - o[0], y - o[1], z - o[2]];
       const m = dot(d, tooth.mesial), u = dot(d, tooth.up), b = dot(d, tooth.out);
       // Only beside the tooth's palatal half: within its width, from its cervical end to past its edge, and palatal of its labial face.
-      if (m < m0 - 0.5 || m > m1 + 0.5 || u < u0 || u > u1 + 1 || b > 0.5 || b < b0 - PALATAL_REACH - 0.5) continue;
+      if (m <= m0 || m >= m1 || u < u0 || u > u1 + 1 || b > 0.5 || b < b0 - PALATAL_REACH - 0.5) continue;
       const key = `${Math.round(x * 1e4)},${Math.round(y * 1e4)},${Math.round(z * 1e4)}`;
       let to = seen.get(key);
       if (to === undefined) {
@@ -77,12 +79,16 @@ export function pressPalatal(scan: Float32Array, teeth: PalatalTooth[]): { posit
             const fade = PALATAL_FADE;
             const w = (1 - smooth01((dist - (PALATAL_REACH - fade)) / fade))
               * smooth01((u - u0) / fade)
-              * smooth01((m - (m0 - 0.5)) / fade) * smooth01((m1 + 0.5 - m) / fade)
+              * smooth01((m - m0) / fade) * smooth01((m1 - m) / fade)
               * smooth01((facing - PALATAL_FACING) / 0.2)
               * (b < b0 ? 1 - smooth01((b0 - b) / PALATAL_RAMP) : 1);
             if (w > 1e-3) {
-              const tx = q[0] - n[0] * PALATAL_SINK, ty = q[1] - n[1] * PALATAL_SINK, tz = q[2] - n[2] * PALATAL_SINK;
-              to = [x + w * (tx - x), y + w * (ty - y), z + w * (tz - z)];
+              // Onto the tooth, just inside it - but never sideways: the share along the tooth's mesial direction is
+              // taken out, so the gum is not dragged towards a neighbouring tooth.
+              let ex = q[0] - n[0] * PALATAL_SINK - x, ey = q[1] - n[1] * PALATAL_SINK - y, ez = q[2] - n[2] * PALATAL_SINK - z;
+              const side = ex * tooth.mesial[0] + ey * tooth.mesial[1] + ez * tooth.mesial[2];
+              ex -= side * tooth.mesial[0]; ey -= side * tooth.mesial[1]; ez -= side * tooth.mesial[2];
+              to = [x + w * ex, y + w * ey, z + w * ez];
             }
           }
         }
