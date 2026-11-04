@@ -13505,7 +13505,9 @@ export function LayerlingEditor({
       const back = arch.sceneToInput.clone().invert();
       const v = new THREE.Vector3();
       // Build 94: only the teeth chosen (when the teeth were found); the rest of the set only sets them out.
-      const chosen = onMarks ? markedFdis : drop ? undefined : waxFound[arch.shape.id]?.chosen;
+      // Build 117: single teeth chosen in Library - only those, whatever else would choose.
+      const single = current.single?.[arch.slot];
+      const chosen = single?.length ? single : onMarks ? markedFdis : drop ? undefined : waxFound[arch.shape.id]?.chosen;
       // Build 102: placed again, each tooth keeps its part (the same id), so a selected tooth stays
       // selected and its gimbal stays on it.
       const idByFdi = new Map(waxTeethOf(arch.shape.id).flatMap((shape) => (shape.waxTooth ? [[shape.waxTooth.fdi, shape.id] as const] : [])));
@@ -21808,6 +21810,16 @@ export function LayerlingEditor({
             actions: {
               onSet: (files) => void loadWaxSet(files),
               onBuiltIn: (id) => void chooseBuiltInSet(id),
+              onSingle: (arch: "upper" | "lower", teeth: number[] | null) => {
+                waxRecord(true);
+                const single = { ...waxupRef.current.single };
+                if (teeth) single[arch] = [...teeth].sort((a, b) => archOrder(a) - archOrder(b)); else delete single[arch];
+                const next = { ...waxupRef.current, single };
+                setWaxup(next);
+                waxupRef.current = next;
+                // Teeth already placed: placed again with only those (or the whole set).
+                if (waxPlacedNow.length) window.setTimeout(() => void placeWaxupRef.current(), 0);
+              },
               onSlot: (slot) => switchWaxSlot(slot),
               onMark: startWaxPicking,
               onMarkTeeth: (only?: number[]) => startToothMarks(only),

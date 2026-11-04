@@ -44,6 +44,8 @@ export type WaxupView = {
   setCurve?: number;
   /** Build 108: the set chosen for each arch (both arches waxed: one for the upper, one for the lower). */
   setIds?: { upper?: string; lower?: string };
+  /** Build 117: single teeth instead of the whole set, by arch - the teeth to wax (each from the set chosen); absent: the whole set. */
+  single?: Partial<Record<"upper" | "lower", number[]>>;
   /** Build 108: the Gum line step - follow the patient's gum, or an even line (each pair's visible crown length at its zenith, mm). */
   gum?: { mode: import("@/lib/waxGum").GumMode; keep: Record<string, number> };
   /** Build 108: Open the bite - the opening at the incisors (mm), the hinge once worked out, and whether it is being worked out. */
@@ -203,6 +205,8 @@ export type WaxupActions = {
   onMarginCancel?: () => void;
   onSet: (files: File[]) => void;
   onBuiltIn: (id: string) => void;
+  /** Build 117: the whole set, or single teeth (null: the whole set again), for an arch. */
+  onSingle?: (arch: "upper" | "lower", teeth: number[] | null) => void;
   onSlot: (slot: "upper" | "lower") => void;
   onMark: () => void;
   onLengthen: (mm: number) => void;
@@ -701,6 +705,25 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
                         <span>{chosen ? <><Check size={13} aria-hidden="true" /> {chosen.name}</> : t("waxup.setNone")}</span>
                       </header>
                     ) : null}
+                    {/* Build 117: the whole set, or single teeth from it (Christian Brenes's library has both). */}
+                    {actions.onSingle ? (() => {
+                      const single = view.single?.[arch];
+                      const all = defaultMarkTeeth(arch);
+                      return (<>
+                        <div className="studio-mm-choice waxup-set-mode" role="radiogroup" aria-label={`${label}: ${t("waxup.single.mode")}`}>
+                          <button type="button" role="radio" aria-checked={!single} className={!single ? "active" : ""} disabled={working} onClick={() => actions.onSingle?.(arch, null)}>{t("waxup.single.sets")}</button>
+                          <button type="button" role="radio" aria-checked={Boolean(single)} className={single ? "active" : ""} disabled={working} onClick={() => actions.onSingle?.(arch, single ?? [arch === "upper" ? 11 : 41])}>{t("waxup.single.teeth")}</button>
+                        </div>
+                        {single ? (<>
+                          <div className="waxup-teeth" role="group" aria-label={t("waxup.single.pick")}>
+                            {all.map((fdi) => (
+                              <button key={fdi} type="button" aria-pressed={single.includes(fdi)} className={`waxup-tooth${single.includes(fdi) ? " active" : ""}`} disabled={working} onClick={() => { const next = single.includes(fdi) ? single.filter((n) => n !== fdi) : [...single, fdi]; actions.onSingle?.(arch, next.length ? next : single); }}>{fdi}</button>
+                            ))}
+                          </div>
+                          <p className="blend-hint">{t("waxup.single.hint", { teeth: single.join(", ") })}</p>
+                        </>) : null}
+                      </>);
+                    })() : null}
                     <span className="waxup-shape-label">{t("waxup.chooseShape")}</span>
                     <div className={`studio-mm-choice waxup-shapes${own.length ? " four" : ""}`} role="radiogroup" aria-label={`${label}: ${t("waxup.chooseShape")}`}>
                       {[...WAX_SET_FORM_ORDER, ...(own.length ? ["own" as const] : [])].map((form) => (
