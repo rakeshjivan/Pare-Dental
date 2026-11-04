@@ -155,6 +155,9 @@ export type DentalStudioOptions = {
   hingeFit?: number;
   /** Build 117: with the posts either side, also the bite-opening risers (1 to 5 mm, two of each), printed as a part of their own. Off unless true. */
   risers?: boolean;
+  /** Build 117: the dental midline the dentist marked on the upper scan (`midlineScan`), in the studio's coordinates; the articulated pair is centred on it. */
+  midlineMark?: [number, number, number];
+  midlineScan?: string;
   /** A pair only: laid out base-down for printing, or upper on lower in occlusion. */
   layout: "print" | "occlusion";
   /** Engraved on the base; U or L goes in front for a pair. Empty for none. */

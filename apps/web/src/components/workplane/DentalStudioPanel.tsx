@@ -189,6 +189,8 @@ export function DentalStudioPanel({
   waxup,
   waxStudio,
   onEditDesign,
+  onMidlinePick,
+  midlinePicking = false,
   finishedCase = false,
   onDone,
   onSaveExport,
@@ -207,6 +209,9 @@ export function DentalStudioPanel({
   stage: "analysing" | "ready" | "making" | "trimming" | "made";
   /** Build 79: after Make - open the design again, or finish. */
   onEditDesign?: () => void;
+  /** Build 117: marking the dental midline on the upper for an articulated pair - start (or stop) marking, and whether it is being marked. */
+  onMidlinePick?: (on: boolean) => void;
+  midlinePicking?: boolean;
   /** Build 117: a case of finished models - nothing to edit here, the design is in the case they were made in. */
   finishedCase?: boolean;
   onDone?: () => void;
@@ -1223,6 +1228,15 @@ export function DentalStudioPanel({
               })}
             </div>
             <p className="blend-hint">{t("studio.hingeFitHint")}</p>
+            {/* Build 117: the dental midline, marked by the dentist - the models, the front pin and the side posts centred on it. */}
+            {onMidlinePick && slots.upper ? (<>
+              <h4 className="dental-group">{t("studio.midline")}</h4>
+              <div className="dental-trim-buttons">
+                <button type="button" className={midlinePicking ? "" : "secondary"} disabled={busy} onClick={() => onMidlinePick(!midlinePicking)}>{t(midlinePicking ? "studio.midlineStop" : options.midlineMark && options.midlineScan === slots.upper ? "studio.midlineAgain" : "studio.midlineMark")}</button>
+                {options.midlineMark && !midlinePicking ? <button type="button" className="secondary" disabled={busy} onClick={() => onOptionsChange({ midlineMark: undefined, midlineScan: undefined })}>{t("studio.midlineClear")}</button> : null}
+              </div>
+              <p className="blend-hint" role="status">{t(midlinePicking ? "studio.midlinePicking" : options.midlineMark && options.midlineScan === slots.upper ? "studio.midlineSet" : "studio.midlineHint")}</p>
+            </>) : null}
           </>) : null}
         </>);
       })() : (<>

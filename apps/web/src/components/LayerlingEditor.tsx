@@ -11754,34 +11754,6 @@ export function LayerlingEditor({
     }, 30);
     stopDentalTrim();
   }, [analyseDentalStudio, commitShapes, dentalTrim, stopDentalTrim]);
-  /**
-   * Build 117: the dental midline on an upper scan (the studio's coordinates): where its central
-   * incisors meet - from the teeth found for a wax-up when they are of this scan, else found now with
-   * the tooth finder (kept per scan). Null when the finder is missing or the centrals are not found.
-   */
-  const dentalMidlines = useRef(new Map<string, { key: string; point: [number, number, number] | null }>());
-  const dentalMidlineOf = useCallback(async (id: string, positions: Float32Array): Promise<[number, number, number] | null> => {
-    let sum = 0;
-    for (let i = 0; i < positions.length; i += Math.max(1, Math.floor(positions.length / 997))) sum += positions[i] * ((i % 7) + 1);
-    const key = `${positions.length}:${sum.toFixed(4)}`;
-    const kept = dentalMidlines.current.get(id);
-    if (kept?.key === key) return kept.point;
-    const { centralsContact } = await import("@/lib/toothSegment");
-    const found = waxFoundRef.current[id];
-    let point: [number, number, number] | null = null;
-    if (found && found.input.length === positions.length) point = centralsContact(positions, found.fdi, "upper");
-    else {
-      try {
-        const teeth = await findTeethInBackground(positions, "upper", finderBytes);
-        point = centralsContact(positions, teeth.fdi, "upper");
-      } catch {
-        // No finder, or stopped: the arch's middle this time; tried again next time.
-        return null;
-      }
-    }
-    dentalMidlines.current.set(id, { key, point });
-    return point;
-  }, []);
   const applyDentalStudio = useCallback((occlusionNow?: { lowerPose?: number[]; raise: number } | null) => {
     const state = dentalStudioRef.current;
     if (!state || !state.analysis) return;
@@ -11832,15 +11804,13 @@ export function LayerlingEditor({
         // Build 117: the posts either side are the default for every case now (Ian Meyers prefers them).
         const pinPlace = state.options.pinPlace ?? "sides";
         const makeOptions = { ...state.options, pinPlace, ...(anonymous ? { label: "" } : {}), ...(openedPose ? { pinRaise: 0 } : {}) };
-        // Build 117: an articulated pair is centred on the dental midline - where the upper centrals (11
-        // and 21) meet, as the tooth finder finds them (the teeth found for a wax-up, else found now, once
-        // per scan). Not found, the models are centred on the arch's middle as before.
+        // Build 117: an articulated pair is centred on the dental midline the dentist marked on the upper (the
+        // Articulator step's Mark the midline). Not marked, the models are centred on the arch's middle as before.
         let madeInput = fixedInput;
         const upperId = state.slots.upper;
         if (state.options.hinge && upperId && state.slots.lower) {
-          const upperArch = fixedInput.arches.find((arch) => arch.id === upperId);
-          const midline = upperArch ? await dentalMidlineOf(upperId, Float32Array.from(upperArch.positions)) : null;
-          if (run !== dentalMakeRun.current) return;
+          // Build 117: the midline the dentist marked on this upper (no tooth finder at Make).
+          const midline = state.options.midlineMark && state.options.midlineScan === upperId ? state.options.midlineMark : null;
           if (midline) madeInput = { ...fixedInput, arches: fixedInput.arches.map((arch) => (arch.id === upperId ? { ...arch, midline } : arch)) };
         }
         const result = await makeDentalStudioInBackground(madeInput, makeOptions);
@@ -12014,7 +11984,7 @@ export function LayerlingEditor({
         setDentalStudio((latest) => latest ? { ...latest, stage: "ready", error: error instanceof Error ? localizedError(error.message) : String(error) } : latest);
       }
     }, 30);
-  }, [commitShapes, dentalInput, dentalMidlineOf]);
+  }, [commitShapes, dentalInput]);
   /** Build 79: Cancel while the models are being made stops the making; the studio stays as it was. */
   const stopDentalMaking = useCallback(() => {
     if (dentalStudioRef.current?.stage !== "making") return;
@@ -19220,6 +19190,35 @@ export function LayerlingEditor({
     }
   };
   const [exportNoticeOpen, setExportNoticeOpen] = useState(false);
+  /** Build 117: Model Builder's articulator - the dental midline marked with a click on the upper (studio coordinates). */
+  const [midlinePicking, setMidlinePicking] = useState(false);
+  const midlineGrid = useRef<{ key: string; grid: RayGrid } | null>(null);
+  const pickMidline = (x: number, y: number) => {
+    const state = dentalStudioRef.current;
+    const upper = state?.slots.upper ? shapesRef.current.find((shape) => shape.id === state.slots.upper) : undefined;
+    const toInput = upper ? waxArchInput(upper) : null;
+    const ray = window.layerlingScreenRay?.(x, y);
+    if (!state || !upper || !toInput || !ray) return;
+    const key = `${upper.id}|${shapeVersionKey(upper)}|${localToWorld(upper)?.elements.map((v) => v.toFixed(3)).join(",")}`;
+    if (midlineGrid.current?.key !== key) midlineGrid.current = { key, grid: rayGrid(Float32Array.from(worldTriangles(upper))) };
+    const hit = rayHitGrid(midlineGrid.current.grid, ray.origin, ray.direction);
+    if (!hit) return;
+    const mark = new THREE.Vector3(...hit).applyMatrix4(toInput).toArray() as [number, number, number];
+    setDentalStudio((current) => current ? { ...current, options: { ...current.options, midlineMark: mark, midlineScan: upper.id }, optionsTouched: true } : current);
+    setMidlinePicking(false);
+  };
+  // Build 117: the marked midline shown as a dot on the upper while its options are open.
+  const midlineShownKey = dentalStudio && dentalStudio.stage === "ready" && dentalStudio.options.hinge && dentalStudio.options.midlineMark && dentalStudio.options.midlineScan === dentalStudio.slots.upper && studioMbStep === "label" ? dentalStudio.options.midlineMark.join(",") : "";
+  useEffect(() => {
+    if (!midlineShownKey) return;
+    const state = dentalStudioRef.current;
+    const upper = state?.slots.upper ? shapesRef.current.find((shape) => shape.id === state.slots.upper) : undefined;
+    const toInput = upper ? waxArchInput(upper) : null;
+    if (!state?.options.midlineMark || !toInput) return;
+    const at = new THREE.Vector3(...state.options.midlineMark).applyMatrix4(toInput.clone().invert()).toArray() as [number, number, number];
+    window.layerlingMarkDots?.([at], 0.35, { colors: [0x1f8fe0], sizes: [0.9] });
+    return () => { window.layerlingMarkDots?.(null, 0.35); };
+  }, [midlineShownKey]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Build 117: the STL's header says what the model is for (slicers show it). */
   const stampedForUse = (buffer: ArrayBuffer) => {
     const header = new Uint8Array(buffer, 0, Math.min(80, buffer.byteLength));
@@ -21787,6 +21786,8 @@ export function LayerlingEditor({
             return { ...current, preset, optionsTouched: false, options: dentalPreset(preset, depth, Boolean(current.slots.upper && current.slots.lower), above, teeth), error: null };
           })}
           onOptionsChange={(patch) => setDentalStudio((current) => current && current.stage === "ready" ? { ...current, options: { ...current.options, ...patch }, optionsTouched: true, error: null } : current)}
+          onMidlinePick={dentalStudio.options.hinge && dentalStudio.slots.lower ? (on: boolean) => setMidlinePicking(on) : undefined}
+          midlinePicking={midlinePicking}
           onAdvancedChange={(advanced) => setDentalStudio((current) => current ? { ...current, advanced } : current)}
           onApply={() => void makeDentalModels()}
           onImport={() => fileInputRef.current?.click()}
@@ -22012,6 +22013,10 @@ export function LayerlingEditor({
           onApply={applyMeshRound}
           onCancel={() => setMeshRoundTool(null)}
         />
+      ) : null}
+      {/* Build 117: the dental midline being marked on the upper (Model Builder's articulator). */}
+      {midlinePicking && dentalStudio ? (
+        <WaxupPointOverlay hint={t("studio.midlinePicking")} onPick={pickMidline} onCancel={() => setMidlinePicking(false)} />
       ) : null}
       {/* Build 117: before the models are written - what they may be used for (no TGA pathway for anything printed to stay in the mouth). */}
       {exportNoticeOpen ? (
