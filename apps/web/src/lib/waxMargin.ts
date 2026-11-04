@@ -332,7 +332,9 @@ const smooth01 = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
  * How much a wax vertex is erased by the line (0-1), judged at its nearest point `c` on the patient's surface
  * (normal `nc`, facing out): past the line on the same side of the tooth as the line, easing in over the band.
  */
-export function pastMargin(line: MarginLine, c: ArrayLike<number>, nc: ArrayLike<number>): number {
+/** Build 117: a boundary line's wax eases down over this much before the line, mm - a feathered finish to smooth, not a step. */
+export const BOUNDARY_BAND = 1.2;
+export function pastMargin(line: MarginLine, c: ArrayLike<number>, nc: ArrayLike<number>, band = MARGIN_BAND): number {
   let best = Infinity, i = -1;
   for (let k = 0; k < line.p.length; k += 1) {
     const s = line.p[k], d = (c[0] - s[0]) ** 2 + (c[1] - s[1]) ** 2 + (c[2] - s[2]) ** 2;
@@ -346,7 +348,7 @@ export function pastMargin(line: MarginLine, c: ArrayLike<number>, nc: ArrayLike
   const beyondEnd = i === 0 ? -dot(d, line.t[0]) : i === last ? dot(d, line.t[last]) : 0;
   // On the line's side of the tooth (its surface facing the same way), not round on the labial.
   const side = smooth01((dot(nc, line.n[i]) + 0.1) / 0.5);
-  return smooth01((past + MARGIN_BAND) / MARGIN_BAND) * (1 - smooth01(beyondEnd / MARGIN_END)) * side;
+  return smooth01((past + band) / band) * (1 - smooth01(beyondEnd / MARGIN_END)) * side;
 }
 
 /**

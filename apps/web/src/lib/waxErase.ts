@@ -10,7 +10,7 @@
  * is kept in the tooth's own frame, so it goes with the tooth.
  */
 import type { NearestSurface } from "@/lib/nearestSurface";
-import { closedMarginAt, pastMargin, softCap, taperLimit, type ClosedMargin, type MarginLine } from "@/lib/waxMargin";
+import { BOUNDARY_BAND, closedMarginAt, pastMargin, softCap, taperLimit, type ClosedMargin, type MarginLine } from "@/lib/waxMargin";
 
 export type Vec3 = [number, number, number];
 /** A brush dab in a tooth's frame: along mesial, towards the incisal edge, labial (mm), and its radius (mm). */
@@ -123,7 +123,7 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
     } else if (margin) erased = Math.max(brushed, pastMargin(margin, q, [nx, ny, nz]));
     // Build 117: boundary lines the user drew on the tooth - wax past one (on the gum side) is taken away, so a
     // stroke of Add stops at the line and Smooth leaves a clean finish along it.
-    for (const line of boundaries) erased = Math.max(erased, pastMargin(line, q, [nx, ny, nz]));
+    for (const line of boundaries) erased = Math.max(erased, pastMargin(line, q, [nx, ny, nz], BOUNDARY_BAND));
     const w = kept * erased;
     if (w <= 1e-3 && capped > -1e-4) continue;
     const px = p[0] + nx * capped, py = p[1] + ny * capped, pz = p[2] + nz * capped;

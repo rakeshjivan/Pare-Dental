@@ -28,7 +28,9 @@ describe("boundary lines", () => {
     const out = eraseTooth(wax, axes, none, patient, sign, null, [line])!;
     expect(out).not.toBeNull();
     for (const z of at(out, 3)) expect(z).toBeCloseTo(0.5, 4);
-    for (const z of at(out, 1)) expect(z).toBeCloseTo(0.5, 2);
+    for (const z of at(out, 1.5)) expect(z).toBeCloseTo(0.5, 2);
+    // Build 117: a feathered finish - part way down within the band before the line, not a step.
+    for (const z of at(out, 0.5)) { expect(z).toBeLessThan(0.5); expect(z).toBeGreaterThan(-0.5); }
     for (const z of at(out, -2)) expect(z).toBeLessThan(0);
   });
 });
