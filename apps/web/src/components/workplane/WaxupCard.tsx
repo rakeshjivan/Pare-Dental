@@ -48,6 +48,8 @@ export type WaxupView = {
   single?: Partial<Record<"upper" | "lower", number[]>>;
   /** Build 108: the Gum line step - follow the patient's gum, or an even line (each pair's visible crown length at its zenith, mm). */
   gum?: { mode: import("@/lib/waxGum").GumMode; keep: Record<string, number> };
+  /** Build 118: the palatal surface on the made model - the library tooth's (the patient's palatal pressed onto it) or the patient's as scanned. */
+  palatal?: import("@/lib/waxPalatal").PalatalForm;
   /** Build 108: Open the bite - the opening at the incisors (mm), the hinge once worked out, and whether it is being worked out. */
   bite?: { raise: number; busy: boolean; hinge: import("@/lib/waxOcclusion").BiteHinge | null };
   /** Build 110: Keep & erase - each wax tooth's paint (by its id), and the brush in hand. */
@@ -170,6 +172,7 @@ export type WaxupActions = {
   onBite?: (raise: number) => void;
   /** Build 108: the Gum line step. */
   onGumMode?: (mode: import("@/lib/waxGum").GumMode) => void;
+  onPalatal?: (form: import("@/lib/waxPalatal").PalatalForm) => void;
   onGumKeep?: (pair: string, keep: number) => void;
   onGumIdeal?: () => void;
   /** Build 107: Sculpt - back to sculpting after moving a tooth. */

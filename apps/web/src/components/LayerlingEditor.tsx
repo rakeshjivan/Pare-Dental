@@ -169,6 +169,7 @@ import { worldTriangles } from "@/lib/blend";
 import { eggshellTooth } from "@/lib/dentalEggshell";
 import { NearestSurface, DeviationProbe, rayMeetsSoup, soupBoxOf, soupWithin } from "@/lib/nearestSurface";
 import { ERASE_BRUSH, eraseKey, eraseTooth, keptCorners, surfaceSign, toFrame, type ToothAxes } from "@/lib/waxErase";
+import { pressPalatal, type PalatalForm } from "@/lib/waxPalatal";
 import { closeEraseWorkers, eraseInBackground, type EraseJob } from "@/lib/waxEraseJobs";
 import { ScanPatch, closedMarginAt, marginFromLabels, pastMargin, patchBox, prepareMargin, resample, type ClosedMargin, type MarginLine } from "@/lib/waxMargin";
 import { gumPaint, gumPair, gumSides, idealLevels, moveGumCut, visibleLength, zenithShift, type GumCut, type GumMode } from "@/lib/waxGum";
@@ -10990,8 +10991,25 @@ export function LayerlingEditor({
       }
       return cuts.length ? cuts : undefined;
     };
+    // Build 118: the library tooth's palatal form - the patient's surface standing palatal of each wax tooth pressed onto it.
+    const palatalOf = (shape: WorkplaneShape, positions: Float32Array) => {
+      if (!dentalStudioRef.current?.waxStudio || (waxupRef.current.palatal ?? "library") !== "library") return positions;
+      const toInput = dentalLocalToInput.current.get(shape.id), world = localToWorld(shape);
+      if (!toInput || !world) return positions;
+      const move = toInput.clone().multiply(world.clone().invert());
+      const turn = new THREE.Matrix3().setFromMatrix4(move);
+      const teeth = shapesRef.current.filter((tooth) => tooth.dental === "wax" && tooth.waxFor === shape.id && !tooth.hidden && tooth.waxTooth && (!waxTeeth || waxTeeth(tooth.waxTooth.fdi))).flatMap((tooth) => {
+        const toothWorld = localToWorld(tooth);
+        if (!toothWorld) return [];
+        const f = moveFrame(tooth.waxTooth!.frame, toothWorld);
+        const dir = (v: ArrayLike<number>) => { const d = new THREE.Vector3(v[0], v[1], v[2]).applyMatrix3(turn).normalize(); return [d.x, d.y, d.z]; };
+        const origin = new THREE.Vector3(f.origin[0], f.origin[1], f.origin[2]).applyMatrix4(move);
+        return [{ soup: transformSoup(Float32Array.from(waxTrianglesOf(tooth)), move), origin: [origin.x, origin.y, origin.z], up: dir(f.up), out: dir(f.out), mesial: dir(f.mesial) }];
+      });
+      return pressPalatal(positions, teeth).positions;
+    };
     return {
-      arches: arches.map(({ shape }) => { const positions = scan(shape!); const gum = gumOf(shape!); return { id: shape!.id, positions, area: dentalAreaFor(shape!) ?? undefined, wax: waxOf(shape!), cuts: cutsOf(shape!, positions), ...(gum ? { gum } : {}) }; }),
+      arches: arches.map(({ shape }) => { const positions = palatalOf(shape!, scan(shape!)); const gum = gumOf(shape!); return { id: shape!.id, positions, area: dentalAreaFor(shape!) ?? undefined, wax: waxOf(shape!), cuts: cutsOf(shape!, positions), ...(gum ? { gum } : {}) }; }),
       bite: bite ? scan(bite) : null,
       ...(bite2 ? { bite2: scan(bite2) } : {}),
       roles: state.rolesChosen ? roles : undefined,
@@ -13063,7 +13081,8 @@ export function LayerlingEditor({
       const job = eraseFor(tooth);
       const own = Float32Array.from(worldTriangles(tooth));
       const erased = erasedSoup(tooth);
-      const near = job ? soupWithin(scanTrianglesOf(job.scan), soupBoxOf(own, 3)) : new Float32Array();
+      const scanOf = job?.scan ?? shapesRef.current.find((shape) => shape.id === tooth.waxFor);
+      const near = scanOf ? soupWithin(scanTrianglesOf(scanOf), soupBoxOf(own, 3)) : new Float32Array();
       const region = job?.margin?.region;
       const gum = region && "inside" in region ? (region.gum ?? region.line) : [];
       return { own: Array.from(own), erased: erased ? Array.from(erased) : null, scan: Array.from(near), gum, axes: toothAxesOf(tooth), key: job?.key, curves: job?.curves ?? [] };
@@ -13752,6 +13771,31 @@ export function LayerlingEditor({
       placed: latest.placed.map((entry) => { const shape = changed.get(entry.id); return shape?.waxTooth ? { ...entry, width: shape.waxTooth.width, length: shape.waxTooth.length, clearance: null } : entry; }),
     }));
   };
+  // For checks: the whole set of the arch shown moved by a matrix (scene coordinates), as the dentist drags it; and the arch's scan.
+  const moveWaxSetRef = useRef<(elements: number[]) => void>(() => {});
+  moveWaxSetRef.current = (elements: number[]) => {
+    const current = waxupRef.current;
+    const arch = dentalStudioRef.current?.slots[current.slot];
+    if (!arch) return;
+    const teeth = waxTeethOf(arch);
+    const move = new THREE.Matrix4().fromArray(elements);
+    const v = new THREE.Vector3();
+    const changed = new Map<string, WorkplaneShape>();
+    for (const shape of teeth) {
+      const soup = worldTriangles(shape);
+      for (let i = 0; i + 2 < soup.length; i += 3) { v.set(soup[i], soup[i + 1], soup[i + 2]).applyMatrix4(move); soup[i] = v.x; soup[i + 1] = v.y; soup[i + 2] = v.z; }
+      const rebuilt = shapeWithWorldPositions(shape, Array.from(soup));
+      const tooth = shape.waxTooth;
+      const toWorld = localToWorld(shape), back = localToWorld(rebuilt);
+      changed.set(shape.id, canonicalizeShape(tooth && toWorld && back ? { ...rebuilt, waxTooth: { ...tooth, frame: moveFrame(moveFrame(moveFrame(tooth.frame, toWorld), move), back.clone().invert()) } } : rebuilt));
+    }
+    commitShapes(shapesRef.current.map((shape) => changed.get(shape.id) ?? shape), teeth.map((shape) => shape.id), "moved");
+  };
+  useEffect(() => {
+    const w = window as unknown as { layerlingMoveWaxSet?: (e: number[]) => void; layerlingScanSoup?: (slot: "upper" | "lower") => number[] | null };
+    w.layerlingMoveWaxSet = (e) => moveWaxSetRef.current(e);
+    w.layerlingScanSoup = (slot) => { const id = dentalStudioRef.current?.slots[slot]; const scan = id ? shapesRef.current.find((shape) => shape.id === id) : undefined; return scan ? Array.from(worldTriangles(scan)) : null; };
+  }, []);
   // Build 79: a wax tooth adjusted along its own frame - and the same tooth on the other side, mirrored, unless that is turned off.
   const [waxMirror, setWaxMirror] = useState(true);
   const nudgeWaxTooth = useCallback((id: string, nudge: ToothNudge, amount: number) => {
@@ -21934,6 +21978,7 @@ export function LayerlingEditor({
               onSetCurve: (curve: number) => bendWaxSet(curve),
               onBite: (raise: number) => void openWaxBite(raise),
               onGumMode: (mode: GumMode) => setWaxGumMode(mode),
+              onPalatal: (form: PalatalForm) => { waxRecordRef.current(true); setWaxup((latest) => ({ ...latest, palatal: form })); },
               onGumKeep: (pair: string, keep: number) => setWaxup((latest) => ({ ...latest, gum: { mode: latest.gum?.mode ?? "even", keep: { ...latest.gum?.keep, [pair]: Math.max(0, Math.round(keep * 10) / 10) } } })),
               onGumIdeal: () => waxGumIdeal(),
               onSelectSet: () => {
