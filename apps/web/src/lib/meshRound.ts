@@ -195,7 +195,8 @@ function openingField(inside: Uint8Array, grid: Grid, radius: number) {
 }
 
 /** Closing: grow by r, shrink back by r. Positive inside, in mm. */
-function closingField(inside: Uint8Array, grid: Grid, radius: number) {
+/** Closing: grow by r, shrink back by r (inside edges rounded). Positive inside, in mm. Build 118: also used for the base's foot fillet. */
+export function closingField(inside: Uint8Array, grid: Grid, radius: number) {
   const { nx, ny, nz, h } = grid;
   const r = radius / h;
   const toInside = squaredDistanceTo(inside, nx, ny, nz);

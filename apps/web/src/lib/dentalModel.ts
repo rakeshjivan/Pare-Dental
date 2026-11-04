@@ -16,7 +16,7 @@
 import * as THREE from "three";
 import { getManifoldRuntime } from "@/lib/editorMeshCore";
 import { alignToBite, archFrame, biteResidual, contacts, vertexNormals, canineWidth, cleanScan, frontOf, isPartialArch, marginUp, pairFrame, palateScore, type CleanArch, type CleanReport } from "@/lib/dentalArch";
-import { ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
+import { footFillet, FOOT_RADIUS, neatOutline, ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
@@ -892,11 +892,20 @@ function buildArch(
         solid = keepSolid(runtime.Manifold.difference(solid, keepSolid(articulatorPockets(runtime, plate, floor))));
         footprint = [plate];
       } else {
-        const block = keepSolid(prismOf(runtime, rings, floor, blockTop));
-        solid = keepSolid(runtime.Manifold.union(solid, block));
+        // Build 118: as lab-printed study models are - the block's outer edge straight-sided with chamfered corners
+        // (a lower's tongue space left open), the scan trimmed to its own smooth outline inside it, so a ledge runs
+        // round the foot; and the foot blended into the ledge with a round.
+        const neat = neatOutline(runtime, rings);
+        const block = keepSolid(prismOf(runtime, neat, floor, blockTop));
         const trim = keepSolid(prismOf(runtime, rings, floor - 0.001, top + 5));
         solid = keepSolid(runtime.Manifold.intersection(solid, trim));
-        footprint = rings.filter((ring) => signedRing(ring) > 0);
+        solid = keepSolid(runtime.Manifold.union(solid, block));
+        let toothLow = Infinity;
+        for (let i = 0; i < scanTeeth.length; i += 1) if (scanTeeth[i]) toothLow = Math.min(toothLow, m.v[i * 3 + 2]);
+        const blended = footFillet(runtime, solid, blockTop, FOOT_RADIUS, toothLow - 0.5);
+        if (blended) solid = keepSolid(blended);
+        footprint = neat.filter((ring) => signedRing(ring) > 0);
+        trimRings = neat;
       }
     }
   } else if (options.baseStyle === "plate") {
