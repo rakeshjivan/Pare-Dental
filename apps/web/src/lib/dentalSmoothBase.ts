@@ -36,26 +36,36 @@ export const SMOOTH = {
   belowCut: 3,
   /** The shell's wall, mm. */
   wall: 2.2,
-  /** The fillet's size between the gum and the ledge, mm. */
-  fillet: 4,
+  /** The fillet's size between the gum and the ledge, mm. Build 122 (Rakesh): a typodont's broad concave sweep, not a crease. */
+  fillet: 7,
   /** The drape's fall per mm out from the scan's edge. */
   drapeSlope: 2.2,
   /** How much the drape's heights are smoothed (Gaussian sigma), mm. */
-  drapeSmooth: 0.7,
-  /** How far the drape stands above the scan's ragged edge, and how far the scan's surface is eased in under it, mm. */
-  drapeLift: 0.7,
-  edgeEase: 0.8,
+  drapeSmooth: 1.4,
+  /** How far the drape stands above the scan's ragged edge, mm. */
+  drapeLift: 0.2,
+  /** Build 122: negative - near its edge the field stands this far outside the scan, so the scan's ragged edge is buried under it. */
+  edgeEase: -0.4,
   /** Over how much of the scan's edge (in from it) the scan gives way to the drape, mm. */
   edgeBand: 3,
   /** The blend between the scan and the drape, mm. */
-  drapeBlend: 1,
+  drapeBlend: 3.5,
+  /**
+   * Build 122 (Rakesh): the edge's heights smoothed along the arch (Gaussian sigma, mm) before the drape falls from them,
+   * so a scalloped or ragged edge never runs down the drape as folds - from above (the highest edge within edgeReach),
+   * never lower than the edge itself, so the edge is always buried.
+   */
+  edgeSmooth: 3,
+  edgeReach: 1,
+  /** Build 122: over this much of the scan in from its edge, the drape stays at the edge's height, mm. */
+  plateau: 2,
   /** How far inside the scan the field stands round the teeth (the scan's crowns show), and how far out from them, mm. */
   inset: 0.25,
   insetReach: 1,
   /** How far past the outline the field reaches (the wall is cut exactly to the outline), mm. */
   wallSpare: 0.4,
   /** The rounding of the outline's top edge, mm. */
-  edgeRound: 0.8,
+  edgeRound: 1.5,
   /** How much the cavity's field is smoothed (sigma), mm. */
   cavitySmooth: 1,
   /** An edge point raises the drape no higher than the lowest edge within this of it, mm. */
@@ -284,6 +294,32 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
     }
     for (const c of cells) seedZ[c] = low[c];
   }
+  // Build 122: the edge's heights smoothed along the arch from above - an upper envelope (each edge point the highest
+  // edge within edgeReach of it), carried everywhere from the nearest edge point, blurred, read back at the edge and
+  // never below the edge itself - so the drape starts at or over the scan's edge all round (it is buried, no line) and
+  // the edge's scallops and dips never run down the drape as folds.
+  {
+    const isSeed = Uint8Array.from(seedZ, (z) => (Number.isFinite(z) ? 1 : 0));
+    const r = Math.ceil(S.edgeReach / h), high = new Float32Array(n2).fill(-Infinity);
+    const cells: number[] = [];
+    for (let c = 0; c < n2; c += 1) if (isSeed[c]) cells.push(c);
+    for (const c of cells) {
+      const ci = c % nx, cj = Math.floor(c / nx);
+      let m = seedZ[c];
+      for (let dj = -r; dj <= r; dj += 1) for (let di = -r; di <= r; di += 1) {
+        const i = ci + di, j = cj + dj;
+        if (i < 0 || j < 0 || i >= nx || j >= ny || di * di + dj * dj > r * r) continue;
+        const z = seedZ[j * nx + i];
+        if (Number.isFinite(z) && z > m) m = z;
+      }
+      high[c] = m;
+    }
+    const toSeed = nearestSeed2D(isSeed, nx, ny);
+    const carried = new Float32Array(n2);
+    for (let c = 0; c < n2; c += 1) carried[c] = toSeed[c] >= 0 ? high[toSeed[c]] : ledge;
+    const smoothed = blur(carried, nx, ny, 1, S.edgeSmooth / h);
+    for (const c of cells) seedZ[c] = Math.max(smoothed[c], seedZ[c]);
+  }
   // The highest of the cones falling at DRAPE_SLOPE from every point of the edge (a chamfer dilation: continuous,
   // never a step where one edge point's reach gives way to the next's).
   const dilate = (seedAt: (c: number) => number, slope: number) => {
@@ -310,6 +346,14 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   };
   const drape = dilate((c) => seedZ[c], S.drapeSlope);
   for (let c = 0; c < n2; c += 1) drape[c] = Math.max(drape[c], ledge - 3);
+  // Build 122: over the scan's last `plateau` mm the drape stays at the edge's own height rather than falling in under
+  // the scan - the smoothing below then rounds only its fall outward, never lowers it at the edge, so the wall that
+  // closes the scan down to the floor stays buried under it.
+  {
+    const isSeed = Uint8Array.from(seedZ, (z) => (Number.isFinite(z) ? 1 : 0));
+    const toSeed = nearestSeed2D(isSeed, nx, ny);
+    for (let c = 0; c < n2; c += 1) if (covered[c] && inFromEdge[c] < S.plateau && toSeed[c] >= 0) drape[c] = Math.max(drape[c], seedZ[toSeed[c]]);
+  }
   const smoothDrape = blur(drape, nx, ny, 1, S.drapeSmooth / h);
   const drapeNorm = new Float32Array(n2);
   for (let j = 0; j < ny; j += 1) for (let i = 0; i < nx; i += 1) {
