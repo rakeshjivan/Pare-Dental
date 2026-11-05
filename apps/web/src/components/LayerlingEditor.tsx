@@ -115,7 +115,7 @@ import { useStudioSlot } from "@/lib/studioSlots";
 import { createPortal } from "react-dom";
 import type { PareStudio } from "@/lib/pareStudio";
 import { applyAppTheme } from "@/lib/appTheme";
-import { DentalStudioPanel, dentalPreset, type DentalAreaTool, type DentalPreset, type DentalSlot, type DentalView } from "./workplane/DentalStudioPanel";
+import { DentalStudioPanel, dentalPreset, dentalPresetOf, type DentalAreaTool, type DentalPreset, type DentalSlot, type DentalView } from "./workplane/DentalStudioPanel";
 import { ShellPanel } from "./workplane/ShellPanel";
 import { OffsetPanel } from "./workplane/OffsetPanel";
 import { CutOutPanel } from "./workplane/CutOutPanel";
@@ -11313,7 +11313,7 @@ export function LayerlingEditor({
     const slots = { upper: source.slots.upper, lower: source.slots.lower, bite: kept(source.slots.bite), bite2: kept(source.slots.bite2) };
     analyseDentalStudio({
       ...freshDentalState(slots, source.rolesChosen),
-      preset: source.preset as DentalPreset,
+      preset: dentalPresetOf(source.preset),
       // Build 117: a case made before the pin's place was kept stood where the default then put it -
       // in front, or either side with a wax-up - and it opens so, though the default is now either side.
       options: { ...(source.options as unknown as DentalStudioOptions), ...(source.options.pinPlace === undefined ? { pinPlace: source.wax.length ? "sides" as const : "midline" as const } : {}) },
@@ -11368,7 +11368,7 @@ export function LayerlingEditor({
         const upper = finished.find((shape) => shape.dentalSource?.finished === "upper")?.id, lower = finished.find((shape) => shape.dentalSource?.finished === "lower")?.id;
         setDentalStudio({
           ...freshDentalState({ upper: null, lower: null, bite: null, bite2: null }, true),
-          preset: source.preset as DentalPreset,
+          preset: dentalPresetOf(source.preset),
           options: source.options as unknown as DentalStudioOptions,
           patientDetails: source.patientDetails,
           ...(source.waxStudio ? { waxStudio: source.waxStudio } : {}),

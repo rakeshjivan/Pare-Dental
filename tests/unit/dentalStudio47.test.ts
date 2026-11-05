@@ -262,7 +262,6 @@ describe("Dental Studio (build 47)", () => {
     expect(aligner.inside).toBe("solid");
     expect(aligner.keep! + aligner.base).toBeGreaterThanOrEqual(15);
     expect(aligner.keep! + aligner.base).toBeLessThanOrEqual(20);
-    expect(dentalPreset("crown", 16, false)).toMatchObject({ inside: "solid", baseStyle: "plate" });
     expect(dentalPreset("ortho", 16, true)).toMatchObject({ baseStyle: "ortho", inside: "solid", layout: "occlusion", base: 8 });
   });
 

@@ -27,7 +27,11 @@ import {
 } from "@/lib/dentalModel";
 import type { WorkplaneWorkspaceSettings } from "@/types/layerling";
 
-export type DentalPreset = "study" | "ortho" | "aligner" | "crown";
+export type DentalPreset = "study" | "ortho" | "aligner";
+/** Build 119 (Rakesh): Crown & bridge is gone - those models are made in the lab, and ours are not for patient work. A case saved with it opens as a study model. */
+export function dentalPresetOf(saved: string | undefined): DentalPreset {
+  return saved === "ortho" || saved === "aligner" ? saved : "study";
+}
 export type DentalSlot = "upper" | "lower" | "bite" | "bite2";
 
 /**
@@ -51,10 +55,6 @@ export function dentalPreset(preset: DentalPreset, depth: number, pair: boolean,
     // tooth about 18 mm, never keeping less than the teeth.
     const keep = Math.max(teeth, Math.min(depth, 15 - above));
     return { ...common, keep, base: Math.max(3, 18 - keep - above), baseStyle: "follow", inside: "solid" };
-  }
-  if (preset === "crown") {
-    // Crown and bridge: solid with a plate across the arch - the most accurate (Shin 2020, Wan 2026).
-    return { ...common, keep: null, base: 5, baseStyle: "plate", inside: "solid" };
   }
   // Study model: hollow and open underneath to save resin, all the anatomy kept.
   // Fork (build 49): on a clean base - trimmed to a smooth outline a few mm round the teeth, low.
@@ -687,10 +687,10 @@ export function DentalStudioPanel({
       </section>
     );
   };
-  const presetBase = ({ study: "clean", ortho: "ortho", aligner: "follow", crown: "plate" } as const)[preset];
+  const presetBase = ({ study: "clean", ortho: "ortho", aligner: "follow" } as const)[preset];
   // Build 75: the base changed in step 4 from the one the model type set.
   const custom = options.baseStyle !== presetBase;
-  const presetName = t(({ study: "dental.study", ortho: "dental.ortho", aligner: "dental.aligner", crown: "dental.crown" } as const)[preset]);
+  const presetName = t(({ study: "dental.study", ortho: "dental.ortho", aligner: "dental.aligner" } as const)[preset]);
   const scansSummary = scansDone
     ? [slots.upper ? t("dental.upper") : null, slots.lower ? t("dental.lower") : null, slots.bite ? t("dental.bite") : null, slots.bite2 ? t("dental.bite2") : null].filter(Boolean).join(" + ") + (biteLocked ? ` - ${t("dental.summaryLocked")}` : "")
     : null;
@@ -1016,11 +1016,10 @@ export function DentalStudioPanel({
             ["study", t("dental.study"), t("dental.studyHint")],
             ["ortho", t("dental.ortho"), t("dental.orthoHint")],
             ["aligner", t("dental.aligner"), t("dental.alignerHint")],
-            ["crown", t("dental.crown"), t("dental.crownHint")],
           ] as const).map(([value, label, hint]) => (
             <button key={value} type="button" role="radio" aria-checked={preset === value} className={preset === value ? (custom ? "active custom" : "active") : ""} disabled={busy} title={framed ? hint : undefined} onClick={() => onPresetChange(value)}>
               {/* Build 66: the base each choice makes, from above. */}
-              <BaseStylePicture style={({ study: "clean", ortho: "ortho", aligner: "follow", crown: "plate" } as const)[value]} />
+              <BaseStylePicture style={({ study: "clean", ortho: "ortho", aligner: "follow" } as const)[value]} />
               <strong>{label}</strong>
               {/* Build 106: in the frame the line under each is its hover text instead. */}
               {framed ? null : <span>{hint}</span>}
