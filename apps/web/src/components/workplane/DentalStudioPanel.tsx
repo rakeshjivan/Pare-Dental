@@ -1033,8 +1033,8 @@ export function DentalStudioPanel({
           <h4 className="dental-group">{t("studio.modelOptions")}</h4>
           <div className="studio-toggle-buttons" role="group" aria-label={t("studio.modelOptions")}>
             {options.baseStyle === "clean" ? (
-              <button type="button" aria-pressed={options.notches !== false} className={options.notches !== false ? "active" : ""} disabled={busy} title={t("dental.notchesHint")} onClick={() => onOptionsChange({ notches: options.notches === false })}>
-                {options.notches !== false ? <Check size={15} aria-hidden="true" /> : null}{t("studio.notches")}
+              <button type="button" aria-pressed={options.notches === true} className={options.notches === true ? "active" : ""} disabled={busy} title={t("dental.notchesHint")} onClick={() => onOptionsChange({ notches: options.notches !== true })}>
+                {options.notches === true ? <Check size={15} aria-hidden="true" /> : null}{t("studio.notches")}
               </button>
             ) : null}
             {preset === "aligner" ? (
@@ -1053,7 +1053,7 @@ export function DentalStudioPanel({
           <>
             {options.baseStyle === "clean" ? (
               <label className="edge-modifier-check" title={t("dental.notchesHint")}>
-                <input type="checkbox" checked={options.notches !== false} disabled={busy} onChange={(event) => onOptionsChange({ notches: event.currentTarget.checked })} />
+                <input type="checkbox" checked={options.notches === true} disabled={busy} onChange={(event) => onOptionsChange({ notches: event.currentTarget.checked })} />
                 <span>{t("dental.notches")}</span>
               </label>
             ) : null}
@@ -1082,14 +1082,7 @@ export function DentalStudioPanel({
               </div>
             );
           })()}
-          {options.inside !== "solid" ? (<>
-            <h4 className="dental-group">{t("dental.wall")}</h4>
-            <div className="studio-mm-choice" role="radiogroup" aria-label={t("dental.wall")}>
-              {[2, 3, 4, 5].map((mm) => (
-                <button key={mm} type="button" role="radio" aria-checked={Math.abs(options.wall - mm) < 0.05} className={Math.abs(options.wall - mm) < 0.05 ? "active" : ""} disabled={busy} onClick={() => onOptionsChange({ wall: mm })}>{`${mm} mm`}</button>
-              ))}
-            </div>
-          </>) : null}
+          {/* Build 119 (Rakesh): the wall is set for the dentist - the model's own (3 mm; the smooth base's even shell) - no choice to make. */}
           {options.inside !== "solid" && options.infill !== "honeycomb" ? (<>
             <h4 className="dental-group">{t("studio.underside")} <HelpTip text={t("studio.undersideHint")} /></h4>
             <div className="studio-pic-choice two" role="radiogroup" aria-label={t("studio.underside")}>

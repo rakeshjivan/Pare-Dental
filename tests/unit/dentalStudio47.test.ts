@@ -385,9 +385,10 @@ describe("Dental Studio (build 47)", () => {
   }, 60_000);
   it("finishes a clean base like a model builder: notches, a tie bar, an articulator plate (build 50)", async () => {
     const input = { arches: [{ id: "a", positions: syntheticArch({ teethDown: true }) }] };
-    const plain = await makeDentalStudio(input, { ...base, baseStyle: "clean", base: 3, notches: false }, runtime as never);
-    const notched = await makeDentalStudio(input, { ...base, baseStyle: "clean", base: 3 }, runtime as never);
-    const barred = await makeDentalStudio(input, { ...base, baseStyle: "clean", base: 3, tieBar: true }, runtime as never);
+    // Build 119: notches are made only when asked for.
+    const plain = await makeDentalStudio(input, { ...base, baseStyle: "clean", base: 3 }, runtime as never);
+    const notched = await makeDentalStudio(input, { ...base, baseStyle: "clean", base: 3, notches: true }, runtime as never);
+    const barred = await makeDentalStudio(input, { ...base, baseStyle: "clean", base: 3, notches: true, tieBar: true }, runtime as never);
     const plate = await makeDentalStudio(input, { ...base, baseStyle: "articulator", base: 8, inside: "open" }, runtime as never);
     for (const result of [plain, notched, barred, plate]) {
       expect(result.warnings).not.toContain("teeth");

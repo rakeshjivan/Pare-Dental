@@ -1119,3 +1119,19 @@ html.studio-right-hidden .studio-shell-on .dental-studio-panel.studio-framed { d
 .studio-snap { display: block; width: 100%; margin-top: 12px; min-height: 36px; padding: 6px 12px; color: var(--studio-teal, #2f7d6d); background: #ffffff; border: 1px solid var(--studio-teal, #2f7d6d); border-radius: 10px; font-size: 13.5px; font-weight: 600; cursor: pointer; }
 .studio-snap:hover:not(:disabled) { background: rgba(47, 125, 109, 0.08); }
 .studio-snap:disabled { opacity: 0.5; cursor: default; }
+
+/* Build 119 (Rakesh): the choices tidied - compact tiles, the picture beside the name, no big square buttons. */
+.studio-shell-on .dental-studio-panel.studio-framed .dental-presets { gap: 8px; }
+.studio-shell-on .dental-studio-panel.studio-framed .dental-presets button {
+  flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px;
+  min-height: 0; padding: 8px 10px; text-align: left;
+}
+.studio-shell-on .dental-studio-panel.studio-framed .dental-presets button .dental-picture { width: 34px; height: 26px; flex: none; }
+.studio-shell-on .dental-studio-panel.studio-framed .dental-presets button strong { font-size: 13.5px; line-height: 1.25; }
+.studio-pic-choice { gap: 6px; }
+.studio-pic-choice button { flex-direction: row; justify-content: center; gap: 8px; padding: 6px 8px; font-size: 13.5px; }
+.studio-pic-choice .studio-body-pic { width: 34px; height: 24px; flex: none; }
+.studio-mm-choice { gap: 6px; }
+.studio-mm-choice button { padding: 6px 4px; font-size: 13px; line-height: 1.25; }
+.studio-toggle-buttons { gap: 6px; }
+.studio-toggle-buttons button { min-height: 0; padding: 7px 10px; font-size: 13px; }

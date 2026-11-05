@@ -116,6 +116,17 @@ export const POST_HALF = 4;
 /** Build 79: the side posts stand this far behind the front of the incisors, mm - about the premolars. */
 export const POST_BACK = 16;
 
+/** Build 119: how far forward into its base a heel (a pedestal or a cup's block on the smooth base) reaches, mm, and the rounding of its upright edges. */
+export const HEEL_INTO = 6;
+export const HEEL_ROUND = 1.5;
+/** A block with its upright edges rounded. */
+function roundedBlock(runtime: ManifoldRuntime, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number) {
+  const r = Math.min(HEEL_ROUND, (x1 - x0) / 2 - 0.01, (y1 - y0) / 2 - 0.01);
+  const plan = runtime.CrossSection.square([x1 - x0 - 2 * r, y1 - y0 - 2 * r]).translate([x0 + r, y0 + r]).offset(r, "Round", 2, 24);
+  const solid = plan.extrude(Math.max(0.01, z1 - z0)).translate([0, 0, z0]);
+  plan.delete();
+  return solid;
+}
 const box = (runtime: ManifoldRuntime, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number) =>
   runtime.Manifold.cube([x1 - x0, y1 - y0, z1 - z0]).translate([x0, y0, z0]);
 
@@ -229,7 +240,7 @@ export function incisalPins(runtime: ManifoldRuntime, raises: number[], axisY: n
 }
 
 /** Build 117: more of the articulator - the cups' fit (mm, CUP_FIT when left out) and the dental midline's x, to centre it on. */
-export type ArticulatorMore = { fit?: number; centre?: number; /** Build 117: the side posts grooved for the risers' click. */ riserGroove?: boolean; /** Build 119: the snap hinge (lib/dentalSnapHinge) instead of the drop-in cups, with its grip. */ snap?: { grip?: number } };
+export type ArticulatorMore = { fit?: number; centre?: number; /** Build 117: the side posts grooved for the risers' click. */ riserGroove?: boolean; /** Build 119: the snap hinge (lib/dentalSnapHinge) instead of the drop-in cups, with its grip. */ snap?: { grip?: number }; /** Build 119: on the smooth base - no bar; the cups' blocks and the balls' pedestals grow out of the bases' straight backs, their edges rounded. */ smooth?: boolean };
 /**
  * Build 117: a side post as built - its x, its place in the upper's frame (y, the dome's centre zc
  * above the plane, the models closed), where the lower half stands (restY) and the top of its arm.
@@ -289,7 +300,7 @@ export function articulatorParts(
   };
   const backOf = (heels: ArticulatorHeel[] | undefined) => (heels?.length ? Math.max(...heels.map((heel) => heel.y)) : back);
   // Build 119: the snap hinge needs no bar - each part stands on its base's own back corner.
-  if (!snap) for (const [heels, parts, z0, z1] of [[backs?.lower, lowerParts, floorLower, floorLower + 4], [backs?.upper, upperParts, floorUpper - 4, floorUpper]] as const) {
+  if (!snap && !more.smooth) for (const [heels, parts, z0, z1] of [[backs?.lower, lowerParts, floorLower, floorLower + 4], [backs?.upper, upperParts, floorUpper - 4, floorUpper]] as const) {
     const [x0, x1] = span(heels);
     parts.push(keep(box(runtime, x0, x1, Math.min(back, backOf(heels)) - 4, yBack, z0, z1)));
     for (const heel of heels ?? []) parts.push(keep(box(runtime, heel.x - 4, heel.x + 4, heel.y - 4, yBack, z0, z1)));
@@ -332,8 +343,9 @@ export function articulatorParts(
   } else centres.forEach((c) => {
     // The lower: a pedestal from its bar, a neck and the ball, centred on the axis (y = ay, z = 0).
     // The pedestal stops below where the cup's block swings down past it as the models open.
+    // Build 119: on the smooth base the pedestal is a rounded heel out of the base's back (no bar to stand on).
     lowerParts.push(
-      keep(box(runtime, c - 4, c + 4, ay - 4, ay + 4, floorLower, Math.max(floorLower + 1, -PEDESTAL))),
+      more.smooth ? keep(roundedBlock(runtime, c - 4, c + 4, back - HEEL_INTO, ay + 4, floorLower, Math.max(floorLower + 1, -PEDESTAL))) : keep(box(runtime, c - 4, c + 4, ay - 4, ay + 4, floorLower, Math.max(floorLower + 1, -PEDESTAL))),
       keep(runtime.Manifold.cylinder(PEDESTAL + 0.5, NECK, NECK, 32).translate([c, ay, -PEDESTAL - 0.25])),
       keep(runtime.Manifold.sphere(R, 96).translate([c, ay, 0])),
     );
@@ -343,7 +355,7 @@ export function articulatorParts(
     // of the block. A polygon's flats lie inside its sphere: the seat is grown by their depth.
     // Build 117: the fit as chosen (CUP_FIT when left out).
     const top = (R + fit) / Math.cos(Math.PI / 96);
-    upperParts.push(keep(box(runtime, c - CUP_HALF_X, c + CUP_HALF_X, ay - CUP_HALF_Y, ay + CUP_HALF_Y, -CUP_UNDER, floorUpper)));
+    upperParts.push(keep(more.smooth ? roundedBlock(runtime, c - CUP_HALF_X, c + CUP_HALF_X, Math.min(ay - CUP_HALF_Y, back - HEEL_INTO), ay + CUP_HALF_Y, -CUP_UNDER, floorUpper) : box(runtime, c - CUP_HALF_X, c + CUP_HALF_X, ay - CUP_HALF_Y, ay + CUP_HALF_Y, -CUP_UNDER, floorUpper)));
     const seat = keep(runtime.Manifold.sphere(top, 96).translate([c, ay, 0]));
     const tilt = DROP_IN_CHANNEL * deg, run = R + CUP_UNDER + 8;
     const out = keep(runtime.Manifold.sphere(top, 96).translate([c, ay + Math.sin(tilt) * run, -Math.cos(tilt) * run]));
