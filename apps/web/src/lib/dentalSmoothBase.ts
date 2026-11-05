@@ -62,11 +62,6 @@ export const SMOOTH = {
   seedOpen: 1,
   /** A boundary loop shorter than this is a hole in the scan, not its edge: it seeds no drape, mm. */
   holeLoop: 40,
-  /** Within this of the teeth the drape stays TEETH_DROP under the scan's edge, never lifted over it, mm. */
-  teethClear: 2,
-  teethDrop: 0.6,
-  /** How much further inside the scan the field stands round the teeth, mm. */
-  teethInset: 0.6,
   /** Taubin smoothing passes over the level set's surface (takes out the grid's faint ripple on curved parts). */
   passes: 6,
   /** Within this of the scan, its distance is exact (from its triangles), mm. */
@@ -317,21 +312,9 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
     const gy = (smoothDrape[Math.min(ny - 1, j + 1) * nx + i] - smoothDrape[Math.max(0, j - 1) * nx + i]) / (2 * h);
     drapeNorm[c] = 1 / Math.sqrt(1 + gx * gx + gy * gy);
   }
-  // Round the teeth: the field stands a little inside the scan, so the scan's crowns show.
-  const teethCols = new Uint8Array(n2);
-  for (let i = 0; i < teeth.length; i += 1) {
-    if (!teeth[i]) continue;
-    const gi = Math.floor((v[i * 3] - x0) / h), gj = Math.floor((v[i * 3 + 1] - y0) / h);
-    if (gi >= 0 && gj >= 0 && gi < nx && gj < ny) teethCols[gj * nx + gi] = 1;
-  }
-  const nearTeeth = grow(teethCols, S.insetReach / h);
-  // Eased in and out over a millimetre, never a step.
   // Away from the scan, its edge's nearness by column - smoothed, so it never steps from one column to the next.
   const edgeField = blur(Float32Array.from(inFromEdge, (d, col) => (covered[col] ? 1 - smooth01(d / S.edgeBand) : 1)), nx, ny, 1, 0.75 / h);
   const edgeAt = (col: number) => edgeField[col];
-  // Near the teeth the drape is never lifted over the scan's edge - it stays a little under it, so the crowns are never covered.
-  const teethNear = blur(Float32Array.from(grow(teethCols, S.teethClear / h)), nx, ny, 1, 0.75 / h);
-  const insetField = blur(Float32Array.from(nearTeeth, (q) => q * S.inset), nx, ny, 1, 1 / h);
   // The outline's distance (negative inside).
   const ring = outline.map(([x, y]) => [x, y] as [number, number]);
   const rim = new Float32Array(n2);
@@ -356,7 +339,7 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   const toSurface = squaredDistanceTo(mark, nx, ny, nz);
   lap("edt");
   const near = new NearestSurface(soup, S.distanceBand + h);
-  const q = new Float64Array(3), nrm = new Float64Array(3), bary = new Float64Array(3);
+  const q = new Float64Array(3), bary = new Float64Array(3);
   // Each corner's nearness to the scan's own edge (1 at it, 0 from EDGE_BAND in), measured over the surface.
   const edgeW = Float32Array.from(alongEdge, (d) => 1 - smooth01(d / S.edgeBand));
   const band = (S.distanceBand / h) ** 2;
@@ -366,25 +349,18 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
     const c = j * nx + i;
     const list = crossings.subarray(counts[c], counts[c + 1]);
     let above = list.length, p = 0;
-    // Round the teeth the field stands further inside the scan: the grid would otherwise fill the narrow embrasures over the crowns.
-    const easeAt = (col: number, e: number) => (S.inset + S.teethInset * Math.min(1, teethNear[col])) * (1 - e);
+    const easeAt = (_col: number, e: number) => S.inset * (1 - e);
     const edgeHere = edgeAt(c), easeHere = easeAt(c, edgeHere);
     for (let k = 0; k < nz; k += 1) {
       const z = cz(k);
       while (p < list.length && list[p] < z) { p += 1; above -= 1; }
       const index = (k * ny + j) * nx + i;
       let d = Math.sqrt(toSurface[index]) * h, edge = edgeHere, ease = easeHere;
-      let inside = above % 2 === 1;
+      const inside = above % 2 === 1;
       if (toSurface[index] <= band) {
         const exact = near.nearest(cx(i), cy(j), z, q);
         if (exact !== Infinity) {
           d = exact;
-          // Round the teeth, which side is inside is the nearest face's: a scan's edge folded under a crown
-          // would put an extra surface over it, and counting surfaces above would call the crown's outside inside.
-          if (teethNear[c] > 0.5 && near.lastTriangle >= 0 && exact > 1e-4) {
-            near.triangleNormal(near.lastTriangle, nrm);
-            inside = (cx(i) - q[0]) * nrm[0] + (cy(j) - q[1]) * nrm[1] + (z - q[2]) * nrm[2] < 0;
-          }
           // Near the scan, how much it is eased in is the nearest surface point's - not this column's, which
           // would step from column to column down a steep wall and streak it.
           const gi = Math.floor((q[0] - x0) / h), gj = Math.floor((q[1] - y0) / h);
@@ -399,11 +375,9 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
         }
       }
       const scanSd = (inside ? -d : d) + ease;
-      const tn = Math.min(1, teethNear[c]);
-      const drapeSd = (z - smoothDrape[c]) * drapeNorm[c] - S.drapeLift * edgeHere * (1 - tn) + S.teethDrop * tn;
+      const drapeSd = (z - smoothDrape[c]) * drapeNorm[c] - S.drapeLift * edgeHere;
       // Over the scan's last EDGE_BAND it is eased in under the drape, so its ragged edge is buried.
-      // Near the teeth the fillet is small, so it never climbs over the crowns.
-      const body = smin(smin(scanSd + S.edgeEase * edge, drapeSd, S.drapeBlend), z - ledge, S.fillet * (1 - 0.75 * tn));
+      const body = smin(smin(scanSd + S.edgeEase * edge, drapeSd, S.drapeBlend), z - ledge, S.fillet);
       // The field reaches a little past the outline; the caller cuts the wall exactly (a prism), so it is flat.
       const cut = smax(body, rim[c] - S.wallSpare, S.edgeRound);
       if (base) base[index] = cut;
