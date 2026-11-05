@@ -1059,7 +1059,7 @@ export function DentalStudioPanel({
             ["ortho", t("dental.ortho"), t("dental.orthoHint")],
             ["aligner", t("dental.aligner"), t("dental.alignerHint")],
           ] as const).map(([value, label, hint]) => (
-            <button key={value} type="button" role="radio" aria-checked={preset === value} className={preset === value ? (custom ? "active custom" : "active") : ""} disabled={busy} title={framed ? hint : undefined} onClick={() => { onPresetChange(value); answer("type"); }}>
+            <button key={value} type="button" role="radio" aria-checked={preset === value && (!shell || Boolean(asked.type))} className={preset === value && (!shell || asked.type) ? (custom ? "active custom" : "active") : ""} disabled={busy} title={framed ? hint : undefined} onClick={() => { onPresetChange(value); answer("type"); }}>
               {/* Build 66: the base each choice makes, from above. */}
               <BaseStylePicture style={({ study: "clean", ortho: "ortho", aligner: "follow" } as const)[value]} />
               <strong>{label}</strong>
@@ -1075,7 +1075,7 @@ export function DentalStudioPanel({
           <h4 className="dental-group">{t("studio.modelsAre")}</h4>
           <div className="studio-pic-choice two" role="radiogroup" aria-label={t("studio.modelsAre")}>
             {(["separate", "articulated"] as const).map((kind) => {
-              const on = kind === "articulated" ? options.hinge : !options.hinge;
+              const on = Boolean(asked.layout) && (kind === "articulated" ? options.hinge : !options.hinge);
               return (
                 <button key={kind} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} title={kind === "articulated" ? t("dental.hingeHint") : undefined} onClick={() => { if (kind === "articulated") toArticulator.current = true; onOptionsChange(kind === "articulated" ? { hinge: true, hingeStyle: options.hingeStyle ?? "snap", ...(options.hinge ? {} : articulatorPinPatch({ incisalPin: false })) } : { hinge: false }); answer("layout"); if (kind === "articulated" && options.hinge) setMbStepId("articulator"); }}>
                   <PairPicture kind={kind} />
@@ -1197,17 +1197,18 @@ export function DentalStudioPanel({
         // Build 120 (Rakesh): Captive (the snap hinge) is set when Articulated is chosen; a case saved before stays as made.
         const snap = options.hingeStyle === "snap";
         const fitIndex = snap ? Math.max(0, SNAP_GRIPS.findIndex((grip) => Math.abs(snapGrip(options.snapGrip) - grip) < 1e-6)) : Math.max(0, HINGE_FITS.findIndex((fit) => Math.abs((options.hingeFit ?? CUP_FIT) - fit) < 1e-6));
-        const fitNames = snap ? (["studio.snapGripLighter", "studio.hingeFitStandard", "studio.snapGripFirmer"] as const) : (["studio.hingeFitTighter", "studio.hingeFitStandard", "studio.hingeFitLooser"] as const);
+        const tolNames = ["studio.hingeFitTighter", "studio.hingeFitStandard", "studio.hingeFitLooser"] as const;
+        const tolPos = snap ? 2 - fitIndex : fitIndex;
         // Build 120 (Rakesh): the questions answered so far (a line each, to change), then the next one open - none after it.
         const order = articOrder;
         const first = order.find((id) => !asked[id]) ?? null;
         const open = openQ && order.includes(openQ) ? openQ : first;
         const shown = first ? order.slice(0, order.indexOf(first) + 1) : order;
         const chosen = (id: string) => Boolean(picked[id] || asked[id]);
-        const pics = <T extends string>(id: string, label: string, value: T, choices: Array<[T, ReactNode, string, string?]>, onPick: (value: T) => void) => (
+        const pics = <T extends string>(id: string, label: string, value: T, choices: Array<[T, ReactNode, string, string?]>, onPick: (value: T) => void, preset = false) => (
           <div className={`studio-pic-choice${choices.length === 2 ? " two" : ""}`} role="radiogroup" aria-label={label}>
             {choices.map(([v, pic, text, tip]) => (
-              <button key={v} type="button" role="radio" aria-checked={chosen(id) && value === v} className={chosen(id) && value === v ? "active" : ""} disabled={busy} title={tip} onClick={() => { onPick(v); pick(id); }}>
+              <button key={v} type="button" role="radio" aria-checked={(preset || chosen(id)) && value === v} className={(preset || chosen(id)) && value === v ? "active" : ""} disabled={busy} title={tip} onClick={() => { onPick(v); pick(id); }}>
                 {pic}<span>{text}</span>
               </button>
             ))}
@@ -1215,17 +1216,18 @@ export function DentalStudioPanel({
         );
         // Build 120 (Rakesh): nothing is shown chosen until it is chosen; Next stays grey until then, green after,
         // and only Next opens the following question. A slider always holds a value, so its Next is ready.
-        const done = (id: string, ready = chosen(id)) => <div className="studio-q-done"><button type="button" className={ready ? "primary" : "secondary"} disabled={busy || !ready} onClick={() => answer(id)}>{t("studio.qDone")}</button></div>;
+        const done = (id: string, ready = chosen(id), note?: string) => <div className="studio-q-done">{note ? <p className="studio-q-note">{note}</p> : null}<button type="button" className={ready ? "studio-q-next ready" : "studio-q-next"} disabled={busy || !ready} onClick={() => answer(id)}>{t("studio.qDone")}</button></div>;
         const questions: Array<{ id: string; title: string; answer: string; body: ReactNode }> = [
           { id: "hinge", title: t("studio.chooseHinge"), answer: t(snap ? "studio.hingeSnap" : "studio.hingeStandard"), body: (<>
             {pics("hinge", t("studio.hingeStyle"), snap ? "snap" : "standard", [["snap", <HingePicture key="n" kind="snap" />, t("studio.hingeSnap"), t("studio.hingeSnapHint")], ["standard", <HingePicture key="s" kind="standard" />, t("studio.hingeStandard"), t("studio.hingeStandardHint")]], (hingeStyle) => onOptionsChange({ hingeStyle }))}
             <p className="blend-hint">{t(snap ? "studio.hingeSnapHint" : "studio.hingeStandardHint")}</p>
             {done("hinge")}
           </>) },
-          { id: "fit", title: t(snap ? "studio.chooseGrip" : "studio.chooseFit"), answer: t(fitNames[fitIndex]), body: (<>
-            {pics("fit", t(snap ? "studio.snapGrip" : "studio.hingeFit"), String(fitIndex), ([0, 1, 2] as const).map((i) => [String(i), <FitPicture key={i} level={(snap ? 2 - i : i) as 0 | 1 | 2} />, t(fitNames[i]), `${(snap ? SNAP_GRIPS[i] : HINGE_FITS[i]).toFixed(2)} mm`] as [string, ReactNode, string, string]), (v) => onOptionsChange(snap ? { snapGrip: SNAP_GRIPS[Number(v)] } : { hingeFit: HINGE_FITS[Number(v)] }))}
-            <p className="blend-hint">{t(snap ? "studio.snapGripHint" : "studio.hingeFitHint")}</p>
-            {done("fit")}
+          // Build 120 (Rakesh): the hinge's tolerance - tighter, standard or looser for either hinge (the captive hinge's
+          // firmer grip is tighter), Standard chosen to start with and Next ready.
+          { id: "fit", title: t("studio.chooseTolerance"), answer: t(tolNames[tolPos]), body: (<>
+            {pics("fit", t("studio.tolerance"), String(tolPos), ([0, 1, 2] as const).map((pos) => [String(pos), <FitPicture key={pos} level={pos} />, t(tolNames[pos]), `${(snap ? SNAP_GRIPS[2 - pos] : HINGE_FITS[pos]).toFixed(2)} mm`] as [string, ReactNode, string, string]), (v) => onOptionsChange(snap ? { snapGrip: SNAP_GRIPS[2 - Number(v)] } : { hingeFit: HINGE_FITS[Number(v)] }), true)}
+            {done("fit", true, t("studio.toleranceNote"))}
           </>) },
           { id: "pins", title: t("studio.choosePins"), answer: t(pins === "none" ? "studio.pinsNone" : pins === "sides" ? "studio.pinsSides" : "studio.pinsFront"), body: (<>
             {pics("pins", t("studio.pins"), pins, [
@@ -1267,7 +1269,7 @@ export function DentalStudioPanel({
               </div>
             ) : (
               <button key={q.id} type="button" className="studio-q-line" disabled={busy} onClick={() => setOpenQ(q.id)}>
-                <span>{t(({ hinge: "studio.hingeStyle", fit: snap ? "studio.snapGrip" : "studio.hingeFit", pins: "studio.pins", gap: "dental.pinGap", ovd: "studio.increaseOvd", aheight: "studio.baseHeightShort" } as Record<string, string>)[q.id] as "studio.pins")}</span><strong>{q.answer}</strong><ChevronDown size={15} aria-hidden="true" />
+                <span>{t(({ hinge: "studio.hingeStyle", fit: "studio.tolerance", pins: "studio.pins", gap: "dental.pinGap", ovd: "studio.increaseOvd", aheight: "studio.baseHeightShort" } as Record<string, string>)[q.id] as "studio.pins")}</span><strong>{q.answer}</strong><ChevronDown size={15} aria-hidden="true" />
               </button>
             ))}
           </div>
