@@ -497,6 +497,30 @@ describe("Build 60: the raised pin and the opening check", () => {
     runtime.setup();
   });
 
+  it("laid out to print, moves the upper back to where it stands open on its raised pin, not to the closed bite (build 122)", async () => {
+    const upper = syntheticArch({ teethDown: true, front: -2 });
+    const lower = syntheticArch();
+    for (let i = 2; i < lower.length; i += 3) lower[i] -= 26.6;
+    const inputOf = () => ({ arches: [{ id: "x", positions: Float32Array.from(lower) }, { id: "y", positions: Float32Array.from(upper) }] });
+    const options = { ...base, hinge: true, pinStyle: "set" as const, pinRaise: 3 };
+    const standing = await makeDentalStudio(inputOf(), { ...options, layout: "occlusion" as const }, runtime as never);
+    const laid = await makeDentalStudio(inputOf(), { ...options, layout: "print" as const }, runtime as never);
+    const box = (p: Float32Array) => {
+      const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < p.length; i += 3) for (let k = 0; k < 3; k += 1) { lo[k] = Math.min(lo[k], p[i + k]); hi[k] = Math.max(hi[k], p[i + k]); }
+      return [...lo, ...hi];
+    };
+    for (const role of ["upper", "lower"] as const) {
+      const part = laid.parts.find((p) => p.role === role)!;
+      const back = new THREE.Matrix4().fromArray(part.toBite!);
+      const moved = new Float32Array(part.positions.length);
+      const v = new THREE.Vector3();
+      for (let i = 0; i < moved.length; i += 3) { v.set(part.positions[i], part.positions[i + 1], part.positions[i + 2]).applyMatrix4(back); moved[i] = v.x; moved[i + 1] = v.y; moved[i + 2] = v.z; }
+      const want = box(standing.parts.find((p) => p.role === role)!.positions), got = box(moved);
+      for (let k = 0; k < 6; k += 1) expect(Math.abs(got[k] - want[k])).toBeLessThan(0.05);
+    }
+  }, 180_000);
+
   it("stands the upper open on its raised pin in occlusion, more at the front than at the back (build 71)", async () => {
     const upper = syntheticArch({ teethDown: true, front: -2 });
     const lower = syntheticArch();

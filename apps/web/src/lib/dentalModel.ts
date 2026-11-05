@@ -1613,7 +1613,13 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
         offsetX += box.max[0] - box.min[0] + 8;
       }
     }
-    out.push({ id: arch.id, role: arch.role, positions: cleanStlSoup(solidPositions(solid)), height: own.max[2] - own.min[2], volume: solid.volume(), ...(pair ? { toBite: laid.clone().invert().toArray() } : {}) });
+    // Build 122 (Rakesh): back to the bite as the pair stands put together - a raised pin holds the upper turned open about
+    // the axle, so Occlusion (and Snap to occlusion) shows it resting on its pins, not closed at the scanned bite.
+    const toBite = laid.clone().invert();
+    if (pair && rest && arch.role === "upper") {
+      toBite.premultiply(new THREE.Matrix4().makeTranslation(0, -rest.axleY, 0)).premultiply(new THREE.Matrix4().makeRotationX((-rest.degrees * Math.PI) / 180)).premultiply(new THREE.Matrix4().makeTranslation(0, rest.axleY, 0));
+    }
+    out.push({ id: arch.id, role: arch.role, positions: cleanStlSoup(solidPositions(solid)), height: own.max[2] - own.min[2], volume: solid.volume(), ...(pair ? { toBite: toBite.toArray() } : {}) });
     toFree.push(solid);
   });
   if (pair && options.layout === "print") {
