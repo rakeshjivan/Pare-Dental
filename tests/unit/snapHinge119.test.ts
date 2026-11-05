@@ -84,3 +84,10 @@ describe("the snap hinge in the articulator", () => {
     expect(runtime.Manifold.intersection(open, a.lower).volume()).toBeLessThan(1e-3);
   }, 120000);
 });
+
+describe("the snap hinge's size", () => {
+  it("is a few hundred thousand triangles at most, so a pair stays light to make and show", () => {
+    const { upper, lower } = snapHinge(runtime);
+    expect(upper.numTri() + lower.numTri()).toBeLessThan(400000);
+  }, 120000);
+});

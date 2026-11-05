@@ -150,7 +150,9 @@ export function lowerField(fit: number = SNAP.fit, throatRadius: number = SNAP.t
 }
 
 /** The level set's grid step, mm. */
-export const SNAP_STEP = 0.12;
+export const SNAP_STEP = 0.18;
+/** How far the parts' surfaces may move when their triangles are merged, mm. */
+export const SNAP_SIMPLIFY = 0.005;
 const made = new Map<string, { upper: ManifoldSolid; lower: ManifoldSolid }>();
 
 /**
@@ -168,10 +170,15 @@ export function snapHinge(runtime: ManifoldRuntime, fitGiven?: number, gripGiven
     Manifold.levelSet((p: [number, number, number]) => -f(p[0], p[1], p[2]), { min, max }, SNAP_STEP, 0);
   const shaped = field(upperField(), [-6, SNAP.front, -1], [6, 4.5, 18]);
   const ball = Manifold.sphere(SNAP.ball, 192);
-  const upper = Manifold.union(shaped, ball);
+  const joined = Manifold.union(shaped, ball);
+  // Flat stretches need far fewer triangles than the grid gives them: merged within a few microns.
+  const upper = joined.simplify(SNAP_SIMPLIFY);
+  joined.delete();
   shaped.delete();
   ball.delete();
-  const lower = field(lowerField(fit, SNAP.ball - grip), [-6, SNAP.front, -19], [6, 7.5, 9.5]);
+  const raw = field(lowerField(fit, SNAP.ball - grip), [-6, SNAP.front, -19], [6, 7.5, 9.5]);
+  const lower = raw.simplify(SNAP_SIMPLIFY);
+  raw.delete();
   const both = { upper, lower };
   made.set(key, both);
   return both;
