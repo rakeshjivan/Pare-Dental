@@ -558,7 +558,12 @@ export function DentalStudioPanel({
   // Build 120: an aligner model is never articulated.
   useEffect(() => { if (shell && preset === "aligner" && options.hinge) onOptionsChange({ hinge: false }); }, [shell, preset, options.hinge]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 120: the articulator's questions one at a time - the one open, the others a line each (the answer shown).
-  const [articOpen, setArticOpen] = useState("hinge");
+  // Build 120 (Rakesh): each choice appears once the one before it is made - what has been chosen (all of it on a design
+  // opened again), and a question opened again to change it.
+  const [asked, setAsked] = useState<Record<string, boolean>>(() => (editing ? Object.fromEntries(["type", "layout", "height", "hinge", "fit", "pins", "gap", "ovd", "aheight"].map((id) => [id, true])) : {}));
+  const [openQ, setOpenQ] = useState<string | null>(null);
+  const answer = (id: string) => { setAsked((state) => ({ ...state, [id]: true })); setOpenQ(null); };
+  const toArticulator = useRef(false);
   const nextSeen = useRef(nextSignal);
   useEffect(() => {
     if (nextSignal === nextSeen.current) return;
@@ -567,8 +572,19 @@ export function DentalStudioPanel({
   }, [nextSignal]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onMbStep?.(null), [onMbStep]);
   const mbIndex = mbSteps && mbStep ? mbSteps.indexOf(mbStep) : -1;
-  const mbStepDone = (id: ModelStepId) => (id === "scans" ? scansDone : id === "prepare" && shell && trimmedDone ? (["upper", "lower"] as const).every((slot) => !slots[slot] || trimmedDone.includes(slot)) : true);
+  // Build 120: Model is done once its choices are made (the type; a pair separate or articulated; separate, the height),
+  // the Articulator once each of its questions is answered.
+  const modelDone = asked.type && (preset === "aligner" || (pair ? asked.layout && (options.hinge || asked.height) : asked.height));
+  const articOrder = ["hinge", "fit", "pins", ...(options.incisalPin !== false ? ["gap", "ovd"] : []), "aheight"];
+  const articDone = articOrder.every((id) => asked[id]);
+  const mbStepDone = (id: ModelStepId) => (id === "scans" ? scansDone : id === "prepare" && shell && trimmedDone ? (["upper", "lower"] as const).every((slot) => !slots[slot] || trimmedDone.includes(slot)) : shell && id === "model" ? Boolean(modelDone) : shell && id === "articulator" ? articDone : true);
   const inMb = (id: ModelStepId) => !mbSteps || mbStep === id;
+  // Build 120 (Rakesh): Articulated chosen, on to the Articulator step.
+  useEffect(() => {
+    if (!toArticulator.current || !articulated || !mbSteps?.includes("articulator")) return;
+    toArticulator.current = false;
+    setMbStepId("articulator");
+  }, [articulated]); // eslint-disable-line react-hooks/exhaustive-deps
   const mbLast = !mbSteps || mbIndex === mbSteps.length - 1;
   const mbStepper = mbSteps && mbStep ? (
     <div className="wax-stepper mb-stepper">
@@ -1040,7 +1056,7 @@ export function DentalStudioPanel({
             ["ortho", t("dental.ortho"), t("dental.orthoHint")],
             ["aligner", t("dental.aligner"), t("dental.alignerHint")],
           ] as const).map(([value, label, hint]) => (
-            <button key={value} type="button" role="radio" aria-checked={preset === value} className={preset === value ? (custom ? "active custom" : "active") : ""} disabled={busy} title={framed ? hint : undefined} onClick={() => onPresetChange(value)}>
+            <button key={value} type="button" role="radio" aria-checked={preset === value} className={preset === value ? (custom ? "active custom" : "active") : ""} disabled={busy} title={framed ? hint : undefined} onClick={() => { onPresetChange(value); answer("type"); }}>
               {/* Build 66: the base each choice makes, from above. */}
               <BaseStylePicture style={({ study: "clean", ortho: "ortho", aligner: "follow" } as const)[value]} />
               <strong>{label}</strong>
@@ -1052,13 +1068,13 @@ export function DentalStudioPanel({
         {/* Build 104: the base's options sit with the model type (its picture already shows the base). */}
         {/* Build 106: in the frame, three buttons that stay pressed while on. */}
         {/* Build 120 (Rakesh): then separate or articulated (a pair, not an aligner model) and, separate, the base's height. */}
-        {framed && pair && preset !== "aligner" ? (<>
+        {framed && pair && preset !== "aligner" && asked.type ? (<>
           <h4 className="dental-group">{t("studio.modelsAre")}</h4>
           <div className="studio-pic-choice two" role="radiogroup" aria-label={t("studio.modelsAre")}>
             {(["separate", "articulated"] as const).map((kind) => {
               const on = kind === "articulated" ? options.hinge : !options.hinge;
               return (
-                <button key={kind} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} title={kind === "articulated" ? t("dental.hingeHint") : undefined} onClick={() => onOptionsChange(kind === "articulated" ? { hinge: true, ...(options.hinge ? {} : articulatorPinPatch({ incisalPin: false })) } : { hinge: false })}>
+                <button key={kind} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} title={kind === "articulated" ? t("dental.hingeHint") : undefined} onClick={() => { if (kind === "articulated") toArticulator.current = true; onOptionsChange(kind === "articulated" ? { hinge: true, hingeStyle: options.hingeStyle ?? "snap", ...(options.hinge ? {} : articulatorPinPatch({ incisalPin: false })) } : { hinge: false }); answer("layout"); if (kind === "articulated" && options.hinge) setMbStepId("articulator"); }}>
                   <PairPicture kind={kind} />
                   <span>{t(kind === "articulated" ? "studio.articulatedModels" : "studio.separateModels")}</span>
                 </button>
@@ -1066,7 +1082,7 @@ export function DentalStudioPanel({
             })}
           </div>
         </>) : null}
-        {framed && !articulated && preset !== "aligner" ? heightChoice() : null}
+        {framed && !articulated && preset !== "aligner" && asked.type && (!pair || asked.layout) ? heightChoice(() => answer("height")) : null}
         {!framed && (options.baseStyle === "clean" || options.baseStyle === "articulator") ? (
           <>
             {options.baseStyle === "clean" ? (
@@ -1175,38 +1191,43 @@ export function DentalStudioPanel({
         const pinOn = options.incisalPin !== false;
         const place = options.pinPlace ?? "sides";
         const pins = !pinOn ? "none" : place === "sides" ? "sides" : "front";
+        // Build 120 (Rakesh): Captive (the snap hinge) is set when Articulated is chosen; a case saved before stays as made.
         const snap = options.hingeStyle === "snap";
         const fitIndex = snap ? Math.max(0, SNAP_GRIPS.findIndex((grip) => Math.abs(snapGrip(options.snapGrip) - grip) < 1e-6)) : Math.max(0, HINGE_FITS.findIndex((fit) => Math.abs((options.hingeFit ?? CUP_FIT) - fit) < 1e-6));
         const fitNames = snap ? (["studio.snapGripLighter", "studio.hingeFitStandard", "studio.snapGripFirmer"] as const) : (["studio.hingeFitTighter", "studio.hingeFitStandard", "studio.hingeFitLooser"] as const);
-        const order = ["hinge", "fit", "pins", ...(pinOn ? ["gap", "ovd"] : []), "height"];
-        // All answered ("done"): every question a line, none open.
-        const open = articOpen === "done" ? null : order.includes(articOpen) ? articOpen : "hinge";
-        const next = (id: string, to?: string) => setArticOpen(to ?? order[order.indexOf(id) + 1] ?? "done");
+        // Build 120 (Rakesh): the questions answered so far (a line each, to change), then the next one open - none after it.
+        const order = articOrder;
+        const first = order.find((id) => !asked[id]) ?? null;
+        const open = openQ && order.includes(openQ) ? openQ : first;
+        const shown = first ? order.slice(0, order.indexOf(first) + 1) : order;
         const pics = <T extends string>(id: string, label: string, value: T, choices: Array<[T, ReactNode, string, string?]>, onPick: (value: T) => void) => (
           <div className={`studio-pic-choice${choices.length === 2 ? " two" : ""}`} role="radiogroup" aria-label={label}>
             {choices.map(([v, pic, text, tip]) => (
-              <button key={v} type="button" role="radio" aria-checked={value === v} className={value === v ? "active" : ""} disabled={busy} title={tip} onClick={() => { onPick(v); next(id, id === "pins" ? (v === "none" ? "height" : "gap") : undefined); }}>
+              <button key={v} type="button" role="radio" aria-checked={value === v} className={value === v ? "active" : ""} disabled={busy} title={tip} onClick={() => { onPick(v); answer(id); }}>
                 {pic}<span>{text}</span>
               </button>
             ))}
           </div>
         );
-        const done = (id: string) => <div className="studio-q-done"><button type="button" className="secondary" disabled={busy} onClick={() => next(id)}>{t("studio.qDone")}</button></div>;
+        const done = (id: string) => <div className="studio-q-done"><button type="button" className="secondary" disabled={busy} onClick={() => answer(id)}>{t("studio.qDone")}</button></div>;
         const questions: Array<{ id: string; title: string; answer: string; body: ReactNode }> = [
-          { id: "hinge", title: t("studio.hingeStyle"), answer: t(snap ? "studio.hingeSnap" : "studio.hingeStandard"), body: (<>
-            {pics("hinge", t("studio.hingeStyle"), snap ? "snap" : "standard", [["standard", <HingePicture key="s" kind="standard" />, t("studio.hingeStandard"), t("studio.hingeStandardHint")], ["snap", <HingePicture key="n" kind="snap" />, t("studio.hingeSnap"), t("studio.hingeSnapHint")]], (hingeStyle) => onOptionsChange({ hingeStyle }))}
+          { id: "hinge", title: t("studio.chooseHinge"), answer: t(snap ? "studio.hingeSnap" : "studio.hingeStandard"), body: (<>
+            {pics("hinge", t("studio.hingeStyle"), snap ? "snap" : "standard", [["snap", <HingePicture key="n" kind="snap" />, t("studio.hingeSnap"), t("studio.hingeSnapHint")], ["standard", <HingePicture key="s" kind="standard" />, t("studio.hingeStandard"), t("studio.hingeStandardHint")]], (hingeStyle) => onOptionsChange({ hingeStyle }))}
             <p className="blend-hint">{t(snap ? "studio.hingeSnapHint" : "studio.hingeStandardHint")}</p>
+            {done("hinge")}
           </>) },
-          { id: "fit", title: t(snap ? "studio.snapGrip" : "studio.hingeFit"), answer: t(fitNames[fitIndex]), body: (<>
+          { id: "fit", title: t(snap ? "studio.chooseGrip" : "studio.chooseFit"), answer: t(fitNames[fitIndex]), body: (<>
             {pics("fit", t(snap ? "studio.snapGrip" : "studio.hingeFit"), String(fitIndex), ([0, 1, 2] as const).map((i) => [String(i), <FitPicture key={i} level={(snap ? 2 - i : i) as 0 | 1 | 2} />, t(fitNames[i]), `${(snap ? SNAP_GRIPS[i] : HINGE_FITS[i]).toFixed(2)} mm`] as [string, ReactNode, string, string]), (v) => onOptionsChange(snap ? { snapGrip: SNAP_GRIPS[Number(v)] } : { hingeFit: HINGE_FITS[Number(v)] }))}
             <p className="blend-hint">{t(snap ? "studio.snapGripHint" : "studio.hingeFitHint")}</p>
+            {done("fit")}
           </>) },
-          { id: "pins", title: t("studio.pins"), answer: t(pins === "none" ? "studio.pinsNone" : pins === "sides" ? "studio.pinsSides" : "studio.pinsFront"), body: (<>
+          { id: "pins", title: t("studio.choosePins"), answer: t(pins === "none" ? "studio.pinsNone" : pins === "sides" ? "studio.pinsSides" : "studio.pinsFront"), body: (<>
             {pics("pins", t("studio.pins"), pins, [
               ["none", <ArticulatorPicture key="0" pinRaise={0} pin={false} pinGap={options.pinGap ?? PIN_CLEAR} />, t("studio.pinsNone"), t("dental.incisalPinOffHint")],
               ["front", <ArticulatorPicture key="1" pinRaise={0} pin pinGap={options.pinGap ?? PIN_CLEAR} />, t("studio.pinsFront"), t("dental.pinMidlineHint")],
               ["sides", <ArticulatorSidesPicture key="2" pinGap={options.pinGap ?? PIN_CLEAR} />, t("studio.pinsSides"), t("dental.pinSidesHint")],
             ], (v) => onOptionsChange(v === "none" ? articulatorPinPatch({ incisalPin: false }) : { ...articulatorPinPatch({ incisalPin: true }), pinPlace: v === "sides" ? "sides" : "midline" }))}
+            {done("pins")}
           </>) },
           ...(pinOn ? [
             { id: "gap", title: t("dental.pinGap"), answer: `${(options.pinGap ?? PIN_CLEAR).toFixed(1)} mm`, body: (<>
@@ -1229,18 +1250,18 @@ export function DentalStudioPanel({
               {done("ovd")}
             </>) },
           ] : []),
-          { id: "height", title: t("studio.baseHeight"), answer: t(options.baseHeight === "tall" ? "studio.baseTall" : "studio.baseStandard"), body: heightChoice(() => next("height")) },
+          { id: "aheight", title: t("studio.baseHeight"), answer: t(options.baseHeight === "tall" ? "studio.baseTall" : "studio.baseStandard"), body: (<>{heightChoice(() => answer("aheight"))}{done("aheight")}</>) },
         ];
         return (
           <div className="studio-questions">
-            {questions.map((q) => q.id === open ? (
+            {questions.filter((q) => shown.includes(q.id)).map((q) => q.id === open ? (
               <div key={q.id} className="studio-q open">
-                {q.id === "height" ? null : <h4 className="dental-group">{q.title}</h4>}
+                {q.id === "aheight" ? null : <h4 className="dental-group">{q.title}</h4>}
                 {q.body}
               </div>
             ) : (
-              <button key={q.id} type="button" className="studio-q-line" disabled={busy} onClick={() => setArticOpen(q.id)}>
-                <span>{q.title}</span><strong>{q.answer}</strong><ChevronDown size={15} aria-hidden="true" />
+              <button key={q.id} type="button" className="studio-q-line" disabled={busy} onClick={() => setOpenQ(q.id)}>
+                <span>{t(({ hinge: "studio.hingeStyle", fit: snap ? "studio.snapGrip" : "studio.hingeFit", pins: "studio.pins", gap: "dental.pinGap", ovd: "studio.increaseOvd", aheight: "studio.baseHeightShort" } as Record<string, string>)[q.id] as "studio.pins")}</span><strong>{q.answer}</strong><ChevronDown size={15} aria-hidden="true" />
               </button>
             ))}
           </div>

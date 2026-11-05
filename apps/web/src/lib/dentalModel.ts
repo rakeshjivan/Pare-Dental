@@ -895,7 +895,12 @@ function buildArch(
     // Build 119: the smooth base - the scan exact, the drape, fillet, ledge and flat wall a field round it (lib/dentalSmoothBase),
     // cut to the orthodontic outline, an even shell open underneath.
     // Build 120: an aligner model's ledge lower, so the model stays short enough to thermoform over.
-    const ledge = options.smoothShape === "aligner" ? Math.max(ALIGNER_LEDGE_MIN, Math.min(SMOOTH.ledge, options.base - SMOOTH.belowCut)) : Math.max(SMOOTH.ledge, options.base - SMOOTH.belowCut);
+    // Build 120: a quadrant never further below its scan than SMOOTH.belowCut - beside a full arch (the pair stands
+    // equally tall) it sits high on its base: its ledge rises to meet it, so the drape has no long fall to make.
+    let scanLow = Infinity;
+    for (let t = 0; t < cut.f.length; t += 1) scanLow = Math.min(scanLow, cut.v[cut.f[t] * 3 + 2]);
+    const ledgeAt = options.smoothShape === "aligner" ? Math.max(ALIGNER_LEDGE_MIN, Math.min(SMOOTH.ledge, options.base - SMOOTH.belowCut)) : Math.max(SMOOTH.ledge, options.base - SMOOTH.belowCut);
+    const ledge = arch.partial && Number.isFinite(scanLow) ? Math.max(ledgeAt, scanLow - floor - SMOOTH.belowCut) : ledgeAt;
     const base = makeSmoothBase(runtime, { scan: cut, teeth, outline: ortho, floor, open: true, ledge });
     keepSolid(base.outer);
     solid = keepSolid(runtime.Manifold.union(solid, base.outer));

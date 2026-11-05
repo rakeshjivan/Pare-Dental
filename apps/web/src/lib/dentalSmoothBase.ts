@@ -286,25 +286,29 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   }
   // The highest of the cones falling at DRAPE_SLOPE from every point of the edge (a chamfer dilation: continuous,
   // never a step where one edge point's reach gives way to the next's).
-  const drape = new Float32Array(n2);
-  for (let c = 0; c < n2; c += 1) drape[c] = Number.isFinite(seedZ[c]) ? seedZ[c] : ledge - 3;
-  const fall = S.drapeSlope * h, fallD = fall * Math.SQRT2;
-  for (let pass = 0; pass < 2; pass += 1) {
-    for (let j = 0; j < ny; j += 1) for (let i = 0; i < nx; i += 1) {
-      const c = j * nx + i;
-      let z = drape[c];
-      if (i > 0) z = Math.max(z, drape[c - 1] - fall);
-      if (j > 0) { z = Math.max(z, drape[c - nx] - fall); if (i > 0) z = Math.max(z, drape[c - nx - 1] - fallD); if (i < nx - 1) z = Math.max(z, drape[c - nx + 1] - fallD); }
-      drape[c] = z;
+  const dilate = (seedAt: (c: number) => number, slope: number) => {
+    const out = new Float32Array(n2);
+    for (let c = 0; c < n2; c += 1) out[c] = Number.isFinite(seedZ[c]) ? seedAt(c) : ledge - 3;
+    const fall = slope * h, fallD = fall * Math.SQRT2;
+    for (let pass = 0; pass < 2; pass += 1) {
+      for (let j = 0; j < ny; j += 1) for (let i = 0; i < nx; i += 1) {
+        const c = j * nx + i;
+        let z = out[c];
+        if (i > 0) z = Math.max(z, out[c - 1] - fall);
+        if (j > 0) { z = Math.max(z, out[c - nx] - fall); if (i > 0) z = Math.max(z, out[c - nx - 1] - fallD); if (i < nx - 1) z = Math.max(z, out[c - nx + 1] - fallD); }
+        out[c] = z;
+      }
+      for (let j = ny - 1; j >= 0; j -= 1) for (let i = nx - 1; i >= 0; i -= 1) {
+        const c = j * nx + i;
+        let z = out[c];
+        if (i < nx - 1) z = Math.max(z, out[c + 1] - fall);
+        if (j < ny - 1) { z = Math.max(z, out[c + nx] - fall); if (i < nx - 1) z = Math.max(z, out[c + nx + 1] - fallD); if (i > 0) z = Math.max(z, out[c + nx - 1] - fallD); }
+        out[c] = z;
+      }
     }
-    for (let j = ny - 1; j >= 0; j -= 1) for (let i = nx - 1; i >= 0; i -= 1) {
-      const c = j * nx + i;
-      let z = drape[c];
-      if (i < nx - 1) z = Math.max(z, drape[c + 1] - fall);
-      if (j < ny - 1) { z = Math.max(z, drape[c + nx] - fall); if (i < nx - 1) z = Math.max(z, drape[c + nx + 1] - fallD); if (i > 0) z = Math.max(z, drape[c + nx - 1] - fallD); }
-      drape[c] = z;
-    }
-  }
+    return out;
+  };
+  const drape = dilate((c) => seedZ[c], S.drapeSlope);
   for (let c = 0; c < n2; c += 1) drape[c] = Math.max(drape[c], ledge - 3);
   const smoothDrape = blur(drape, nx, ny, 1, S.drapeSmooth / h);
   const drapeNorm = new Float32Array(n2);
