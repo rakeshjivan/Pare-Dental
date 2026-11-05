@@ -4507,7 +4507,7 @@ export const MESSAGES_RU: Partial<Record<MessageKey, string>> = {
   "dental.ortho": "Ортодонтические модели",
   "dental.studyHint": "Полая, открытая снизу; вся анатомия",
   "dental.orthoHint": "Обрезанный цоколь, парные модели",
-  "dental.alignerHint": "Сплошная, 18 мм для термоформовки",
+  "dental.alignerHint": "Подкова, полая с сотовым основанием, низкая для термоформовки",
   "dental.crownHint": "Сплошная с пластиной — самая точная",
   "dental.more": "Изменить настройки",
   "dental.keepAll": "Сохранить весь скан",

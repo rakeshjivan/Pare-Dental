@@ -893,12 +893,11 @@ export const CLEAN_CLEARANCE = 3;
  */
 export const CROWN_REACH = 4;
 
-export function cleanOutline(runtime: ManifoldRuntime, m: Mesh, teeth: Uint8Array, grow: number, scan?: { mesh: Mesh; crowns: Uint8Array; partial?: boolean }): Ring[] {
+/** What a mesh covers seen from above, as 0.5 mm cells (its triangles filled in) - only the triangles `wanted` says. */
+function footprintCells(runtime: ManifoldRuntime, m: Mesh, wanted: (t: number) => boolean) {
   const cell = 0.5;
   const key = (ix: number, iy: number) => (ix + 32768) * 65536 + (iy + 32768);
-  // Seen from above, as cells: the teeth, and everything the scan covers (triangles filled in).
-  const footprint = (wanted: (t: number) => boolean, mesh: Mesh = m) => {
-    const m = mesh;
+  {
     const cells = new Set<number>();
     for (let t = 0; t < m.f.length; t += 3) {
       if (!wanted(t)) continue;
@@ -915,7 +914,55 @@ export function cleanOutline(runtime: ManifoldRuntime, m: Mesh, teeth: Uint8Arra
       squares.push([[x, y], [x + cell, y], [x + cell, y + cell], [x, y + cell]]);
     });
     return new runtime.CrossSection(squares, "Positive");
-  };
+  }
+}
+
+/**
+ * Build 121 (Rakesh): an aligner model's horseshoe - the scan seen from above (it already follows the gum, the palate
+ * and tongue space gone) grown `grow` mm all round, gaps under 3 mm bridged, then smoothed so the wall turns gently
+ * (no rows of tiny faces, no vertical ridges). Its largest outline, counter-clockwise; empty if there is none.
+ */
+export function archBand(runtime: ManifoldRuntime, m: Mesh, grow: number): Ring {
+  const made: Array<{ delete: () => void }> = [];
+  const keep = <T extends { delete: () => void }>(section: T) => { made.push(section); return section; };
+  const cells = keep(footprintCells(runtime, m, () => true));
+  const grown = keep(cells.offset(grow, "Round", 2, 48));
+  const bridged = keep(keep(grown.offset(3, "Round", 2, 64)).offset(-3, "Round", 2, 64));
+  const opened = keep(keep(bridged.offset(-2, "Round", 2, 64)).offset(2, "Round", 2, 64));
+  const fine = opened.toPolygons().map((polygon) => smoothRing(polygon.map(([x, y]) => [x, y] as [number, number]), 0.3, 5, 4)).filter((ring) => ring.length >= 3);
+  // Smoothing pulls the line in a little on convex turns: it is held at least grow - 1 outside the scan.
+  const held = keep(runtime.CrossSection.union(keep(new runtime.CrossSection(fine, "EvenOdd")), keep(cells.offset(Math.max(0.5, grow - 1), "Round", 2, 48))));
+  const smooth = keep(keep(keep(held.offset(2, "Round", 2, 96)).offset(-2, "Round", 2, 96)).simplify(0.01));
+  const rings = smooth.toPolygons().map((polygon) => polygon.map(([x, y]) => [x, y] as [number, number]));
+  made.forEach((section) => section.delete());
+  return rings.filter((ring) => ringArea(ring) > 0).sort((a, b) => ringArea(b) - ringArea(a))[0] ?? [];
+}
+
+/**
+ * Build 121: an articulated aligner model's horseshoe with a straight back for the hinge: each arm's end (what lies
+ * within `reach` mm of `back`), 2 mm wider, carried straight back to `back` and cut off square there, its corners rounded 1 mm.
+ * The rest of the outline - the middle of the U above all - is left as it was.
+ */
+export function bandToBack(runtime: ManifoldRuntime, ring: Ring, back: number, reach = 15): Ring {
+  const made: Array<{ delete: () => void }> = [];
+  const keep = <T extends { delete: () => void }>(section: T) => { made.push(section); return section; };
+  const { CrossSection } = runtime;
+  const band = keep(new CrossSection([ring], "Positive"));
+  const strip = keep(CrossSection.square([2000, 2 * reach]).translate([-1000, back - reach]));
+  // The ends 2 mm wider all round: room for the drape to come down off the tissue behind the last teeth.
+  const ends = keep(keep(CrossSection.intersection(band, strip)).offset(2, "Round", 2, 48));
+  let swept = keep(CrossSection.union(band, ends));
+  for (let d = 0.5; d <= reach + 0.5; d += 0.5) swept = keep(CrossSection.union(swept, keep(ends.translate([0, d]))));
+  const behind = keep(CrossSection.square([2000, 2000]).translate([-1000, back - 2000]));
+  const cut = keep(CrossSection.intersection(swept, behind));
+  const rounded = keep(keep(cut.offset(-1, "Round", 2, 48)).offset(1, "Round", 2, 48));
+  const rings = rounded.toPolygons().map((polygon) => polygon.map(([x, y]) => [x, y] as [number, number]));
+  made.forEach((section) => section.delete());
+  return rings.filter((r) => ringArea(r) > 0).sort((a, b) => ringArea(b) - ringArea(a))[0] ?? ring;
+}
+
+export function cleanOutline(runtime: ManifoldRuntime, m: Mesh, teeth: Uint8Array, grow: number, scan?: { mesh: Mesh; crowns: Uint8Array; partial?: boolean }): Ring[] {
+  const footprint = (wanted: (t: number) => boolean) => footprintCells(runtime, m, wanted);
   const toothCells = footprint((t) => Boolean(teeth[m.f[t]] && teeth[m.f[t + 1]] && teeth[m.f[t + 2]]));
   if (toothCells.isEmpty()) { toothCells.delete(); return []; }
   const scanCells = footprint(() => true);

@@ -4498,7 +4498,7 @@ export const MESSAGES_SL: Partial<Record<MessageKey, string>> = {
   "dental.ortho": "Ortodontski študijski modeli",
   "dental.studyHint": "Votel, spodaj odprt; vsa anatomija",
   "dental.orthoHint": "Obrezan podstavek, ujemajoč par",
-  "dental.alignerHint": "Poln, 18 mm visok za termoformiranje",
+  "dental.alignerHint": "Podkev, votla s satovjem v podnožju, nizka za termoformiranje",
   "dental.crownHint": "Poln s ploščo - najnatančnejši",
   "dental.more": "Prilagodi nastavitve",
   "dental.keepAll": "Ohrani ves sken",

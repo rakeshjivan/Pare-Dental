@@ -4495,7 +4495,7 @@ export const MESSAGES_FR: Partial<Record<MessageKey, string>> = {
   "dental.ortho": "Modèles d'étude ODF",
   "dental.studyHint": "Creux, ouvert dessous ; toute l'anatomie",
   "dental.orthoHint": "Socle taillé, paire assortie",
-  "dental.alignerHint": "Plein, 18 mm de haut pour thermoformage",
+  "dental.alignerHint": "En fer à cheval, creux avec base en nid d’abeille, bas pour thermoformage",
   "dental.crownHint": "Plein avec plaque - le plus précis",
   "dental.more": "Ajuster les réglages",
   "dental.keepAll": "Conserver tout le scan",

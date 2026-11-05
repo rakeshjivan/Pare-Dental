@@ -151,15 +151,25 @@ describe("Dental Studio (build 47)", () => {
 
   it("hollows open underneath on the smooth base - a closed hollow is made open (build 120)", async () => {
     const input = { arches: [{ id: "a", positions: syntheticArch({ teethDown: true }) }] };
-    const solid = await makeDentalStudio(input, base, runtime as never);
-    const open = await makeDentalStudio(input, { ...base, inside: "open", infill: "none" }, runtime as never);
-    const closed = await makeDentalStudio(input, { ...base, inside: "closed", infill: "none" }, runtime as never);
+    // Build 121: on a study model (an aligner model is always hollow - below).
+    const study = { ...base, baseStyle: "clean" as const };
+    const solid = await makeDentalStudio(input, study, runtime as never);
+    const open = await makeDentalStudio(input, { ...study, inside: "open", infill: "none" }, runtime as never);
+    const closed = await makeDentalStudio(input, { ...study, inside: "closed", infill: "none" }, runtime as never);
     expect(open.parts[0].volume).toBeLessThan(solid.parts[0].volume * 0.85);
     expect(closed.parts[0].volume).toBeCloseTo(open.parts[0].volume, 3);
     for (const result of [solid, open]) {
       expect(closedVolume(runtime, result.parts[0].positions).status).toBe("NoError");
       expect(pinchedEdges(result.parts[0].positions)).toBe(0);
     }
+  }, 180_000);
+
+  it("makes an aligner model hollow with the honeycomb base, whatever is asked (build 121)", async () => {
+    const input = { arches: [{ id: "a", positions: syntheticArch({ teethDown: true }) }] };
+    const asked = await makeDentalStudio(input, { ...base, inside: "solid", infill: "none" }, runtime as never);
+    const usual = await makeDentalStudio(input, { ...base, inside: "open", infill: "base" }, runtime as never);
+    expect(asked.parts[0].volume).toBeCloseTo(usual.parts[0].volume, 3);
+    expect(closedVolume(runtime, asked.parts[0].positions).status).toBe("NoError");
   }, 180_000);
 
   it("trims an orthodontic base and engraves its label", async () => {

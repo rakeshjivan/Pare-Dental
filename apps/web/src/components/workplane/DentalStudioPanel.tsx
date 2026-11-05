@@ -528,8 +528,9 @@ export function DentalStudioPanel({
   // Build 104: the articulator and the label share the last step.
   // Build 120 (Rakesh): in the studio, a decision at a time - Scans, Trim, Model (its type, separate or articulated), the
   // Articulator (articulated only), Fill (hollow or solid, the base underneath) and Finish (the name, the midline, Make).
-  const articulated = pair && options.hinge && preset !== "aligner";
-  const mbSteps: ModelStepId[] | null = waxStudio ? null : shell ? ["scans", "prepare", "model", ...(articulated ? ["articulator" as const] : []), "fill", "label"] : ["scans", "prepare", "model", "base", "label"];
+  // Build 121 (Rakesh): aligner models may be articulated too (always hollow with the honeycomb base, on their horseshoe).
+  const articulated = pair && options.hinge;
+  const mbSteps: ModelStepId[] | null = waxStudio ? null : shell ? ["scans", "prepare", "model", ...(articulated ? ["articulator" as const] : []), ...(preset === "aligner" ? [] : ["fill" as const]), "label"] : ["scans", "prepare", "model", "base", "label"];
   const mbStepName = (id: ModelStepId) => t(shell && id === "label" ? "modelBuilder.step.finishModels" : id === "label" && pair ? "modelBuilder.step.finish" : `modelBuilder.step.${id}` as "modelBuilder.step.scans");
   // Build 117: a design opened again (from a case with models made in it) starts on its last step, ready to make again.
   const [mbStepId, setMbStepId] = useState<ModelStepId>(editing ? "label" : "scans");
@@ -555,8 +556,6 @@ export function DentalStudioPanel({
     if (shell && (mbStep === "label" || waxStep === "make") && options.layout !== "print") onOptionsChange({ layout: "print" });
   }, [shell, mbStep, options.layout]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (shell && patientDetails === "remove") onPatientDetails?.("keep"); }, [shell, patientDetails]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Build 120: an aligner model is never articulated.
-  useEffect(() => { if (shell && preset === "aligner" && options.hinge) onOptionsChange({ hinge: false }); }, [shell, preset, options.hinge]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 120: the articulator's questions one at a time - the one open, the others a line each (the answer shown).
   // Build 120 (Rakesh): each choice appears once the one before it is made - what has been chosen (all of it on a design
   // opened again), and a question opened again to change it.
@@ -577,8 +576,9 @@ export function DentalStudioPanel({
   const mbIndex = mbSteps && mbStep ? mbSteps.indexOf(mbStep) : -1;
   // Build 120: Model is done once its choices are made (the type; a pair separate or articulated; separate, the height),
   // the Articulator once each of its questions is answered.
-  const modelDone = asked.type && (preset === "aligner" || (pair ? asked.layout && (options.hinge || asked.height) : asked.height));
-  const articOrder = ["hinge", "fit", "pins", ...(options.incisalPin !== false ? ["gap", "ovd"] : []), "aheight"];
+  // (An aligner model keeps its own low height: no height to choose.)
+  const modelDone = asked.type && (pair ? asked.layout && (options.hinge || preset === "aligner" || asked.height) : preset === "aligner" || asked.height);
+  const articOrder = ["hinge", "fit", "pins", ...(options.incisalPin !== false ? ["gap", "ovd"] : []), ...(preset === "aligner" ? [] : ["aheight"])];
   const articDone = articOrder.every((id) => asked[id]);
   const mbStepDone = (id: ModelStepId) => (id === "scans" ? scansDone : id === "prepare" && shell && trimmedDone ? (["upper", "lower"] as const).every((slot) => !slots[slot] || trimmedDone.includes(slot)) : shell && id === "model" ? Boolean(modelDone) : shell && id === "articulator" ? articDone : true);
   const inMb = (id: ModelStepId) => !mbSteps || mbStep === id;
@@ -1070,8 +1070,8 @@ export function DentalStudioPanel({
         </div>
         {/* Build 104: the base's options sit with the model type (its picture already shows the base). */}
         {/* Build 106: in the frame, three buttons that stay pressed while on. */}
-        {/* Build 120 (Rakesh): then separate or articulated (a pair, not an aligner model) and, separate, the base's height. */}
-        {framed && pair && preset !== "aligner" && asked.type ? (<>
+        {/* Build 120 (Rakesh): then separate or articulated (a pair) and, separate, the base's height (not an aligner model's). */}
+        {framed && pair && asked.type ? (<>
           <h4 className="dental-group">{t("studio.modelsAre")}</h4>
           <div className="studio-pic-choice two" role="radiogroup" aria-label={t("studio.modelsAre")}>
             {(["separate", "articulated"] as const).map((kind) => {
@@ -1258,7 +1258,7 @@ export function DentalStudioPanel({
               {done("ovd", true)}
             </>) },
           ] : []),
-          { id: "aheight", title: t("studio.baseHeight"), answer: t(options.baseHeight === "tall" ? "studio.baseTall" : "studio.baseStandard"), body: (<>{heightChoice(() => pick("aheight"), chosen("aheight"))}{done("aheight")}</>) },
+          ...(preset === "aligner" ? [] : [{ id: "aheight", title: t("studio.baseHeight"), answer: t(options.baseHeight === "tall" ? "studio.baseTall" : "studio.baseStandard"), body: (<>{heightChoice(() => pick("aheight"), chosen("aheight"))}{done("aheight")}</>) }]),
         ];
         return (
           <div className="studio-questions">

@@ -16,7 +16,7 @@
 import * as THREE from "three";
 import { getManifoldRuntime } from "@/lib/editorMeshCore";
 import { alignToBite, archFrame, biteResidual, contacts, vertexNormals, canineWidth, cleanScan, frontOf, isPartialArch, marginUp, pairFrame, palateScore, type CleanArch, type CleanReport } from "@/lib/dentalArch";
-import { ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, roundOutline, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
+import { archBand, bandToBack, ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, roundOutline, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
@@ -456,6 +456,8 @@ export function analyseDental(input: DentalStudioInput): DentalAnalysis {
   return prepared(input).analysis;
 }
 
+/** Build 121: an aligner model's horseshoe outline runs this far outside its scan's edge, seen from above, mm. */
+export const ALIGNER_GROW = 3;
 /** Build 120: an aligner model's smooth base - its ledge no lower than this above the rim, mm. */
 export const ALIGNER_LEDGE_MIN = 2.5;
 /** Build 120: a tall base is this much taller than the standard one, mm. */
@@ -901,15 +903,26 @@ function buildArch(
     for (let t = 0; t < cut.f.length; t += 1) scanLow = Math.min(scanLow, cut.v[cut.f[t] * 3 + 2]);
     const ledgeAt = options.smoothShape === "aligner" ? Math.max(ALIGNER_LEDGE_MIN, Math.min(SMOOTH.ledge, options.base - SMOOTH.belowCut)) : Math.max(SMOOTH.ledge, options.base - SMOOTH.belowCut);
     const ledge = arch.partial && Number.isFinite(scanLow) ? Math.max(ledgeAt, scanLow - floor - SMOOTH.belowCut) : ledgeAt;
-    const base = makeSmoothBase(runtime, { scan: cut, teeth, outline: ortho, floor, open: true, ledge });
+    // Build 121 (Rakesh): an aligner model is a horseshoe - its outline the arch's own (lib/dentalBase archBand), the scan seen from above grown
+    // ALIGNER_GROW outside the scan's edge, open across the palate and the tongue space (the scan already follows the gum there),
+    // so the drape runs down inside the arch as well as outside it. A quadrant keeps its block.
+    let outline = ortho;
+    if (options.smoothShape === "aligner" && !arch.partial) {
+      let band = archBand(runtime, cut, ALIGNER_GROW);
+      // Build 121 (Rakesh): articulated, its arms carried straight back to the pair's common back (the orthodontic
+      // outline's, shared by both models), where the hinge stands.
+      if (options.hinge && band.length >= 3) band = bandToBack(runtime, band, Math.max(...ortho.map(([, y]) => y)));
+      if (band.length >= 3) outline = band;
+    }
+    const base = makeSmoothBase(runtime, { scan: cut, teeth, outline, floor, open: true, ledge });
     keepSolid(base.outer);
     solid = keepSolid(runtime.Manifold.union(solid, base.outer));
-    solid = keepSolid(runtime.Manifold.intersection(solid, keepSolid(prism(runtime, ortho, floor, top + 5))));
+    solid = keepSolid(runtime.Manifold.intersection(solid, keepSolid(prism(runtime, outline, floor, top + 5))));
     if (base.cavity) smoothCavity = keepSolid(base.cavity);
     buried = floor + ledge;
-    footprint = [ortho];
-    trimRings = [ortho];
-    labelRing = ortho;
+    footprint = [outline];
+    trimRings = [outline];
+    labelRing = outline;
   } else if (options.baseStyle === "ortho" && ortho) {
     const block = keepSolid(prism(runtime, ortho, floor, floor + Math.max(DENTAL_MIN_BASE, options.base)));
     buried = floor + Math.max(DENTAL_MIN_BASE, options.base);
@@ -1286,9 +1299,12 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
   // outline, orthodontic models on the orthodontic one, aligner models on a close outline, low (for thermoforming).
   const smoothShape = options.baseStyle === "clean" ? "round" : options.baseStyle === "follow" ? "aligner" : options.baseStyle === "ortho" ? "ortho" : null;
   if (options.hinge && prep.arches.length === 2 || smoothShape) {
-    const shape = options.hinge && prep.arches.length === 2 && smoothShape === "aligner" ? "round" : smoothShape ?? "ortho";
+    // Build 121 (Rakesh): an articulated aligner pair keeps its horseshoe (its arms squared off at the back for the hinge).
+    const shape = smoothShape ?? "ortho";
     const lowest = shape === "aligner" ? ALIGNER_LEDGE_MIN + SMOOTH.belowCut : SMOOTH.ledge + SMOOTH.belowCut;
-    options = { ...options, baseStyle: "ortho", inside: options.inside === "solid" ? "solid" : "open", smoothBase: true, smoothShape: shape, base: shape === "aligner" ? Math.max(options.base, lowest) : lowest + (options.baseHeight === "tall" ? TALL_BASE : 0) };
+    // Build 121 (Rakesh): an aligner model is always hollow with the honeycomb base - steadier to thermoform over, no choice to make.
+    const aligner = shape === "aligner";
+    options = { ...options, baseStyle: "ortho", inside: !aligner && options.inside === "solid" ? "solid" : "open", ...(aligner ? { infill: "base" as const } : {}), smoothBase: true, smoothShape: shape, base: shape === "aligner" ? Math.max(options.base, lowest) : lowest + (options.baseHeight === "tall" ? TALL_BASE : 0) };
   }
   const runtime = given ?? (await getManifoldRuntime());
   const base = Math.max(DENTAL_MIN_BASE, Math.min(DENTAL_MAX_BASE, options.base));

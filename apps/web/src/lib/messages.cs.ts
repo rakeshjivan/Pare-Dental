@@ -4527,7 +4527,7 @@ export const MESSAGES_CS: Partial<Record<MessageKey, string>> = {
   "dental.ortho": "Ortodontické studijní modely",
   "dental.studyHint": "Dutý, zespodu otevřený; celá anatomie",
   "dental.orthoHint": "Zabroušený podstavec, párové modely",
-  "dental.alignerHint": "Plný, 18 mm vysoký pro termoformování",
+  "dental.alignerHint": "Podkova, dutá s voštinovou základnou, nízká pro termoformování",
   "dental.crownHint": "Plný s deskou - nejpřesnější",
   "dental.more": "Upravit nastavení",
   "dental.keepAll": "Zachovat celý sken",

@@ -4721,7 +4721,7 @@ export const MESSAGES_EN = {
   "dental.ortho": "Ortho study models",
   "dental.studyHint": "Clean base, hollow and open underneath",
   "dental.orthoHint": "Trimmed base, matching pair",
-  "dental.alignerHint": "Solid, 18 mm tall for thermoforming",
+  "dental.alignerHint": "A horseshoe, hollow with a honeycomb base, low for thermoforming",
   "dental.crownHint": "Solid with a plate - most accurate",
   "dental.more": "Adjust the settings",
   "dental.keepAll": "Keep the scan as deep as it goes",

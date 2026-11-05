@@ -4528,7 +4528,7 @@ export const MESSAGES_DE: Partial<Record<MessageKey, string>> = {
   "dental.ortho": "KFO-Studienmodelle",
   "dental.studyHint": "Hohl, unten offen; ganze Anatomie",
   "dental.orthoHint": "Getrimmter Sockel, passendes Paar",
-  "dental.alignerHint": "Massiv, 18 mm hoch zum Tiefziehen",
+  "dental.alignerHint": "Hufeisen, hohl mit Wabenboden, niedrig zum Tiefziehen",
   "dental.crownHint": "Massiv mit Platte - am genauesten",
   "dental.more": "Einstellungen anpassen",
   "dental.keepAll": "Den ganzen Scan behalten",

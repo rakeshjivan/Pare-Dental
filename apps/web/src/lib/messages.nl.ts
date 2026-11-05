@@ -4527,7 +4527,7 @@ export const MESSAGES_NL: Partial<Record<MessageKey, string>> = {
   "dental.ortho": "Orthodontische studiemodellen",
   "dental.studyHint": "Hol, onderaan open; alle anatomie",
   "dental.orthoHint": "Getrimde sokkel, passend paar",
-  "dental.alignerHint": "Massief, 18 mm hoog voor dieptrekken",
+  "dental.alignerHint": "Hoefijzer, hol met honingraatbasis, laag voor dieptrekken",
   "dental.crownHint": "Massief met plaat - het nauwkeurigst",
   "dental.more": "Instellingen aanpassen",
   "dental.keepAll": "De hele scan bewaren",

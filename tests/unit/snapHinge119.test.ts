@@ -91,21 +91,3 @@ describe("the snap hinge's size", () => {
     expect(upper.numTri() + lower.numTri()).toBeLessThan(400000);
   }, 120000);
 });
-
-describe("the standard hinge on the smooth base", () => {
-  it("has the same seat round the ball, clear closed and opened to 90 degrees", async () => {
-    const { articulatorParts, CONDYLE_RADIUS, CUP_FIT } = await import("@/lib/dentalArticulator");
-    const heels = [{ x: -22, y: 20 }, { x: 22, y: 20 }];
-    const a = articulatorParts(runtime as never, 20, -27, 27, 21, -21, null, 0, { upper: heels, lower: heels }, "fused", { smooth: true });
-    expect(runtime.Manifold.intersection(a.upper, a.lower).volume()).toBeLessThan(1e-4);
-    for (const c of a.centres) {
-      const ball = (grow: number) => runtime.Manifold.intersection(a.upper, runtime.Manifold.sphere(CONDYLE_RADIUS + grow, 96).translate([c, a.axleY, 0])).volume();
-      expect(ball(CUP_FIT - 0.02)).toBeLessThan(1e-6);
-      expect(ball(CUP_FIT + 0.03)).toBeGreaterThan(0);
-    }
-    for (const angle of [30, 60, 90]) {
-      const open = a.upper.translate([0, -a.axleY, 0]).rotate([-angle, 0, 0]).translate([0, a.axleY, 0]);
-      expect(runtime.Manifold.intersection(open, a.lower).volume()).toBeLessThan(1e-3);
-    }
-  }, 180000);
-});

@@ -135,14 +135,14 @@ export function upperField() {
   return (x: number, y: number, z: number) => Math.max(smin(arm(x, y, z), stem(x, y, z), SNAP.blend), SNAP.front - y);
 }
 
-/** The post's distance field (negative inside) with its slot, pocket (fit as given) and throat cut. */
-export function lowerField(fit: number = SNAP.fit, throatRadius: number = SNAP.throat) {
+/** The post's distance field (negative inside) with its slot, pocket (fit as given) and throat cut (none when null - build 121's passive hinge). */
+export function lowerField(fit: number = SNAP.fit, throatRadius: number | null = SNAP.throat) {
   const post = extruded(profileField(POST_PROFILE, [SNAP.front - 3, -20], [8, 10]), SNAP.postHalf, SNAP.postRound);
   const lean = (SNAP.slotLean * Math.PI) / 180, ny = Math.cos(lean), nz = Math.sin(lean);
   const slot = (x: number, y: number, z: number) => Math.max(Math.abs(x) - SNAP.slotHalf, -((y - SNAP.slotFront) * ny + z * nz), SNAP.slotFloor - z);
   const pocket = (x: number, y: number, z: number) => Math.hypot(x, y, z) - (SNAP.ball + fit);
   const throat = (x: number, y: number, z: number) => {
-    if (y < 0) return Infinity;
+    if (y < 0 || throatRadius === null) return Infinity;
     const r = y < SNAP.throatRun ? throatRadius : throatRadius + (SNAP.lead - throatRadius) * Math.min(1, (y - SNAP.throatRun) / 4.4);
     return Math.hypot(x, z) - r;
   };

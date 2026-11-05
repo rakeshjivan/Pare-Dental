@@ -17,7 +17,8 @@
  */
 import type { ManifoldRuntime, ManifoldSolid } from "@/lib/dentalMesh";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
-import { SNAP, snapHinge, profileField, extruded } from "@/lib/dentalSnapHinge";
+import { SNAP, snapHinge } from "@/lib/dentalSnapHinge";
+import { passiveHinge } from "@/lib/dentalPassiveHinge";
 
 const deg = Math.PI / 180;
 
@@ -115,44 +116,6 @@ export type ArticulatorSides = { y: number; posts: [number, number]; bases: { up
 export const POST_HALF = 4;
 /** Build 79: the side posts stand this far behind the front of the incisors, mm - about the premolars. */
 export const POST_BACK = 16;
-
-/** Build 119: how far forward into its base a heel (a pedestal or a cup's block on the smooth base) reaches, mm. */
-export const HEEL_INTO = 6;
-/**
- * Build 119 (Rakesh): on the smooth base, the standard hinge's cup blocks and pedestals shaped like the snap hinge's
- * arm and post - smooth curved side profiles, every edge rounded, the underside sloping up into the base's back -
- * in the axis' frame (x across from the condyle's centre, y back from the axis, z up). Around the ball they are the
- * blocks they always were (CUP_HALF_X across, CUP_HALF_Y in front of and behind the ball, CUP_UNDER under its
- * equator; the pedestal PEDESTAL under it), so the seat, its fit and the swing are unchanged. Made once and kept;
- * the caller cuts them at the floors.
- */
-// Build 120: kept per runtime - a solid of one manifold runtime cannot be used with another (a worker's, a test's).
-const shapedHeelsBy = new WeakMap<object, { cup: ManifoldSolid; pedestal: ManifoldSolid }>();
-function shapedHinge(runtime: ManifoldRuntime) {
-  const kept = shapedHeelsBy.get(runtime);
-  if (kept) return kept;
-  const front = -(CUP_HALF_Y + 0.5) - HEEL_INTO;
-  // The cup's block: its underside CUP_UNDER under the ball round the seat, sweeping up in front into the base's back
-  // wall, its back corner a broad round.
-  // Its top a curve from just over the seat at the back up and forward into the base's back wall (a sloping arm, as the snap hinge's, not a full-height block).
-  const cupProfile: Array<[number, number]> = [[front - 2, 40], [front - 2, 2], [front + 2, 0.5], [-CUP_HALF_Y + 1.5, -CUP_UNDER], [CUP_HALF_Y - 2.5, -CUP_UNDER], [CUP_HALF_Y - 0.4, -CUP_UNDER + 1.2], [CUP_HALF_Y, 2], [CUP_HALF_Y, 5], [CUP_HALF_Y - 1.5, 8], [CUP_HALF_Y - 5, 10.5], [-1, 13], [-CUP_HALF_Y - 0.5, 17.5], [front + 1, 23], [front, 32], [front - 1, 40]];
-  const cupField = extruded(profileField(cupProfile, [front - 4, -6], [CUP_HALF_Y + 3, 42]), CUP_HALF_X, 1.5);
-  // The pedestal: 8 mm across, its top PEDESTAL under the ball, its back corner rounded, its front running into the base.
-  // (Its top a millimetre under PEDESTAL: the smooth curve through these points must never rise into the cup's swing.)
-  // Its top falls forward from under the ball into the base's back wall.
-  const pedProfile: Array<[number, number]> = [[front - 2, -60], [4, -60], [4, -40], [4, -20], [4, -PEDESTAL - 5], [4, -PEDESTAL - 3], [3.2, -PEDESTAL - 1.3], [1.5, -PEDESTAL - 1], [-2, -PEDESTAL - 1.5], [-CUP_HALF_Y - 0.5, -PEDESTAL - 4], [front - 2, -PEDESTAL - 8], [front - 2, -40]];
-  const pedField = extruded(profileField(pedProfile, [front - 4, -62], [7, -PEDESTAL + 2]), 4, 1.2);
-  const step = 0.2;
-  const level = (f: (x: number, y: number, z: number) => number, min: [number, number, number], max: [number, number, number]) =>
-    runtime.Manifold.levelSet((p: [number, number, number]) => -Math.max(f(p[0], p[1], p[2]), front - p[1]), { min, max }, step, 0);
-  const cupRaw = level(cupField, [-CUP_HALF_X - 1, front, -CUP_UNDER - 1], [CUP_HALF_X + 1, CUP_HALF_Y + 1, 40]);
-  const pedRaw = level(pedField, [-5, front, -60], [5, 5, -PEDESTAL + 1]);
-  const shaped = { cup: cupRaw.simplify(0.005), pedestal: pedRaw.simplify(0.005) };
-  cupRaw.delete();
-  pedRaw.delete();
-  shapedHeelsBy.set(runtime, shaped);
-  return shaped;
-}
 
 const box = (runtime: ManifoldRuntime, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number) =>
   runtime.Manifold.cube([x1 - x0, y1 - y0, z1 - z0]).translate([x0, y0, z0]);
@@ -267,7 +230,7 @@ export function incisalPins(runtime: ManifoldRuntime, raises: number[], axisY: n
 }
 
 /** Build 117: more of the articulator - the cups' fit (mm, CUP_FIT when left out) and the dental midline's x, to centre it on. */
-export type ArticulatorMore = { fit?: number; centre?: number; /** Build 117: the side posts grooved for the risers' click. */ riserGroove?: boolean; /** Build 119: the snap hinge (lib/dentalSnapHinge) instead of the drop-in cups, with its grip. */ snap?: { grip?: number }; /** Build 119: on the smooth base - no bar; the cups' blocks and the balls' pedestals grow out of the bases' straight backs, their edges rounded. */ smooth?: boolean };
+export type ArticulatorMore = { fit?: number; centre?: number; /** Build 117: the side posts grooved for the risers' click. */ riserGroove?: boolean; /** Build 119: the snap hinge (lib/dentalSnapHinge) instead of the drop-in cups, with its grip. */ snap?: { grip?: number }; /** Build 119: on the smooth base - no bar. Build 121: there the passive hinge is lib/dentalPassiveHinge's. */ smooth?: boolean };
 /**
  * Build 117: a side post as built - its x, its place in the upper's frame (y, the dome's centre zc
  * above the plane, the models closed), where the lower half stands (restY) and the top of its arm.
@@ -300,8 +263,11 @@ export function articulatorParts(
   const R = CONDYLE_RADIUS;
   const fit = hingeFit(more.fit);
   const snap = more.snap ?? null;
+  // Build 121: on the smooth base the passive hinge is the snap hinge turned upside down (lib/dentalPassiveHinge) -
+  // the same small parts in the same place.
+  const slim = Boolean(snap || more.smooth);
   // Build 119: the snap hinge's ball stands SNAP.behind behind the bases' (straight) backs.
-  const ay = snap ? back + SNAP.behind : condyleAxisY(back);
+  const ay = slim ? back + SNAP.behind : condyleAxisY(back);
   const known = Number.isFinite(xMin) && Number.isFinite(xMax);
   // Build 117: on the dental midline when it was found - the condyles either side of it alike, as far
   // out as the wider side reaches - else in the middle of the heels.
@@ -309,7 +275,7 @@ export function articulatorParts(
   const cx = centred ? more.centre! : known ? (xMin + xMax) / 2 : 0;
   const half = Math.max(CUP_HALF_X, centred ? Math.max(cx - xMin, xMax - cx) : known ? (xMax - xMin) / 2 : 14);
   // As wide as the models allow: the cups' outer edges at the heels' outer edges.
-  const sideHalf = snap ? SNAP.postHalf + 1 : CUP_HALF_X;
+  const sideHalf = slim ? SNAP.postHalf + 1 : CUP_HALF_X;
   const centres = half >= 2 * sideHalf + 2
     ? [cx - half + sideHalf, cx + half - sideHalf]
     : [cx - sideHalf - 1, cx + sideHalf + 1];
@@ -327,7 +293,7 @@ export function articulatorParts(
   };
   const backOf = (heels: ArticulatorHeel[] | undefined) => (heels?.length ? Math.max(...heels.map((heel) => heel.y)) : back);
   // Build 119: the snap hinge needs no bar - each part stands on its base's own back corner.
-  if (!snap && !more.smooth) for (const [heels, parts, z0, z1] of [[backs?.lower, lowerParts, floorLower, floorLower + 4], [backs?.upper, upperParts, floorUpper - 4, floorUpper]] as const) {
+  if (!slim) for (const [heels, parts, z0, z1] of [[backs?.lower, lowerParts, floorLower, floorLower + 4], [backs?.upper, upperParts, floorUpper - 4, floorUpper]] as const) {
     const [x0, x1] = span(heels);
     parts.push(keep(box(runtime, x0, x1, Math.min(back, backOf(heels)) - 4, yBack, z0, z1)));
     for (const heel of heels ?? []) parts.push(keep(box(runtime, heel.x - 4, heel.x + 4, heel.y - 4, yBack, z0, z1)));
@@ -347,10 +313,12 @@ export function articulatorParts(
       pinY = Math.min(pinY, limit - Math.max(0, restY - pinY));
     }
   }
-  if (snap) {
+  if (slim) {
     // Build 119: each side, the beak and ball on the upper and the post on the lower (lib/dentalSnapHinge), each cut
     // at its base's floor, and the heel each stands on: its base's back corner carried to the part, SNAP_HEEL forward.
-    const hinge = snapHinge(runtime, undefined, snap.grip);
+    // Build 121: the passive hinge the other way up - the housing on the upper, the beak and ball on the lower.
+    const hinge = snap ? snapHinge(runtime, undefined, snap.grip) : passiveHinge(runtime, fit);
+    const [upperHalf, lowerHalf] = snap ? [SNAP.armHalf, SNAP.postHalf] : [SNAP.postHalf, SNAP.armHalf];
     const round = (x0: number, x1: number, y0: number, y1: number, z0: number, z1: number) => {
       const r = 1;
       const plan = runtime.CrossSection.square([x1 - x0 - 2 * r, y1 - y0 - 2 * r]).translate([x0 + r, y0 + r]).offset(r, "Round", 2, 24);
@@ -363,18 +331,18 @@ export function articulatorParts(
       const lowerAt = keep(hinge.lower.translate([c, ay, 0]));
       upperParts.push(keep(upperAt.intersect(keep(box(runtime, c - 20, c + 20, ay - 40, ay + 40, -20, floorUpper)))));
       lowerParts.push(keep(lowerAt.intersect(keep(box(runtime, c - 20, c + 20, ay - 40, ay + 40, floorLower, 20)))));
-      const armTop = Math.min(floorUpper, 7.7), postTop = Math.max(floorLower, -11.5);
-      if (floorUpper > armTop) upperParts.push(keep(round(c - SNAP.armHalf + 0.2, c + SNAP.armHalf - 0.2, back - SNAP_HEEL, back + 0.5, armTop, floorUpper)));
-      if (postTop > floorLower) lowerParts.push(keep(round(c - SNAP.postHalf + 0.2, c + SNAP.postHalf - 0.2, back - SNAP_HEEL, back + 0.5, floorLower, postTop)));
+      // The heels fill from just inside each part to its base's floor (the snap's arm reaches 7.7 down, its post 11.5 up; the passive's mirrored).
+      const [upperFrom, lowerFrom] = snap ? [7.7, -11.5] : [11.5, -7.7];
+      const armTop = Math.min(floorUpper, upperFrom), postTop = Math.max(floorLower, lowerFrom);
+      if (floorUpper > armTop) upperParts.push(keep(round(c - upperHalf + 0.2, c + upperHalf - 0.2, back - SNAP_HEEL, back + 0.5, armTop, floorUpper)));
+      if (postTop > floorLower) lowerParts.push(keep(round(c - lowerHalf + 0.2, c + lowerHalf - 0.2, back - SNAP_HEEL, back + 0.5, floorLower, postTop)));
     });
   } else centres.forEach((c) => {
     // The lower: a pedestal from its bar, a neck and the ball, centred on the axis (y = ay, z = 0).
     // The pedestal stops below where the cup's block swings down past it as the models open.
-    // Build 119: on the smooth base the pedestal is a rounded heel out of the base's back (no bar to stand on).
     lowerParts.push(
-      more.smooth ? keep(keep(shapedHinge(runtime).pedestal.translate([c, ay, 0])).intersect(keep(box(runtime, c - 10, c + 10, ay - 30, ay + 10, floorLower, 0)))) : keep(box(runtime, c - 4, c + 4, ay - 4, ay + 4, floorLower, Math.max(floorLower + 1, -PEDESTAL))),
-      // Build 119: on the smooth base the pedestal's top stands a millimetre lower: the neck reaches down into it.
-      more.smooth ? keep(runtime.Manifold.cylinder(PEDESTAL + 2, NECK, NECK, 32).translate([c, ay, -PEDESTAL - 1.75])) : keep(runtime.Manifold.cylinder(PEDESTAL + 0.5, NECK, NECK, 32).translate([c, ay, -PEDESTAL - 0.25])),
+      keep(box(runtime, c - 4, c + 4, ay - 4, ay + 4, floorLower, Math.max(floorLower + 1, -PEDESTAL))),
+      keep(runtime.Manifold.cylinder(PEDESTAL + 0.5, NECK, NECK, 32).translate([c, ay, -PEDESTAL - 0.25])),
       keep(runtime.Manifold.sphere(R, 96).translate([c, ay, 0])),
     );
     // Build 84: the drop-in cup, as builds 63-77 made it - a small block round the ball, reaching
@@ -383,7 +351,7 @@ export function articulatorParts(
     // of the block. A polygon's flats lie inside its sphere: the seat is grown by their depth.
     // Build 117: the fit as chosen (CUP_FIT when left out).
     const top = (R + fit) / Math.cos(Math.PI / 96);
-    upperParts.push(keep(more.smooth ? keep(shapedHinge(runtime).cup.translate([c, ay, 0])).intersect(keep(box(runtime, c - 20, c + 20, ay - 30, ay + 20, -10, floorUpper))) : box(runtime, c - CUP_HALF_X, c + CUP_HALF_X, ay - CUP_HALF_Y, ay + CUP_HALF_Y, -CUP_UNDER, floorUpper)));
+    upperParts.push(keep(box(runtime, c - CUP_HALF_X, c + CUP_HALF_X, ay - CUP_HALF_Y, ay + CUP_HALF_Y, -CUP_UNDER, floorUpper)));
     const seat = keep(runtime.Manifold.sphere(top, 96).translate([c, ay, 0]));
     const tilt = DROP_IN_CHANNEL * deg, run = R + CUP_UNDER + 8;
     const out = keep(runtime.Manifold.sphere(top, 96).translate([c, ay + Math.sin(tilt) * run, -Math.cos(tilt) * run]));

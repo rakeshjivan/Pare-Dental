@@ -346,11 +346,12 @@ export function HingePicture({ kind }: { kind: "standard" | "snap" }) {
   return (
     <svg className="studio-choice-pic" viewBox="0 0 64 40" aria-hidden="true">
       {kind === "standard" ? (<>
-        <path d="M18 38V24A14 14 0 0 1 46 24V38Z" fill={MODEL_BASE} stroke={MODEL_BASE_EDGE} strokeWidth="0.8" />
-        <path d="M23 24A9 9 0 0 1 41 24" fill="#ffffff" stroke={MODEL_BASE_EDGE} strokeWidth="0.8" />
-        <path d="M23 24H41" stroke="#ffffff" strokeWidth="1.6" />
-        <rect x="29.5" y="2" width="5" height="14" rx="1.5" fill={MODEL_TOOTH} stroke={MODEL_EDGE} strokeWidth="0.7" />
-        <circle cx="32" cy="19" r="7.6" fill={MODEL_TOOTH} stroke={MODEL_EDGE} strokeWidth="0.8" />
+        {/* Build 121: the captive turned over - the housing above, open below, the ball rising into it on its stem. */}
+        <path d="M14 2V19A18 18 0 0 0 50 19V2Z" fill={MODEL_BASE} stroke={MODEL_BASE_EDGE} strokeWidth="0.8" />
+        <circle cx="32" cy="19" r="8.6" fill="#ffffff" stroke={MODEL_BASE_EDGE} strokeWidth="0.8" />
+        <path d="M23.4 19H40.6V38H23.4Z" fill="#ffffff" />
+        <rect x="29.5" y="24" width="5" height="14" rx="1.5" fill={MODEL_TOOTH} stroke={MODEL_EDGE} strokeWidth="0.7" />
+        <circle cx="32" cy="19" r="7.8" fill={MODEL_TOOTH} stroke={MODEL_EDGE} strokeWidth="0.8" />
       </>) : (<>
         <path d="M14 38V20A18 18 0 0 1 50 20V38Z" fill={MODEL_BASE} stroke={MODEL_BASE_EDGE} strokeWidth="0.8" />
         <circle cx="32" cy="21" r="8.6" fill="#ffffff" stroke={MODEL_BASE_EDGE} strokeWidth="0.8" />
