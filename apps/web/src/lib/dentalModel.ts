@@ -162,6 +162,8 @@ export type DentalStudioOptions = {
   smoothBase?: boolean;
   /** Build 120: set by the studio - the smooth base's outline: orthodontic, rounded (a study model) or close and low (an aligner model). */
   smoothShape?: "ortho" | "round" | "aligner";
+  /** Build 120 (Rakesh): the base's height - standard, or tall (TALL_BASE more; not for aligner models). */
+  baseHeight?: "standard" | "tall";
   /** Build 117: with the posts either side, also the bite-opening risers (1 to 5 mm, two of each), printed as a part of their own. Off unless true. */
   risers?: boolean;
   /** Build 117: the dental midline the dentist marked on the upper scan (`midlineScan`), in the studio's coordinates; the articulated pair is centred on it. */
@@ -456,6 +458,8 @@ export function analyseDental(input: DentalStudioInput): DentalAnalysis {
 
 /** Build 120: an aligner model's smooth base - its ledge no lower than this above the rim, mm. */
 export const ALIGNER_LEDGE_MIN = 2.5;
+/** Build 120: a tall base is this much taller than the standard one, mm. */
+export const TALL_BASE = 3;
 
 /** Build 117: the dental midline is believed only this close to the arch's middle, mm - further, the centrals were not what was found. */
 export const MIDLINE_REACH = 8;
@@ -891,7 +895,7 @@ function buildArch(
     // Build 119: the smooth base - the scan exact, the drape, fillet, ledge and flat wall a field round it (lib/dentalSmoothBase),
     // cut to the orthodontic outline, an even shell open underneath.
     // Build 120: an aligner model's ledge lower, so the model stays short enough to thermoform over.
-    const ledge = options.smoothShape === "aligner" ? Math.max(ALIGNER_LEDGE_MIN, Math.min(SMOOTH.ledge, options.base - SMOOTH.belowCut)) : SMOOTH.ledge;
+    const ledge = options.smoothShape === "aligner" ? Math.max(ALIGNER_LEDGE_MIN, Math.min(SMOOTH.ledge, options.base - SMOOTH.belowCut)) : Math.max(SMOOTH.ledge, options.base - SMOOTH.belowCut);
     const base = makeSmoothBase(runtime, { scan: cut, teeth, outline: ortho, floor, open: true, ledge });
     keepSolid(base.outer);
     solid = keepSolid(runtime.Manifold.union(solid, base.outer));
@@ -1267,7 +1271,8 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
   // A clean base keeps a band of gum round the teeth, and no more.
   // Build 52: a margin drawn by hand is the margin - no gum band is cut on top of it.
   // Build 53: with an approved area, the gum band (Expand) runs round it; otherwise round the teeth found.
-  if ((options.margin === "manual" || options.baseStyle === "clean") && (options.gum === null || options.gum === undefined)) options = { ...options, gum: CLEAN_GUM };
+  // Build 120: an orthodontic model too, now on the smooth base - the scan's edge curling under the vestibule, kept whole, stood out of the drape.
+  if ((options.margin === "manual" || options.baseStyle === "clean" || options.baseStyle === "ortho") && (options.gum === null || options.gum === undefined)) options = { ...options, gum: CLEAN_GUM };
   const apart = Boolean(prep.analysis.pair?.apart);
   if (apart) options = { ...options, layout: "print", hinge: false };
   // Build 119: articulated models stand on the smooth base (either hinge) - an orthodontic outline (a straight back for
@@ -1278,7 +1283,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
   if (options.hinge && prep.arches.length === 2 || smoothShape) {
     const shape = options.hinge && prep.arches.length === 2 && smoothShape === "aligner" ? "round" : smoothShape ?? "ortho";
     const lowest = shape === "aligner" ? ALIGNER_LEDGE_MIN + SMOOTH.belowCut : SMOOTH.ledge + SMOOTH.belowCut;
-    options = { ...options, baseStyle: "ortho", inside: options.inside === "solid" ? "solid" : "open", smoothBase: true, smoothShape: shape, base: shape === "aligner" ? Math.max(options.base, lowest) : lowest };
+    options = { ...options, baseStyle: "ortho", inside: options.inside === "solid" ? "solid" : "open", smoothBase: true, smoothShape: shape, base: shape === "aligner" ? Math.max(options.base, lowest) : lowest + (options.baseHeight === "tall" ? TALL_BASE : 0) };
   }
   const runtime = given ?? (await getManifoldRuntime());
   const base = Math.max(DENTAL_MIN_BASE, Math.min(DENTAL_MAX_BASE, options.base));

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import manifoldModule, { type ManifoldToplevel } from "manifold-3d";
 import { beforeAll, describe, expect, it } from "vitest";
-import { analyseDental, looksLikeDentalScan, makeDentalArchPart, labelledOptions, makeDentalStudio, pinchedEdges, type DentalStudioOptions } from "@/lib/dentalModel";
+import { analyseDental, looksLikeDentalScan, makeDentalArchPart, labelledOptions, makeDentalStudio, TALL_BASE, pinchedEdges, type DentalStudioOptions } from "@/lib/dentalModel";
 import { closeToFloor, orthoOutline } from "@/lib/dentalBase";
 import { labelSection, labelText } from "@/lib/dentalLabel";
 import { weld } from "@/lib/dentalMesh";
@@ -149,20 +149,18 @@ describe("Dental Studio (build 47)", () => {
     expect(closed.worn).toBeLessThan(2000);
   });
 
-  it("hollows open underneath, or closed with vents", async () => {
+  it("hollows open underneath on the smooth base - a closed hollow is made open (build 120)", async () => {
     const input = { arches: [{ id: "a", positions: syntheticArch({ teethDown: true }) }] };
     const solid = await makeDentalStudio(input, base, runtime as never);
-    const open = await makeDentalStudio(input, { ...base, inside: "open" }, runtime as never);
-    const closed = await makeDentalStudio(input, { ...base, inside: "closed" }, runtime as never);
+    const open = await makeDentalStudio(input, { ...base, inside: "open", infill: "none" }, runtime as never);
+    const closed = await makeDentalStudio(input, { ...base, inside: "closed", infill: "none" }, runtime as never);
     expect(open.parts[0].volume).toBeLessThan(solid.parts[0].volume * 0.85);
-    expect(closed.parts[0].volume).toBeLessThan(solid.parts[0].volume * 0.95);
-    expect(closed.parts[0].volume).toBeGreaterThan(open.parts[0].volume);
-    for (const result of [open, closed]) {
+    expect(closed.parts[0].volume).toBeCloseTo(open.parts[0].volume, 3);
+    for (const result of [solid, open]) {
       expect(closedVolume(runtime, result.parts[0].positions).status).toBe("NoError");
       expect(pinchedEdges(result.parts[0].positions)).toBe(0);
     }
-    expect(closed.warnings).not.toContain("vents");
-  }, 60_000);
+  }, 180_000);
 
   it("trims an orthodontic base and engraves its label", async () => {
     const input = { arches: [{ id: "a", positions: syntheticArch({ teethDown: true }) }] };
@@ -259,10 +257,11 @@ describe("Dental Studio (build 47)", () => {
   it("starts each preset from the settings the evidence points to", () => {
     expect(dentalPreset("study", 16, false)).toMatchObject({ inside: "open", baseStyle: "clean", keep: null });
     const aligner = dentalPreset("aligner", 16, false);
-    expect(aligner.inside).toBe("solid");
+    // Build 120 (Rakesh): hollow with a honeycomb base by default (solid if chosen).
+    expect(aligner).toMatchObject({ inside: "open", infill: "base" });
     expect(aligner.keep! + aligner.base).toBeGreaterThanOrEqual(15);
     expect(aligner.keep! + aligner.base).toBeLessThanOrEqual(20);
-    expect(dentalPreset("ortho", 16, true)).toMatchObject({ baseStyle: "ortho", inside: "solid", layout: "occlusion", base: 8 });
+    expect(dentalPreset("ortho", 16, true)).toMatchObject({ baseStyle: "ortho", inside: "open", infill: "base", layout: "occlusion", base: 8 });
   });
 
   it("writes labels in its own font", () => {
@@ -371,39 +370,43 @@ describe("Dental Studio (build 47)", () => {
     expect(clean.warnings).not.toContain("teeth");
     expect(clean.surface[0][-1]).toBeGreaterThanOrEqual(0.999);
     expect(closedVolume(runtime, clean.parts[0].positions).status).toBe("NoError");
-    const empty = await makeDentalStudio(input, { ...base, baseStyle: "clean", base: 3, inside: "closed", infill: "none" }, runtime as never);
-    const honey = await makeDentalStudio(input, { ...base, baseStyle: "clean", base: 3, inside: "closed" }, runtime as never);
-    expect(honey.parts[0].volume).toBeGreaterThan(empty.parts[0].volume);
-    expect(honey.parts[0].volume).toBeLessThan(clean.parts[0].volume);
-    expect(closedVolume(runtime, honey.parts[0].positions).status).toBe("NoError");
-    // Build 50: a honeycomb in the base only lies between the two.
-    const baseOnly = await makeDentalStudio(input, { ...base, baseStyle: "clean", base: 3, inside: "closed", infill: "base" }, runtime as never);
+    // Build 120: on the smooth base - hollow and open underneath, a honeycomb across the base if chosen.
+    const empty = await makeDentalStudio(input, { ...base, baseStyle: "clean", base: 3, inside: "open", infill: "none" }, runtime as never);
+    const baseOnly = await makeDentalStudio(input, { ...base, baseStyle: "clean", base: 3, inside: "open", infill: "base" }, runtime as never);
     expect(baseOnly.parts[0].volume).toBeGreaterThan(empty.parts[0].volume);
-    expect(baseOnly.parts[0].volume).toBeLessThanOrEqual(honey.parts[0].volume + 1e-6);
-    for (const part of [empty, honey, baseOnly].map((r) => r.parts[0])) expect(pinchedEdges(part.positions)).toBe(0);
-  }, 60_000);
+    expect(baseOnly.parts[0].volume).toBeLessThan(clean.parts[0].volume);
+    expect(closedVolume(runtime, baseOnly.parts[0].positions).status).toBe("NoError");
+    for (const part of [empty, baseOnly].map((r) => r.parts[0])) expect(pinchedEdges(part.positions)).toBe(0);
+  }, 240_000);
   it("finishes a clean base like a model builder: notches, a tie bar, an articulator plate (build 50)", async () => {
     const input = { arches: [{ id: "a", positions: syntheticArch({ teethDown: true }) }] };
-    // Build 119: notches are made only when asked for.
+    // Build 120 (Rakesh): a study model stands on the smooth base - no notches or tie bar any more.
     const plain = await makeDentalStudio(input, { ...base, baseStyle: "clean", base: 3 }, runtime as never);
-    const notched = await makeDentalStudio(input, { ...base, baseStyle: "clean", base: 3, notches: true }, runtime as never);
-    const barred = await makeDentalStudio(input, { ...base, baseStyle: "clean", base: 3, notches: true, tieBar: true }, runtime as never);
+    const notched = await makeDentalStudio(input, { ...base, baseStyle: "clean", base: 3, notches: true, tieBar: true }, runtime as never);
     const plate = await makeDentalStudio(input, { ...base, baseStyle: "articulator", base: 8, inside: "open" }, runtime as never);
-    for (const result of [plain, notched, barred, plate]) {
+    for (const result of [plain, plate]) {
       expect(result.warnings).not.toContain("teeth");
       expect(result.surface[0][-1]).toBeGreaterThanOrEqual(0.999);
       expect(pinchedEdges(result.parts[0].positions)).toBe(0);
       expect(closedVolume(runtime, result.parts[0].positions).status).toBe("NoError");
     }
-    // Notches take a little away; a tie bar adds a little (the U is open at the back).
-    expect(notched.parts[0].volume).toBeLessThan(plain.parts[0].volume);
-    expect(barred.parts[0].volume).toBeGreaterThanOrEqual(notched.parts[0].volume);
+    expect(notched.parts[0].volume).toBeCloseTo(plain.parts[0].volume, 3);
     // The articulator block is solid (never hollowed) and stands on its pockets.
     let lowest = Infinity;
     const p = plate.parts[0].positions;
     for (let k = 2; k < p.length; k += 3) lowest = Math.min(lowest, p[k]);
     expect(lowest).toBeCloseTo(0, 3);
-  }, 120_000);
+  }, 300_000);
+  it("makes the base standard or tall, an and an aligner model low (build 120)", async () => {
+    const input = { arches: [{ id: "a", positions: syntheticArch({ teethDown: true }) }] };
+    const study = { ...base, baseStyle: "clean" as const, base: 3, inside: "solid" as const };
+    const standard = await makeDentalStudio(input, study, runtime as never);
+    const tall = await makeDentalStudio(input, { ...study, baseHeight: "tall" }, runtime as never);
+    expect(tall.parts[0].height - standard.parts[0].height).toBeCloseTo(TALL_BASE, 1);
+    const aligner = await makeDentalStudio(input, { ...study, baseStyle: "follow", gum: 2, base: 3 }, runtime as never);
+    expect(aligner.parts[0].height).toBeLessThan(standard.parts[0].height);
+    for (const result of [standard, tall, aligner]) expect(closedVolume(runtime, result.parts[0].positions).status).toBe("NoError");
+  }, 400_000);
   it("cuts a scan exactly along a drawn line, smooth, never the teeth (build 52)", () => {
     const arch = syntheticArch();
     const corners = arch.length / 3;

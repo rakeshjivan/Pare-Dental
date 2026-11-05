@@ -15,9 +15,11 @@ const TEETH: Array<[number, number]> = [
 
 const BASES: Record<DentalBaseStyle, { outline: string; inner?: string }> = {
   // A smooth band round the teeth: a horseshoe.
-  clean: { outline: "M8 42 C8 13 19 4 32 4 C45 4 56 13 56 42 L45 42 C45 22 40 17 32 17 C24 17 19 22 19 42 Z" },
+  // Build 120: a study model on the smooth base - rounded, following the arch, its back straight.
+  clean: { outline: "M12 44 Q7 44 7 39 L7 30 Q7 20 13 13 Q21 4 32 3 Q43 4 51 13 Q57 20 57 30 L57 39 Q57 44 52 44 Z" },
   // The scan's own edge, as it was taken.
-  follow: { outline: "M7 42 Q6 34 9 28 Q7 21 12 16 Q14 8 21 7 Q26 2 32 4 Q38 2 43 7 Q50 8 52 16 Q57 21 55 28 Q58 34 57 42 L46 41 Q47 30 42 23 Q37 17 32 18 Q27 17 22 23 Q17 30 18 41 Z" },
+  // Build 120: an aligner model - close round the teeth, low.
+  follow: { outline: "M13 41 Q9 41 9 37 L9 30 Q9 21 14 15 Q22 6 32 6 Q42 6 50 15 Q55 21 55 30 L55 37 Q55 41 51 41 Z" },
   // The horseshoe, with the palate or the tongue space closed by a plate.
   plate: { outline: "M8 42 C8 13 19 4 32 4 C45 4 56 13 56 42 Z", inner: "M19 42 C19 22 24 17 32 17 C40 17 45 22 45 42 Z" },
   // Trimmed the ABO way: back square to the midline, heels, angled sides, the front pointed.
@@ -289,6 +291,86 @@ export function ModelHeightPicture({ teeth, gum, base }: { teeth: number; gum: n
       {bracket(top, y1, "teeth")}
       {g > 0 ? bracket(y1, y2, "gum") : null}
       {bracket(y2, y3, "base")}
+    </svg>
+  );
+}
+
+
+/*
+ * Build 120: pictures for the Model Builder's choices - separate or articulated, the base's height, the hinge,
+ * and the hinge's fit - drawn small, to sit on their buttons (viewBox 0 0 64 40).
+ */
+const MODEL_TOOTH = "#f3efe4", MODEL_EDGE = "#8a8270", MODEL_BASE = "#9fb4c9", MODEL_BASE_EDGE = "#6f86a0", MODEL_HINGE = "#2f7d6d";
+
+/** A model from the side: teeth along the top of a base `h` units tall, standing on y = `bottom`; flipped for an upper. */
+function sideModel(x: number, bottom: number, w: number, h: number, upper = false, key = "") {
+  const sign = upper ? -1 : 1;
+  const top = bottom - sign * h;
+  const teeth = Array.from({ length: 5 }, (_, i) => x + 3 + i * ((w - 6) / 4));
+  return (
+    <g key={key}>
+      <rect x={x} y={upper ? bottom : top} width={w} height={h} rx="2.2" fill={MODEL_BASE} stroke={MODEL_BASE_EDGE} strokeWidth="0.8" />
+      {teeth.map((cx, i) => <rect key={i} x={cx - 2.4} y={upper ? top : top - 5} width="4.8" height="5" rx="1.8" fill={MODEL_TOOTH} stroke={MODEL_EDGE} strokeWidth="0.6" />)}
+    </g>
+  );
+}
+
+export function PairPicture({ kind }: { kind: "separate" | "articulated" }) {
+  return (
+    <svg className="studio-choice-pic" viewBox="0 0 64 40" aria-hidden="true">
+      {kind === "separate" ? (<>
+        {sideModel(3, 34, 26, 12)}
+        {sideModel(35, 34, 26, 12)}
+      </>) : (<>
+        {sideModel(8, 6, 40, 12, true, "u")}
+        {sideModel(8, 34, 40, 12, false, "l")}
+        <rect x="49" y="8" width="5" height="24" rx="1.5" fill={MODEL_BASE} stroke={MODEL_BASE_EDGE} strokeWidth="0.8" />
+        <circle cx="51.5" cy="20" r="3.2" fill="#ffffff" stroke={MODEL_HINGE} strokeWidth="1.4" />
+      </>)}
+    </svg>
+  );
+}
+
+export function HeightPicture({ kind }: { kind: "standard" | "tall" }) {
+  const h = kind === "tall" ? 17 : 11;
+  return (
+    <svg className="studio-choice-pic" viewBox="0 0 64 40" aria-hidden="true">
+      {sideModel(12, 36, 40, h)}
+      <path d={`M57 36V${36 - h}M55 36H59M55 ${36 - h}H59`} stroke={MODEL_HINGE} strokeWidth="1.2" fill="none" />
+    </svg>
+  );
+}
+
+/** The two hinges, in section: the ball dropping into an open cup, or held by a clip whose mouth is narrower than the ball. */
+export function HingePicture({ kind }: { kind: "standard" | "snap" }) {
+  return (
+    <svg className="studio-choice-pic" viewBox="0 0 64 40" aria-hidden="true">
+      {kind === "standard" ? (<>
+        <path d="M18 38V24A14 14 0 0 1 46 24V38Z" fill={MODEL_BASE} stroke={MODEL_BASE_EDGE} strokeWidth="0.8" />
+        <path d="M23 24A9 9 0 0 1 41 24" fill="#ffffff" stroke={MODEL_BASE_EDGE} strokeWidth="0.8" />
+        <path d="M23 24H41" stroke="#ffffff" strokeWidth="1.6" />
+        <rect x="29.5" y="2" width="5" height="14" rx="1.5" fill={MODEL_TOOTH} stroke={MODEL_EDGE} strokeWidth="0.7" />
+        <circle cx="32" cy="19" r="7.6" fill={MODEL_TOOTH} stroke={MODEL_EDGE} strokeWidth="0.8" />
+      </>) : (<>
+        <path d="M14 38V20A18 18 0 0 1 50 20V38Z" fill={MODEL_BASE} stroke={MODEL_BASE_EDGE} strokeWidth="0.8" />
+        <circle cx="32" cy="21" r="8.6" fill="#ffffff" stroke={MODEL_BASE_EDGE} strokeWidth="0.8" />
+        <path d="M27.6 4H36.4V13H27.6Z" fill="#ffffff" />
+        <rect x="29.5" y="2" width="5" height="14" rx="1.5" fill={MODEL_TOOTH} stroke={MODEL_EDGE} strokeWidth="0.7" />
+        <circle cx="32" cy="21" r="7.8" fill={MODEL_TOOTH} stroke={MODEL_EDGE} strokeWidth="0.8" />
+        <path d="M26.6 12.6L28.6 14.6M37.4 12.6L35.4 14.6" stroke={MODEL_HINGE} strokeWidth="1.6" strokeLinecap="round" />
+      </>)}
+    </svg>
+  );
+}
+
+/** The ball in its seat with the clearance round it - tighter, standard or looser (drawn larger than life). */
+export function FitPicture({ level }: { level: 0 | 1 | 2 }) {
+  const gap = [0.8, 2, 3.4][level];
+  return (
+    <svg className="studio-choice-pic" viewBox="0 0 64 40" aria-hidden="true">
+      <path d="M14 38V22A18 18 0 0 1 50 22V38Z" fill={MODEL_BASE} stroke={MODEL_BASE_EDGE} strokeWidth="0.8" />
+      <circle cx="32" cy="22" r={10 + gap} fill="#ffffff" stroke={MODEL_BASE_EDGE} strokeWidth="0.8" />
+      <circle cx="32" cy="22" r="10" fill={MODEL_TOOTH} stroke={MODEL_EDGE} strokeWidth="0.8" />
     </svg>
   );
 }

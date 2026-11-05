@@ -20379,7 +20379,7 @@ export function LayerlingEditor({
     // Build 106: Model, Base, Articulator & label and the made models - the views and the view's own
     // settings only (and Print view / Occlusion once made), the same on a model as beside it.
     // Wax-up Studio: every step after Import, the same way (with the selected wax tooth's own items).
-    const viewStep = studioShellOn && (dentalStudio?.stage === "made" || (studioWaxOpen ? Boolean(studioWaxStep) && studioWaxStep !== "scans" : studioMbStep === "model" || studioMbStep === "base" || studioMbStep === "label"));
+    const viewStep = studioShellOn && (dentalStudio?.stage === "made" || (studioWaxOpen ? Boolean(studioWaxStep) && studioWaxStep !== "scans" : studioMbStep === "model" || studioMbStep === "base" || studioMbStep === "articulator" || studioMbStep === "fill" || studioMbStep === "label"));
     if (scansStep || viewStep) selectOther = [];
     const onPart = Boolean(shapeContextMenu?.onShape) && hasSelection && !scansStep && !viewStep;
     const parts = onPart ? selectedShapes : shapes.filter((shape) => !shape.hidden && !shape.hole);

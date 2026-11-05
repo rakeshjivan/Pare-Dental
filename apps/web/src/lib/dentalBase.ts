@@ -440,12 +440,6 @@ export function roundOutline(runtime: ManifoldRuntime, points: Ring, clearance =
   if (!ring || ring.length < 3) return sharp;
   return ringArea(ring) < 0 ? [...ring].reverse() : ring;
 }
-function ringArea(ring: Ring) {
-  let a = 0;
-  for (let i = 0; i < ring.length; i += 1) { const p = ring[i], q = ring[(i + 1) % ring.length]; a += p[0] * q[1] - q[0] * p[1]; }
-  return a / 2;
-}
-
 /** A rectangular block round the teeth `points`, each side `clearance` mm clear of them. Counter-clockwise. */
 export function blockOutline(points: Ring, clearance = 3): Ring {
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
