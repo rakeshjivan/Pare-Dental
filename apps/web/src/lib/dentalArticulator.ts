@@ -17,7 +17,7 @@
  */
 import type { ManifoldRuntime, ManifoldSolid } from "@/lib/dentalMesh";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
-import { SNAP, snapHinge } from "@/lib/dentalSnapHinge";
+import { SNAP, snapHinge, profileField, extruded } from "@/lib/dentalSnapHinge";
 
 const deg = Math.PI / 180;
 
@@ -116,17 +116,41 @@ export const POST_HALF = 4;
 /** Build 79: the side posts stand this far behind the front of the incisors, mm - about the premolars. */
 export const POST_BACK = 16;
 
-/** Build 119: how far forward into its base a heel (a pedestal or a cup's block on the smooth base) reaches, mm, and the rounding of its upright edges. */
+/** Build 119: how far forward into its base a heel (a pedestal or a cup's block on the smooth base) reaches, mm. */
 export const HEEL_INTO = 6;
-export const HEEL_ROUND = 1.5;
-/** A block with its upright edges rounded. */
-function roundedBlock(runtime: ManifoldRuntime, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number) {
-  const r = Math.min(HEEL_ROUND, (x1 - x0) / 2 - 0.01, (y1 - y0) / 2 - 0.01);
-  const plan = runtime.CrossSection.square([x1 - x0 - 2 * r, y1 - y0 - 2 * r]).translate([x0 + r, y0 + r]).offset(r, "Round", 2, 24);
-  const solid = plan.extrude(Math.max(0.01, z1 - z0)).translate([0, 0, z0]);
-  plan.delete();
-  return solid;
+/**
+ * Build 119 (Rakesh): on the smooth base, the standard hinge's cup blocks and pedestals shaped like the snap hinge's
+ * arm and post - smooth curved side profiles, every edge rounded, the underside sloping up into the base's back -
+ * in the axis' frame (x across from the condyle's centre, y back from the axis, z up). Around the ball they are the
+ * blocks they always were (CUP_HALF_X across, CUP_HALF_Y in front of and behind the ball, CUP_UNDER under its
+ * equator; the pedestal PEDESTAL under it), so the seat, its fit and the swing are unchanged. Made once and kept;
+ * the caller cuts them at the floors.
+ */
+let shapedHeels: { cup: ManifoldSolid; pedestal: ManifoldSolid } | null = null;
+function shapedHinge(runtime: ManifoldRuntime) {
+  if (shapedHeels) return shapedHeels;
+  const front = -(CUP_HALF_Y + 0.5) - HEEL_INTO;
+  // The cup's block: its underside CUP_UNDER under the ball round the seat, sweeping up in front into the base's back
+  // wall, its back corner a broad round.
+  // Its top a curve from just over the seat at the back up and forward into the base's back wall (a sloping arm, as the snap hinge's, not a full-height block).
+  const cupProfile: Array<[number, number]> = [[front - 2, 40], [front - 2, 2], [front + 2, 0.5], [-CUP_HALF_Y + 1.5, -CUP_UNDER], [CUP_HALF_Y - 2.5, -CUP_UNDER], [CUP_HALF_Y - 0.4, -CUP_UNDER + 1.2], [CUP_HALF_Y, 2], [CUP_HALF_Y, 5], [CUP_HALF_Y - 1.5, 8], [CUP_HALF_Y - 5, 10.5], [-1, 13], [-CUP_HALF_Y - 0.5, 17.5], [front + 1, 23], [front, 32], [front - 1, 40]];
+  const cupField = extruded(profileField(cupProfile, [front - 4, -6], [CUP_HALF_Y + 3, 42]), CUP_HALF_X, 1.5);
+  // The pedestal: 8 mm across, its top PEDESTAL under the ball, its back corner rounded, its front running into the base.
+  // (Its top a millimetre under PEDESTAL: the smooth curve through these points must never rise into the cup's swing.)
+  // Its top falls forward from under the ball into the base's back wall.
+  const pedProfile: Array<[number, number]> = [[front - 2, -60], [4, -60], [4, -40], [4, -20], [4, -PEDESTAL - 5], [4, -PEDESTAL - 3], [3.2, -PEDESTAL - 1.3], [1.5, -PEDESTAL - 1], [-2, -PEDESTAL - 1.5], [-CUP_HALF_Y - 0.5, -PEDESTAL - 4], [front - 2, -PEDESTAL - 8], [front - 2, -40]];
+  const pedField = extruded(profileField(pedProfile, [front - 4, -62], [7, -PEDESTAL + 2]), 4, 1.2);
+  const step = 0.2;
+  const level = (f: (x: number, y: number, z: number) => number, min: [number, number, number], max: [number, number, number]) =>
+    runtime.Manifold.levelSet((p: [number, number, number]) => -Math.max(f(p[0], p[1], p[2]), front - p[1]), { min, max }, step, 0);
+  const cupRaw = level(cupField, [-CUP_HALF_X - 1, front, -CUP_UNDER - 1], [CUP_HALF_X + 1, CUP_HALF_Y + 1, 40]);
+  const pedRaw = level(pedField, [-5, front, -60], [5, 5, -PEDESTAL + 1]);
+  shapedHeels = { cup: cupRaw.simplify(0.005), pedestal: pedRaw.simplify(0.005) };
+  cupRaw.delete();
+  pedRaw.delete();
+  return shapedHeels;
 }
+
 const box = (runtime: ManifoldRuntime, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number) =>
   runtime.Manifold.cube([x1 - x0, y1 - y0, z1 - z0]).translate([x0, y0, z0]);
 
@@ -345,8 +369,9 @@ export function articulatorParts(
     // The pedestal stops below where the cup's block swings down past it as the models open.
     // Build 119: on the smooth base the pedestal is a rounded heel out of the base's back (no bar to stand on).
     lowerParts.push(
-      more.smooth ? keep(roundedBlock(runtime, c - 4, c + 4, back - HEEL_INTO, ay + 4, floorLower, Math.max(floorLower + 1, -PEDESTAL))) : keep(box(runtime, c - 4, c + 4, ay - 4, ay + 4, floorLower, Math.max(floorLower + 1, -PEDESTAL))),
-      keep(runtime.Manifold.cylinder(PEDESTAL + 0.5, NECK, NECK, 32).translate([c, ay, -PEDESTAL - 0.25])),
+      more.smooth ? keep(keep(shapedHinge(runtime).pedestal.translate([c, ay, 0])).intersect(keep(box(runtime, c - 10, c + 10, ay - 30, ay + 10, floorLower, 0)))) : keep(box(runtime, c - 4, c + 4, ay - 4, ay + 4, floorLower, Math.max(floorLower + 1, -PEDESTAL))),
+      // Build 119: on the smooth base the pedestal's top stands a millimetre lower: the neck reaches down into it.
+      more.smooth ? keep(runtime.Manifold.cylinder(PEDESTAL + 2, NECK, NECK, 32).translate([c, ay, -PEDESTAL - 1.75])) : keep(runtime.Manifold.cylinder(PEDESTAL + 0.5, NECK, NECK, 32).translate([c, ay, -PEDESTAL - 0.25])),
       keep(runtime.Manifold.sphere(R, 96).translate([c, ay, 0])),
     );
     // Build 84: the drop-in cup, as builds 63-77 made it - a small block round the ball, reaching
@@ -355,7 +380,7 @@ export function articulatorParts(
     // of the block. A polygon's flats lie inside its sphere: the seat is grown by their depth.
     // Build 117: the fit as chosen (CUP_FIT when left out).
     const top = (R + fit) / Math.cos(Math.PI / 96);
-    upperParts.push(keep(more.smooth ? roundedBlock(runtime, c - CUP_HALF_X, c + CUP_HALF_X, Math.min(ay - CUP_HALF_Y, back - HEEL_INTO), ay + CUP_HALF_Y, -CUP_UNDER, floorUpper) : box(runtime, c - CUP_HALF_X, c + CUP_HALF_X, ay - CUP_HALF_Y, ay + CUP_HALF_Y, -CUP_UNDER, floorUpper)));
+    upperParts.push(keep(more.smooth ? keep(shapedHinge(runtime).cup.translate([c, ay, 0])).intersect(keep(box(runtime, c - 20, c + 20, ay - 30, ay + 20, -10, floorUpper))) : box(runtime, c - CUP_HALF_X, c + CUP_HALF_X, ay - CUP_HALF_Y, ay + CUP_HALF_Y, -CUP_UNDER, floorUpper)));
     const seat = keep(runtime.Manifold.sphere(top, 96).translate([c, ay, 0]));
     const tilt = DROP_IN_CHANNEL * deg, run = R + CUP_UNDER + 8;
     const out = keep(runtime.Manifold.sphere(top, 96).translate([c, ay + Math.sin(tilt) * run, -Math.cos(tilt) * run]));

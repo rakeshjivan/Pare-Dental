@@ -24,14 +24,16 @@ import { sampler, squaredDistanceTo, type Grid } from "@/lib/meshRound";
 import { NearestSurface } from "@/lib/nearestSurface";
 import { polygonDistance } from "@/lib/dentalSnapHinge";
 import { distanceFromEdge } from "@/lib/dentalBase";
+import { boundaryLoops } from "@/lib/dentalMesh";
 
 type Ring = Array<[number, number]>;
 
 export const SMOOTH = {
   /** The grid's step, mm (coarser on a big model, to keep within MAX_VOXELS). */
   step: 0.4,
-  /** The ledge's height above the rim, mm. */
+  /** The ledge's height above the rim, mm, and how far below where the scan is cut it stands (so the fillet is on the base, not the gum). */
   ledge: 5,
+  belowCut: 3,
   /** The shell's wall, mm. */
   wall: 2.2,
   /** The fillet's size between the gum and the ledge, mm. */
@@ -58,6 +60,13 @@ export const SMOOTH = {
   cavitySmooth: 1,
   /** An edge point raises the drape no higher than the lowest edge within this of it, mm. */
   seedOpen: 1,
+  /** A boundary loop shorter than this is a hole in the scan, not its edge: it seeds no drape, mm. */
+  holeLoop: 40,
+  /** Within this of the teeth the drape stays TEETH_DROP under the scan's edge, never lifted over it, mm. */
+  teethClear: 2,
+  teethDrop: 0.6,
+  /** How much further inside the scan the field stands round the teeth, mm. */
+  teethInset: 0.6,
   /** Taubin smoothing passes over the level set's surface (takes out the grid's faint ripple on curved parts). */
   passes: 6,
   /** Within this of the scan, its distance is exact (from its triangles), mm. */
@@ -66,7 +75,6 @@ export const SMOOTH = {
 
 /** The most voxels the base's grid may have. */
 const MAX_VOXELS = 14_000_000;
-const SIGN_BY_NORMAL = Boolean((globalThis as { __sbNormal?: boolean }).__sbNormal);
 
 const smin = (a: number, b: number, k: number) => { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k * 0.25; };
 const smax = (a: number, b: number, k: number) => -smin(-a, -b, k);
@@ -247,8 +255,16 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   // the scan (from the top of a tooth's labial face it would wrap the face in a cone).
   const alongEdge = distanceFromEdge(scan, S.edgeBand + 1);
   const seedZ = new Float32Array(n2).fill(-Infinity);
+  // Only the scan's own edge seeds the drape - not the rim of a hole in it (a gap in the scan beside a molar): a cone
+  // from a hole's rim, high on a tooth, would fill the hole up over the tooth.
+  const outerEdge = new Uint8Array(alongEdge.length);
+  for (const loop of boundaryLoops(scan)) {
+    let length = 0;
+    for (let k = 0; k < loop.length; k += 1) { const a = loop[k] * 3, b = loop[(k + 1) % loop.length] * 3; length += Math.hypot(v[a] - v[b], v[a + 1] - v[b + 1], v[a + 2] - v[b + 2]); }
+    if (length >= S.holeLoop) for (const i of loop) outerEdge[i] = 1;
+  }
   for (let i = 0; i < alongEdge.length; i += 1) {
-    if (alongEdge[i] !== 0) continue;
+    if (alongEdge[i] !== 0 || !outerEdge[i]) continue;
     const gi = Math.floor((v[i * 3] - x0) / h), gj = Math.floor((v[i * 3 + 1] - y0) / h);
     if (gi >= 0 && gj >= 0 && gi < nx && gj < ny) seedZ[gj * nx + gi] = Math.max(seedZ[gj * nx + gi], v[i * 3 + 2]);
   }
@@ -313,6 +329,8 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   // Away from the scan, its edge's nearness by column - smoothed, so it never steps from one column to the next.
   const edgeField = blur(Float32Array.from(inFromEdge, (d, col) => (covered[col] ? 1 - smooth01(d / S.edgeBand) : 1)), nx, ny, 1, 0.75 / h);
   const edgeAt = (col: number) => edgeField[col];
+  // Near the teeth the drape is never lifted over the scan's edge - it stays a little under it, so the crowns are never covered.
+  const teethNear = blur(Float32Array.from(grow(teethCols, S.teethClear / h)), nx, ny, 1, 0.75 / h);
   const insetField = blur(Float32Array.from(nearTeeth, (q) => q * S.inset), nx, ny, 1, 1 / h);
   // The outline's distance (negative inside).
   const ring = outline.map(([x, y]) => [x, y] as [number, number]);
@@ -348,7 +366,8 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
     const c = j * nx + i;
     const list = crossings.subarray(counts[c], counts[c + 1]);
     let above = list.length, p = 0;
-    const easeAt = (col: number, e: number) => (S.inset + insetField[col] * 0) * (1 - e);
+    // Round the teeth the field stands further inside the scan: the grid would otherwise fill the narrow embrasures over the crowns.
+    const easeAt = (col: number, e: number) => (S.inset + S.teethInset * Math.min(1, teethNear[col])) * (1 - e);
     const edgeHere = edgeAt(c), easeHere = easeAt(c, edgeHere);
     for (let k = 0; k < nz; k += 1) {
       const z = cz(k);
@@ -360,7 +379,9 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
         const exact = near.nearest(cx(i), cy(j), z, q);
         if (exact !== Infinity) {
           d = exact;
-          if (SIGN_BY_NORMAL && near.lastTriangle >= 0 && exact > 1e-4) {
+          // Round the teeth, which side is inside is the nearest face's: a scan's edge folded under a crown
+          // would put an extra surface over it, and counting surfaces above would call the crown's outside inside.
+          if (teethNear[c] > 0.5 && near.lastTriangle >= 0 && exact > 1e-4) {
             near.triangleNormal(near.lastTriangle, nrm);
             inside = (cx(i) - q[0]) * nrm[0] + (cy(j) - q[1]) * nrm[1] + (z - q[2]) * nrm[2] < 0;
           }
@@ -378,9 +399,11 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
         }
       }
       const scanSd = (inside ? -d : d) + ease;
-      const drapeSd = (z - smoothDrape[c]) * drapeNorm[c] - S.drapeLift * edgeHere;
+      const tn = Math.min(1, teethNear[c]);
+      const drapeSd = (z - smoothDrape[c]) * drapeNorm[c] - S.drapeLift * edgeHere * (1 - tn) + S.teethDrop * tn;
       // Over the scan's last EDGE_BAND it is eased in under the drape, so its ragged edge is buried.
-      const body = smin(smin(scanSd + S.edgeEase * edge, drapeSd, S.drapeBlend), z - ledge, S.fillet);
+      // Near the teeth the fillet is small, so it never climbs over the crowns.
+      const body = smin(smin(scanSd + S.edgeEase * edge, drapeSd, S.drapeBlend), z - ledge, S.fillet * (1 - 0.75 * tn));
       // The field reaches a little past the outline; the caller cuts the wall exactly (a prism), so it is flat.
       const cut = smax(body, rim[c] - S.wallSpare, S.edgeRound);
       if (base) base[index] = cut;
@@ -446,7 +469,9 @@ export function withoutTags(scan: Mesh, teeth: Uint8Array): Mesh {
     }
     if (!any) break;
     const kept: number[] = [];
-    for (let t = 0; t + 2 < f.length; t += 3) if (!(tag[f[t]] || tag[f[t + 1]] || tag[f[t + 2]])) kept.push(f[t], f[t + 1], f[t + 2]);
+    // A face touching the teeth is never taken, even beside a tag.
+    for (let t = 0; t + 2 < f.length; t += 3) if (!(tag[f[t]] || tag[f[t + 1]] || tag[f[t + 2]]) || teeth[f[t]] || teeth[f[t + 1]] || teeth[f[t + 2]]) kept.push(f[t], f[t + 1], f[t + 2]);
+    if (kept.length === f.length) break;
     m = { v, f: kept };
   }
   return m;

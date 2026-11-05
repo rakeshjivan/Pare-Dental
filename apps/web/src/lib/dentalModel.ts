@@ -1253,8 +1253,8 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
   const apart = Boolean(prep.analysis.pair?.apart);
   if (apart) options = { ...options, layout: "print", hinge: false };
   // Build 119: articulated models stand on the smooth base (either hinge) - an orthodontic outline (a straight back for
-  // the hinge), hollow, honeycomb or solid as chosen, its ledge SMOOTH.ledge above the rim, so the base is at least that tall.
-  if (options.hinge && prep.arches.length === 2) options = { ...options, baseStyle: "ortho", inside: options.inside === "solid" ? "solid" : "open", smoothBase: true, base: Math.max(options.base, SMOOTH.ledge) };
+  // the hinge), hollow, honeycomb or solid as chosen, its ledge SMOOTH.ledge above the rim and SMOOTH.belowCut below where the scan is cut, so the gum runs on down into the fillet.
+  if (options.hinge && prep.arches.length === 2) options = { ...options, baseStyle: "ortho", inside: options.inside === "solid" ? "solid" : "open", smoothBase: true, base: Math.max(options.base, SMOOTH.ledge + SMOOTH.belowCut) };
   const runtime = given ?? (await getManifoldRuntime());
   const base = Math.max(DENTAL_MIN_BASE, Math.min(DENTAL_MAX_BASE, options.base));
   const keeps = prep.arches.map((arch) => keptDepthFor(arch, options));

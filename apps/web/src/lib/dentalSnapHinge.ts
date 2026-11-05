@@ -102,7 +102,7 @@ export function polygonDistance(poly: P2[], x: number, y: number) {
 }
 
 /** A profile's distance, sampled on a grid over [lo, hi] and read bilinearly (exact enough at 0.05 mm, and fast). */
-function profileField(points: P2[], lo: P2, hi: P2, g = 0.05) {
+export function profileField(points: P2[], lo: P2, hi: P2, g = 0.05) {
   const poly = smoothLoop(points);
   const nx = Math.ceil((hi[0] - lo[0]) / g) + 1, ny = Math.ceil((hi[1] - lo[1]) / g) + 1;
   const a = new Float32Array(nx * ny);
@@ -116,7 +116,7 @@ function profileField(points: P2[], lo: P2, hi: P2, g = 0.05) {
 }
 
 /** A 2-D profile (in y, z) extruded across |x| <= half, its edges rounded by r. */
-const extruded = (f: (y: number, z: number) => number, half: number, r: number) => (x: number, y: number, z: number) => {
+export const extruded = (f: (y: number, z: number) => number, half: number, r: number) => (x: number, y: number, z: number) => {
   const wx = f(y, z) + r, wy = Math.abs(x) - half + r;
   return Math.min(Math.max(wx, wy), 0) + Math.hypot(Math.max(wx, 0), Math.max(wy, 0)) - r;
 };
