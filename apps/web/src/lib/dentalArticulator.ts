@@ -126,9 +126,11 @@ export const HEEL_INTO = 6;
  * equator; the pedestal PEDESTAL under it), so the seat, its fit and the swing are unchanged. Made once and kept;
  * the caller cuts them at the floors.
  */
-let shapedHeels: { cup: ManifoldSolid; pedestal: ManifoldSolid } | null = null;
+// Build 120: kept per runtime - a solid of one manifold runtime cannot be used with another (a worker's, a test's).
+const shapedHeelsBy = new WeakMap<object, { cup: ManifoldSolid; pedestal: ManifoldSolid }>();
 function shapedHinge(runtime: ManifoldRuntime) {
-  if (shapedHeels) return shapedHeels;
+  const kept = shapedHeelsBy.get(runtime);
+  if (kept) return kept;
   const front = -(CUP_HALF_Y + 0.5) - HEEL_INTO;
   // The cup's block: its underside CUP_UNDER under the ball round the seat, sweeping up in front into the base's back
   // wall, its back corner a broad round.
@@ -145,10 +147,11 @@ function shapedHinge(runtime: ManifoldRuntime) {
     runtime.Manifold.levelSet((p: [number, number, number]) => -Math.max(f(p[0], p[1], p[2]), front - p[1]), { min, max }, step, 0);
   const cupRaw = level(cupField, [-CUP_HALF_X - 1, front, -CUP_UNDER - 1], [CUP_HALF_X + 1, CUP_HALF_Y + 1, 40]);
   const pedRaw = level(pedField, [-5, front, -60], [5, 5, -PEDESTAL + 1]);
-  shapedHeels = { cup: cupRaw.simplify(0.005), pedestal: pedRaw.simplify(0.005) };
+  const shaped = { cup: cupRaw.simplify(0.005), pedestal: pedRaw.simplify(0.005) };
   cupRaw.delete();
   pedRaw.delete();
-  return shapedHeels;
+  shapedHeelsBy.set(runtime, shaped);
+  return shaped;
 }
 
 const box = (runtime: ManifoldRuntime, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number) =>

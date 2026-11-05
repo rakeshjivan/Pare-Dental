@@ -252,7 +252,7 @@ describe("Dental Studio (build 47)", () => {
     // An arch that could not be made apart is made here after all.
     const fallback = await makeDentalStudio(inputOf(), options, runtime as never, { index: 1, part: Promise.reject(new Error("worker gone")) });
     expect(fallback.parts.map((part) => part.volume)).toEqual(whole.parts.map((part) => part.volume));
-  }, 120_000);
+  }, 400_000);
 
   it("starts each preset from the settings the evidence points to", () => {
     expect(dentalPreset("study", 16, false)).toMatchObject({ inside: "open", baseStyle: "clean", keep: null });

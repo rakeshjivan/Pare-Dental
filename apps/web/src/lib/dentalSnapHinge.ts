@@ -153,7 +153,8 @@ export function lowerField(fit: number = SNAP.fit, throatRadius: number = SNAP.t
 export const SNAP_STEP = 0.18;
 /** How far the parts' surfaces may move when their triangles are merged, mm. */
 export const SNAP_SIMPLIFY = 0.005;
-const made = new Map<string, { upper: ManifoldSolid; lower: ManifoldSolid }>();
+// Build 120: kept per runtime (a solid of one manifold runtime cannot be used with another).
+const madeBy = new WeakMap<object, Map<string, { upper: ManifoldSolid; lower: ManifoldSolid }>>();
 
 /**
  * One side's hinge in its own frame (made once for each fit and kept): the upper's beak, stem and ball,
@@ -163,6 +164,8 @@ export function snapHinge(runtime: ManifoldRuntime, fitGiven?: number, gripGiven
   const fit = snapFit(fitGiven);
   const grip = snapGrip(gripGiven);
   const key = `${fit.toFixed(3)}|${grip.toFixed(3)}`;
+  let made = madeBy.get(runtime);
+  if (!made) { made = new Map(); madeBy.set(runtime, made); }
   const kept = made.get(key);
   if (kept) return kept;
   const { Manifold } = runtime;
