@@ -1224,7 +1224,7 @@ export function DentalStudioPanel({
             </>) : null}
             {/* Build 119 (on test): the hinge - the drop-in cups, or the snap hinge on the smooth base. */}
             <h4 className="dental-group">{t("studio.hingeStyle")}</h4>
-            <div className="studio-mm-choice" role="radiogroup" aria-label={t("studio.hingeStyle")}>
+            <div className="studio-mm-choice two" role="radiogroup" aria-label={t("studio.hingeStyle")}>
               {(["standard", "snap"] as const).map((style) => {
                 const on = (options.hingeStyle ?? "standard") === style;
                 return <button key={style} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} onClick={() => onOptionsChange({ hingeStyle: style })}>{t(style === "snap" ? "studio.hingeSnap" : "studio.hingeStandard")}</button>;
@@ -1234,20 +1234,20 @@ export function DentalStudioPanel({
             {options.hingeStyle === "snap" ? (<>
               {/* Build 119: the snap's grip - how much narrower than the ball the throat is. */}
               <h4 className="dental-group">{t("studio.snapGrip")}</h4>
-              <div className="studio-mm-choice" role="radiogroup" aria-label={t("studio.snapGrip")}>
+              <div className="studio-mm-choice three" role="radiogroup" aria-label={t("studio.snapGrip")}>
                 {SNAP_GRIPS.map((grip, index) => {
                   const on = Math.abs(snapGrip(options.snapGrip) - grip) < 1e-6;
-                  return <button key={grip} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} title={t("studio.snapGripHint")} onClick={() => onOptionsChange({ snapGrip: grip })}>{`${t((["studio.snapGripLighter", "studio.hingeFitStandard", "studio.snapGripFirmer"] as const)[index])} ${grip.toFixed(2)} mm`}</button>;
+                  return <button key={grip} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} title={`${grip.toFixed(2)} mm`} onClick={() => onOptionsChange({ snapGrip: grip })}>{t((["studio.snapGripLighter", "studio.hingeFitStandard", "studio.snapGripFirmer"] as const)[index])}</button>;
                 })}
               </div>
               <p className="blend-hint">{t("studio.snapGripHint")}</p>
             </>) : (<>
             {/* Build 117: the ball-and-socket's fit - tighter, standard or looser, the clearance all round the ball. */}
             <h4 className="dental-group">{t("studio.hingeFit")}</h4>
-            <div className="studio-mm-choice" role="radiogroup" aria-label={t("studio.hingeFit")}>
+            <div className="studio-mm-choice three" role="radiogroup" aria-label={t("studio.hingeFit")}>
               {HINGE_FITS.map((fit, index) => {
                 const on = Math.abs((options.hingeFit ?? CUP_FIT) - fit) < 1e-6;
-                return <button key={fit} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} title={t("studio.hingeFitHint")} onClick={() => onOptionsChange({ hingeFit: fit })}>{`${t((["studio.hingeFitTighter", "studio.hingeFitStandard", "studio.hingeFitLooser"] as const)[index])} ${fit.toFixed(2)} mm`}</button>;
+                return <button key={fit} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} title={`${fit.toFixed(2)} mm`} onClick={() => onOptionsChange({ hingeFit: fit })}>{t((["studio.hingeFitTighter", "studio.hingeFitStandard", "studio.hingeFitLooser"] as const)[index])}</button>;
               })}
             </div>
             <p className="blend-hint">{t("studio.hingeFitHint")}</p>

@@ -1128,9 +1128,19 @@ html.studio-right-hidden .studio-shell-on .dental-studio-panel.studio-framed { d
 }
 .studio-shell-on .dental-studio-panel.studio-framed .dental-presets button .dental-picture { width: 34px; height: 26px; flex: none; }
 .studio-shell-on .dental-studio-panel.studio-framed .dental-presets button strong { font-size: 13.5px; line-height: 1.25; }
-.studio-pic-choice { gap: 6px; }
-.studio-pic-choice button { flex-direction: row; justify-content: center; gap: 8px; padding: 6px 8px; font-size: 13.5px; }
-.studio-pic-choice .studio-body-pic { width: 34px; height: 24px; flex: none; }
+/* Never wider than the panel (no sideways scroll): columns that can shrink, the picture over the name. */
+.studio-pic-choice { gap: 6px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.studio-pic-choice.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.studio-pic-choice button { min-width: 0; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 4px; font-size: 13px; line-height: 1.2; white-space: nowrap; }
+.studio-pic-choice .studio-body-pic { width: 32px; height: 22px; flex: none; }
+.studio-shell-on .dental-studio-panel.studio-framed .dental-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.studio-shell-on .dental-studio-panel.studio-framed .dental-presets button { min-width: 0; }
+.studio-mm-choice button, .studio-toggle-buttons button { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The hinge's choices: three across, one word each. */
+.studio-mm-choice.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.studio-mm-choice { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.studio-mm-choice.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.studio-toggle-buttons { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .studio-mm-choice { gap: 6px; }
 .studio-mm-choice button { padding: 6px 4px; font-size: 13px; line-height: 1.25; }
 .studio-toggle-buttons { gap: 6px; }
