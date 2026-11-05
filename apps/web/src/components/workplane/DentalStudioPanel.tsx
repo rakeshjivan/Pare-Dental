@@ -563,6 +563,9 @@ export function DentalStudioPanel({
   const [asked, setAsked] = useState<Record<string, boolean>>(() => (editing ? Object.fromEntries(["type", "layout", "height", "hinge", "fit", "pins", "gap", "ovd", "aheight"].map((id) => [id, true])) : {}));
   const [openQ, setOpenQ] = useState<string | null>(null);
   const answer = (id: string) => { setAsked((state) => ({ ...state, [id]: true })); setOpenQ(null); };
+  // Build 120 (Rakesh): an articulator question's choice, made but not yet confirmed with its Next.
+  const [picked, setPicked] = useState<Record<string, boolean>>({});
+  const pick = (id: string) => setPicked((state) => (state[id] ? state : { ...state, [id]: true }));
   const toArticulator = useRef(false);
   const nextSeen = useRef(nextSignal);
   useEffect(() => {
@@ -699,11 +702,11 @@ export function DentalStudioPanel({
   ) : null;
   const waxPart: WaxupPart | null = waxStep && ["select", "teeth", "find", "choose", "set", "place", "adjust", "occlusion", "sculpt"].includes(waxStep) ? waxStep as WaxupPart : null;
   /** Build 120 (Rakesh): the base's height - standard (the smooth base's own) or tall. */
-  const heightChoice = (onPicked?: () => void) => (<>
+  const heightChoice = (onPicked?: () => void, shown = true) => (<>
     <h4 className="dental-group">{t("studio.baseHeight")} <HelpTip text={t("studio.baseHeightHint")} /></h4>
     <div className="studio-pic-choice two" role="radiogroup" aria-label={t("studio.baseHeight")}>
       {(["standard", "tall"] as const).map((kind) => {
-        const on = (options.baseHeight ?? "standard") === kind;
+        const on = shown && (options.baseHeight ?? "standard") === kind;
         return (
           <button key={kind} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} onClick={() => { onOptionsChange({ baseHeight: kind }); onPicked?.(); }}>
             <HeightPicture kind={kind} />
@@ -1200,16 +1203,19 @@ export function DentalStudioPanel({
         const first = order.find((id) => !asked[id]) ?? null;
         const open = openQ && order.includes(openQ) ? openQ : first;
         const shown = first ? order.slice(0, order.indexOf(first) + 1) : order;
+        const chosen = (id: string) => Boolean(picked[id] || asked[id]);
         const pics = <T extends string>(id: string, label: string, value: T, choices: Array<[T, ReactNode, string, string?]>, onPick: (value: T) => void) => (
           <div className={`studio-pic-choice${choices.length === 2 ? " two" : ""}`} role="radiogroup" aria-label={label}>
             {choices.map(([v, pic, text, tip]) => (
-              <button key={v} type="button" role="radio" aria-checked={value === v} className={value === v ? "active" : ""} disabled={busy} title={tip} onClick={() => { onPick(v); answer(id); }}>
+              <button key={v} type="button" role="radio" aria-checked={chosen(id) && value === v} className={chosen(id) && value === v ? "active" : ""} disabled={busy} title={tip} onClick={() => { onPick(v); pick(id); }}>
                 {pic}<span>{text}</span>
               </button>
             ))}
           </div>
         );
-        const done = (id: string) => <div className="studio-q-done"><button type="button" className="secondary" disabled={busy} onClick={() => answer(id)}>{t("studio.qDone")}</button></div>;
+        // Build 120 (Rakesh): nothing is shown chosen until it is chosen; Next stays grey until then, green after,
+        // and only Next opens the following question. A slider always holds a value, so its Next is ready.
+        const done = (id: string, ready = chosen(id)) => <div className="studio-q-done"><button type="button" className={ready ? "primary" : "secondary"} disabled={busy || !ready} onClick={() => answer(id)}>{t("studio.qDone")}</button></div>;
         const questions: Array<{ id: string; title: string; answer: string; body: ReactNode }> = [
           { id: "hinge", title: t("studio.chooseHinge"), answer: t(snap ? "studio.hingeSnap" : "studio.hingeStandard"), body: (<>
             {pics("hinge", t("studio.hingeStyle"), snap ? "snap" : "standard", [["snap", <HingePicture key="n" kind="snap" />, t("studio.hingeSnap"), t("studio.hingeSnapHint")], ["standard", <HingePicture key="s" kind="standard" />, t("studio.hingeStandard"), t("studio.hingeStandardHint")]], (hingeStyle) => onOptionsChange({ hingeStyle }))}
@@ -1234,7 +1240,7 @@ export function DentalStudioPanel({
               <div className="studio-artic-picture">{place === "sides" ? <ArticulatorSidesPicture pinGap={options.pinGap ?? PIN_CLEAR} /> : <ArticulatorPicture pinRaise={0} pin pinGap={options.pinGap ?? PIN_CLEAR} />}</div>
               <EdgeModifierSlider label={t("dental.pinGap")} value={options.pinGap ?? PIN_CLEAR} min={PIN_CLEAR} max={PIN_GAP_MAX} step={0.5} workspace={workspace} length disabled={busy} onChange={(value) => onOptionsChange({ pinGap: Math.max(PIN_CLEAR, Math.min(PIN_GAP_MAX, Math.round(value * 2) / 2)) })} />
               <p className="blend-hint">{t("studio.pinGapHint")}</p>
-              {done("gap")}
+              {done("gap", true)}
             </>) },
             { id: "ovd", title: t("studio.increaseOvd"), answer: (options.pinRaise ?? 0) > 0 ? `${(options.pinRaise ?? 0).toFixed(1)} mm${options.risers && place === "sides" ? ` + ${t("studio.risersShort")}` : ""}` : t("studio.ovdNone"), body: (<>
               <div className="studio-artic-picture"><ArticulatorPicture pinRaise={options.pinRaise ?? 0} pin={place !== "sides"} pinGap={options.pinGap ?? PIN_CLEAR} /></div>
@@ -1247,10 +1253,10 @@ export function DentalStudioPanel({
                 </label>
                 {options.risers ? <p className="blend-hint">{t("studio.risersHint")}</p> : null}
               </>) : null}
-              {done("ovd")}
+              {done("ovd", true)}
             </>) },
           ] : []),
-          { id: "aheight", title: t("studio.baseHeight"), answer: t(options.baseHeight === "tall" ? "studio.baseTall" : "studio.baseStandard"), body: (<>{heightChoice(() => answer("aheight"))}{done("aheight")}</>) },
+          { id: "aheight", title: t("studio.baseHeight"), answer: t(options.baseHeight === "tall" ? "studio.baseTall" : "studio.baseStandard"), body: (<>{heightChoice(() => pick("aheight"), chosen("aheight"))}{done("aheight")}</>) },
         ];
         return (
           <div className="studio-questions">

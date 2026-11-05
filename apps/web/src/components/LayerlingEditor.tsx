@@ -2782,6 +2782,8 @@ export function LayerlingEditor({
         if (button.title) {
           return;
         }
+        // Build 120: not in the studio's questions - their words are on the button already.
+        if (button.closest(".studio-questions")) return;
         const label = button.getAttribute("aria-label") ?? button.textContent?.trim();
         if (label) {
           button.title = label.replace(/\s+/g, " ");
