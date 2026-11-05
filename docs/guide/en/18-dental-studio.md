@@ -162,7 +162,7 @@ The scans are kept with the models, hidden. Later, select a model and open **{{u
 5. **{{ui:waxup.occlusionStep}}** (both arches): the bite opened at the incisors on an average articulator, the posterior wax brought into even contact and the lower front teeth to touch the upper's palatal surfaces, then the jaw moved forward and to each side with canine guidance or group function; interferences on posterior wax are carved back (up to 0.5 mm), the rest - and any on the patient's own teeth - reported.
 6. Make the models. With **{{ui:waxStudio.flowImt}}** Make also makes, for each arch waxed, the pre-op model and the alternate-tooth wax-up (the series 1 index); the full wax-up model is the series 2 index. Print them at a 25-50 micron layer height and make the clear silicone index chairside on them.
 
-The tooth finder is a trained network (CrossTooth, Xi et al., CVPR 2025) that is not part of Pare 3D: load its file (.ptw) once with **{{ui:waxup.loadFinder}}** and this browser keeps it. It runs on your computer; the scan never leaves it. Without it, mark the midline and canines by hand.
+No tooth finder comes with Pare 3D: mark the midline and canines by hand.
 
 ## Accuracy
 

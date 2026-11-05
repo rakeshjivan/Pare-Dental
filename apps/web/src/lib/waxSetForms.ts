@@ -1,10 +1,9 @@
 /**
  * Build 108: the tooth sets Wax-up Studio offers, by arch and form. Every library's six-tooth front sets
- * (Pare's, Dr Adam Nulty's and Teethy's - no pontics, no full arches) are sorted by the form of their
+ * (no pontics, no full arches) are sorted by the form of their
  * centrals and named by it: Square 1, Square 2, Oval 1... The authors are credited on the Licences &
  * credits page, not in the tool. A set not listed here is not offered (it still opens in a design made with it).
- * Build 117: Christian Brenes's sets only (Pare's library) - the library Prof Meyers works with; Dr Nulty's and
- * Teethy's are no longer offered.
+ * Build 117: Christian Brenes's sets only (Pare's library) - the library Prof Meyers works with.
  */
 export type WaxSetForm = "square" | "oval" | "round";
 export const WAX_SET_FORM_ORDER: WaxSetForm[] = ["square", "oval", "round"];

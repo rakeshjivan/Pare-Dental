@@ -26,12 +26,10 @@ export type ToothSetEntry = {
 export type ToothLibraryManifest = { id: string; name: string; credit: string; url: string; sets: ToothSetEntry[]; hidden?: boolean };
 
 /**
- * The libraries that ship with Pare 3D (folders under public/libraries). Build 102: the Pare library
- * (Christian Brenes's Elchi forms and Smile Overlay designs) is the one offered; Teethy's and Dr Adam
- * Nulty's sets stay in the app, hidden, so designs made with them still open. Build 108: Wax-up Studio offers
- * every library's front sets again, by form (src/lib/waxSetForms.ts).
+ * The libraries that ship with Pare 3D (folders under public/libraries). Build 120 (Rakesh): only the Pare
+ * library (Christian Brenes's Elchi forms and Smile Overlay designs); the other libraries are no longer included.
  */
-export const BUILT_IN_LIBRARIES = ["pare", "nulty", "teethy"] as const;
+export const BUILT_IN_LIBRARIES = ["pare"] as const;
 
 const MAGIC = 0x314c5450; // "PTL1"
 

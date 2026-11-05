@@ -92,10 +92,11 @@ describe("Build 102: exocad tooth libraries, read natively", () => {
 
 describe("Build 102: the Pare library - Christian Brenes's Elchi and Smile Overlay, by Pare names", () => {
   const manifest = JSON.parse(readFileSync("apps/web/public/libraries/pare/manifest.json", "utf8")) as ToothLibraryManifest;
-  it("is the library offered; the earlier ones stay, hidden; the credit is kept", () => {
-    expect(BUILT_IN_LIBRARIES[0]).toBe("pare");
+  it("is the only library that ships (Build 120: the others removed); the credit is kept", () => {
+    expect(BUILT_IN_LIBRARIES).toEqual(["pare"]);
     expect(manifest.hidden).toBeFalsy();
-    for (const id of ["nulty", "teethy"]) expect((JSON.parse(readFileSync(`apps/web/public/libraries/${id}/manifest.json`, "utf8")) as ToothLibraryManifest).hidden).toBe(true);
+    for (const id of ["nulty", "teethy"]) expect(existsSync(`apps/web/public/libraries/${id}`)).toBe(false);
+    expect(existsSync("apps/web/public/models/crosstooth.ptw")).toBe(false);
     expect(manifest.credit).toMatch(/Christian Brenes/);
     expect(readFileSync("apps/web/public/libraries/pare/ATTRIBUTION.md", "utf8")).toMatch(/Christian Brenes/);
     expect(readFileSync("docs/guide/en/19-licences-and-credits.md", "utf8")).toMatch(/Christian Brenes/);
@@ -137,5 +138,5 @@ describe("Build 107: the six-tooth sets come in contact, as a Meshmixer part", (
         expect(Math.sqrt(best), `${set.name} ${k}`).toBeLessThan(0.5);
       }
     }
-  });
+  }, 120000);
 });

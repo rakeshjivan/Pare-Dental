@@ -224,19 +224,6 @@ describe("Build 79: the digital wax-up", () => {
     expect(() => decodeToothSet(new Uint8Array(16))).toThrow();
   });
 
-  it("ships the Teethy sets: each six closed teeth that read as a set", () => {
-    const manifest = JSON.parse(readFileSync("apps/web/public/libraries/teethy/manifest.json", "utf8")) as ToothLibraryManifest;
-    expect(manifest.sets.length).toBe(9);
-    expect(manifest.credit).toMatch(/teethy\.org/);
-    for (const set of manifest.sets) {
-      const shells = decodeToothSet(readFileSync(`apps/web/public/libraries/teethy/${set.file}`));
-      expect(shells.length).toBe(set.teeth);
-      const kinds = librarySet(set.name, shells).teeth.map((t) => t.kind);
-      expect(kinds).toEqual(["canine", "lateral", "central", "central", "lateral", "canine"]);
-      for (const shell of shells) toManifold(runtime as never, weld(shell, 1e-6)).delete();
-    }
-  });
-
   it("joins wax to a Dental Studio model and keeps every crown point it does not cover where the scan put it", async () => {
     const arch = syntheticArch();
     // One wax "tooth" over the front of the made-up arch's teeth.

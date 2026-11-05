@@ -15,8 +15,7 @@ Pare 3D began as a modified version of **layerling** (copyright 2026 layerling c
 
 ## Dental data and models
 
-- **Tooth libraries:** the sets in Wax-up (named by their form: Square 1, Oval 1, Round 1 and so on) are made from Christian Brenes's Elchi library and 3D Smile Overlay, used with his permission; from Dr Adam Nulty's A01 and F01 libraries, used with his permission (CC BY-NC-ND 4.0); and from [teethy.org](https://teethy.org)'s anterior library, redistributed with written permission.
-- **Tooth finder:** the trained network is CrossTooth - Xi et al., *3D Dental Model Segmentation with Geometrical Boundary Preserving*, CVPR 2025 - used with the authors' permission.
+- **Tooth libraries:** the sets in Wax-up (named by their form: Square 1, Oval 1, Round 1 and so on) are made from Christian Brenes's Elchi library and 3D Smile Overlay, used with his permission.
 
 ## Open-source libraries
 

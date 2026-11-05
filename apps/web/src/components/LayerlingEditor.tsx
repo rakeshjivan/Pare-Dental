@@ -12052,8 +12052,7 @@ export function LayerlingEditor({
   /** Build 101: Wax-up Studio's Undo records a step through this (the function is defined below, with the stacks). */
   const waxRecordRef = useRef<(coalesce?: boolean) => void>(() => {});
   const waxLibraries = useRef<ToothLibraryManifest[] | null>(null);
-  // The sets that ship with Pare 3D, read once the Studio is open. Build 91: every library (Teethy and
-  // Dr Adam Nulty's), the anterior sets in the picker, each with its picture.
+  // The sets that ship with Pare 3D, read once the Studio is open (Build 120: the Pare library only).
   useEffect(() => {
     if (!dentalStudio?.waxStudio || waxLibraries.current) return;
     waxLibraries.current = [];
@@ -12064,7 +12063,7 @@ export function LayerlingEditor({
       // the sets' Pare names - the authors are credited on the Licences & credits page, not in the tool.
       // Build 107: Christian Brenes's six-tooth sets only (the Pare library) - the Smile Overlay parts first,
       // as Meshmixer's Parts bring them in, then the Elchi forms; no full arches.
-      // Build 108: every library's front sets again (Pare's, Dr Nulty's, Teethy's - no pontics, no full
+      // Build 108: the library's front sets (no pontics, no full
       // arches), each by its arch and form and named by it (Square 1, Oval 2...).
       const builtIn = libraries.flatMap((library) => library.sets.flatMap((set) => {
         const form = WAX_SET_FORMS.get(set.id);
