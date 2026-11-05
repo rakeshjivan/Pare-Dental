@@ -11848,11 +11848,12 @@ export function LayerlingEditor({
         // Build 117: an articulated pair is centred on the dental midline the dentist marked on the upper (the
         // Articulator step's Mark the midline). Not marked, the models are centred on the arch's middle as before.
         let madeInput = fixedInput;
-        const upperId = state.slots.upper;
-        if (state.options.hinge && upperId && state.slots.lower) {
-          // Build 117: the midline the dentist marked on this upper (no tooth finder at Make).
-          const midline = state.options.midlineMark && state.options.midlineScan === upperId ? state.options.midlineMark : null;
-          if (midline) madeInput = { ...fixedInput, arches: fixedInput.arches.map((arch) => (arch.id === upperId ? { ...arch, midline } : arch)) };
+        // Build 120: marked on the upper (the lower with only a lower) - articulated or not, every model is centred on it.
+        const markId = state.slots.upper ?? state.slots.lower;
+        if (markId) {
+          // Build 117: the midline the dentist marked on this arch (no tooth finder at Make).
+          const midline = state.options.midlineMark && state.options.midlineScan === markId ? state.options.midlineMark : null;
+          if (midline) madeInput = { ...fixedInput, arches: fixedInput.arches.map((arch) => (arch.id === markId ? { ...arch, midline } : arch)) };
         }
         const result = await makeDentalStudioInBackground(madeInput, makeOptions);
         // Build 79: stopped with Cancel while it was making - nothing is changed.
@@ -19335,7 +19336,8 @@ export function LayerlingEditor({
   const midlineGrid = useRef<{ key: string; grid: RayGrid } | null>(null);
   const pickMidline = (x: number, y: number) => {
     const state = dentalStudioRef.current;
-    const upper = state?.slots.upper ? shapesRef.current.find((shape) => shape.id === state.slots.upper) : undefined;
+    const markId = state?.slots.upper ?? state?.slots.lower;
+    const upper = markId ? shapesRef.current.find((shape) => shape.id === markId) : undefined;
     const toInput = upper ? waxArchInput(upper) : null;
     const ray = window.layerlingScreenRay?.(x, y);
     if (!state || !upper || !toInput || !ray) return;
@@ -19348,11 +19350,12 @@ export function LayerlingEditor({
     setMidlinePicking(false);
   };
   // Build 117: the marked midline shown as a dot on the upper while its options are open.
-  const midlineShownKey = dentalStudio && dentalStudio.stage === "ready" && dentalStudio.options.hinge && dentalStudio.options.midlineMark && dentalStudio.options.midlineScan === dentalStudio.slots.upper && studioMbStep === "label" ? dentalStudio.options.midlineMark.join(",") : "";
+  const midlineShownKey = dentalStudio && dentalStudio.stage === "ready" && dentalStudio.options.midlineMark && dentalStudio.options.midlineScan === (dentalStudio.slots.upper ?? dentalStudio.slots.lower) && studioMbStep === "label" ? dentalStudio.options.midlineMark.join(",") : "";
   useEffect(() => {
     if (!midlineShownKey) return;
     const state = dentalStudioRef.current;
-    const upper = state?.slots.upper ? shapesRef.current.find((shape) => shape.id === state.slots.upper) : undefined;
+    const markId = state?.slots.upper ?? state?.slots.lower;
+    const upper = markId ? shapesRef.current.find((shape) => shape.id === markId) : undefined;
     const toInput = upper ? waxArchInput(upper) : null;
     if (!state?.options.midlineMark || !toInput) return;
     const at = new THREE.Vector3(...state.options.midlineMark).applyMatrix4(toInput.clone().invert()).toArray() as [number, number, number];
@@ -21928,7 +21931,7 @@ export function LayerlingEditor({
             return { ...current, preset, optionsTouched: false, options: dentalPreset(preset, depth, Boolean(current.slots.upper && current.slots.lower), above, teeth), error: null };
           })}
           onOptionsChange={(patch) => setDentalStudio((current) => current && current.stage === "ready" ? { ...current, options: { ...current.options, ...patch }, optionsTouched: true, error: null } : current)}
-          onMidlinePick={dentalStudio.options.hinge && dentalStudio.slots.lower ? (on: boolean) => setMidlinePicking(on) : undefined}
+          onMidlinePick={(on: boolean) => setMidlinePicking(on)}
           midlinePicking={midlinePicking}
           onAdvancedChange={(advanced) => setDentalStudio((current) => current ? { ...current, advanced } : current)}
           onApply={() => void makeDentalModels()}

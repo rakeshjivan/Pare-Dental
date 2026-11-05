@@ -169,6 +169,8 @@ export type SmoothBaseInput = {
   /** Open underneath (a shell) or solid. */
   open: boolean;
   step?: number;
+  /** The ledge's height above the rim, mm (SMOOTH.ledge unless given - lower on an aligner model). */
+  ledge?: number;
 };
 
 export type SmoothBaseFields = { grid: Grid; outer: Float32Array; cavity: Float32Array | null; timing: Record<string, number> };
@@ -245,7 +247,7 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
     const d = squaredDistanceTo(Uint8Array.from(covered, (q) => 1 - q), nx, ny, 1);
     for (let c = 0; c < n2; c += 1) inFromEdge[c] = Math.sqrt(d[c]) * h;
   }
-  const ledge = floor + S.ledge;
+  const ledge = floor + (input.ledge ?? S.ledge);
   // The drape falls from the scan's own edge (its boundary, at the edge's height) - never from a steep face of
   // the scan (from the top of a tooth's labial face it would wrap the face in a cone).
   const alongEdge = distanceFromEdge(scan, S.edgeBand + 1);

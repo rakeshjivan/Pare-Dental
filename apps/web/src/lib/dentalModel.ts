@@ -16,7 +16,7 @@
 import * as THREE from "three";
 import { getManifoldRuntime } from "@/lib/editorMeshCore";
 import { alignToBite, archFrame, biteResidual, contacts, vertexNormals, canineWidth, cleanScan, frontOf, isPartialArch, marginUp, pairFrame, palateScore, type CleanArch, type CleanReport } from "@/lib/dentalArch";
-import { ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
+import { ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, roundOutline, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
@@ -160,6 +160,8 @@ export type DentalStudioOptions = {
   snapGrip?: number;
   /** Build 119: set by the studio, not the panel - this arch on the smooth base (the snap hinge's). */
   smoothBase?: boolean;
+  /** Build 120: set by the studio - the smooth base's outline: orthodontic, rounded (a study model) or close and low (an aligner model). */
+  smoothShape?: "ortho" | "round" | "aligner";
   /** Build 117: with the posts either side, also the bite-opening risers (1 to 5 mm, two of each), printed as a part of their own. Off unless true. */
   risers?: boolean;
   /** Build 117: the dental midline the dentist marked on the upper scan (`midlineScan`), in the studio's coordinates; the articulated pair is centred on it. */
@@ -452,6 +454,9 @@ export function analyseDental(input: DentalStudioInput): DentalAnalysis {
   return prepared(input).analysis;
 }
 
+/** Build 120: an aligner model's smooth base - its ledge no lower than this above the rim, mm. */
+export const ALIGNER_LEDGE_MIN = 2.5;
+
 /** Build 117: the dental midline is believed only this close to the arch's middle, mm - further, the centrals were not what was found. */
 export const MIDLINE_REACH = 8;
 
@@ -460,8 +465,17 @@ export const MIDLINE_REACH = 8;
  * upper's centrals (DentalArchInput.midline) - or null, to keep the middle (no centrals given, a
  * quadrant, scans set up apart, or a point too far off to be the centrals' contact).
  */
-function midlineOffset(prep: Prepared, input: DentalStudioInput): { x: number; y: number } | null {
-  if (prep.arches.length !== 2 || prep.analysis.pair?.apart || prep.arches.some((arch) => arch.partial)) return null;
+function midlineOffset(prep: Prepared, input: DentalStudioInput): { x: number; y: number; single?: boolean } | null {
+  if (prep.arches.some((arch) => arch.partial)) return null;
+  // Build 120 (Rakesh): a single model is centred on its midline too - the teeth's midline on the base's (x = 0 of its own frame).
+  if (prep.arches.length === 1) {
+    const only = prep.arches[0];
+    const mark = input.arches.find((arch) => arch.id === only.id)?.midline;
+    if (!mark || !mark.every(Number.isFinite)) return null;
+    const point = new THREE.Vector3(...mark).applyMatrix4(only.frame);
+    return Math.abs(point.x) <= MIDLINE_REACH ? { x: point.x, y: point.y, single: true } : null;
+  }
+  if (prep.arches.length !== 2 || prep.analysis.pair?.apart) return null;
   const upper = prep.arches.find((arch) => arch.role === "upper");
   const given = upper ? input.arches.find((arch) => arch.id === upper.id)?.midline : null;
   if (!upper || !given || !given.every(Number.isFinite)) return null;
@@ -490,9 +504,10 @@ export function midlineTurn(at: { x: number; y: number }, role: "upper" | "lower
   const angle = Math.atan2(at.x, pivotY - at.y);
   return new THREE.Matrix4().makeTranslation(0, pivotY, 0).multiply(new THREE.Matrix4().makeRotationZ(role === "upper" ? angle : -angle)).multiply(new THREE.Matrix4().makeTranslation(0, -pivotY, 0));
 }
-function onMidline(prep: Prepared, at: { x: number; y: number }): Prepared {
+function onMidline(prep: Prepared, at: { x: number; y: number; single?: boolean }): Prepared {
   if (!at.x) return prep;
-  return { ...prep, arches: prep.arches.map((arch) => ({ ...arch, frame: midlineTurn(at, arch.role === "upper" ? "upper" : "lower").multiply(arch.frame) })) };
+  // A single arch is turned in its own frame (the turn that brings a point of that frame onto x = 0).
+  return { ...prep, arches: prep.arches.map((arch) => ({ ...arch, frame: midlineTurn(at, at.single || arch.role !== "upper" ? "lower" : "upper").multiply(arch.frame) })) };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -875,12 +890,14 @@ function buildArch(
   if (options.smoothBase && ortho) {
     // Build 119: the smooth base - the scan exact, the drape, fillet, ledge and flat wall a field round it (lib/dentalSmoothBase),
     // cut to the orthodontic outline, an even shell open underneath.
-    const base = makeSmoothBase(runtime, { scan: cut, teeth, outline: ortho, floor, open: true });
+    // Build 120: an aligner model's ledge lower, so the model stays short enough to thermoform over.
+    const ledge = options.smoothShape === "aligner" ? Math.max(ALIGNER_LEDGE_MIN, Math.min(SMOOTH.ledge, options.base - SMOOTH.belowCut)) : SMOOTH.ledge;
+    const base = makeSmoothBase(runtime, { scan: cut, teeth, outline: ortho, floor, open: true, ledge });
     keepSolid(base.outer);
     solid = keepSolid(runtime.Manifold.union(solid, base.outer));
     solid = keepSolid(runtime.Manifold.intersection(solid, keepSolid(prism(runtime, ortho, floor, top + 5))));
     if (base.cavity) smoothCavity = keepSolid(base.cavity);
-    buried = floor + SMOOTH.ledge;
+    buried = floor + ledge;
     footprint = [ortho];
     trimRings = [ortho];
     labelRing = ortho;
@@ -1227,7 +1244,8 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
   // they were found (Ian Meyers saw the pin and the models' middle off his midline): the arches' frames
   // are moved across, so the articulator, the pin and a symmetric base all stand on it.
   const analysed = prepared(input);
-  const midline = given_options.hinge ? midlineOffset(analysed, input) : null;
+  // Build 120: separate models too - each centred on the midline marked.
+  const midline = midlineOffset(analysed, input);
   const prep = midline !== null ? onMidline(analysed, midline) : analysed;
   // Build 53: an approved tooth area, carried from the scan's triangles to the cleaned scan's corners.
   const areaOn = (id: string, mesh: Mesh): Uint8Array | undefined => {
@@ -1254,7 +1272,14 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
   if (apart) options = { ...options, layout: "print", hinge: false };
   // Build 119: articulated models stand on the smooth base (either hinge) - an orthodontic outline (a straight back for
   // the hinge), hollow, honeycomb or solid as chosen, its ledge SMOOTH.ledge above the rim and SMOOTH.belowCut below where the scan is cut, so the gum runs on down into the fillet.
-  if (options.hinge && prep.arches.length === 2) options = { ...options, baseStyle: "ortho", inside: options.inside === "solid" ? "solid" : "open", smoothBase: true, base: Math.max(options.base, SMOOTH.ledge + SMOOTH.belowCut) };
+  // Build 120 (Rakesh): every model stands on the smooth base now - separate or articulated - study models on a rounded
+  // outline, orthodontic models on the orthodontic one, aligner models on a close outline, low (for thermoforming).
+  const smoothShape = options.baseStyle === "clean" ? "round" : options.baseStyle === "follow" ? "aligner" : options.baseStyle === "ortho" ? "ortho" : null;
+  if (options.hinge && prep.arches.length === 2 || smoothShape) {
+    const shape = options.hinge && prep.arches.length === 2 && smoothShape === "aligner" ? "round" : smoothShape ?? "ortho";
+    const lowest = shape === "aligner" ? ALIGNER_LEDGE_MIN + SMOOTH.belowCut : SMOOTH.ledge + SMOOTH.belowCut;
+    options = { ...options, baseStyle: "ortho", inside: options.inside === "solid" ? "solid" : "open", smoothBase: true, smoothShape: shape, base: shape === "aligner" ? Math.max(options.base, lowest) : lowest };
+  }
   const runtime = given ?? (await getManifoldRuntime());
   const base = Math.max(DENTAL_MIN_BASE, Math.min(DENTAL_MAX_BASE, options.base));
   const keeps = prep.arches.map((arch) => keptDepthFor(arch, options));
@@ -1282,7 +1307,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     if (options.baseStyle === "ortho") {
       // A quadrant or sextant gets a block: square all round, 3 mm clear of the teeth.
       const prints = shared ? footprint : teethFootprint(arch.clean.mesh, arch.frame, new THREE.Matrix4(), Math.max(11, arch.teeth));
-      const common = prep.arches.some((a) => a.partial) ? blockOutline(prints) : orthoOutline(prints, arch.role);
+      const common = prep.arches.some((a) => a.partial) ? blockOutline(prints) : options.smoothShape === "round" ? roundOutline(runtime, prints) : options.smoothShape === "aligner" ? roundOutline(runtime, prints, 2, 5) : orthoOutline(prints, arch.role);
       ortho = arch.role === "upper" && shared ? mirrorRing(common) : common;
     }
     const line = userLabel ? (pair ? `${arch.role === "upper" ? "U" : "L"} ${userLabel}` : userLabel) : "";
