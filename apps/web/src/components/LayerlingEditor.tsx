@@ -19310,7 +19310,10 @@ export function LayerlingEditor({
     const soup = stlSoupOf(buffer);
     if (!soup || !soup.length) return buffer;
     try {
-      if (meshHealth(soup).watertight && (await isManifoldSolid(soup))) return buffer;
+      // Build 124 (Rakesh): a model Manifold takes as a sound, closed solid is written as it is - a few edges where two
+      // walls meet (the honeycomb's cells on the floor) are no reason to run the repair over half a million triangles,
+      // which took minutes and could leave the app's window out of memory. Only one with holes or that Manifold refuses.
+      if (meshHealth(soup).openEdges === 0 && (await isManifoldSolid(soup))) return buffer;
       setNotice(t("studio.repairing", { name: which }), true);
       const result = await repairStlPositions(soup);
       // Not if it moved the surface more than a tenth of a millimetre anywhere - the model's accuracy comes first.
