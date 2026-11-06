@@ -196,7 +196,7 @@ const SMOOTH_ROUNDS: Record<DentalSmooth, number> = { off: 0, low: 3, high: 10 }
 
 export type DentalPart = { id: string; role: DentalRole; positions: Float32Array; height: number; volume: number; /** Build 101: of a pair, the move from where the part is laid out back to the bite it was built in (column-major) - to measure the models' contacts wherever they are laid. */ toBite?: number[] };
 /** `surface`: per part, the share of the scan's surface kept above each depth (mm below the occlusal plane). */
-export type DentalStudioResult = { parts: DentalPart[]; worn: number; keptDepth: number[]; voxel: number | null; warnings: string[]; surface: Array<Record<number, number>>; /** Build 60: how far the printed articulator opens, degrees. */ opening?: number; /** Build 65: the solid pieces each part is made of - 1 when it holds together. */ pieces?: number[]; /** Build 71: a raised pin holds the bite open this much, mm: at the pin, the front teeth and the back teeth. */ held?: { pin: number; front: number; back: number }; /** Build 78: the incisal pin set, laid out to print, and what each pin does. */ pins?: { positions: Float32Array; raises: number[] }; /** Build 117: the side posts' bite-opening risers, laid out to print, and the height each holds the bite open at the posts (mm). */ risers?: { positions: Float32Array; heights: number[] }; /** Build 117: the articulator stands on the dental midline found between the centrals, this far (mm, + the patient's left) from the arch's middle. */ midline?: number; pinTable?: Array<{ pin: number; front: number; back: number }>; /** Build 78: per part, how the scan's crowns came through (toothTrueness). */ trueness?: ToothTrueness[]; /** Build 78: per part, soft tissue cut back clear of the other model in the bite, mm². */ relieved?: number[]; /** Build 78: per part, soft tissue the other model's teeth meet in the bite (kept as a contact), mm². */ contactArea?: number[] };
+export type DentalStudioResult = { parts: DentalPart[]; worn: number; keptDepth: number[]; voxel: number | null; warnings: string[]; surface: Array<Record<number, number>>; /** Build 60: how far the printed articulator opens, degrees. */ opening?: number; /** Build 65: the solid pieces each part is made of - 1 when it holds together. */ pieces?: number[]; /** Build 71: a raised pin holds the bite open this much, mm: at the pin, the front teeth and the back teeth. */ held?: { pin: number; front: number; back: number }; /** Build 78: the incisal pin set, laid out to print, and what each pin does. */ pins?: { positions: Float32Array; raises: number[] }; /** Build 117: the side posts' bite-opening risers, laid out to print, and the height each holds the bite open at the posts (mm). */ risers?: { positions: Float32Array; heights: number[] }; /** Build 117: the articulator stands on the dental midline found between the centrals, this far (mm, + the patient's left) from the arch's middle. */ midline?: number; pinTable?: Array<{ pin: number; front: number; back: number }>; /** Build 78: per part, how the scan's crowns came through (toothTrueness). */ trueness?: ToothTrueness[]; /** Build 124: per part, of the kept gum more than each band (mm) in from its trimmed edge, the share that came through exactly. */ gumKept?: Array<Record<number, number>>; /** Build 78: per part, soft tissue cut back clear of the other model in the bite, mm². */ relieved?: number[]; /** Build 78: per part, soft tissue the other model's teeth meet in the bite (kept as a contact), mm². */ contactArea?: number[] };
 
 /** Whether a mesh looks like a raw scan: an open surface with one long open edge. */
 export function looksLikeDentalScan(positions: ArrayLike<number>): boolean {
@@ -677,6 +677,8 @@ function insideRings(rings: Ring[], x: number, y: number, margin: number) {
 }
 export type ToothTrueness = { points: number; within: number; worst: number; /** Build 79: crown points under the wax-up, left out of the count (covered on purpose). */ waxed?: number; /** Points with no surface near them: left out with a speck too small to print. */ removed: number; /** Points the surface is near but not on; `worst` is the furthest of these, mm. */ moved: number };
 export const TRUE_WITHIN = 0.001;
+/** Build 124: the gum check's bands - how far in from the trimmed edge the kept gum is counted from, mm (the edge itself may be smoothed). */
+export const GUM_BANDS = [0, 0.5, 1, 2, 3];
 export function toothTrueness(solid: ManifoldSolid, points: Float64Array, turn: THREE.Matrix4 | null): ToothTrueness {
   const mesh = solid.getMesh();
   const stride = mesh.numProp, props = mesh.vertProperties;
@@ -723,7 +725,7 @@ function engrave(runtime: ManifoldRuntime, solid: ManifoldSolid, text: string, h
   return result;
 }
 
-type Built = { solid: ManifoldSolid; floor: number; top: number; footprint: Ring[]; worn: number; keptDepth: number; voxel: number | null; warnings: string[]; kept: Record<number, number>; /** Build 78: the scan's crown points, in the arch's frame, for the trueness check. */ crownPoints: Float64Array; /** Build 78: soft tissue cut back clear of the other model, mm². */ relieved: number; /** Build 78: soft tissue the other model's teeth meet in the bite, kept as a contact, mm². */ contactArea: number; /** Build 79: the scan's crown points the wax-up covers. */ waxed: number };
+type Built = { solid: ManifoldSolid; floor: number; top: number; footprint: Ring[]; worn: number; keptDepth: number; voxel: number | null; warnings: string[]; kept: Record<number, number>; /** Build 78: the scan's crown points, in the arch's frame, for the trueness check. */ crownPoints: Float64Array; /** Build 124: the kept gum's points (x, y, z, distance from the trimmed edge), for the gum check. */ gumPoints: Float64Array; /** Build 78: soft tissue cut back clear of the other model, mm². */ relieved: number; /** Build 78: soft tissue the other model's teeth meet in the bite, kept as a contact, mm². */ contactArea: number; /** Build 79: the scan's crown points the wax-up covers. */ waxed: number };
 
 function buildArch(
   runtime: ManifoldRuntime,
@@ -856,6 +858,13 @@ function buildArch(
   const keptKeys = new Set<string>();
   const fringe = distanceFromEdge(cut, EDGE_FRINGE);
   for (const i of new Set(cut.f)) if (fringe[i] > EDGE_FRINGE) keptKeys.add(`${cut.v[i * 3]},${cut.v[i * 3 + 1]},${cut.v[i * 3 + 2]}`);
+  // Build 124 (Rakesh): the gum the person chose to keep (after the Trim step and the gum band) must all come through -
+  // only its trimmed edge may be smoothed. Its points, each with how far it lies from the edge, for the gum check.
+  const gumList: number[] = [];
+  {
+    const crownOnCut = onCut(crowns), along = distanceFromEdge(cut, GUM_BANDS[GUM_BANDS.length - 1] + 1);
+    for (const i of new Set(cut.f)) if (!crownOnCut[i]) gumList.push(cut.v[i * 3], cut.v[i * 3 + 1], cut.v[i * 3 + 2], Math.min(along[i], 99));
+  }
   // Build 101: High unless chosen otherwise - the edge alone moves (the teeth are kept), shrink-free.
   // Build 119: on the smooth base, tags of tissue standing up at the scan's edge are trimmed off, as from a cast.
   if (options.smoothBase) {
@@ -1214,7 +1223,12 @@ function buildArch(
       else crownList.push(m.v[i * 3], m.v[i * 3 + 1], m.v[i * 3 + 2]);
     }
   });
-  return { solid: result, floor, top, footprint, worn: closed.worn, keptDepth: Number.isFinite(keptLow) ? -keptLow : keep, voxel, warnings, kept, crownPoints: Float64Array.from(crownList), relieved, contactArea, waxed };
+  const gumPoints: number[] = [];
+  for (let k = 0; k + 3 < gumList.length; k += 4) {
+    const [x, y, z, d] = [gumList[k], gumList[k + 1], gumList[k + 2], gumList[k + 3]];
+    if (z > buried + 0.05 && insideRings(trimRings, x, y, 0.05)) gumPoints.push(x, y, z, d);
+  }
+  return { solid: result, floor, top, footprint, worn: closed.worn, keptDepth: Number.isFinite(keptLow) ? -keptLow : keep, voxel, warnings, kept, crownPoints: Float64Array.from(crownList), gumPoints: Float64Array.from(gumPoints), relieved, contactArea, waxed };
 }
 
 /**
@@ -1568,6 +1582,12 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
   // Build 78: the trueness check - every crown point of the scan, where the scan put it, against the
   // finished model's surface: the teeth must come through untouched.
   const trueness = built.map(({ arch, built: b }, i) => ({ ...toothTrueness(solids[i], b.crownPoints, pair && arch.role === "upper" ? FLIP : null), waxed: b.waxed }));
+  // Build 124: the gum check - of the kept gum more than each band in from the trimmed edge, the share on the finished surface.
+  const gumKept = built.map(({ arch, built: b }, i) => Object.fromEntries(GUM_BANDS.map((band) => {
+    const pts: number[] = [];
+    for (let k = 0; k + 3 < b.gumPoints.length; k += 4) if (b.gumPoints[k + 3] > band) pts.push(b.gumPoints[k], b.gumPoints[k + 1], b.gumPoints[k + 2]);
+    return [band, toothTrueness(solids[i], Float64Array.from(pts), pair && arch.role === "upper" ? FLIP : null).within];
+  })));
   // Lay out: base down on the plate, the upper turned over beside the lower; or upper on lower.
   const out: DentalPart[] = [];
   const pieces: number[] = [];
@@ -1675,6 +1695,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     ...(midline !== null ? { midline: midline.x } : {}),
     ...(pinTable ? { pinTable } : {}),
     trueness,
+    gumKept,
     relieved: built.map(({ built: b }) => Math.round(b.relieved)),
     contactArea: built.map(({ built: b }) => Math.round(b.contactArea)),
     pieces,
