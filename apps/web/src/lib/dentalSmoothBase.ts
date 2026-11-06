@@ -61,6 +61,12 @@ export const SMOOTH = {
   edgeReach: 1,
   /** Build 122: over this much of the scan in from its edge, the drape stays at the edge's height, mm. */
   plateau: 2,
+  /**
+   * Build 123: ...and on out past the edge this far, mm, before it falls - so its smoothing (drapeSmooth), which rounds
+   * the shoulder where it starts to fall, never lowers it at the edge itself, where the wall closing the scan to the
+   * floor stands (on a trimmed scan that wall showed below the edge as a ragged, striated band).
+   */
+  plateauOut: 1.4,
   /** Build 122: the seam's envelope - how much it is smoothed (sigma) and how far it stands out over the body, mm. */
   seamSmooth: 1,
   seamCover: 0.3,
@@ -291,6 +297,8 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   }
   // A narrow flap of tissue standing up at the edge (a retromolar tag) would raise a cone round it: each edge
   // point is taken no higher than the lowest edge within SEED_OPEN of it, so only broad edges raise the drape.
+  // Build 123: the edge's own heights, kept - a trimmed scan's jagged edge must still be buried (see below).
+  const rawSeedZ = Float32Array.from(seedZ);
   {
     const r = Math.ceil(S.seedOpen / h), low = new Float32Array(n2).fill(Infinity);
     const cells: number[] = [];
@@ -332,7 +340,10 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
     const carried = new Float32Array(n2);
     for (let c = 0; c < n2; c += 1) carried[c] = toSeed[c] >= 0 ? high[toSeed[c]] : ledge;
     const smoothed = blur(carried, nx, ny, 1, S.edgeSmooth / h);
-    for (const c of cells) seedZ[c] = Math.max(smoothed[c], seedZ[c]);
+    // Build 123: never below the edge's own height there either, but for a tag standing more than TAG_RISE over the edge
+    // nearby - a jagged trim line's points, lowered to the dips between them above, would leave the wall under each
+    // point standing out below the drape as a ragged, striated band.
+    for (const c of cells) seedZ[c] = Math.max(smoothed[c], seedZ[c], Math.min(rawSeedZ[c], seedZ[c] + TAG_RISE));
   }
   // The highest of the cones falling at DRAPE_SLOPE from every point of the edge (a chamfer dilation: continuous,
   // never a step where one edge point's reach gives way to the next's).
@@ -366,7 +377,11 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   {
     const isSeed = Uint8Array.from(seedZ, (z) => (Number.isFinite(z) ? 1 : 0));
     const toSeed = nearestSeed2D(isSeed, nx, ny);
-    for (let c = 0; c < n2; c += 1) if (covered[c] && inFromEdge[c] < S.plateau && toSeed[c] >= 0) drape[c] = Math.max(drape[c], seedZ[toSeed[c]]);
+    const outside = squaredDistanceTo(covered, nx, ny, 1), reach = (S.plateauOut / h) ** 2;
+    for (let c = 0; c < n2; c += 1) {
+      if (toSeed[c] < 0) continue;
+      if (covered[c] ? inFromEdge[c] < S.plateau : outside[c] <= reach) drape[c] = Math.max(drape[c], seedZ[toSeed[c]]);
+    }
   }
   const smoothDrape = blur(drape, nx, ny, 1, S.drapeSmooth / h);
   const drapeNorm = new Float32Array(n2);
