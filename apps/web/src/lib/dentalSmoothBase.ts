@@ -86,7 +86,7 @@ export const SMOOTH = {
   /** An edge point raises the drape no higher than the lowest edge within this of it, mm. */
   seedOpen: 1,
   /** Build 123: ...but an edge point is lowered so by no more than this, mm (a tag is taken off before: TAG_RISE). */
-  seedRaw: 1.5,
+  seedRaw: 0,
   /** A boundary loop shorter than this is a hole in the scan, not its edge: it seeds no drape, mm. */
   holeLoop: 40,
   /** Taubin smoothing passes over the level set's surface (takes out the grid's faint ripple on curved parts). */
