@@ -56,9 +56,9 @@ export const SMOOTH = {
   /** Build 124: under the scan, the drape stays this far below the scan's lowest surface, mm. */
   underGum: 0.3,
   /** Build 124: how much larger than the base the closed scan is clipped to, mm (0: not clipped). */
-  coverGrow: 0.4,
+  coverGrow: 0,
   /** Build 124: beside the scan's edge, inside or out by the nearest face (1) rather than by the column's crossings (0). */
-  edgeSide: 1,
+  edgeSide: 0,
   /** The blend between the scan and the drape, mm. */
   drapeBlend: 3.5,
   /**
