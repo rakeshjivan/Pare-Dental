@@ -59,6 +59,13 @@ export const SMOOTH = {
   edgeReach: 1,
   /** Build 122: over this much of the scan in from its edge, the drape stays at the edge's height, mm. */
   plateau: 2,
+  /** Build 122: the seam's envelope - how much it is smoothed (sigma) and how far it stands out over the body, mm. */
+  seamSmooth: 1,
+  seamCover: 0.3,
+  /** Build 122: within this of a tooth the field never stands out over the scan, mm. */
+  toothClear: 1.5,
+  /** Build 122: the narrowest the scan-to-drape blend gets beside a tooth (elsewhere no wider than the distance to one), mm. */
+  toothBlend: 0.8,
   /** How far inside the scan the field stands round the teeth (the scan's crowns show), and how far out from them, mm. */
   inset: 0.25,
   insetReach: 1,
@@ -373,9 +380,12 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   // --- 3-D: the scan's distance, exact near it.
   const n3 = n2 * nz;
   const mark = new Uint8Array(n3);
+  // Build 122: the teeth's own voxels too - how far each voxel is from a tooth, for the blend's width near them.
+  const markTooth = new Uint8Array(n3);
   const soup = new Float32Array(f.length * 3);
   for (let t = 0; t < f.length; t += 1) { soup[t * 3] = v[f[t] * 3]; soup[t * 3 + 1] = v[f[t] * 3 + 1]; soup[t * 3 + 2] = v[f[t] * 3 + 2]; }
   for (let t = 0; t + 8 < soup.length; t += 9) {
+    const onTooth = teeth[f[t / 3]] && teeth[f[t / 3 + 1]] && teeth[f[t / 3 + 2]];
     // Points over the triangle at under half a voxel apart.
     const e = Math.max(Math.hypot(soup[t + 3] - soup[t], soup[t + 4] - soup[t + 1], soup[t + 5] - soup[t + 2]), Math.hypot(soup[t + 6] - soup[t], soup[t + 7] - soup[t + 1], soup[t + 8] - soup[t + 2]));
     const n = Math.max(1, Math.ceil(e / (h * 0.5)));
@@ -383,10 +393,11 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
       const u = a / n, w = b / n, s = 1 - u - w;
       const px = s * soup[t] + u * soup[t + 3] + w * soup[t + 6], py = s * soup[t + 1] + u * soup[t + 4] + w * soup[t + 7], pz = s * soup[t + 2] + u * soup[t + 5] + w * soup[t + 8];
       const gi = Math.floor((px - x0) / h), gj = Math.floor((py - y0) / h), gk = Math.floor((pz - z0) / h);
-      if (gi >= 0 && gj >= 0 && gk >= 0 && gi < nx && gj < ny && gk < nz) mark[(gk * ny + gj) * nx + gi] = 1;
+      if (gi >= 0 && gj >= 0 && gk >= 0 && gi < nx && gj < ny && gk < nz) { mark[(gk * ny + gj) * nx + gi] = 1; if (onTooth) markTooth[(gk * ny + gj) * nx + gi] = 1; }
     }
   }
   const toSurface = squaredDistanceTo(mark, nx, ny, nz);
+  const toTooth = squaredDistanceTo(markTooth, nx, ny, nz);
   lap("edt");
   const near = new NearestSurface(soup, S.distanceBand + h);
   const q = new Float64Array(3), bary = new Float64Array(3);
@@ -395,6 +406,8 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   const band = (S.distanceBand / h) ** 2;
   const outer = new Float32Array(n3);
   const base = input.open ? new Float32Array(n3) : null;
+  // Build 122: the body before it is cut, and how much of the seam's smoothing each voxel takes (see below).
+  const bodies = new Float32Array(n3), seamW = new Float32Array(n3);
   for (let j = 0; j < ny; j += 1) for (let i = 0; i < nx; i += 1) {
     const c = j * nx + i;
     const list = crossings.subarray(counts[c], counts[c + 1]);
@@ -427,7 +440,25 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
       const scanSd = (inside ? -d : d) + ease;
       const drapeSd = (z - smoothDrape[c]) * drapeNorm[c] - S.drapeLift * edgeHere;
       // Over the scan's last EDGE_BAND it is eased in under the drape, so its ragged edge is buried.
-      const body = smin(smin(scanSd + S.edgeEase * edge, drapeSd, S.drapeBlend), z - ledge, S.fillet);
+      // (Near a tooth the blend is never wider than the distance to it, so its rounding never reaches the tooth; nor
+      // does the field stand out over the scan there.)
+      const dTooth = Math.sqrt(toTooth[index]) * h;
+      const blendHere = Math.max(S.toothBlend, Math.min(S.drapeBlend, dTooth));
+      const standOut = smooth01(dTooth / S.toothClear);
+      bodies[index] = smin(smin(scanSd + S.edgeEase * edge * standOut, drapeSd, blendHere), z - ledge, S.fillet);
+      seamW[index] = edge * standOut;
+    }
+  }
+  // Build 122 (Rakesh): over the seam - the scan's last edgeBand, never beside a tooth - a smoothed envelope of the body
+  // (blurred seamSmooth, stood seamCover out) is laid over it, so the scan's lumpy edge is covered, not traced: one
+  // even line where the gum meets the drape.
+  const smoothed = blur(bodies, nx, ny, nz, S.seamSmooth / h);
+  for (let k = 0; k < nz; k += 1) {
+    const z = cz(k);
+    for (let j = 0; j < ny; j += 1) for (let i = 0; i < nx; i += 1) {
+      const c = j * nx + i, index = (k * ny + j) * nx + i;
+      const raw = bodies[index], w = seamW[index];
+      const body = w > 0 ? raw + (Math.min(raw, smoothed[index] - S.seamCover) - raw) * w : raw;
       // The field reaches a little past the outline; the caller cuts the wall exactly (a prism), so it is flat.
       const cut = smax(body, rim[c] - S.wallSpare, S.edgeRound);
       if (base) base[index] = cut;
