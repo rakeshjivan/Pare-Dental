@@ -11245,7 +11245,7 @@ export function LayerlingEditor({
           const pair = Boolean(slots.upper && slots.lower);
           const depth = Math.max(...analysis.arches.map((arch) => arch.depth));
           const above = Math.max(...analysis.arches.map((arch) => arch.above)), teeth = Math.max(...analysis.arches.map((arch) => arch.teeth));
-          return { ...latest, slots, stage: "ready", analysis, ...(laidOut ? { layout: laidOut } : {}), options: latest.optionsTouched ? latest.options : dentalPreset(latest.preset, depth, pair, above, teeth) };
+          return { ...latest, slots, stage: "ready", analysis, ...(laidOut ? { layout: laidOut } : {}), options: latest.optionsTouched ? latest.options : { ...dentalPreset(latest.preset, depth, pair, above, teeth), label: latest.options.label } };
         });
       } catch (error) {
         if (run !== dentalRun.current) return;
@@ -21981,7 +21981,7 @@ export function LayerlingEditor({
             const depth = arches.length ? Math.max(...arches.map((arch) => arch.depth)) : 15;
             const above = arches.length ? Math.max(...arches.map((arch) => arch.above)) : 0;
             const teeth = arches.length ? Math.max(...arches.map((arch) => arch.teeth)) : 0;
-            return { ...current, preset, optionsTouched: false, options: dentalPreset(preset, depth, Boolean(current.slots.upper && current.slots.lower), above, teeth), error: null };
+            return { ...current, preset, optionsTouched: false, options: { ...dentalPreset(preset, depth, Boolean(current.slots.upper && current.slots.lower), above, teeth), label: current.options.label }, error: null };
           })}
           onOptionsChange={(patch) => setDentalStudio((current) => {
             if (!current) return current;
