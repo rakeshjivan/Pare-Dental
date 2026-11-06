@@ -186,9 +186,12 @@ describe("The articulator on the dental midline (build 117)", () => {
     void lowerPart; void plainLower; void teethX;
     expect(Math.abs(condylesX(lowerPart))).toBeLessThan(0.05);
     expect(centred.pieces).toEqual([1, 1]);
-    // A point far off the arch's middle is not the centrals': the arch's middle is kept.
+    // Build 124 (Rakesh): the dentist's mark is used however far it is from the arch's middle (with teeth missing the
+    // arch's middle is well off the centrals), and nothing is said about it.
     const far = await makeDentalStudio({ arches: [{ id: "l", positions: lower }, { id: "u", positions: upper, midline: [14, -18, -12] }] }, options, runtime as never);
-    expect(far.midline).toBeUndefined();
+    expect(Math.abs(Math.abs(far.midline!) - 14)).toBeLessThan(0.5);
+    expect(far.warnings).not.toContain("midline");
+    expect(far.pieces).toEqual([1, 1]);
   }, 120_000);
 });
 

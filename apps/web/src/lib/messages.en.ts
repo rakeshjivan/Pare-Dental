@@ -4769,6 +4769,7 @@ export const MESSAGES_EN = {
   "dental.doneClosed": "hollow with a closed floor and vents, walls {wall} mm",
   "dental.donePair": "Made upper and lower models, {height} mm tall ({kind}).",
   "dental.warn.apart": "The scans were not where the scanner put them, so they were made side by side without the bite or a hinge.",
+  "dental.warn.midline": "The midline you marked could not be used (a quadrant, or scans made side by side), so the models are centred on the arch's middle.",
   "dental.warn.teeth": "Some of the tooth surface could not be kept where the scan's edge folds under the teeth. Check the model before printing.",
   "dental.warn.edge": "Part of the scan's ragged edge could not stand on the base, so the scan was cut where its edge is complete.",
   "dental.warn.label": "The label was left off: it needs the orthodontic base or a plate with a solid or closed inside, and room for letters at least 1.5 mm tall.",

@@ -4542,6 +4542,7 @@ export const MESSAGES_SL: Partial<Record<MessageKey, string>> = {
   "dental.doneClosed": "votel z zaprtim dnom in zračniki, stene {wall} mm",
   "dental.donePair": "Ustvarjena zgornji in spodnji model, visoka {height} mm ({kind}).",
   "dental.warn.apart": "Skena nista bila tam, kamor ju je postavil skener, zato sta izdelana drug ob drugem brez griza in tečaja.",
+  "dental.warn.midline": "Označene sredinske črte ni bilo mogoče uporabiti (kvadrant ali skeni, narejeni drug ob drugem), zato so modeli usredinjeni na sredino loka.",
   "dental.warn.teeth": "Dela površine zob ni bilo mogoče ohraniti tam, kjer se rob skena zavihne pod zobe. Pred tiskanjem preverite model.",
   "dental.warn.edge": "Del razcefranega roba skena ni mogel stati na podstavku, zato je bil sken odrezan tam, kjer je rob popoln.",
   "dental.warn.label": "Oznaka je izpuščena: potrebuje ortodontski podstavek ali ploščo s polno ali zaprto notranjostjo ter prostor za vsaj 1,5 mm visoke črke.",

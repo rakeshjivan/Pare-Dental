@@ -322,6 +322,9 @@ describe("Dental Studio (build 47)", () => {
     expect(result.surface[0][-2]).toBeGreaterThan(150);
     expect(result.surface[0][-1]).toBeGreaterThanOrEqual(0.999);
     expect(closedVolume(runtime, result.parts[0].positions).status).toBe("NoError");
+    // Build 124: a midline marked on a quadrant cannot centre it - that is said, not dropped silently.
+    const marked = await makeDentalStudio({ arches: [{ id: "q", positions: quadrant, midline: [0, 0, 8] }] }, { ...base, inside: "open" }, runtime as never);
+    expect(marked.warnings).toContain("midline");
   }, 60_000);
 
   it("remembers where an imported file's coordinates went, so scans keep the scanner's places", () => {

@@ -4572,6 +4572,7 @@ export const MESSAGES_DE: Partial<Record<MessageKey, string>> = {
   "dental.doneClosed": "hohl mit geschlossenem Boden und Entlüftung, Wände {wall} mm",
   "dental.donePair": "Ober- und Unterkiefermodell erstellt, {height} mm hoch ({kind}).",
   "dental.warn.apart": "Die Scans lagen nicht dort, wo der Scanner sie abgelegt hat, daher wurden sie nebeneinander ohne Biss und ohne Scharnier erstellt.",
+  "dental.warn.midline": "Die markierte Mittellinie konnte nicht verwendet werden (ein Quadrant oder nebeneinander erstellte Scans), daher sind die Modelle auf die Mitte des Bogens zentriert.",
   "dental.warn.teeth": "Ein Teil der Zahnoberfläche konnte nicht erhalten bleiben, wo sich der Scanrand unter die Zähne faltet. Prüfe das Modell vor dem Druck.",
   "dental.warn.edge": "Ein Teil des ausgefransten Scanrands konnte nicht auf dem Sockel stehen, daher wurde der Scan dort geschnitten, wo sein Rand vollständig ist.",
   "dental.warn.label": "Die Beschriftung wurde weggelassen: Sie braucht den kieferorthopädischen Sockel oder eine Platte mit massivem oder geschlossenem Inneren und Platz für mindestens 1,5 mm hohe Buchstaben.",

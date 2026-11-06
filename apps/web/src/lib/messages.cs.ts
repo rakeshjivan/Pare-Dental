@@ -4571,6 +4571,7 @@ export const MESSAGES_CS: Partial<Record<MessageKey, string>> = {
   "dental.doneClosed": "dutý s uzavřeným dnem a odvzdušněním, stěny {wall} mm",
   "dental.donePair": "Vytvořen horní a dolní model, vysoký {height} mm ({kind}).",
   "dental.warn.apart": "Skeny nebyly tam, kam je umístil skener, takže byly vytvořeny vedle sebe bez skusu a bez kloubu.",
+  "dental.warn.midline": "Vyznačenou střední čáru nebylo možné použít (kvadrant nebo skeny vytvořené vedle sebe), proto jsou modely vystředěny na střed oblouku.",
   "dental.warn.teeth": "Část povrchu zubů nešlo zachovat tam, kde se okraj skenu podvíjí pod zuby. Před tiskem model zkontrolujte.",
   "dental.warn.edge": "Část roztřepeného okraje skenu nemohla stát na podstavci, proto byl sken oříznut tam, kde je okraj úplný.",
   "dental.warn.label": "Popisek byl vynechán: potřebuje ortodontický podstavec nebo desku s plným či uzavřeným vnitřkem a místo pro písmena vysoká aspoň 1,5 mm.",

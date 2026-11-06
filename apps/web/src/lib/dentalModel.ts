@@ -16,12 +16,12 @@
 import * as THREE from "three";
 import { getManifoldRuntime } from "@/lib/editorMeshCore";
 import { alignToBite, archFrame, biteResidual, contacts, vertexNormals, canineWidth, cleanScan, frontOf, isPartialArch, marginUp, pairFrame, palateScore, type CleanArch, type CleanReport } from "@/lib/dentalArch";
-import { archBand, bandToBack, ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, roundOutline, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
+import { archBand, bandToBack, ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, relaxFringe, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, roundOutline, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
 import { GUM_REACH, marginRegion, moveGumCut, type GumCut } from "@/lib/waxGum";
-import { smoothBase as makeSmoothBase, SMOOTH, withoutTags as withoutTissueTags } from "@/lib/dentalSmoothBase";
+import { smoothBase as makeSmoothBase, SMOOTH } from "@/lib/dentalSmoothBase";
 import { articulatorParts, incisalPins, pinRisers, PIN, PIN_BAND, PIN_CLEAR, PIN_HALF, PIN_MAX, PIN_SET, POST_BACK, restAngle, type ArticulatorSides, type PinStyle } from "@/lib/dentalArticulator";
 import {
   applyMatrix, boundaryLoops, cloneMesh, transformSoup, convexHull, cutAlongField, cutBelow, dropFragments, smoothField, faceArea, loopLength, surfaceKept, pinchedEdges, PointGrid, solidPositions, toManifold, upwardness, weld,
@@ -467,8 +467,6 @@ export const ALIGNER_LEDGE_MIN = 2.5;
 /** Build 120: a tall base is this much taller than the standard one, mm. */
 export const TALL_BASE = 3;
 
-/** Build 117: the dental midline is believed only this close to the arch's middle, mm - further, the centrals were not what was found. */
-export const MIDLINE_REACH = 8;
 
 /**
  * Build 117: the x of the dental midline in the pair's frame (x = 0 the middle of the arch), from the
@@ -483,7 +481,9 @@ function midlineOffset(prep: Prepared, input: DentalStudioInput): { x: number; y
     const mark = input.arches.find((arch) => arch.id === only.id)?.midline;
     if (!mark || !mark.every(Number.isFinite)) return null;
     const point = new THREE.Vector3(...mark).applyMatrix4(only.frame);
-    return Math.abs(point.x) <= MIDLINE_REACH ? { x: point.x, y: point.y, single: true } : null;
+    // Build 124 (Rakesh): the dentist's own mark is always believed, however far it is from the arch's middle (a scan with
+    // missing teeth has its middle well off the centrals).
+    return { x: point.x, y: point.y, single: true };
   }
   if (prep.arches.length !== 2 || prep.analysis.pair?.apart) return null;
   const upper = prep.arches.find((arch) => arch.role === "upper");
@@ -496,7 +496,7 @@ function midlineOffset(prep: Prepared, input: DentalStudioInput): { x: number; y
   // The upper's frame is the pair's turned over (FLIP: x the other way).
   point.applyMatrix4(upper.frame);
   const x = -point.x;
-  return Math.abs(x) <= MIDLINE_REACH ? { x, y: point.y } : null;
+  return { x, y: point.y };
 }
 
 /** Build 117: the pair is turned about a point this far behind the midline (about the first molars), mm. */
@@ -679,6 +679,8 @@ export type ToothTrueness = { points: number; within: number; worst: number; /**
 export const TRUE_WITHIN = 0.001;
 /** Build 124: the gum check's bands - how far in from the trimmed edge the kept gum is counted from, mm (the edge itself may be smoothed). */
 export const GUM_BANDS = [0, 0.5, 1, 2, 3];
+/** Build 124 (Rakesh): on the smooth base only this much of the kept gum, in from its trimmed edge, is smoothed, mm. */
+export const EDGE_SMOOTH = 1;
 export function toothTrueness(solid: ManifoldSolid, points: Float64Array, turn: THREE.Matrix4 | null): ToothTrueness {
   const mesh = solid.getMesh();
   const stride = mesh.numProp, props = mesh.vertProperties;
@@ -866,12 +868,20 @@ function buildArch(
     for (const i of new Set(cut.f)) if (!crownOnCut[i]) gumList.push(cut.v[i * 3], cut.v[i * 3 + 1], cut.v[i * 3 + 2], Math.min(along[i], 99));
   }
   // Build 101: High unless chosen otherwise - the edge alone moves (the teeth are kept), shrink-free.
-  // Build 119: on the smooth base, tags of tissue standing up at the scan's edge are trimmed off, as from a cast.
+  // Build 124 (Rakesh): tissue standing up at the scan's edge is no longer trimmed off on the smooth base (build 119 did) -
+  // every bit of the gum the person kept comes through; what stays is chosen in the Trim step.
+  // Build 124 (Rakesh): on the smooth base the trimmed edge is smoothed - its last EDGE_SMOOTH mm only, never the gum
+  // beyond (every bit of the gum the person kept comes through): the tooth zone stops short of the edge there (a scan
+  // trimmed close under the teeth had its whole edge in the zone, kept raw, a ragged lip), and the folds of that last
+  // strip are relaxed. The teeth the trueness check holds to - beyond the whole scan's edge fringe - always stay.
+  let edgeClear = teeth;
   if (options.smoothBase) {
-    const untagged = withoutTissueTags(cut, teeth);
-    if (untagged !== cut) { cut.f = untagged.f; dropFragments(cut, 0.05, teeth); }
+    const whole = distanceFromEdge(m, EDGE_FRINGE + 0.01), here = distanceFromEdge(cut, EDGE_SMOOTH + 0.01);
+    const promised = onCut(scanTeeth.map((inZone, i) => (inZone && whole[i] > EDGE_FRINGE ? 1 : 0)));
+    edgeClear = Uint8Array.from(teeth, (z, i) => (z && (here[i] > EDGE_SMOOTH || promised[i]) ? 1 : 0));
   }
-  smoothEdge(cut, SMOOTH_ROUNDS[options.smooth ?? "high"], teeth);
+  smoothEdge(cut, SMOOTH_ROUNDS[options.smooth ?? "high"], edgeClear);
+  if (options.smoothBase) relaxFringe(cut, EDGE_SMOOTH, 8, edgeClear);
   let closed;
   try {
     closed = closeToFloor(cut, floor, 400, guard, 0);
@@ -931,7 +941,7 @@ function buildArch(
       if (options.hinge && band.length >= 3) band = bandToBack(runtime, band, Math.max(...ortho.map(([, y]) => y)));
       if (band.length >= 3) outline = band;
     }
-    const base = makeSmoothBase(runtime, { scan: cut, teeth, outline, floor, open: true, ledge, ...crisp });
+    const base = makeSmoothBase(runtime, { scan: cut, teeth: edgeClear, outline, floor, open: true, ledge, ...crisp });
     keepSolid(base.outer);
     solid = keepSolid(runtime.Manifold.union(solid, base.outer));
     solid = keepSolid(runtime.Manifold.intersection(solid, keepSolid(prism(runtime, outline, floor, top + 5))));
@@ -1414,7 +1424,9 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     }
     sections.forEach((section) => section.delete());
   }
-  const warnings = [...new Set([...(apart ? ["apart"] : []), ...built.flatMap(({ built: b }) => b.warnings)])];
+  // Build 124: a midline marked that could not be used (a quadrant, or scans made apart) is said, never dropped silently.
+  const midlineDropped = midline === null && input.arches.some((arch) => arch.midline && arch.midline.every(Number.isFinite));
+  const warnings = [...new Set([...(apart ? ["apart"] : []), ...(midlineDropped ? ["midline"] : []), ...built.flatMap(({ built: b }) => b.warnings)])];
   const voxel = built.find(({ built: b }) => b.voxel !== null)?.built.voxel ?? null;
   const toFree: ManifoldSolid[] = [];
   let opening: number | undefined;

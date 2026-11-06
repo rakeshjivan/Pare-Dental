@@ -49,7 +49,11 @@ export const SMOOTH = {
   /** ...and beside a tooth it is eased this far in under the scan instead, so the tooth's own surface shows, mm. */
   edgeEaseTooth: 0.8,
   /** Over how much of the scan's edge (in from it) the scan gives way to the drape, mm. */
-  edgeBand: 3,
+  edgeBand: 1,
+  /** Build 124: the narrowest the scan-to-drape rounding gets, away from the scan's edge, mm. */
+  meetMin: 0.2,
+  /** Build 124: under the scan, the drape stays this far below the scan's lowest surface, mm. */
+  underGum: 0.3,
   /** The blend between the scan and the drape, mm. */
   drapeBlend: 3.5,
   /**
@@ -368,7 +372,15 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
     const toSeed = nearestSeed2D(isSeed, nx, ny);
     for (let c = 0; c < n2; c += 1) if (covered[c] && inFromEdge[c] < S.plateau && toSeed[c] >= 0) drape[c] = Math.max(drape[c], seedZ[toSeed[c]]);
   }
+  // Build 124 (Rakesh): under the scan the drape never stands higher than the scan's lowest surface there, less underGum -
+  // along a wavy trimmed edge it would otherwise stand at the high points' height and come up through the gum between them.
+  const underScan = (heights: Float32Array) => {
+    // (Not over the scan's last edgeBand: that is the trimmed edge, which the drape buries.)
+    for (let c = 0; c < n2; c += 1) if (counts[c + 1] > counts[c] && inFromEdge[c] > S.edgeBand + h) heights[c] = Math.min(heights[c], crossings[counts[c]] - S.underGum);
+  };
+  underScan(drape);
   const smoothDrape = blur(drape, nx, ny, 1, S.drapeSmooth / h);
+  underScan(smoothDrape);
   const drapeNorm = new Float32Array(n2);
   for (let j = 0; j < ny; j += 1) for (let i = 0; i < nx; i += 1) {
     const c = j * nx + i;
@@ -459,7 +471,11 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
       // Over the scan's last edgeBand: out on the gum the field stands a little out over it (its ragged edge buried);
       // beside a tooth it is eased in under it, as before build 122, so the scan's own tooth surface always shows.
       const easeEdge = edge * (S.edgeEaseTooth + (S.edgeEase - S.edgeEaseTooth) * standOut);
-      bodies[index] = smin(smin(scanSd + easeEdge, drapeSd, blendHere), z - ledge, fillet);
+      // Build 124 (Rakesh): all the gum the person kept comes through - the broad fillet sweeps the drape onto the ledge,
+      // never the gum itself (it thickened low gum lying near the ledge), and the gum meets the drape with a rounding
+      // only over its own last edgeBand (beyond, the scan's own surface).
+      const meet = Math.max(S.meetMin, blendHere * edge);
+      bodies[index] = smin(scanSd + easeEdge, smin(drapeSd, z - ledge, fillet), meet);
       seamW[index] = edge * standOut;
     }
   }
