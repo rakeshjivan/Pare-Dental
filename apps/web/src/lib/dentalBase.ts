@@ -710,6 +710,36 @@ export const TOOTH_REACH = 5.5;
  * of cheek or tongue standing far above the occlusal plane, or lying well below it) and find no teeth.
  * `lonely`: a group of tips further than this from every other group finds no teeth.
  */
+/** Build 122: how much the gum cut's reference height (the highest tip in reach) is smoothed, mm (Gaussian sigma). */
+export const MARGIN_REF_SMOOTH = 3;
+
+/** A grid's finite values blurred (Gaussian, sigma in cells), the non-finite cells left out of every average and left as they were. */
+function smoothedFinite(src: Float64Array, nx: number, ny: number, sigma: number): Float64Array {
+  const r = Math.ceil(sigma * 2.5), w = new Float64Array(2 * r + 1);
+  for (let i = -r; i <= r; i += 1) w[i + r] = Math.exp(-(i * i) / (2 * sigma * sigma));
+  const run = (val: Float64Array, wt: Float64Array, horizontal: boolean) => {
+    const v2 = new Float64Array(nx * ny), w2 = new Float64Array(nx * ny);
+    for (let y = 0; y < ny; y += 1) for (let x = 0; x < nx; x += 1) {
+      let sv = 0, sw = 0;
+      for (let k = -r; k <= r; k += 1) {
+        const xx = horizontal ? x + k : x, yy = horizontal ? y : y + k;
+        if (xx < 0 || yy < 0 || xx >= nx || yy >= ny) continue;
+        const j = yy * nx + xx;
+        sv += w[k + r] * val[j]; sw += w[k + r] * wt[j];
+      }
+      v2[y * nx + x] = sv; w2[y * nx + x] = sw;
+    }
+    return [v2, w2] as const;
+  };
+  const val = new Float64Array(nx * ny), wt = new Float64Array(nx * ny);
+  for (let k = 0; k < src.length; k += 1) if (Number.isFinite(src[k])) { val[k] = src[k]; wt[k] = 1; }
+  const [v1, w1] = run(val, wt, true);
+  const [v2, w2] = run(v1, w1, false);
+  const out = Float64Array.from(src);
+  for (let k = 0; k < out.length; k += 1) if (Number.isFinite(src[k]) && w2[k] > 1e-9) out[k] = v2[k] / w2[k];
+  return out;
+}
+
 export function toothZone(m: Mesh, crown = TOOTH_CROWN, reachOut = TOOTH_REACH, tipsOut?: number[][], ceiling = Infinity, lowest = -Infinity, lonely = Infinity, fieldOut?: Float64Array): Uint8Array {
   const cell = 0.5;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -803,7 +833,9 @@ export function toothZone(m: Mesh, crown = TOOTH_CROWN, reachOut = TOOTH_REACH, 
     const mask = new Uint8Array(nx * ny);
     for (let k = 0; k < mask.length; k += 1) if (Number.isFinite(tips[k])) mask[k] = 1;
     const squared = squaredDistanceTo(mask, nx, ny, 1);
-    const wide = pass(tips, reachOut + 4, Math.max, -Infinity);
+    // Build 122 (Rakesh): the height the cut is measured down from, smoothed (MARGIN_REF_SMOOTH) - a square window's
+    // highest tip jumps as tips come in and out of it, most of all beside a missing tooth, and the cut stepped with it.
+    const wide = smoothedFinite(pass(tips, reachOut + 4, Math.max, -Infinity), nx, ny, MARGIN_REF_SMOOTH / cell);
     for (let i = 0; i < zone.length; i += 1) {
       const k = at(m.v[i * 3], m.v[i * 3 + 1]);
       const across = reachOut - Math.sqrt(squared[k]) * cell;
