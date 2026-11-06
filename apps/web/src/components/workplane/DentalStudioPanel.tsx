@@ -562,7 +562,11 @@ export function DentalStudioPanel({
   // Build 120: the articulator's questions one at a time - the one open, the others a line each (the answer shown).
   // Build 120 (Rakesh): each choice appears once the one before it is made - what has been chosen (all of it on a design
   // opened again), and a question opened again to change it.
-  const [asked, setAsked] = useState<Record<string, boolean>>(() => (editing ? Object.fromEntries(["type", "layout", "height", "hinge", "fit", "pins", "gap", "ovd", "aheight"].map((id) => [id, true])) : {}));
+  const allAsked = () => Object.fromEntries(["type", "layout", "height", "hinge", "fit", "pins", "gap", "ovd", "aheight"].map((id) => [id, true]));
+  const [asked, setAsked] = useState<Record<string, boolean>>(() => (editing ? allAsked() : {}));
+  // Build 124 (Rakesh): a design opened again with Edit design while the panel is open counts every choice as made too -
+  // on a pair made articulated and switched to separate, the height (shown chosen) held Next back until clicked again.
+  useEffect(() => { if (editing) setAsked(allAsked()); }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
   const [openQ, setOpenQ] = useState<string | null>(null);
   const answer = (id: string) => { setAsked((state) => ({ ...state, [id]: true })); setOpenQ(null); };
   // Build 120 (Rakesh): an articulator question's choice, made but not yet confirmed with its Next.
