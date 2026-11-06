@@ -193,8 +193,11 @@ export type DentalStudioOptions = {
 
 export type DentalSmooth = "off" | "low" | "high";
 const SMOOTH_ROUNDS: Record<DentalSmooth, number> = { off: 0, low: 3, high: 10 };
-/** Build 123: how far in from a scan's edge its surface is relaxed on the smooth base, mm, and how many passes. */
-export const FRINGE_RELAX = { reach: 1.5, passes: 8 };
+/**
+ * Build 123: on the smooth base, how far in from a scan's edge its surface is relaxed, mm, and how many passes; and how
+ * far from the edge the tooth zone stops (0: it runs to the edge, as before).
+ */
+export const FRINGE_RELAX = { reach: 1.5, passes: 8, clear: EDGE_FRINGE };
 
 /** The flags of `zone`, less the corners within `fringe` mm of the scan's edge (over the surface). */
 function clearOfEdge(m: Mesh, zone: Uint8Array, fringe: number) {
@@ -875,10 +878,10 @@ function buildArch(
   // the scan, it stood out under the base as a ragged lip; now it is smoothed and buried like the rest of the edge.
   // (What the trueness check holds to - the teeth beyond the fringe of the whole scan's edge - always stays.)
   let edgeClear = teeth;
-  if (options.smoothBase) {
+  if (options.smoothBase && FRINGE_RELAX.clear > 0) {
     const whole = distanceFromEdge(m, EDGE_FRINGE + 0.01);
     const promised = onCut(scanTeeth.map((inZone, i) => (inZone && whole[i] > EDGE_FRINGE ? 1 : 0)));
-    const clear = clearOfEdge(cut, teeth, EDGE_FRINGE);
+    const clear = clearOfEdge(cut, teeth, FRINGE_RELAX.clear);
     edgeClear = Uint8Array.from(clear, (c, i) => (c || (teeth[i] && promised[i]) ? 1 : 0));
   }
   smoothEdge(cut, SMOOTH_ROUNDS[options.smooth ?? "high"], edgeClear);

@@ -85,6 +85,8 @@ export const SMOOTH = {
   cavitySmooth: 1,
   /** An edge point raises the drape no higher than the lowest edge within this of it, mm. */
   seedOpen: 1,
+  /** Build 123: ...but an edge point is lowered so by no more than this, mm (a tag is taken off before: TAG_RISE). */
+  seedRaw: 1.5,
   /** A boundary loop shorter than this is a hole in the scan, not its edge: it seeds no drape, mm. */
   holeLoop: 40,
   /** Taubin smoothing passes over the level set's surface (takes out the grid's faint ripple on curved parts). */
@@ -340,10 +342,10 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
     const carried = new Float32Array(n2);
     for (let c = 0; c < n2; c += 1) carried[c] = toSeed[c] >= 0 ? high[toSeed[c]] : ledge;
     const smoothed = blur(carried, nx, ny, 1, S.edgeSmooth / h);
-    // Build 123: never below the edge's own height there either, but for a tag standing more than TAG_RISE over the edge
+    // Build 123: never below the edge's own height there either, but by more than seedRaw (a tag standing higher over the edge is gone by then)
     // nearby - a jagged trim line's points, lowered to the dips between them above, would leave the wall under each
     // point standing out below the drape as a ragged, striated band.
-    for (const c of cells) seedZ[c] = Math.max(smoothed[c], seedZ[c], Math.min(rawSeedZ[c], seedZ[c] + TAG_RISE));
+    for (const c of cells) seedZ[c] = Math.max(smoothed[c], seedZ[c], Math.min(rawSeedZ[c], seedZ[c] + S.seedRaw));
   }
   // The highest of the cones falling at DRAPE_SLOPE from every point of the edge (a chamfer dilation: continuous,
   // never a step where one edge point's reach gives way to the next's).
