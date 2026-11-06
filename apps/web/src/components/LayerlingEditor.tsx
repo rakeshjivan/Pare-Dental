@@ -2338,6 +2338,8 @@ export function LayerlingEditor({
     setNotice(t("status.cruisePlace", { name: shapeAssetLabel(cruiseAsset) }), true);
   }, [cruiseAsset, editorLanguage, setNotice]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const replaceInputRef = useRef<HTMLInputElement | null>(null);
+  const replaceSlotRef = useRef<DentalSlot | null>(null);
   // Left open on an iPad, which greys out files of types it does not know (#219).
   const projectFileAccept = useFileAccept(".lyl,.skf");
   const myShapesFileAccept = useFileAccept(".zip,.lyl,.skf");
@@ -19402,6 +19404,24 @@ export function LayerlingEditor({
       studioExporting.current = false;
     }
   };
+  /** Build 124 (Rakesh): the scan in one slot replaced with another file - imported, put in that slot, the old scan removed. */
+  const replaceDentalScan = async (file: File) => {
+    const slot = replaceSlotRef.current;
+    replaceSlotRef.current = null;
+    if (!slot || !dentalStudioRef.current || dentalStudioRef.current.stage === "making") return;
+    const result = await importFilesRef.current?.([file]);
+    const id = result?.importedIds[0];
+    const current = dentalStudioRef.current;
+    if (!id || !current) return;
+    const old = current.slots[slot];
+    const slots = { ...current.slots };
+    (Object.keys(slots) as DentalSlot[]).forEach((key) => { if (slots[key] === id) slots[key] = null; });
+    slots[slot] = id;
+    if (old && old !== id && !Object.values(slots).includes(old)) {
+      commitShapes(shapesRef.current.filter((shape) => shape.id !== old), [id], t("dental.replacedScan", { slot: t(`dental.${slot}`), name: file.name }));
+    }
+    analyseDentalStudio({ ...current, slots, rolesChosen: true });
+  };
   const saveExportDentalModels = async () => {
     const state = dentalStudioRef.current;
     if (!state || studioExporting.current) return;
@@ -21963,12 +21983,19 @@ export function LayerlingEditor({
             const teeth = arches.length ? Math.max(...arches.map((arch) => arch.teeth)) : 0;
             return { ...current, preset, optionsTouched: false, options: dentalPreset(preset, depth, Boolean(current.slots.upper && current.slots.lower), above, teeth), error: null };
           })}
-          onOptionsChange={(patch) => setDentalStudio((current) => current && current.stage === "ready" ? { ...current, options: { ...current.options, ...patch }, optionsTouched: true, error: null } : current)}
+          onOptionsChange={(patch) => setDentalStudio((current) => {
+            if (!current) return current;
+            // Build 124 (Rakesh): the patient's name is taken at the first step too - before the scans are ready.
+            const onlyLabel = Object.keys(patch).every((key) => key === "label");
+            if (current.stage === "ready" || (onlyLabel && current.stage !== "making")) return { ...current, options: { ...current.options, ...patch }, ...(onlyLabel ? {} : { optionsTouched: true }), error: null };
+            return current;
+          })}
           onMidlinePick={(on: boolean) => setMidlinePicking(on)}
           midlinePicking={midlinePicking}
           onAdvancedChange={(advanced) => setDentalStudio((current) => current ? { ...current, advanced } : current)}
           onApply={() => void makeDentalModels()}
           onImport={() => fileInputRef.current?.click()}
+          onReplaceScan={(slot) => { replaceSlotRef.current = slot; replaceInputRef.current?.click(); }}
           patientDetails={dentalStudio.patientDetails}
           onPatientDetails={(patientDetails) => {
             storePatientDetails(patientDetails);
@@ -22569,6 +22596,18 @@ export function LayerlingEditor({
           const file = event.currentTarget.files?.[0];
           if (file) void insertLylDesign(file);
           event.currentTarget.value = "";
+        }}
+      />
+      {/* Build 124 (Rakesh): one scan replaced in its slot - the old one taken out, the others left as they are. */}
+      <input
+        ref={replaceInputRef}
+        className="hidden-file-input"
+        type="file"
+        accept={importFileAccept}
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (file) void replaceDentalScan(file);
         }}
       />
       <input

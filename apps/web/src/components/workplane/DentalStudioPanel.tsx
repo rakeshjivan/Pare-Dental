@@ -144,6 +144,9 @@ function HelpTip({ text }: { text: string }) {
   );
 }
 
+/** Build 124: the slot list's "replace with another file" entry. */
+const REPLACE_SCAN = "__replace_scan__";
+
 export function DentalStudioPanel({
   parts,
   slots,
@@ -174,6 +177,7 @@ export function DentalStudioPanel({
   onAdvancedChange,
   onApply,
   onImport,
+  onReplaceScan,
   onCancel,
   patientDetails = "keep",
   onPatientDetails,
@@ -267,6 +271,8 @@ export function DentalStudioPanel({
   onAdvancedChange: (open: boolean) => void;
   onApply: () => void;
   onImport: () => void;
+  /** Build 124 (Rakesh): replace the scan in one slot with another file. */
+  onReplaceScan?: (slot: DentalSlot) => void;
   onCancel: () => void;
   /** Build 71: whether the made models keep the patient's details (scan names, label) or lose them. */
   patientDetails?: "keep" | "remove";
@@ -338,9 +344,15 @@ export function DentalStudioPanel({
     <div className={`dental-slot${extra ? " with-extra" : ""}`} key={slot}>
       <label>
         <span>{label}</span>
-        <select value={slots[slot] ?? ""} disabled={busy} onChange={(event) => onSlotChange(slot, event.currentTarget.value || null)}>
+        <select value={slots[slot] ?? ""} disabled={busy} onChange={(event) => {
+          const value = event.currentTarget.value;
+          // Build 124 (Rakesh): a wrong scan replaced on its own, from another file - the others stay as they are.
+          if (value === REPLACE_SCAN) { event.currentTarget.value = slots[slot] ?? ""; onReplaceScan?.(slot); return; }
+          onSlotChange(slot, value || null);
+        }}>
           <option value="">{slot === "bite2" ? t("dental.optional") : t("dental.none")}</option>
           {parts.map((part) => <option key={part.id} value={part.id}>{part.name}</option>)}
+          {onReplaceScan && stage !== "making" ? <option value={REPLACE_SCAN}>{t(slots[slot] ? "dental.replaceScan" : "dental.loadScan")}</option> : null}
         </select>
       </label>
       {extra}
@@ -811,6 +823,13 @@ export function DentalStudioPanel({
       {inWaxStep("scans") && inMb("scans") ? card(1, t("dental.step1"), scansDone, t("dental.step1Hint"), scansSummary, (<>
         <div className="dental-slots">
           {parts.length === 0 ? <a className="dental-guide-link" href={DENTAL_GUIDE_PDF} download={DENTAL_GUIDE_FILE}><FileDown size={15} aria-hidden="true" /> {t("dental.guidePdfFirst")}</a> : null}
+          {/* Build 124 (Rakesh): the patient's name or case first of all, so a case left at the first step is named too (the same field as at Finish). */}
+          {framed ? (
+            <label className="studio-label-field">
+              <span>{t("studio.patientCase")}</span>
+              <input type="text" maxLength={24} value={options.label} placeholder={t("studio.labelPlaceholder")} disabled={stage === "making"} onChange={(event) => onOptionsChange({ label: event.currentTarget.value })} />
+            </label>
+          ) : null}
           <div className={onNewPatient ? "dental-import-row" : undefined}>
             <button type="button" className="dental-import" disabled={stage === "making" || !archesChosen} title={archesChosen ? undefined : t("waxStudio.archesFirst")} onClick={onImport}><Upload size={15} /> {t("dental.import")}</button>
             {onNewPatient ? <button type="button" className="dental-import dental-new-patient" disabled={stage === "making"} title={t("dental.newPatientHint")} onClick={onNewPatient}><FilePlus2 size={15} /> {t("dental.newPatient")}</button> : null}
