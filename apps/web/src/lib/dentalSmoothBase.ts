@@ -46,6 +46,8 @@ export const SMOOTH = {
   drapeLift: 0.2,
   /** Build 122: negative - near its edge the field stands this far outside the scan, so the scan's ragged edge is buried under it. */
   edgeEase: -0.4,
+  /** ...and beside a tooth it is eased this far in under the scan instead, so the tooth's own surface shows, mm. */
+  edgeEaseTooth: 0.8,
   /** Over how much of the scan's edge (in from it) the scan gives way to the drape, mm. */
   edgeBand: 3,
   /** The blend between the scan and the drape, mm. */
@@ -423,7 +425,7 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
       const z = cz(k);
       while (p < list.length && list[p] < z) { p += 1; above -= 1; }
       const index = (k * ny + j) * nx + i;
-      let d = Math.sqrt(toSurface[index]) * h, edge = edgeHere, ease = easeHere;
+      let d = Math.sqrt(toSurface[index]) * h, edge = edgeHere, ease = easeHere, onTooth = 0;
       const inside = above % 2 === 1;
       if (toSurface[index] <= band) {
         const exact = near.nearest(cx(i), cy(j), z, q);
@@ -437,7 +439,11 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
             // How near the scan's edge the nearest point is: along the surface, from its triangle's corners - smooth, never a step.
             const a = f[t * 3], b = f[t * 3 + 1], c3 = f[t * 3 + 2];
             const w = barycentric(soup, t, q, bary);
-            if (w) edge = bary[0] * edgeW[a] + bary[1] * edgeW[b] + bary[2] * edgeW[c3];
+            if (w) {
+              edge = bary[0] * edgeW[a] + bary[1] * edgeW[b] + bary[2] * edgeW[c3];
+              // Build 122: how much the nearest scan point is tooth - there the field never stands out over it.
+              onTooth = bary[0] * (teeth[a] ? 1 : 0) + bary[1] * (teeth[b] ? 1 : 0) + bary[2] * (teeth[c3] ? 1 : 0);
+            }
           }
           if (gi >= 0 && gj >= 0 && gi < nx && gj < ny) ease = easeAt(gj * nx + gi, edge);
         }
@@ -449,8 +455,11 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
       // does the field stand out over the scan there.)
       const dTooth = Math.sqrt(toTooth[index]) * h;
       const blendHere = Math.max(S.toothBlend, Math.min(S.drapeBlend, dTooth));
-      const standOut = smooth01(dTooth / S.toothClear);
-      bodies[index] = smin(smin(scanSd + S.edgeEase * edge * standOut, drapeSd, blendHere), z - ledge, fillet);
+      const standOut = smooth01(dTooth / S.toothClear) * (1 - onTooth);
+      // Over the scan's last edgeBand: out on the gum the field stands a little out over it (its ragged edge buried);
+      // beside a tooth it is eased in under it, as before build 122, so the scan's own tooth surface always shows.
+      const easeEdge = edge * (S.edgeEaseTooth + (S.edgeEase - S.edgeEaseTooth) * standOut);
+      bodies[index] = smin(smin(scanSd + easeEdge, drapeSd, blendHere), z - ledge, fillet);
       seamW[index] = edge * standOut;
     }
   }
