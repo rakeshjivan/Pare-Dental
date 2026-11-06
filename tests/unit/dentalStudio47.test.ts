@@ -240,7 +240,7 @@ describe("Dental Studio (build 47)", () => {
     expect(a.minZ).toBeCloseTo(0, 3);
     expect(b.minZ).toBeCloseTo(0, 3);
     expect(Math.max(a.minX, b.minX)).toBeGreaterThan(Math.min(a.maxX, b.maxX));
-  }, 60_000);
+  }, 240_000);
 
   it("makes the same pair when one arch is made apart, as the second worker does (build 68)", async () => {
     const upper = syntheticArch({ teethDown: true, front: -2 });

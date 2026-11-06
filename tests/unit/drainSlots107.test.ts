@@ -26,7 +26,7 @@ function syntheticArch() {
   return Float32Array.from(out);
 }
 
-const base: DentalStudioOptions = { keep: null, base: 4, baseStyle: "follow", inside: "solid", wall: 3, hinge: false, layout: "print", label: "" };
+const base: DentalStudioOptions = { keep: null, base: 4, baseStyle: "plate", inside: "solid", wall: 3, hinge: false, layout: "print", label: "" };
 
 /** Enclosed pockets in a horizontal slice of the model at height z: each is a hollow (or cell) with no way out at that height. */
 function pocketsAt(positions: Float32Array, z: number) {

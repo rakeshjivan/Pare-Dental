@@ -148,10 +148,13 @@ describe("fitting to the teeth found", () => {
 
 describe("tooth sets the right way up", () => {
   it("every shipped set has its incisors' wide incisal third at the top (the edge), both arches", async () => {
-    const { readFileSync } = await import("node:fs");
+    const { readFileSync, readdirSync, existsSync } = await import("node:fs");
     const { librarySet } = await import("@/lib/dentalWaxup");
     const { decodeToothSet } = await import("@/lib/toothLibrary");
-    for (const lib of ["nulty", "teethy"]) {
+    // Build 122: every library that ships (only Pare's since the others were removed).
+    const shipped = readdirSync("apps/web/public/libraries").filter((lib) => existsSync(`apps/web/public/libraries/${lib}/manifest.json`));
+    expect(shipped.length).toBeGreaterThan(0);
+    for (const lib of shipped) {
       const manifest = JSON.parse(readFileSync(`apps/web/public/libraries/${lib}/manifest.json`, "utf8")) as { sets: Array<{ id: string; file: string }> };
       for (const entry of manifest.sets) {
         const set = librarySet(entry.id, decodeToothSet(readFileSync(`apps/web/public/libraries/${lib}/${entry.file}`)));
