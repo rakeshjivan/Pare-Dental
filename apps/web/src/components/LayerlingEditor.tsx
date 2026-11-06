@@ -19370,6 +19370,35 @@ export function LayerlingEditor({
     header.set(text.subarray(0, header.length));
     return buffer;
   };
+  /** Build 122 (Rakesh): the scans as trimmed, saved as STL files - the upper and lower, "_trimmed" added to their names. */
+  const exportTrimmedScans = async () => {
+    const state = dentalStudioRef.current;
+    if (!state || studioExporting.current) return;
+    const scans = (["upper", "lower"] as const).map((slot) => ({ slot, shape: state.slots[slot] ? shapesRef.current.find((shape) => shape.id === state.slots[slot]) : undefined })).filter((entry): entry is { slot: "upper" | "lower"; shape: WorkplaneShape } => Boolean(entry.shape));
+    if (!scans.length) return;
+    studioExporting.current = true;
+    try {
+      if (await getFileSettings()) {
+        const chosen = await chooseFilesFolder("exports", t("studio.exportWhere"));
+        if (!chosen) return;
+      }
+      const saved: string[] = [];
+      for (const { slot, shape } of scans) {
+        const { meshes } = await exportBodiesWithLooseHoles([shape]);
+        if (!meshes.length) continue;
+        const base = displayShapeName(shape).replace(/\.(stl|ply|obj)$/i, "").trim() || t(slot === "upper" ? "dental.upper" : "dental.lower");
+        const name = projectExportFileName(`${base}_trimmed`, "stl");
+        const answer = await saveUserFile(name, new Blob([new Uint8Array(cleanStlBinary(exportMeshesToStl(meshes)))], { type: "model/stl" }), t("files.saveExport"));
+        if (answer === "cancelled") return;
+        saved.push(name);
+      }
+      if (saved.length) setNotice(t("studio.exportedTrimmed", { files: saved.join(", ") }));
+    } catch (error) {
+      setNotice(error instanceof Error ? localizedError(error.message) : String(error), true);
+    } finally {
+      studioExporting.current = false;
+    }
+  };
   const saveExportDentalModels = async () => {
     const state = dentalStudioRef.current;
     if (!state || studioExporting.current) return;
@@ -22144,6 +22173,7 @@ export function LayerlingEditor({
           onMbStep={setStudioMbStep}
           onWaxStep={setStudioWaxStep}
           onSaveExport={studioShellOn ? () => setExportNoticeOpen(true) : undefined}
+          onExportTrimmed={studioShellOn ? () => { void exportTrimmedScans(); } : undefined}
           exporting={studioExportBusy}
           onExit={studioExported && onHome ? () => leaveToDashboard() : undefined}
           trimSlot={sculptTool?.trim ? (sculptTool.shapeId === dentalStudio.slots.upper ? "upper" : sculptTool.shapeId === dentalStudio.slots.lower ? "lower" : null) : null}

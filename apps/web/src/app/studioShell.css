@@ -646,6 +646,17 @@
   cursor: default;
 }
 
+/* Build 122: Export trimmed, in the Trim step - a green box between Back and Next. */
+.studio-nav button.studio-export-trimmed {
+  color: var(--studio-teal-strong, #08665c);
+  background: #e8f4f2;
+  border-color: var(--studio-teal, #0a786c);
+}
+
+.studio-nav button.studio-export-trimmed:hover:not(:disabled) {
+  background: #d6ece8;
+}
+
 /* ---------------------------------------------------------------- the step's tools (right) */
 .studio-shell-on .dental-studio-panel.studio-framed {
   top: calc(var(--studio-top) + var(--studio-gap)) !important;

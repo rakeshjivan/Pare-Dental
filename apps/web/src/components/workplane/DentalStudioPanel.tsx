@@ -204,6 +204,7 @@ export function DentalStudioPanel({
   onWaxStep,
   trimSlot = null,
   trimmedDone = null,
+  onExportTrimmed,
   nextSignal = 0,
 }: {
   parts: DentalPartChoice[];
@@ -289,6 +290,8 @@ export function DentalStudioPanel({
   trimSlot?: "upper" | "lower" | null;
   /** Build 106: the arches finished in Trim and tidy (Done pressed) - Next waits for each one there is. */
   trimmedDone?: Array<"upper" | "lower"> | null;
+  /** Build 122 (Rakesh): saves the trimmed scans (upper and lower STL, "_trimmed"), from the Trim step once they are trimmed. */
+  onExportTrimmed?: () => void;
   nextSignal?: number;
 }) {
   useLanguage();
@@ -689,6 +692,9 @@ export function DentalStudioPanel({
     ) : null}
   </>) : mbSteps && mbStep ? (<>
     <button type="button" className="secondary" disabled={mbIndex <= 0} onClick={() => setMbStepId(mbSteps[mbIndex - 1])}>{t("waxStudio.back")}</button>
+    {mbStep === "prepare" && onExportTrimmed && mbStepDone("prepare") ? (
+      <button type="button" className="studio-export-trimmed" disabled={busy} title={t("studio.exportTrimmedHint")} onClick={onExportTrimmed}><FileDown size={17} /> {t("studio.exportTrimmed")}</button>
+    ) : null}
     {!mbLast ? (
       <button type="button" className="primary" disabled={!mbStepDone(mbStep) || busy} onClick={() => setMbStepId(mbSteps[mbIndex + 1])}>{t("studio.nextTo", { step: mbStepName(mbSteps[mbIndex + 1]) })} <ArrowRight size={18} /></button>
     ) : null}
