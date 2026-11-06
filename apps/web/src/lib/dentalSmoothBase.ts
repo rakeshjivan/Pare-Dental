@@ -45,7 +45,8 @@ export const SMOOTH = {
   /** How far the drape stands above the scan's ragged edge, mm. */
   drapeLift: 0.2,
   /** Build 122: negative - near its edge the field stands this far outside the scan, so the scan's ragged edge is buried under it. */
-  edgeEase: -0.4,
+  // Build 124 (Rakesh): 0 - standing out over a 1 mm edge strip made a bead along the trimmed edge, a visible ridge.
+  edgeEase: 0,
   /** ...and beside a tooth it is eased this far in under the scan instead, so the tooth's own surface shows, mm. */
   edgeEaseTooth: 0.8,
   /** Over how much of the scan's edge (in from it) the scan gives way to the drape, mm. */
@@ -67,7 +68,7 @@ export const SMOOTH = {
   plateau: 2,
   /** Build 122: the seam's envelope - how much it is smoothed (sigma) and how far it stands out over the body, mm. */
   seamSmooth: 1,
-  seamCover: 0.3,
+  seamCover: 0,
   /** Build 122: within this of a tooth the field never stands out over the scan, mm. */
   toothClear: 1.5,
   /** Build 122: the narrowest the scan-to-drape blend gets beside a tooth (elsewhere no wider than the distance to one), mm. */
