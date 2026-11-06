@@ -188,6 +188,9 @@ export type SmoothBaseInput = {
   step?: number;
   /** The ledge's height above the rim, mm (SMOOTH.ledge unless given - lower on an aligner model). */
   ledge?: number;
+  /** Build 122: the fillet onto the ledge and the rounding of the wall's top edge, mm (SMOOTH's unless given - tighter on an orthodontic base). */
+  fillet?: number;
+  edgeRound?: number;
 };
 
 export type SmoothBaseFields = { grid: Grid; outer: Float32Array; cavity: Float32Array | null; timing: Record<string, number> };
@@ -265,6 +268,8 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
     for (let c = 0; c < n2; c += 1) inFromEdge[c] = Math.sqrt(d[c]) * h;
   }
   const ledge = floor + (input.ledge ?? S.ledge);
+  // Build 122: an orthodontic base's crisper join and top edge (lib/dentalModel passes them).
+  const fillet = input.fillet ?? S.fillet, edgeRound = input.edgeRound ?? S.edgeRound;
   // The drape falls from the scan's own edge (its boundary, at the edge's height) - never from a steep face of
   // the scan (from the top of a tooth's labial face it would wrap the face in a cone).
   const alongEdge = distanceFromEdge(scan, S.edgeBand + 1);
@@ -445,7 +450,7 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
       const dTooth = Math.sqrt(toTooth[index]) * h;
       const blendHere = Math.max(S.toothBlend, Math.min(S.drapeBlend, dTooth));
       const standOut = smooth01(dTooth / S.toothClear);
-      bodies[index] = smin(smin(scanSd + S.edgeEase * edge * standOut, drapeSd, blendHere), z - ledge, S.fillet);
+      bodies[index] = smin(smin(scanSd + S.edgeEase * edge * standOut, drapeSd, blendHere), z - ledge, fillet);
       seamW[index] = edge * standOut;
     }
   }
@@ -460,7 +465,7 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
       const raw = bodies[index], w = seamW[index];
       const body = w > 0 ? raw + (Math.min(raw, smoothed[index] - S.seamCover) - raw) * w : raw;
       // The field reaches a little past the outline; the caller cuts the wall exactly (a prism), so it is flat.
-      const cut = smax(body, rim[c] - S.wallSpare, S.edgeRound);
+      const cut = smax(body, rim[c] - S.wallSpare, edgeRound);
       if (base) base[index] = cut;
       outer[index] = -Math.max(cut, floor - z);
     }

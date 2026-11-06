@@ -458,6 +458,10 @@ export function analyseDental(input: DentalStudioInput): DentalAnalysis {
 
 /** Build 121: an aligner model's horseshoe outline runs this far outside its scan's edge, seen from above, mm. */
 export const ALIGNER_GROW = 3;
+/** Build 122: an orthodontic base's wall stops this far under the lowest of the scan; its join onto the ledge and its top edge, mm. */
+export const ORTHO_BELOW_SCAN = 1;
+export const ORTHO_FILLET = 2;
+export const ORTHO_EDGE_ROUND = 0.8;
 /** Build 120: an aligner model's smooth base - its ledge no lower than this above the rim, mm. */
 export const ALIGNER_LEDGE_MIN = 2.5;
 /** Build 120: a tall base is this much taller than the standard one, mm. */
@@ -902,7 +906,11 @@ function buildArch(
     let scanLow = Infinity;
     for (let t = 0; t < cut.f.length; t += 1) scanLow = Math.min(scanLow, cut.v[cut.f[t] * 3 + 2]);
     const ledgeAt = options.smoothShape === "aligner" ? Math.max(ALIGNER_LEDGE_MIN, Math.min(SMOOTH.ledge, options.base - SMOOTH.belowCut)) : Math.max(SMOOTH.ledge, options.base - SMOOTH.belowCut);
-    const ledge = arch.partial && Number.isFinite(scanLow) ? Math.max(ledgeAt, scanLow - floor - SMOOTH.belowCut) : ledgeAt;
+    // Build 122 (Rakesh): an orthodontic base as a trimmed cast's - its wall rises to just under the lowest of the scan,
+    // the anatomy sitting on it with a crisp, slightly rounded edge, no broad sweep.
+    const orthoBase = options.smoothShape === "ortho" && !arch.partial;
+    const ledge = (arch.partial || orthoBase) && Number.isFinite(scanLow) ? Math.max(ledgeAt, scanLow - floor - (orthoBase ? ORTHO_BELOW_SCAN : SMOOTH.belowCut)) : ledgeAt;
+    const crisp = orthoBase ? { fillet: ORTHO_FILLET, edgeRound: ORTHO_EDGE_ROUND } : {};
     // Build 121 (Rakesh): an aligner model is a horseshoe - its outline the arch's own (lib/dentalBase archBand), the scan seen from above grown
     // ALIGNER_GROW outside the scan's edge, open across the palate and the tongue space (the scan already follows the gum there),
     // so the drape runs down inside the arch as well as outside it. A quadrant keeps its block.
@@ -914,7 +922,7 @@ function buildArch(
       if (options.hinge && band.length >= 3) band = bandToBack(runtime, band, Math.max(...ortho.map(([, y]) => y)));
       if (band.length >= 3) outline = band;
     }
-    const base = makeSmoothBase(runtime, { scan: cut, teeth, outline, floor, open: true, ledge });
+    const base = makeSmoothBase(runtime, { scan: cut, teeth, outline, floor, open: true, ledge, ...crisp });
     keepSolid(base.outer);
     solid = keepSolid(runtime.Manifold.union(solid, base.outer));
     solid = keepSolid(runtime.Manifold.intersection(solid, keepSolid(prism(runtime, outline, floor, top + 5))));
