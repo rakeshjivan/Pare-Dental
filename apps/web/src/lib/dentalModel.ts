@@ -22,6 +22,7 @@ import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
 import { GUM_REACH, marginRegion, moveGumCut, type GumCut } from "@/lib/waxGum";
 import { smoothBase as makeSmoothBase, SMOOTH } from "@/lib/dentalSmoothBase";
+import { smoothSeam } from "@/lib/dentalSeam";
 import { articulatorParts, incisalPins, pinRisers, PIN, PIN_BAND, PIN_CLEAR, PIN_HALF, PIN_MAX, PIN_SET, POST_BACK, restAngle, type ArticulatorSides, type PinStyle } from "@/lib/dentalArticulator";
 import {
   applyMatrix, boundaryLoops, cloneMesh, transformSoup, convexHull, cutAlongField, cutBelow, dropFragments, smoothField, faceArea, loopLength, surfaceKept, pinchedEdges, PointGrid, solidPositions, toManifold, upwardness, weld,
@@ -943,8 +944,19 @@ function buildArch(
     }
     const base = makeSmoothBase(runtime, { scan: cut, teeth: edgeClear, outline, floor, open: true, ledge, ...crisp });
     keepSolid(base.outer);
+    if (base.cover) solid = keepSolid(runtime.Manifold.intersection(solid, keepSolid(base.cover)));
     solid = keepSolid(runtime.Manifold.union(solid, base.outer));
     solid = keepSolid(runtime.Manifold.intersection(solid, keepSolid(prism(runtime, outline, floor, top + 5))));
+    // Build 124 (Rakesh): and the finished surface smoothed along the trim line, as CAD Studio's smooth tool does by
+    // hand - the base and the scan's last edge strip, never a point of the gum or teeth kept - so they meet in one even
+    // surface, not a ridge or a comb.
+    {
+      const edges = boundaryLoops(cut).map((loop) => loop.flatMap((i) => [cut.v[i * 3], cut.v[i * 3 + 1], cut.v[i * 3 + 2]]));
+      const along = distanceFromEdge(cut, EDGE_SMOOTH + 0.01), keepAt: number[] = [];
+      for (const i of new Set(cut.f)) if (along[i] > EDGE_SMOOTH) keepAt.push(cut.v[i * 3], cut.v[i * 3 + 1], cut.v[i * 3 + 2]);
+      const smoothed = smoothSeam(runtime, solid, edges, keepAt);
+      if (smoothed !== solid) solid = keepSolid(smoothed);
+    }
     if (base.cavity) smoothCavity = keepSolid(base.cavity);
     buried = floor + ledge;
     footprint = [outline];

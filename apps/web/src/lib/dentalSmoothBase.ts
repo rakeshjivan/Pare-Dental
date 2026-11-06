@@ -55,6 +55,10 @@ export const SMOOTH = {
   meetMin: 0.2,
   /** Build 124: under the scan, the drape stays this far below the scan's lowest surface, mm. */
   underGum: 0.3,
+  /** Build 124: how much larger than the base the closed scan is clipped to, mm (0: not clipped). */
+  coverGrow: 0.4,
+  /** Build 124: beside the scan's edge, inside or out by the nearest face (1) rather than by the column's crossings (0). */
+  edgeSide: 1,
   /** The blend between the scan and the drape, mm. */
   drapeBlend: 3.5,
   /**
@@ -439,7 +443,7 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
       while (p < list.length && list[p] < z) { p += 1; above -= 1; }
       const index = (k * ny + j) * nx + i;
       let d = Math.sqrt(toSurface[index]) * h, edge = edgeHere, ease = easeHere, onTooth = 0;
-      const inside = above % 2 === 1;
+      let inside = above % 2 === 1;
       if (toSurface[index] <= band) {
         const exact = near.nearest(cx(i), cy(j), z, q);
         if (exact !== Infinity) {
@@ -456,6 +460,17 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
               edge = bary[0] * edgeW[a] + bary[1] * edgeW[b] + bary[2] * edgeW[c3];
               // Build 122: how much the nearest scan point is tooth - there the field never stands out over it.
               onTooth = bary[0] * (teeth[a] ? 1 : 0) + bary[1] * (teeth[b] ? 1 : 0) + bary[2] * (teeth[c3] ? 1 : 0);
+              // Build 124 (Rakesh): beside the scan's open edge, which side of it a point is on is taken from the nearest
+              // triangle's face, not by counting the scan's crossings in its column - along a ragged edge neighbouring
+              // columns disagree, and the base came out with a comb of teeth along the trimmed edge.
+              if (S.edgeSide && edge > 0) {
+                const o = t * 9;
+                const ux = soup[o + 3] - soup[o], uy = soup[o + 4] - soup[o + 1], uz = soup[o + 5] - soup[o + 2];
+                const vx = soup[o + 6] - soup[o], vy = soup[o + 7] - soup[o + 1], vz = soup[o + 8] - soup[o + 2];
+                const nx3 = uy * vz - uz * vy, ny3 = uz * vx - ux * vz, nz3 = ux * vy - uy * vx;
+                const side = (cx(i) - q[0]) * nx3 + (cy(j) - q[1]) * ny3 + (z - q[2]) * nz3;
+                if (side !== 0) inside = side < 0;
+              }
             }
           }
           if (gi >= 0 && gj >= 0 && gi < nx && gj < ny) ease = easeAt(gj * nx + gi, edge);
@@ -507,7 +522,7 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
 }
 
 /** The base as solids: the model's outside below the teeth, and the cavity (to take out), or null for a solid base. */
-export function smoothBase(runtime: ManifoldRuntime, input: SmoothBaseInput): { outer: ManifoldSolid; cavity: ManifoldSolid | null; step: number; timing: Record<string, number> } {
+export function smoothBase(runtime: ManifoldRuntime, input: SmoothBaseInput): { outer: ManifoldSolid; cavity: ManifoldSolid | null; cover: ManifoldSolid | null; step: number; timing: Record<string, number> } {
   const { grid, outer, cavity, timing } = smoothBaseFields(input);
   let clock = Date.now();
   const { nx, ny, nz, h, origin } = grid;
@@ -515,8 +530,12 @@ export function smoothBase(runtime: ManifoldRuntime, input: SmoothBaseInput): { 
   const outside = smoothSolid(runtime, runtime.Manifold.levelSet(sampler(outer, grid, -1), bounds, h, 0), SMOOTH.passes);
   // The cavity runs out through the rim: below the grid it is open.
   const hollow = cavity ? smoothSolid(runtime, runtime.Manifold.levelSet(sampler(cavity, grid, -1), bounds, h, 0), SMOOTH.passes) : null;
+  // Build 124 (Rakesh): the base grown by coverGrow - the scan's own surface lies inside it everywhere (the base hugs
+  // it), so the closed scan clipped to it keeps every bit of scan and loses only the wall it stands on, where that wall
+  // would show through the base below the trimmed edge as a dashed line.
+  const cover = SMOOTH.coverGrow > 0 ? smoothSolid(runtime, runtime.Manifold.levelSet(sampler(outer, grid, -1), bounds, h, -SMOOTH.coverGrow), SMOOTH.passes) : null;
   timing.levelSet = Date.now() - clock;
-  return { outer: outside, cavity: hollow, step: h, timing };
+  return { outer: outside, cavity: hollow, cover, step: h, timing };
 }
 
 /**
