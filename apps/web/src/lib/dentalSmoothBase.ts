@@ -66,7 +66,7 @@ export const SMOOTH = {
    * the shoulder where it starts to fall, never lowers it at the edge itself, where the wall closing the scan to the
    * floor stands (on a trimmed scan that wall showed below the edge as a ragged, striated band).
    */
-  plateauOut: 1.4,
+  plateauOut: 0,
   /** Build 122: the seam's envelope - how much it is smoothed (sigma) and how far it stands out over the body, mm. */
   seamSmooth: 1,
   seamCover: 0.3,
@@ -190,6 +190,11 @@ export type SmoothBaseInput = {
   scan: Mesh;
   /** The scan's corners on the teeth (the crowns the caller adds exactly). */
   teeth: Uint8Array;
+  /**
+   * Build 123: the crowns themselves (narrower than `teeth`, which reaches down the gum) - the blend between scan and drape
+   * is kept narrow only near these, so it rounds the join on the gum below them. All of `teeth` when not given.
+   */
+  crowns?: Uint8Array;
   /** The base's outline (the rim), and the rim's height. */
   outline: Ring;
   floor: number;
@@ -409,7 +414,8 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   const soup = new Float32Array(f.length * 3);
   for (let t = 0; t < f.length; t += 1) { soup[t * 3] = v[f[t] * 3]; soup[t * 3 + 1] = v[f[t] * 3 + 1]; soup[t * 3 + 2] = v[f[t] * 3 + 2]; }
   for (let t = 0; t + 8 < soup.length; t += 9) {
-    const onTooth = teeth[f[t / 3]] && teeth[f[t / 3 + 1]] && teeth[f[t / 3 + 2]];
+    const crownOf = input.crowns ?? teeth;
+    const onTooth = crownOf[f[t / 3]] && crownOf[f[t / 3 + 1]] && crownOf[f[t / 3 + 2]];
     // Points over the triangle at under half a voxel apart.
     const e = Math.max(Math.hypot(soup[t + 3] - soup[t], soup[t + 4] - soup[t + 1], soup[t + 5] - soup[t + 2]), Math.hypot(soup[t + 6] - soup[t], soup[t + 7] - soup[t + 1], soup[t + 8] - soup[t + 2]));
     const n = Math.max(1, Math.ceil(e / (h * 0.5)));

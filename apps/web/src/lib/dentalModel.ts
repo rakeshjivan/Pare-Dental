@@ -946,7 +946,9 @@ function buildArch(
       if (options.hinge && band.length >= 3) band = bandToBack(runtime, band, Math.max(...ortho.map(([, y]) => y)));
       if (band.length >= 3) outline = band;
     }
-    const base = makeSmoothBase(runtime, { scan: cut, teeth: edgeClear, outline, floor, open: true, ledge, ...crisp });
+    // Build 123: the blend is kept narrow only beside the crowns, not all down the gum the tooth zone reaches over.
+    const onCrowns = onCut(crowns), crownsHere = Uint8Array.from(edgeClear, (z, i) => (z && onCrowns[i] ? 1 : 0));
+    const base = makeSmoothBase(runtime, { scan: cut, teeth: edgeClear, crowns: crownsHere, outline, floor, open: true, ledge, ...crisp });
     keepSolid(base.outer);
     solid = keepSolid(runtime.Manifold.union(solid, base.outer));
     solid = keepSolid(runtime.Manifold.intersection(solid, keepSolid(prism(runtime, outline, floor, top + 5))));
