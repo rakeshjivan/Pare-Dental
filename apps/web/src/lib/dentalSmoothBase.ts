@@ -72,6 +72,8 @@ export const SMOOTH = {
   seamCover: 0.3,
   /** Build 122: within this of a tooth the field never stands out over the scan, mm. */
   toothClear: 1.5,
+  /** Build 123: ...and within this of the tooth zone's gum (when the crowns are given apart from it), mm. */
+  zoneClear: 1.2,
   /** Build 122: the narrowest the scan-to-drape blend gets beside a tooth (elsewhere no wider than the distance to one), mm. */
   toothBlend: 0.8,
   /** How far inside the scan the field stands round the teeth (the scan's crowns show), and how far out from them, mm. */
@@ -411,11 +413,14 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   const mark = new Uint8Array(n3);
   // Build 122: the teeth's own voxels too - how far each voxel is from a tooth, for the blend's width near them.
   const markTooth = new Uint8Array(n3);
+  // Build 123: and the whole tooth zone's voxels (the teeth and the gum it reaches over), so the field never stands out onto it.
+  const markZone = input.crowns ? new Uint8Array(n3) : null;
   const soup = new Float32Array(f.length * 3);
   for (let t = 0; t < f.length; t += 1) { soup[t * 3] = v[f[t] * 3]; soup[t * 3 + 1] = v[f[t] * 3 + 1]; soup[t * 3 + 2] = v[f[t] * 3 + 2]; }
   for (let t = 0; t + 8 < soup.length; t += 9) {
     const crownOf = input.crowns ?? teeth;
     const onTooth = crownOf[f[t / 3]] && crownOf[f[t / 3 + 1]] && crownOf[f[t / 3 + 2]];
+    const inZone = teeth[f[t / 3]] && teeth[f[t / 3 + 1]] && teeth[f[t / 3 + 2]];
     // Points over the triangle at under half a voxel apart.
     const e = Math.max(Math.hypot(soup[t + 3] - soup[t], soup[t + 4] - soup[t + 1], soup[t + 5] - soup[t + 2]), Math.hypot(soup[t + 6] - soup[t], soup[t + 7] - soup[t + 1], soup[t + 8] - soup[t + 2]));
     const n = Math.max(1, Math.ceil(e / (h * 0.5)));
@@ -423,11 +428,12 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
       const u = a / n, w = b / n, s = 1 - u - w;
       const px = s * soup[t] + u * soup[t + 3] + w * soup[t + 6], py = s * soup[t + 1] + u * soup[t + 4] + w * soup[t + 7], pz = s * soup[t + 2] + u * soup[t + 5] + w * soup[t + 8];
       const gi = Math.floor((px - x0) / h), gj = Math.floor((py - y0) / h), gk = Math.floor((pz - z0) / h);
-      if (gi >= 0 && gj >= 0 && gk >= 0 && gi < nx && gj < ny && gk < nz) { mark[(gk * ny + gj) * nx + gi] = 1; if (onTooth) markTooth[(gk * ny + gj) * nx + gi] = 1; }
+      if (gi >= 0 && gj >= 0 && gk >= 0 && gi < nx && gj < ny && gk < nz) { const at = (gk * ny + gj) * nx + gi; mark[at] = 1; if (onTooth) markTooth[at] = 1; if (markZone && inZone) markZone[at] = 1; }
     }
   }
   const toSurface = squaredDistanceTo(mark, nx, ny, nz);
   const toTooth = squaredDistanceTo(markTooth, nx, ny, nz);
+  const toZone = markZone ? squaredDistanceTo(markZone, nx, ny, nz) : null;
   lap("edt");
   const near = new NearestSurface(soup, S.distanceBand + h);
   const q = new Float64Array(3), bary = new Float64Array(3);
@@ -478,7 +484,8 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
       // does the field stand out over the scan there.)
       const dTooth = Math.sqrt(toTooth[index]) * h;
       const blendHere = Math.max(S.toothBlend, Math.min(S.drapeBlend, dTooth));
-      const standOut = smooth01(dTooth / S.toothClear) * (1 - onTooth);
+      const zoneClear = toZone ? smooth01((Math.sqrt(toZone[index]) * h) / S.zoneClear) : 1;
+      const standOut = smooth01(dTooth / S.toothClear) * (1 - onTooth) * zoneClear;
       // Over the scan's last edgeBand: out on the gum the field stands a little out over it (its ragged edge buried);
       // beside a tooth it is eased in under it, as before build 122, so the scan's own tooth surface always shows.
       const easeEdge = edge * (S.edgeEaseTooth + (S.edgeEase - S.edgeEaseTooth) * standOut);
