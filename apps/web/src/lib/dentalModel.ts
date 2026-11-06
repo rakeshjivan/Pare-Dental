@@ -16,7 +16,7 @@
 import * as THREE from "three";
 import { getManifoldRuntime } from "@/lib/editorMeshCore";
 import { alignToBite, archFrame, biteResidual, contacts, vertexNormals, canineWidth, cleanScan, frontOf, isPartialArch, marginUp, pairFrame, palateScore, type CleanArch, type CleanReport } from "@/lib/dentalArch";
-import { archBand, bandToBack, ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, relaxFringe, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, roundOutline, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
+import { archBand, bandToBack, ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, roundOutline, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
@@ -193,17 +193,6 @@ export type DentalStudioOptions = {
 
 export type DentalSmooth = "off" | "low" | "high";
 const SMOOTH_ROUNDS: Record<DentalSmooth, number> = { off: 0, low: 3, high: 10 };
-/**
- * Build 123: on the smooth base, how far in from a scan's edge its surface is relaxed, mm, and how many passes; and how
- * far from the edge the tooth zone stops (0: it runs to the edge, as before).
- */
-export const FRINGE_RELAX = { reach: 1.5, passes: 8, clear: EDGE_FRINGE };
-
-/** The flags of `zone`, less the corners within `fringe` mm of the scan's edge (over the surface). */
-function clearOfEdge(m: Mesh, zone: Uint8Array, fringe: number) {
-  const along = distanceFromEdge(m, fringe + 0.01);
-  return Uint8Array.from(zone, (z, i) => (z && along[i] > fringe ? 1 : 0));
-}
 
 export type DentalPart = { id: string; role: DentalRole; positions: Float32Array; height: number; volume: number; /** Build 101: of a pair, the move from where the part is laid out back to the bite it was built in (column-major) - to measure the models' contacts wherever they are laid. */ toBite?: number[] };
 /** `surface`: per part, the share of the scan's surface kept above each depth (mm below the occlusal plane). */
@@ -873,20 +862,7 @@ function buildArch(
     const untagged = withoutTissueTags(cut, teeth);
     if (untagged !== cut) { cut.f = untagged.f; dropFragments(cut, 0.05, teeth); }
   }
-  // Build 123 (Rakesh): on the smooth base, the tooth zone stops short of the scan's own edge (EDGE_FRINGE, which
-  // the trueness check leaves out too). A scan trimmed close under the teeth has its whole edge in the zone - kept as
-  // the scan, it stood out under the base as a ragged lip; now it is smoothed and buried like the rest of the edge.
-  // (What the trueness check holds to - the teeth beyond the fringe of the whole scan's edge - always stays.)
-  let edgeClear = teeth;
-  if (options.smoothBase && FRINGE_RELAX.clear > 0) {
-    const whole = distanceFromEdge(m, EDGE_FRINGE + 0.01);
-    const promised = onCut(scanTeeth.map((inZone, i) => (inZone && whole[i] > EDGE_FRINGE ? 1 : 0)));
-    const clear = clearOfEdge(cut, teeth, FRINGE_RELAX.clear);
-    edgeClear = Uint8Array.from(clear, (c, i) => (c || (teeth[i] && promised[i]) ? 1 : 0));
-  }
-  smoothEdge(cut, SMOOTH_ROUNDS[options.smooth ?? "high"], edgeClear);
-  // Build 123: on the smooth base the folds of a trimmed scan's last millimetre or so are relaxed too.
-  if (options.smoothBase) relaxFringe(cut, FRINGE_RELAX.reach, FRINGE_RELAX.passes, edgeClear);
+  smoothEdge(cut, SMOOTH_ROUNDS[options.smooth ?? "high"], teeth);
   let closed;
   try {
     closed = closeToFloor(cut, floor, 400, guard, 0);
@@ -946,9 +922,7 @@ function buildArch(
       if (options.hinge && band.length >= 3) band = bandToBack(runtime, band, Math.max(...ortho.map(([, y]) => y)));
       if (band.length >= 3) outline = band;
     }
-    // Build 123: the blend is kept narrow only beside the crowns, not all down the gum the tooth zone reaches over.
-    const onCrowns = onCut(crowns), crownsHere = Uint8Array.from(edgeClear, (z, i) => (z && onCrowns[i] ? 1 : 0));
-    const base = makeSmoothBase(runtime, { scan: cut, teeth: edgeClear, crowns: crownsHere, outline, floor, open: true, ledge, ...crisp });
+    const base = makeSmoothBase(runtime, { scan: cut, teeth, outline, floor, open: true, ledge, ...crisp });
     keepSolid(base.outer);
     solid = keepSolid(runtime.Manifold.union(solid, base.outer));
     solid = keepSolid(runtime.Manifold.intersection(solid, keepSolid(prism(runtime, outline, floor, top + 5))));

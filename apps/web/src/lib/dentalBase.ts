@@ -871,57 +871,6 @@ export function smoothEdge(m: Mesh, rounds: number, keep?: Uint8Array) {
   }
 }
 
-/**
- * Build 123 (Rakesh): the scan's surface near its own edge relaxed - every corner within `reach` mm of the edge (over
- * the surface), never one in `keep` (the teeth), moved towards the average of its neighbours, `passes` Taubin passes
- * (shrink-free), the more the nearer the edge. A trimmed scan's last millimetre is a fringe of slivers and folds where the
- * cut ran through its triangles; smoothEdge straightens the edge itself, this takes out the folds beside it, so the
- * smooth base meets an even surface, not a ragged lip.
- */
-export function relaxFringe(m: Mesh, reach: number, passes: number, keep?: Uint8Array) {
-  if (passes <= 0 || reach <= 0) return;
-  const n = m.v.length / 3;
-  const along = distanceFromEdge(m, reach);
-  const moving: number[] = [];
-  const weight = new Float64Array(n);
-  for (let i = 0; i < n; i += 1) {
-    if (!(along[i] < reach) || keep?.[i]) continue;
-    const x = along[i] / reach;
-    weight[i] = 1 - x * x * (3 - 2 * x);
-    if (weight[i] > 0) moving.push(i);
-  }
-  if (!moving.length) return;
-  // Neighbours of the moving corners - along the edge only, for a corner on it (so the edge is not pulled in).
-  const uses = new Map<number, number>();
-  for (let t = 0; t + 2 < m.f.length; t += 3) for (let k = 0; k < 3; k += 1) {
-    const a = m.f[t + k], b = m.f[t + ((k + 1) % 3)], key = a < b ? a * 4194304 + b : b * 4194304 + a;
-    uses.set(key, (uses.get(key) ?? 0) + 1);
-  }
-  const all = new Map<number, Set<number>>(), rim = new Map<number, Set<number>>();
-  for (const i of moving) { all.set(i, new Set()); rim.set(i, new Set()); }
-  for (let t = 0; t + 2 < m.f.length; t += 3) for (let k = 0; k < 3; k += 1) {
-    const a = m.f[t + k], b = m.f[t + ((k + 1) % 3)], key = a < b ? a * 4194304 + b : b * 4194304 + a;
-    const open = uses.get(key) === 1;
-    for (const [p, q] of [[a, b], [b, a]]) { all.get(p)?.add(q); if (open) rim.get(p)?.add(q); }
-  }
-  const lists = moving.map((i) => [...((along[i] === 0 && (rim.get(i)?.size ?? 0) >= 2) ? rim.get(i)! : all.get(i)!)]);
-  const next = new Float64Array(moving.length * 3);
-  for (let pass = 0; pass < passes; pass += 1) {
-    for (const factor of [0.5, -0.53]) {
-      moving.forEach((i, k) => {
-        const list = lists[k];
-        for (let axis = 0; axis < 3; axis += 1) {
-          let sum = 0;
-          for (const j of list) sum += m.v[j * 3 + axis];
-          const here = m.v[i * 3 + axis];
-          next[k * 3 + axis] = list.length ? here + factor * weight[i] * (sum / list.length - here) : here;
-        }
-      });
-      moving.forEach((i, k) => { for (let axis = 0; axis < 3; axis += 1) m.v[i * 3 + axis] = next[k * 3 + axis]; });
-    }
-  }
-}
-
 // ---------------------------------------------------------------------------------------------
 // Clean base (build 49)
 
