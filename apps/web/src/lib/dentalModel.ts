@@ -26,7 +26,7 @@ import { dentalStage } from "@/lib/dentalStages";
 import { smoothSeam } from "@/lib/dentalSeam";
 import { articulatorParts, incisalPins, pinRisers, PIN, PIN_BAND, PIN_CLEAR, PIN_HALF, PIN_MAX, PIN_SET, POST_BACK, restAngle, type ArticulatorSides, type PinStyle } from "@/lib/dentalArticulator";
 import {
-  applyMatrix, boundaryLoops, cloneMesh, transformSoup, convexHull, cutAlongField, cutBelow, dropFragments, smoothField, faceArea, loopLength, surfaceKept, pinchedEdges, PointGrid, solidPositions, toManifold, upwardness, weld,
+  applyMatrix, boundaryLoops, cloneMesh, transformSoup, convexHull, cutAlongField, cutBelow, dropFragments, smoothField, faceArea, loopLength, surfaceKept, surfaceKeptOf, pinchedEdges, PointGrid, solidPositions, toManifold, upwardness, weld,
   type ManifoldRuntime, type ManifoldSolid, type Mesh, type Ring,
 } from "@/lib/dentalMesh";
 
@@ -1317,11 +1317,12 @@ function buildArch(
   const replaced = [...underWax, ...underCut];
   if (replaced.length) for (let i = 0; i < waxedCorner.length; i += 1) if (scanTeeth[i] && replaced.some((inside) => inside(m.v[i * 3], m.v[i * 3 + 1], m.v[i * 3 + 2]))) waxedCorner[i] = 1;
   const promised = scanTeeth.map((inZone, i) => (inZone && !waxedCorner[i] && fromEdge[i] > EDGE_FRINGE ? 1 : 0));
-  for (const depth of [2, 4, 6, 8, 10, 12]) kept[depth] = surfaceKept(m, out, -depth, scanTeeth);
-  kept[-3] = surfaceKept(m, out, -Infinity, scanTeeth);
-  kept[-1] = surfaceKept(m, out, -Infinity, promised);
+  const keptShare = surfaceKeptOf(m, out);
+  for (const depth of [2, 4, 6, 8, 10, 12]) kept[depth] = keptShare(-depth, scanTeeth);
+  kept[-3] = keptShare(-Infinity, scanTeeth);
+  kept[-1] = keptShare(-Infinity, promised);
   // The teeth as found before build 50 (wider: within TOOTH_REACH of every tip), all but the fringe.
-  kept[-4] = surfaceKept(m, out, -Infinity, scanTeeth.map((inZone, i) => (inZone && fromEdge[i] > EDGE_FRINGE ? 1 : 0)));
+  kept[-4] = keptShare(-Infinity, scanTeeth.map((inZone, i) => (inZone && fromEdge[i] > EDGE_FRINGE ? 1 : 0)));
   let toothArea = 0;
   for (let t = 0; t < m.f.length / 3; t += 1) if (scanTeeth[m.f[t * 3]] && scanTeeth[m.f[t * 3 + 1]] && scanTeeth[m.f[t * 3 + 2]]) toothArea += faceArea(m, t);
   kept[-2] = toothArea;

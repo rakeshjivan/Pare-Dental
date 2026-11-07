@@ -11897,7 +11897,7 @@ export function LayerlingEditor({
           // design can be opened again.
           // Build 94: in IMT the full wax-up model is the series 2 index model.
           const series2 = state.waxStudio?.flow === "imt" && input.arches.some((arch) => arch.id === part.id && arch.wax?.length);
-          made.set(part.id, canonicalizeShape({ ...shapeWithWorldPositions(meshShapeFromPositions(series2 ? `${name} - ${t("waxup.imtSeries2")}` : name, shape.color, positions), positions), dental: "model" }));
+          made.set(part.id, canonicalizeShape({ ...shapeWithWorldPositions(meshShapeFromPositions(series2 ? `${name} - ${t("waxup.imtSeries2")}` : name, shape.color, NO_POSITIONS), positions), dental: "model" }));
           // Build 101: the model as it stands in the bite (wherever it is laid out), for its contacts map.
           if (part.toBite) madeBiteRef.current.set(made.get(part.id)!.id, Float32Array.from(fromZUp(transformSoup(Float32Array.from(part.positions), new THREE.Matrix4().fromArray(part.toBite)), offset)));
           // Build 106: and the move that takes it there, kept with the model - the studio's Occlusion view
@@ -11928,7 +11928,7 @@ export function LayerlingEditor({
         if (result.pins) {
           const positions = fromZUp(result.pins.positions, offset);
           if (lift) for (let i = 1; i < positions.length; i += 3) positions[i] += lift;
-          const pins = canonicalizeShape({ ...shapeWithWorldPositions(meshShapeFromPositions(t("dental.pinSet"), "#8b6fc9", positions), positions), dental: "model" as const });
+          const pins = canonicalizeShape({ ...shapeWithWorldPositions(meshShapeFromPositions(t("dental.pinSet"), "#8b6fc9", NO_POSITIONS), positions), dental: "model" as const });
           next = [...next, pins];
           made.set(pins.id, pins);
         }
@@ -11936,7 +11936,7 @@ export function LayerlingEditor({
         if (result.risers) {
           const positions = fromZUp(result.risers.positions, offset);
           if (lift) for (let i = 1; i < positions.length; i += 3) positions[i] += lift;
-          const risers = canonicalizeShape({ ...shapeWithWorldPositions(meshShapeFromPositions(t("dental.pinRisers"), "#6f9fc9", positions), positions), dental: "model" as const });
+          const risers = canonicalizeShape({ ...shapeWithWorldPositions(meshShapeFromPositions(t("dental.pinRisers"), "#6f9fc9", NO_POSITIONS), positions), dental: "model" as const });
           next = [...next, risers];
           made.set(risers.id, risers);
         }
@@ -11976,7 +11976,7 @@ export function LayerlingEditor({
             ? (anonymous ? t("waxup.preOpModelPlain") : t("waxup.preOpModel", { name: displayShapeName(shape) }))
             : imt ? (anonymous ? t("waxup.imtSeries1Plain") : t("waxup.imtSeries1", { name: displayShapeName(shape) }))
             : (anonymous ? t("waxup.alternateModelPlain") : t("waxup.alternateModel", { name: displayShapeName(shape) }));
-          const model = canonicalizeShape({ ...shapeWithWorldPositions(meshShapeFromPositions(name, kind === "preop" ? shape.color ?? "#d9c3a5" : "#d9c3a5", positions), positions), dental: "model" as const });
+          const model = canonicalizeShape({ ...shapeWithWorldPositions(meshShapeFromPositions(name, kind === "preop" ? shape.color ?? "#d9c3a5" : "#d9c3a5", NO_POSITIONS), positions), dental: "model" as const });
           next = [...next, model];
           made.set(model.id, model);
         }
@@ -13629,7 +13629,7 @@ export function LayerlingEditor({
           v.set(tooth.positions[i], tooth.positions[i + 1], tooth.positions[i + 2]).applyMatrix4(back);
           positions[i] = v.x; positions[i + 1] = v.y; positions[i + 2] = v.z;
         }
-        const fresh = shapeWithWorldPositions(meshShapeFromPositions(t("waxup.toothName", { fdi }), current.locks?.[fdi] ? WAX_CONFIRMED_COLOURS[fdi] ?? WAX_COLOR : current.stage === "position" ? WAX_TOOTH_COLOURS[fdi] ?? WAX_COLOR : WAX_COLOR, positions), positions);
+        const fresh = shapeWithWorldPositions(meshShapeFromPositions(t("waxup.toothName", { fdi }), current.locks?.[fdi] ? WAX_CONFIRMED_COLOURS[fdi] ?? WAX_COLOR : current.stage === "position" ? WAX_TOOTH_COLOURS[fdi] ?? WAX_COLOR : WAX_COLOR, NO_POSITIONS), positions);
         const made = canonicalizeShape({ ...fresh, id: idByFdi.get(fdi) ?? fresh.id, dental: "wax" as const, waxFor: arch.shape.id });
         // Its frame, kept in the part's own coordinates so it follows the part when it is moved.
         const local = localToWorld(made);
@@ -15067,7 +15067,7 @@ export function LayerlingEditor({
         // Its part moved or turned on its own: the text goes with it, exactly.
         const positions = movePositions(worldTriangles(shape), motion);
         const made = canonicalizeShape({
-          ...shapeWithWorldPositions(meshShapeFromPositions(shape.name, shape.color, positions), positions),
+          ...shapeWithWorldPositions(meshShapeFromPositions(shape.name, shape.color, NO_POSITIONS), positions),
           id: shape.id,
           name: shape.name,
           color: shape.color,
@@ -22727,6 +22727,12 @@ function partGeom(shape: WorkplaneShape) {
  */
 const READ_ONLY_MESHES_KEPT = 4;
 const readOnlyMeshes = new Map<WorkplaneShape, MeshData>();
+/**
+ * Build 267: a part rebuilt from world positions (shapeWithWorldPositions) takes only the name, colour and id of the
+ * shape it is given - every measure and the mesh come from the positions - so that shape is made from none, not from a
+ * second copy of a whole model (each made model was copied twice over on the page as Make finished).
+ */
+const NO_POSITIONS: number[] = [];
 /** Build 266: forgets the meshes of every part not among `current` (nor grouped in one of them). */
 function forgetReadOnlyMeshes(current: WorkplaneShape[]) {
   if (!readOnlyMeshes.size) return;

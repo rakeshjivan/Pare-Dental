@@ -1033,8 +1033,20 @@ export const normalize = (v: Vec3): Vec3 => {
  * a triangle counts when all its corners are there, within 0.01 mm.
  */
 export function surfaceKept(scan: Mesh, result: ArrayLike<number>, level: number, only?: Uint8Array): number {
+  return surfaceKeptOf(scan, result)(level, only);
+}
+
+/**
+ * Build 267: `surfaceKept` for one scan and result, asked several times - the result's point grid built once, and
+ * whether each scan corner came through found once (Make asked nine times, building the grid nine times over).
+ */
+export function surfaceKeptOf(scan: Mesh, result: ArrayLike<number>): (level: number, only?: Uint8Array) => number {
   const grid = new PointGrid(result, 0.05);
   const found = new Int8Array(scan.v.length / 3); // 0 unknown, 1 there, -1 gone
+  return (level, only) => keptShare(scan, grid, found, level, only);
+}
+
+function keptShare(scan: Mesh, grid: PointGrid, found: Int8Array, level: number, only?: Uint8Array): number {
   const there = (i: number) => {
     if (!found[i]) {
       found[i] = grid.within(scan.v[i * 3], scan.v[i * 3 + 1], scan.v[i * 3 + 2], 0.01) ? 1 : -1;

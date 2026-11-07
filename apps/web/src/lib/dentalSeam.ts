@@ -6,9 +6,13 @@
  */
 import type { ManifoldRuntime, ManifoldSolid } from "@/lib/dentalMesh";
 
+const cellKey = (ix: number, iy: number, iz: number) => ((ix & 1023) * 1024 + (iy & 1023)) * 1024 + (iz & 1023);
+
 /** A spatial hash of points, for "how near is the nearest" questions. */
 class PointGrid {
-  private cells = new Map<string, number[]>();
+  // Build 267: number keys (each cell's indices packed, wrapping every 1024 cells - a far point sharing a key is only
+  // measured and left out), not strings: Make spent over a second building and looking up the strings.
+  private cells = new Map<number, number[]>();
   constructor(private points: ArrayLike<number>, private size: number) {
     for (let i = 0; i + 2 < points.length; i += 3) {
       const key = this.key(points[i], points[i + 1], points[i + 2]);
@@ -17,14 +21,14 @@ class PointGrid {
     }
   }
   private key(x: number, y: number, z: number) {
-    return `${Math.floor(x / this.size)},${Math.floor(y / this.size)},${Math.floor(z / this.size)}`;
+    return cellKey(Math.floor(x / this.size), Math.floor(y / this.size), Math.floor(z / this.size));
   }
   /** The distance to the nearest point, if within `size`; otherwise Infinity. */
   nearest(x: number, y: number, z: number) {
     const cx = Math.floor(x / this.size), cy = Math.floor(y / this.size), cz = Math.floor(z / this.size);
     let best = Infinity;
     for (let i = -1; i <= 1; i += 1) for (let j = -1; j <= 1; j += 1) for (let k = -1; k <= 1; k += 1) {
-      const list = this.cells.get(`${cx + i},${cy + j},${cz + k}`);
+      const list = this.cells.get(cellKey(cx + i, cy + j, cz + k));
       if (!list) continue;
       for (const p of list) {
         const d = Math.hypot(this.points[p] - x, this.points[p + 1] - y, this.points[p + 2] - z);

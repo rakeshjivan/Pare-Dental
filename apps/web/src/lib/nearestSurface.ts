@@ -12,13 +12,24 @@ export class NearestSurface {
   lastTriangle = -1;
   /** Build 116: the triangles it was built from (to hand to a worker). */
   get triangles(): Float32Array { return this.soup; }
+  /** Build 267: each triangle's box (min x y z, max x y z), and the query that last looked at it - see nearest(). */
+  private readonly boxes: Float32Array;
+  private readonly seen: Uint32Array;
+  private query = 0;
   constructor(private readonly soup: Float32Array, readonly reach: number) {
     // Build 107: a fine grid searched outward ring by ring (below) - a 4 mm grid on a dense full-arch scan
     // held thousands of triangles per query, and Attract at full strength froze the page.
     this.cell = Math.max(0.25, Math.min(reach, 0.75));
     const c = this.cell;
+    const count = Math.floor(soup.length / 9);
+    this.boxes = new Float32Array(count * 6);
+    this.seen = new Uint32Array(count);
     for (let t = 0; t * 9 + 8 < soup.length; t += 1) {
       const o = t * 9;
+      for (let k = 0; k < 3; k += 1) {
+        this.boxes[t * 6 + k] = Math.min(soup[o + k], soup[o + 3 + k], soup[o + 6 + k]);
+        this.boxes[t * 6 + 3 + k] = Math.max(soup[o + k], soup[o + 3 + k], soup[o + 6 + k]);
+      }
       const x0 = Math.floor(Math.min(soup[o], soup[o + 3], soup[o + 6]) / c), x1 = Math.floor(Math.max(soup[o], soup[o + 3], soup[o + 6]) / c);
       const y0 = Math.floor(Math.min(soup[o + 1], soup[o + 4], soup[o + 7]) / c), y1 = Math.floor(Math.max(soup[o + 1], soup[o + 4], soup[o + 7]) / c);
       const z0 = Math.floor(Math.min(soup[o + 2], soup[o + 5], soup[o + 8]) / c), z1 = Math.floor(Math.max(soup[o + 2], soup[o + 5], soup[o + 8]) / c);
@@ -44,16 +55,34 @@ export class NearestSurface {
     const c = this.cell, cx = Math.floor(x / c), cy = Math.floor(y / c), cz = Math.floor(z / c);
     let best = this.reach * this.reach, found = false;
     this.lastTriangle = -1;
+    // Build 267: a new query number (0 is never one: the triangles start unseen).
+    this.query = this.query === 0xffffffff ? 1 : this.query + 1;
+    if (this.query === 1) this.seen.fill(0);
+    const query = this.query;
     const rings = Math.ceil(this.reach / c);
     for (let k = 0; k <= rings; k += 1) {
       // The cells at Chebyshev distance k from the point's cell (the shell of the cube).
-      for (let ox = -k; ox <= k; ox += 1) for (let oy = -k; oy <= k; oy += 1) for (let oz = -k; oz <= k; oz += 1) {
-        if (Math.max(Math.abs(ox), Math.abs(oy), Math.abs(oz)) !== k) continue;
-        const list = this.cells.get(key(cx + ox, cy + oy, cz + oz));
-        if (!list) continue;
-        for (let i = 0; i < list.length; i += 1) {
-          const d2 = closest(x, y, z, this.soup, list[i] * 9, this.q);
-          if (d2 < best) { best = d2; found = true; this.lastTriangle = list[i]; out[0] = this.q[0]; out[1] = this.q[1]; out[2] = this.q[2]; }
+      // Build 267: in the same order as before, but only the shell's own cells - inside it z jumps from -k to k.
+      for (let ox = -k; ox <= k; ox += 1) for (let oy = -k; oy <= k; oy += 1) {
+        const edge = ox === -k || ox === k || oy === -k || oy === k;
+        for (let oz = -k; oz <= k; oz += edge || k === 0 ? 1 : 2 * k) {
+          const list = this.cells.get(key(cx + ox, cy + oy, cz + oz));
+          if (!list) continue;
+          for (let i = 0; i < list.length; i += 1) {
+            // Build 267: a triangle is in every cell its box touches - each looked at once per query; and one whose box
+            // is already further off than the best so far cannot be nearer (a hair of slack, so rounding never decides).
+            // The same triangle is found as before, only faster (Make spent a sixth of its time here).
+            const t = list[i];
+            if (this.seen[t] === query) continue;
+            this.seen[t] = query;
+            const b = t * 6, bx = this.boxes;
+            const gx = x < bx[b] ? bx[b] - x : x > bx[b + 3] ? x - bx[b + 3] : 0;
+            const gy = y < bx[b + 1] ? bx[b + 1] - y : y > bx[b + 4] ? y - bx[b + 4] : 0;
+            const gz = z < bx[b + 2] ? bx[b + 2] - z : z > bx[b + 5] ? z - bx[b + 5] : 0;
+            if (gx * gx + gy * gy + gz * gz > best * (1 + 1e-9) + 1e-12) continue;
+            const d2 = closest(x, y, z, this.soup, list[i] * 9, this.q);
+            if (d2 < best) { best = d2; found = true; this.lastTriangle = list[i]; out[0] = this.q[0]; out[1] = this.q[1]; out[2] = this.q[2]; }
+          }
         }
       }
       // Anything in a further shell is at least k cells away: nearer than that is final.
