@@ -12120,7 +12120,7 @@ export function LayerlingEditor({
   // For checks: the wax-up's set and arch state.
   // Build 266: what holds the memory - the mesh numbers in the parts on screen, those only the undo history holds, and the made models' bite copies.
   useEffect(() => {
-    (window as unknown as { layerlingMemoryInfo?: () => unknown }).layerlingMemoryInfo = () => {
+    (window as unknown as { layerlingMemoryInfo?: (mark?: boolean) => unknown }).layerlingMemoryInfo = (mark = false) => {
       const seen = new Set<unknown>();
       const count = (shapes: WorkplaneShape[]) => {
         let numbers = 0;
@@ -12140,7 +12140,10 @@ export function LayerlingEditor({
       const known = new Set(tracked.map((ref) => ref.deref()).filter(Boolean));
       seen.forEach((array) => { if (!known.has(array as number[])) tracked.push(new WeakRef(array as number[])); });
       let strayArrays = 0, strayNumbers = 0;
-      for (const ref of tracked) { const array = ref.deref(); if (array && !seen.has(array)) { strayArrays += 1; strayNumbers += array.length; } }
+      const strays: number[][] = [];
+      for (const ref of tracked) { const array = ref.deref(); if (array && !seen.has(array)) { strayArrays += 1; strayNumbers += array.length; strays.push(array); } }
+      // For a heap snapshot: the strays, marked so what else holds them can be found.
+      if (mark) (window as unknown as { layerlingStrayArrays?: unknown }).layerlingStrayArrays = strays;
       return { strayArrays, strayMillions: strayNumbers / 1e6, readOnlyMeshes: readOnlyMeshes.size, shapes: shapesRef.current.length, shownMillions: shown / 1e6, historySteps: history.length, historyIndex: historyIndexRef.current, historyOnlyMillions: history.map((n) => +(n / 1e6).toFixed(1)), biteCopies: madeBiteRef.current.size, biteMillions: bite / 1e6 };
     };
   }, []);
