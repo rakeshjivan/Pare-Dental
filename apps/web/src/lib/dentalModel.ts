@@ -1012,6 +1012,7 @@ function buildArch(
       dentalStage("edge", stageArch);
       const smoothed = smoothSeam(runtime, solid, edges, keepAt);
       if (smoothed !== solid) solid = keepSolid(smoothed);
+      (globalThis as { __afterSeam?: (role: string, p: Float32Array) => void }).__afterSeam?.(arch.role, solidPositions(solid));
     }
     if (base.cavity) smoothCavity = keepSolid(base.cavity);
     buried = floor + ledge;
