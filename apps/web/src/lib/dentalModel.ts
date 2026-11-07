@@ -16,7 +16,7 @@
 import * as THREE from "three";
 import { getManifoldRuntime } from "@/lib/editorMeshCore";
 import { alignToBite, archFrame, biteResidual, contacts, vertexNormals, canineWidth, cleanScan, frontOf, isPartialArch, marginUp, pairFrame, palateScore, type CleanArch, type CleanReport } from "@/lib/dentalArch";
-import { archBand, bandToBack, ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, relaxFringe, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, roundOutline, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
+import { archBand, sideRun, bandToBack, ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, relaxFringe, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, roundOutline, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
@@ -463,8 +463,15 @@ export const ALIGNER_GROW = 3;
 export const ORTHO_BELOW_SCAN = 1;
 export const ORTHO_FILLET = 2;
 export const ORTHO_EDGE_ROUND = 0.8;
+/** Build 266 (Rakesh): the label's clearance above and below on its wall, mm. */
+export const LABEL_MARGIN = 0.5;
+/** Build 266: the label's clearance from each end of the back wall when the hinge stands at its corners, and the standard hinge's bar along the back, mm. */
+export const LABEL_HINGE_CLEAR = 12;
+export const HINGE_BAR_HEIGHT = 4;
 /** Build 120: an aligner model's smooth base - its ledge no lower than this above the rim, mm. */
 export const ALIGNER_LEDGE_MIN = 2.5;
+/** Build 266 (Rakesh): an aligner model with a name - its side wall this tall, so the name fits under the rounded top edge, mm. */
+export const ALIGNER_LABEL_LEDGE = 5;
 /** Build 120: a tall base is this much taller than the standard one, mm. */
 export const TALL_BASE = 3;
 
@@ -728,6 +735,44 @@ function engrave(runtime: ManifoldRuntime, solid: ManifoldSolid, text: string, h
   return result;
 }
 
+/**
+ * Build 266 (Rakesh): the name cut letter by letter along a curved wall - `path` the wall's line seen from above (x, y,
+ * in the ring's counter-clockwise order, the solid on its left), the name centred on it, each letter upright and square
+ * to the wall where it stands, its letters `height` tall, centred at `middle`.
+ */
+function engraveAlong(runtime: ManifoldRuntime, solid: ManifoldSolid, text: string, height: number, path: Array<[number, number]>, middle: number, depth = 0.6): ManifoldSolid {
+  const lengths = [0];
+  for (let i = 1; i < path.length; i += 1) lengths.push(lengths[i - 1] + Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]));
+  const total = lengths[lengths.length - 1];
+  const pointAt = (s: number) => {
+    let i = 1;
+    while (i < path.length - 1 && lengths[i] < s) i += 1;
+    const a = path[i - 1], b = path[i], l = lengths[i] - lengths[i - 1] || 1;
+    const t = Math.max(0, Math.min(1, (s - lengths[i - 1]) / l));
+    return { x: a[0] + (b[0] - a[0]) * t, y: a[1] + (b[1] - a[1]) * t, dx: (b[0] - a[0]) / l, dy: (b[1] - a[1]) / l };
+  };
+  const unit = height / 6, advance = labelWidth("AA", height) - labelWidth("A", height), width = labelWidth(text, height);
+  const cutters: ManifoldSolid[] = [];
+  text.split("").forEach((char, k) => {
+    if (char === " ") return;
+    const section = labelSection(runtime, char, height);
+    const cutter = section.extrude(depth + 1);
+    section.delete();
+    const at = pointAt(total / 2 - width / 2 + k * advance + 2 * unit);
+    // Local x along the wall (the reading direction), y up, z into the wall (to the left of the path); from 1 mm outside.
+    const right = new THREE.Vector3(at.dx, at.dy, 0), up = new THREE.Vector3(0, 0, 1), into = new THREE.Vector3(-at.dy, at.dx, 0);
+    const start = new THREE.Vector3(at.x, at.y, middle).addScaledVector(into, -1);
+    cutters.push(transformSolid(cutter, new THREE.Matrix4().makeBasis(right, up, into).setPosition(start)));
+    cutter.delete();
+  });
+  if (!cutters.length) return solid;
+  const all = runtime.Manifold.union(cutters);
+  cutters.forEach((cutter) => cutter.delete());
+  const result = runtime.Manifold.difference(solid, all);
+  all.delete();
+  return result;
+}
+
 type Built = { solid: ManifoldSolid; floor: number; top: number; footprint: Ring[]; worn: number; keptDepth: number; voxel: number | null; warnings: string[]; kept: Record<number, number>; /** Build 78: the scan's crown points, in the arch's frame, for the trueness check. */ crownPoints: Float64Array; /** Build 124: the kept gum's points (x, y, z, distance from the trimmed edge), for the gum check. */ gumPoints: Float64Array; /** Build 78: soft tissue cut back clear of the other model, mm². */ relieved: number; /** Build 78: soft tissue the other model's teeth meet in the bite, kept as a contact, mm². */ contactArea: number; /** Build 79: the scan's crown points the wax-up covers. */ waxed: number };
 
 function buildArch(
@@ -916,6 +961,9 @@ function buildArch(
   let buried = -Infinity;
   // The outline whose front face carries the label (orthodontic and articulator bases).
   let labelRing: Ring | null = options.baseStyle === "ortho" ? ortho : null;
+  // Build 266 (Rakesh): the top of the label face's flat wall - on the smooth base the ledge, less its rounded top edge,
+  // not the base height (the name ran up into the rounding and its tops were cut off).
+  let labelTop = floor + options.base;
   let smoothCavity: ManifoldSolid | null = null;
   if (options.smoothBase && ortho) {
     // Build 119: the smooth base - the scan exact, the drape, fillet, ledge and flat wall a field round it (lib/dentalSmoothBase),
@@ -931,6 +979,7 @@ function buildArch(
     const orthoBase = options.smoothShape === "ortho" && !arch.partial;
     const ledge = (arch.partial || orthoBase) && Number.isFinite(scanLow) ? Math.max(ledgeAt, scanLow - floor - (orthoBase ? ORTHO_BELOW_SCAN : SMOOTH.belowCut)) : ledgeAt;
     const crisp = orthoBase ? { fillet: ORTHO_FILLET, edgeRound: ORTHO_EDGE_ROUND } : {};
+    labelTop = floor + ledge - (orthoBase ? ORTHO_EDGE_ROUND : SMOOTH.edgeRound);
     // Build 121 (Rakesh): an aligner model is a horseshoe - its outline the arch's own (lib/dentalBase archBand), the scan seen from above grown
     // ALIGNER_GROW outside the scan's edge, open across the palate and the tongue space (the scan already follows the gum there),
     // so the drape runs down inside the arch as well as outside it. A quadrant keeps its block.
@@ -1178,17 +1227,47 @@ function buildArch(
   }
   const text = labelText(labelLine);
   if (text) {
-    if ((options.baseStyle === "ortho" || options.baseStyle === "articulator") && labelRing && options.base >= 3) {
-      const side = outlineSide(labelRing, arch.partial ? 0 : arch.role === "upper" ? -25 : -35);
-      const sideLength = Math.hypot(side.b[0] - side.a[0], side.b[1] - side.a[1]);
-      let height = Math.min(5, options.base * 0.55);
+    if ((options.baseStyle === "ortho" || options.baseStyle === "articulator" || options.smoothBase) && labelRing && options.base >= 3) {
+      // Build 266 (Rakesh): on the back wall, which is long and straight - a study or orthodontic model, with or without the
+      // articulator. An aligner model has no back (a horseshoe), so its name goes on the side, as before.
+      const aligner = options.smoothShape === "aligner" && !arch.partial;
+      const onBack = !aligner;
+      const side = outlineSide(labelRing, onBack ? 90 : arch.partial ? 0 : arch.role === "upper" ? -25 : -35);
+      let a = side.a, b = side.b;
+      const at = (t: number): [number, number] => [side.a[0] + (side.b[0] - side.a[0]) * t, side.a[1] + (side.b[1] - side.a[1]) * t];
+      const full = Math.hypot(side.b[0] - side.a[0], side.b[1] - side.a[1]) || 1;
+      if (onBack && options.hinge) {
+        // The hinge stands at the back's two corners: the name keeps clear of both.
+        const t = Math.min(0.45, LABEL_HINGE_CLEAR / full);
+        a = at(t); b = at(1 - t);
+      }
+      const sideLength = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      // As tall as the flat wall allows, a margin above and below: never into its rounded top edge, nor (the standard
+      // hinge) onto the bar along the bottom of the back.
+      const bottom = floor + (onBack && options.hinge && !options.smoothBase ? HINGE_BAR_HEIGHT : 0);
+      const top = Math.min(labelTop, floor + options.base);
+      let height = Math.min(5, top - bottom - 2 * LABEL_MARGIN);
       const width = labelWidth(text, height);
-      if (width > sideLength * 0.8) height *= (sideLength * 0.8) / width;
+      if (width > sideLength * 0.85) height *= (sideLength * 0.85) / width;
       const into = new THREE.Vector3(-side.nx, -side.ny, 0);
       const up = new THREE.Vector3(0, 0, 1);
       const right = new THREE.Vector3(-side.ny, side.nx, 0);
-      const origin = new THREE.Vector3((side.a[0] + side.b[0]) / 2, (side.a[1] + side.b[1]) / 2, floor + options.base / 2);
-      if (height >= 1.5) solid = keepSolid(engrave(runtime, solid, text, height, origin, right, up, into));
+      const origin = new THREE.Vector3((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (bottom + top) / 2);
+      if (aligner) {
+        // Build 266 (Rakesh): an aligner model's outline curves all round - its name follows the cheek side's outer wall,
+        // letter by letter, along the longest stretch of it facing out to the side.
+        let cx = 0, cy = 0;
+        labelRing.forEach(([x, y]) => { cx += x; cy += y; });
+        cx /= labelRing.length; cy /= labelRing.length;
+        const path = sideRun(labelRing, (nx, _ny, mid) => Math.abs(nx) > 0.6 && nx * (mid[0] - cx) > 0);
+        let runLength = 0;
+        for (let k = 1; k < path.length; k += 1) runLength += Math.hypot(path[k][0] - path[k - 1][0], path[k][1] - path[k - 1][1]);
+        let along = Math.min(5, top - bottom - 2 * LABEL_MARGIN);
+        const needs = labelWidth(text, along);
+        if (needs > runLength * 0.85) along *= (runLength * 0.85) / needs;
+        if (path.length >= 2 && along >= 1.5) solid = keepSolid(engraveAlong(runtime, solid, text, along, path, (bottom + top) / 2));
+        else warnings.push("label");
+      } else if (height >= 1.5) solid = keepSolid(engrave(runtime, solid, text, height, origin, right, up, into));
       else warnings.push("label");
     } else if ((options.baseStyle === "plate" || options.baseStyle === "clean" || options.baseStyle === "follow") && options.inside !== "open") {
       const hull = footprint[0];
@@ -1345,7 +1424,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
   if (options.hinge && prep.arches.length === 2 || smoothShape) {
     // Build 121 (Rakesh): an articulated aligner pair keeps its horseshoe (its arms squared off at the back for the hinge).
     const shape = smoothShape ?? "ortho";
-    const lowest = shape === "aligner" ? ALIGNER_LEDGE_MIN + SMOOTH.belowCut : SMOOTH.ledge + SMOOTH.belowCut;
+    const lowest = shape === "aligner" ? (labelText(options.label) ? ALIGNER_LABEL_LEDGE : ALIGNER_LEDGE_MIN) + SMOOTH.belowCut : SMOOTH.ledge + SMOOTH.belowCut;
     // Build 121 (Rakesh): an aligner model is always hollow with the honeycomb base - steadier to thermoform over, no choice to make.
     const aligner = shape === "aligner";
     options = { ...options, baseStyle: "ortho", inside: !aligner && options.inside === "solid" ? "solid" : "open", ...(aligner ? { infill: "base" as const } : {}), smoothBase: true, smoothShape: shape, base: shape === "aligner" ? Math.max(options.base, lowest) : lowest + (options.baseHeight === "tall" ? TALL_BASE : 0) };

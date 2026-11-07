@@ -1286,3 +1286,30 @@ export function honeycombIn(runtime: ManifoldRuntime, cavity: ManifoldSolid, flo
   slotsInside.delete();
   return taken;
 }
+
+/**
+ * Build 266 (Rakesh): the longest run of `poly`'s sides (counter-clockwise, so the solid is on their left) whose outward
+ * normals `accept` takes, as its corners in order - the stretch of a curved wall a name can follow.
+ */
+export function sideRun(poly: Ring, accept: (nx: number, ny: number, mid: [number, number]) => boolean): Array<[number, number]> {
+  const n = poly.length;
+  const ok = poly.map((p, i) => {
+    const q = poly[(i + 1) % n], length = Math.hypot(q[0] - p[0], q[1] - p[1]);
+    return length > 1e-9 && accept((q[1] - p[1]) / length, -(q[0] - p[0]) / length, [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]);
+  });
+  if (ok.every(Boolean)) return [...poly, poly[0]];
+  let best: number[] = [], bestLength = 0;
+  const start = ok.findIndex((good) => !good);
+  let run: number[] = [], length = 0;
+  for (let k = 1; k <= n; k += 1) {
+    const i = (start + k) % n;
+    if (ok[i]) {
+      run.push(i);
+      const q = poly[(i + 1) % n];
+      length += Math.hypot(q[0] - poly[i][0], q[1] - poly[i][1]);
+      if (length > bestLength) { best = [...run]; bestLength = length; }
+    } else { run = []; length = 0; }
+  }
+  if (!best.length) return [];
+  return [...best.map((i) => poly[i]), poly[(best[best.length - 1] + 1) % n]];
+}

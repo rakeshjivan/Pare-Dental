@@ -12132,7 +12132,13 @@ export function LayerlingEditor({
       const history = historyRef.current.map((entry) => count(entry.shapes));
       let bite = 0;
       madeBiteRef.current.forEach((soup) => { bite += soup.length; });
-      return { shapes: shapesRef.current.length, shownMillions: shown / 1e6, historySteps: history.length, historyIndex: historyIndexRef.current, historyOnlyMillions: history.map((n) => +(n / 1e6).toFixed(1)), biteCopies: madeBiteRef.current.size, biteMillions: bite / 1e6 };
+      // Every mesh array ever seen here, weakly: those still alive but held by neither the parts nor the history are kept by something else.
+      const tracked = ((window as unknown as { layerlingMemoryTracked?: Array<WeakRef<number[]>> }).layerlingMemoryTracked ??= []);
+      const known = new Set(tracked.map((ref) => ref.deref()).filter(Boolean));
+      seen.forEach((array) => { if (!known.has(array as number[])) tracked.push(new WeakRef(array as number[])); });
+      let strayArrays = 0, strayNumbers = 0;
+      for (const ref of tracked) { const array = ref.deref(); if (array && !seen.has(array)) { strayArrays += 1; strayNumbers += array.length; } }
+      return { strayArrays, strayMillions: strayNumbers / 1e6, shapes: shapesRef.current.length, shownMillions: shown / 1e6, historySteps: history.length, historyIndex: historyIndexRef.current, historyOnlyMillions: history.map((n) => +(n / 1e6).toFixed(1)), biteCopies: madeBiteRef.current.size, biteMillions: bite / 1e6 };
     };
   }, []);
   useEffect(() => { (window as unknown as { layerlingWaxupState?: () => unknown }).layerlingWaxupState =() => { const w = waxupRef.current; return { slot: w.slot, setId: w.setId, setIds: w.setIds, setName: w.setName, single: w.single, placed: w.placed.length, busy: w.busy, error: w.error }; }; }, []);
