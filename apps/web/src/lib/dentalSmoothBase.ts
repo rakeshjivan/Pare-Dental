@@ -191,6 +191,12 @@ export type SmoothBaseInput = {
   scan: Mesh;
   /** The scan's corners on the teeth (the crowns the caller adds exactly). */
   teeth: Uint8Array;
+  /**
+   * Build 271 (Rakesh: "the teeth should never be touched"): the scan's crown corners. The drape never rises to them - on
+   * a lower molar's tongue side, trimmed close or beside a flap of tissue as high as the tooth, it filled in under the
+   * crown's bulge over the tooth's own surface - and the hollow keeps a wall from them.
+   */
+  crowns?: Uint8Array;
   /** The base's outline (the rim), and the rim's height. */
   outline: Ring;
   floor: number;
@@ -265,6 +271,30 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   const crossings = new Float32Array(counts[n2]);
   const fill = counts.slice(0, n2);
   forColumns((column, z) => { crossings[fill[column]++] = z; });
+  // Build 271 (Rakesh: "the teeth should never be touched"): the lowest crown over each column - the drape stays under it.
+  const crownLow = new Float32Array(n2).fill(Infinity);
+  if (input.crowns) {
+    const crowns = input.crowns;
+    for (let t = 0; t + 2 < f.length; t += 3) {
+      if (!crowns[f[t]] || !crowns[f[t + 1]] || !crowns[f[t + 2]]) continue;
+      const a = f[t] * 3, b = f[t + 1] * 3, c = f[t + 2] * 3;
+      const ax = v[a], ay = v[a + 1], az = v[a + 2], bx = v[b], by = v[b + 1], bz = v[b + 2], qx = v[c], qy = v[c + 1], qz = v[c + 2];
+      const det = (bx - ax) * (qy - ay) - (qx - ax) * (by - ay);
+      const i0 = Math.max(0, Math.floor((Math.min(ax, bx, qx) - x0) / h)), i1 = Math.min(nx - 1, Math.floor((Math.max(ax, bx, qx) - x0) / h));
+      const j0 = Math.max(0, Math.floor((Math.min(ay, by, qy) - y0) / h)), j1 = Math.min(ny - 1, Math.floor((Math.max(ay, by, qy) - y0) / h));
+      for (let j = j0; j <= j1; j += 1) for (let i = i0; i <= i1; i += 1) {
+        const col = j * nx + i;
+        // (Over the column's whole cell, not only its centre: a steep crown face crosses few centres.)
+        let low = Math.min(az, bz, qz);
+        if (Math.abs(det) >= 1e-12) {
+          const px = cx(i), py = cy(j);
+          const u = ((bx - px) * (qy - py) - (qx - px) * (by - py)) / det, w = ((qx - px) * (ay - py) - (ax - px) * (qy - py)) / det, s3 = 1 - u - w;
+          if (u >= 0 && w >= 0 && s3 >= 0) low = Math.min(low, u * az + w * bz + s3 * qz);
+        }
+        if (low < crownLow[col]) crownLow[col] = low;
+      }
+    }
+  }
   for (let c = 0; c < n2; c += 1) if (counts[c + 1] - counts[c] > 1) crossings.subarray(counts[c], counts[c + 1]).sort();
   lap("columns");
   // --- 2-D: where the scan is (closed over small gaps), how far in from its edge, its height everywhere (the drape beyond it).
@@ -387,6 +417,8 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   const underScan = (heights: Float32Array) => {
     // (Not over the scan's last edgeBand: that is the trimmed edge, which the drape buries.)
     for (let c = 0; c < n2; c += 1) if (counts[c + 1] > counts[c] && inFromEdge[c] > S.edgeBand + h) heights[c] = Math.min(heights[c], crossings[counts[c]] - S.underGum);
+    // Build 271: and never up to a crown, however near the scan's edge.
+    for (let c = 0; c < n2; c += 1) if (crownLow[c] < Infinity) heights[c] = Math.min(heights[c], crownLow[c] - S.underGum);
   };
   underScan(drape);
   const smoothDrape = blur(drape, nx, ny, 1, S.drapeSmooth / h);
@@ -411,10 +443,13 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   const mark = new Uint8Array(n3);
   // Build 122: the teeth's own voxels too - how far each voxel is from a tooth, for the blend's width near them.
   const markTooth = new Uint8Array(n3);
+  // Build 271: and the crowns' (the hollow keeps a wall from them).
+  const markCrown = input.crowns ? new Uint8Array(n3) : null;
   const soup = new Float32Array(f.length * 3);
   for (let t = 0; t < f.length; t += 1) { soup[t * 3] = v[f[t] * 3]; soup[t * 3 + 1] = v[f[t] * 3 + 1]; soup[t * 3 + 2] = v[f[t] * 3 + 2]; }
   for (let t = 0; t + 8 < soup.length; t += 9) {
     const onTooth = teeth[f[t / 3]] && teeth[f[t / 3 + 1]] && teeth[f[t / 3 + 2]];
+    const onCrownFace = input.crowns ? input.crowns[f[t / 3]] && input.crowns[f[t / 3 + 1]] && input.crowns[f[t / 3 + 2]] : 0;
     // Points over the triangle at under half a voxel apart.
     const e = Math.max(Math.hypot(soup[t + 3] - soup[t], soup[t + 4] - soup[t + 1], soup[t + 5] - soup[t + 2]), Math.hypot(soup[t + 6] - soup[t], soup[t + 7] - soup[t + 1], soup[t + 8] - soup[t + 2]));
     const n = Math.max(1, Math.ceil(e / (h * 0.5)));
@@ -422,11 +457,12 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
       const u = a / n, w = b / n, s = 1 - u - w;
       const px = s * soup[t] + u * soup[t + 3] + w * soup[t + 6], py = s * soup[t + 1] + u * soup[t + 4] + w * soup[t + 7], pz = s * soup[t + 2] + u * soup[t + 5] + w * soup[t + 8];
       const gi = Math.floor((px - x0) / h), gj = Math.floor((py - y0) / h), gk = Math.floor((pz - z0) / h);
-      if (gi >= 0 && gj >= 0 && gk >= 0 && gi < nx && gj < ny && gk < nz) { mark[(gk * ny + gj) * nx + gi] = 1; if (onTooth) markTooth[(gk * ny + gj) * nx + gi] = 1; }
+      if (gi >= 0 && gj >= 0 && gk >= 0 && gi < nx && gj < ny && gk < nz) { mark[(gk * ny + gj) * nx + gi] = 1; if (onTooth) markTooth[(gk * ny + gj) * nx + gi] = 1; if (markCrown && onCrownFace) markCrown[(gk * ny + gj) * nx + gi] = 1; }
     }
   }
   const toSurface = squaredDistanceTo(mark, nx, ny, nz);
   const toTooth = squaredDistanceTo(markTooth, nx, ny, nz);
+  const toCrown = markCrown ? squaredDistanceTo(markCrown, nx, ny, nz) : null;
   lap("edt");
   const near = new NearestSurface(soup, S.distanceBand + h);
   const q = new Float64Array(3), bary = new Float64Array(3);
@@ -523,6 +559,9 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   if (base) {
     cavity = blur(base, nx, ny, nz, S.cavitySmooth / h);
     for (let i = 0; i < n3; i += 1) cavity[i] = -(cavity[i] + S.wall);
+    // Build 271: and never nearer a crown than the wall - beside a lower molar's tongue side, close above the base, the
+    // hollow came up through the crown (hidden while the base lay over it).
+    if (toCrown) for (let i = 0; i < n3; i += 1) cavity[i] = Math.min(cavity[i], Math.sqrt(toCrown[i]) * h - S.wall);
   }
   lap("cavity");
   return { grid, outer, cavity, timing };

@@ -728,6 +728,53 @@ export const HORSESHOE_MARGIN = 0.5;
 export const HORSESHOE_THICKNESS = 3;
 const mirrorRing = (ring: Ring): Ring => ring.map(([x, y]) => [-x, y] as [number, number]).reverse();
 
+/** Build 271: how far out in front of a crown face the base is cut back, mm (the drape is kept under the crowns: this
+ * takes what the base's voxel surface still lays over them, a few tenths). */
+export const CROWN_UNCOVER = 0.35;
+/** ...each face widened this much about its middle, so neighbouring pieces overlap. */
+const CROWN_UNCOVER_GROW = 1.1;
+
+/**
+ * Build 271 (Rakesh): `solid` (the scan joined to its base) with the base cut back off the crowns - each crown face of
+ * `scan` (corners marked in `crowns`) with a corner no longer on the surface has the air in front of it, CROWN_UNCOVER
+ * deep, taken out, and what of `scanSolid` (the closed scan) lay in it put back, so nothing of the scan itself is lost.
+ */
+function uncoverCrowns(runtime: ManifoldRuntime, solid: ManifoldSolid, scanSolid: ManifoldSolid, scan: Mesh, crowns: Uint8Array, keep: (s: ManifoldSolid) => ManifoldSolid): ManifoldSolid {
+  const grid = new PointGrid(solidPositions(solid), 0.05);
+  const { v, f } = scan;
+  const shown = new Int8Array(v.length / 3);
+  const on = (i: number) => { if (!shown[i]) shown[i] = grid.within(v[i * 3], v[i * 3 + 1], v[i * 3 + 2], 0.01) ? 1 : -1; return shown[i] === 1; };
+  const pieces: ManifoldSolid[] = [];
+  for (let t = 0; t + 2 < f.length; t += 3) {
+    const a = f[t], b = f[t + 1], c = f[t + 2];
+    if (!crowns[a] || !crowns[b] || !crowns[c] || (on(a) && on(b) && on(c))) continue;
+    const ax = v[a * 3], ay = v[a * 3 + 1], az = v[a * 3 + 2];
+    const ux = v[b * 3] - ax, uy = v[b * 3 + 1] - ay, uz = v[b * 3 + 2] - az, wx = v[c * 3] - ax, wy = v[c * 3 + 1] - ay, wz = v[c * 3 + 2] - az;
+    let nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+    const len = Math.hypot(nx, ny, nz);
+    if (len < 1e-12) continue;
+    nx /= len; ny /= len; nz /= len;
+    // The face a little wider, from just inside the crown out into the air.
+    const mx = (ax + v[b * 3] + v[c * 3]) / 3, my = (ay + v[b * 3 + 1] + v[c * 3 + 1]) / 3, mz = (az + v[b * 3 + 2] + v[c * 3 + 2]) / 3;
+    const points: Array<[number, number, number]> = [];
+    for (const i of [a, b, c]) {
+      const px = mx + (v[i * 3] - mx) * CROWN_UNCOVER_GROW, py = my + (v[i * 3 + 1] - my) * CROWN_UNCOVER_GROW, pz = mz + (v[i * 3 + 2] - mz) * CROWN_UNCOVER_GROW;
+      points.push([px - nx * 0.05, py - ny * 0.05, pz - nz * 0.05], [px + nx * CROWN_UNCOVER, py + ny * CROWN_UNCOVER, pz + nz * CROWN_UNCOVER]);
+    }
+    pieces.push(runtime.Manifold.hull(points));
+  }
+  if (!pieces.length) return solid;
+  const air = runtime.Manifold.union(pieces);
+  pieces.forEach((piece) => piece.delete());
+  // Only the scan the pieces reached comes back (not any of it the base's outline cut off).
+  const opened = runtime.Manifold.difference(solid, air), back = runtime.Manifold.intersection(scanSolid, air);
+  air.delete();
+  const result = keep(runtime.Manifold.union(opened, back));
+  opened.delete();
+  back.delete();
+  return result;
+}
+
 function engrave(runtime: ManifoldRuntime, solid: ManifoldSolid, text: string, height: number, origin: THREE.Vector3, right: THREE.Vector3, up: THREE.Vector3, into: THREE.Vector3, depth = 0.6): ManifoldSolid {
   const section = labelSection(runtime, text, height);
   const cutter = section.extrude(depth + 1);
@@ -919,8 +966,9 @@ function buildArch(
   // Build 124 (Rakesh): the gum the person chose to keep (after the Trim step and the gum band) must all come through -
   // only its trimmed edge may be smoothed. Its points, each with how far it lies from the edge, for the gum check.
   const gumList: number[] = [];
+  const crownOnCut = onCut(crowns);
   {
-    const crownOnCut = onCut(crowns), along = distanceFromEdge(cut, GUM_BANDS[GUM_BANDS.length - 1] + 1);
+    const along = distanceFromEdge(cut, GUM_BANDS[GUM_BANDS.length - 1] + 1);
     for (const i of new Set(cut.f)) if (!crownOnCut[i]) gumList.push(cut.v[i * 3], cut.v[i * 3 + 1], cut.v[i * 3 + 2], Math.min(along[i], 99));
   }
   // Build 101: High unless chosen otherwise - the edge alone moves (the teeth are kept), shrink-free.
@@ -1008,12 +1056,16 @@ function buildArch(
       if (band.length >= 3) outline = band;
     }
     dentalStage("base", stageArch);
-    const base = makeSmoothBase(runtime, { scan: cut, teeth: edgeClear, outline, floor, open: true, ledge, ...crisp, ...(backRaise ? { backRaise } : {}) });
+    const base = makeSmoothBase(runtime, { scan: cut, teeth: edgeClear, crowns: crownOnCut, outline, floor, open: true, ledge, ...crisp, ...(backRaise ? { backRaise } : {}) });
     dentalStage("join", stageArch);
     keepSolid(base.outer);
     if (base.cover) solid = keepSolid(runtime.Manifold.intersection(solid, keepSolid(base.cover)));
+    const scanSolid = solid;
     solid = keepSolid(runtime.Manifold.union(solid, base.outer));
     solid = keepSolid(runtime.Manifold.intersection(solid, keepSolid(prism(runtime, outline, floor, top + 5))));
+    // Build 271 (Rakesh: "the teeth should never be touched"): what the base still lays over a crown (its surface is found
+    // between voxels, a few tenths off) is cut back to the crown's own surface, so every crown shows exactly as scanned.
+    solid = uncoverCrowns(runtime, solid, scanSolid, cut, crownOnCut, keepSolid);
     // Build 124 (Rakesh): and the finished surface smoothed along the trim line, as CAD Studio's smooth tool does by
     // hand - the base and the scan's last edge strip, never a point of the gum or teeth kept - so they meet in one even
     // surface, not a ridge or a comb.
@@ -1022,7 +1074,8 @@ function buildArch(
       const along = distanceFromEdge(cut, EDGE_SMOOTH + 0.01), keepAt: number[] = [];
       // Build 267 (Rakesh): and the teeth held above (edgeClear) wherever they are - a scan trimmed close under the teeth
       // has crown within EDGE_SMOOTH of its edge, which this smoothing moved (a thin strip at the necks, flagged "teeth").
-      for (const i of new Set(cut.f)) if (along[i] > EDGE_SMOOTH || edgeClear[i]) keepAt.push(cut.v[i * 3], cut.v[i * 3 + 1], cut.v[i * 3 + 2]);
+      // Build 271: and every crown, wherever it is.
+      for (const i of new Set(cut.f)) if (along[i] > EDGE_SMOOTH || edgeClear[i] || crownOnCut[i]) keepAt.push(cut.v[i * 3], cut.v[i * 3 + 1], cut.v[i * 3 + 2]);
       dentalStage("edge", stageArch);
       const smoothed = smoothSeam(runtime, solid, edges, keepAt);
       if (smoothed !== solid) solid = keepSolid(smoothed);

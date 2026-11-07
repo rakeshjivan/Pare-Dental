@@ -1219,14 +1219,28 @@ export function cleanStlSoup(positions: Float32Array): Float32Array {
   const parent = new Int32Array(triangles);
   for (let t = 0; t < triangles; t += 1) parent[t] = t;
   const find = (x: number) => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
-  const edgeOwner = new Map<string, number>();
+  // Build 271 (final check): joined only across edges two triangles share. A sheet of no volume pinched onto the model
+  // along an edge (then used four times) was counted as part of it and stayed; on its own it goes.
+  const edgeOf = new Int32Array(triangles * 3).fill(-1), index = new Map<string, number>();
   for (let t = 0; t < triangles; t += 1) {
     if (!keep[t]) continue;
     for (let k = 0; k < 3; k += 1) {
       const a = ids[t * 3 + k], b = ids[t * 3 + ((k + 1) % 3)];
-      const e = a < b ? `${a}_${b}` : `${b}_${a}`;
-      const o = edgeOwner.get(e);
-      if (o === undefined) edgeOwner.set(e, t);
+      const name = a < b ? `${a}_${b}` : `${b}_${a}`;
+      let e = index.get(name);
+      if (e === undefined) { e = index.size; index.set(name, e); }
+      edgeOf[t * 3 + k] = e;
+    }
+  }
+  const uses = new Int32Array(index.size), owner = new Int32Array(index.size).fill(-1);
+  for (let i = 0; i < edgeOf.length; i += 1) if (edgeOf[i] >= 0) uses[edgeOf[i]] += 1;
+  for (let t = 0; t < triangles; t += 1) {
+    if (!keep[t]) continue;
+    for (let k = 0; k < 3; k += 1) {
+      const e = edgeOf[t * 3 + k];
+      if (uses[e] !== 2) continue;
+      const o = owner[e];
+      if (o < 0) owner[e] = t;
       else { const ra = find(o), rb = find(t); if (ra !== rb) parent[ra] = rb; }
     }
   }
@@ -1238,11 +1252,29 @@ export function cleanStlSoup(positions: Float32Array): Float32Array {
     const r = find(t);
     volume.set(r, (volume.get(r) ?? 0) + v); count.set(r, (count.get(r) ?? 0) + 1);
   }
+  // A piece parted from the rest at such an edge goes only if it is a closed sheet in itself (every edge of it used
+  // twice within it): a patch of the model's own surface ringed by them would otherwise leave a hole.
+  const small = (r: number) => Math.abs(volume.get(r) ?? 0) <= 1e-3 && (count.get(r) ?? 0) <= 1000;
+  const pinched = new Set<number>(), within = new Map<number, Map<number, number>>();
+  for (let t = 0; t < triangles; t += 1) {
+    if (!keep[t]) continue;
+    const r = find(t);
+    if (!small(r)) continue;
+    let edges = within.get(r);
+    if (!edges) { edges = new Map(); within.set(r, edges); }
+    for (let k = 0; k < 3; k += 1) {
+      const e = edgeOf[t * 3 + k];
+      if (uses[e] !== 2) pinched.add(r);
+      edges.set(e, (edges.get(e) ?? 0) + 1);
+    }
+  }
+  const open = new Set<number>();
+  for (const [r, edges] of within) if (pinched.has(r)) for (const n of edges.values()) if (n !== 2) { open.add(r); break; }
   let dropped = 0;
   for (let t = 0; t < triangles; t += 1) {
     if (!keep[t]) { dropped += 1; continue; }
     const r = find(t);
-    if (Math.abs(volume.get(r) ?? 0) <= 1e-3 && (count.get(r) ?? 0) <= 1000) { keep[t] = 0; dropped += 1; }
+    if (small(r) && !open.has(r)) { keep[t] = 0; dropped += 1; }
   }
   if (!dropped) return positions;
   const out = new Float32Array((triangles - dropped) * 9);
