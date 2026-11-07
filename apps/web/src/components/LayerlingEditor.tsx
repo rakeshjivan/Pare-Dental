@@ -2820,6 +2820,9 @@ export function LayerlingEditor({
 
   useEffect(() => {
     shapesRef.current = shapes;
+    // Build 266: meshes kept for parts that are no longer in the design go - each held its whole part (a made model's
+    // copy among them) alive after an Update had replaced it.
+    forgetReadOnlyMeshes(shapes);
   }, [shapes]);
 
   useEffect(() => {
@@ -12138,7 +12141,7 @@ export function LayerlingEditor({
       seen.forEach((array) => { if (!known.has(array as number[])) tracked.push(new WeakRef(array as number[])); });
       let strayArrays = 0, strayNumbers = 0;
       for (const ref of tracked) { const array = ref.deref(); if (array && !seen.has(array)) { strayArrays += 1; strayNumbers += array.length; } }
-      return { strayArrays, strayMillions: strayNumbers / 1e6, shapes: shapesRef.current.length, shownMillions: shown / 1e6, historySteps: history.length, historyIndex: historyIndexRef.current, historyOnlyMillions: history.map((n) => +(n / 1e6).toFixed(1)), biteCopies: madeBiteRef.current.size, biteMillions: bite / 1e6 };
+      return { strayArrays, strayMillions: strayNumbers / 1e6, readOnlyMeshes: readOnlyMeshes.size, shapes: shapesRef.current.length, shownMillions: shown / 1e6, historySteps: history.length, historyIndex: historyIndexRef.current, historyOnlyMillions: history.map((n) => +(n / 1e6).toFixed(1)), biteCopies: madeBiteRef.current.size, biteMillions: bite / 1e6 };
     };
   }, []);
   useEffect(() => { (window as unknown as { layerlingWaxupState?: () => unknown }).layerlingWaxupState =() => { const w = waxupRef.current; return { slot: w.slot, setId: w.setId, setIds: w.setIds, setName: w.setName, single: w.single, placed: w.placed.length, busy: w.busy, error: w.error }; }; }, []);
@@ -22713,6 +22716,14 @@ function partGeom(shape: WorkplaneShape) {
  */
 const READ_ONLY_MESHES_KEPT = 4;
 const readOnlyMeshes = new Map<WorkplaneShape, MeshData>();
+/** Build 266: forgets the meshes of every part not among `current` (nor grouped in one of them). */
+function forgetReadOnlyMeshes(current: WorkplaneShape[]) {
+  if (!readOnlyMeshes.size) return;
+  const live = new Set<WorkplaneShape>();
+  const walk = (shape: WorkplaneShape) => { live.add(shape); shape.groupedShapes?.forEach(walk); };
+  current.forEach(walk);
+  for (const shape of [...readOnlyMeshes.keys()]) if (!live.has(shape)) readOnlyMeshes.delete(shape);
+}
 function readOnlyMesh(shape: WorkplaneShape): MeshData {
   const known = readOnlyMeshes.get(shape);
   if (known) {
