@@ -993,7 +993,7 @@ function buildArch(
     const crisp = orthoBase ? { fillet: ORTHO_FILLET, edgeRound: ORTHO_EDGE_ROUND } : {};
     // Build 268 (Rakesh): a low base with a name - its back raised to the standard ledge, so the name fits on the back wall.
     const backY = Math.max(...ortho.map(([, y]) => y));
-    const raiseBack = low && labelText(labelLine) && ledge < SMOOTH.ledge && !arch.partial ? SMOOTH.ledge - ledge : 0;
+    const raiseBack = low && labelText(labelLine) && ledge < SMOOTH.ledge ? SMOOTH.ledge - ledge : 0;
     const backRaise = raiseBack > 0 ? { from: backY - LOW_NAME_BAND, ramp: LOW_NAME_RAMP, by: raiseBack } : undefined;
     labelTop = floor + ledge + raiseBack - (orthoBase ? ORTHO_EDGE_ROUND : SMOOTH.edgeRound);
     // Build 121 (Rakesh): an aligner model is a horseshoe - its outline the arch's own (lib/dentalBase archBand), the scan seen from above grown
