@@ -165,7 +165,8 @@ export type DentalStudioOptions = {
   /** Build 120: set by the studio - the smooth base's outline: orthodontic, rounded (a study model) or close and low (an aligner model). */
   smoothShape?: "ortho" | "round" | "aligner";
   /** Build 120 (Rakesh): the base's height - standard, or tall (TALL_BASE more; not for aligner models). */
-  baseHeight?: "standard" | "tall";
+  /** Build 268 (Rakesh): "low" - a 3 mm ledge (LOW_LEDGE), the back raised to the standard one where a name goes. */
+  baseHeight?: "low" | "standard" | "tall";
   /** Build 117: with the posts either side, also the bite-opening risers (1 to 5 mm, two of each), printed as a part of their own. Off unless true. */
   risers?: boolean;
   /** Build 117: the dental midline the dentist marked on the upper scan (`midlineScan`), in the studio's coordinates; the articulated pair is centred on it. */
@@ -475,6 +476,11 @@ export const ALIGNER_LEDGE_MIN = 2.5;
 export const ALIGNER_LABEL_LEDGE = 5;
 /** Build 120: a tall base is this much taller than the standard one, mm. */
 export const TALL_BASE = 3;
+/** Build 268 (Rakesh): a low base's ledge above the rim, mm (the standard is SMOOTH.ledge) - 2 mm shorter, about 7% less to print. */
+export const LOW_LEDGE = 3;
+/** Build 268: on a low base with a name, the ledge is raised along this much of the back, after a ramp of this, mm. */
+export const LOW_NAME_BAND = 6;
+export const LOW_NAME_RAMP = 4;
 
 
 /**
@@ -977,13 +983,19 @@ function buildArch(
     // equally tall) it sits high on its base: its ledge rises to meet it, so the drape has no long fall to make.
     let scanLow = Infinity;
     for (let t = 0; t < cut.f.length; t += 1) scanLow = Math.min(scanLow, cut.v[cut.f[t] * 3 + 2]);
-    const ledgeAt = options.smoothShape === "aligner" ? Math.max(ALIGNER_LEDGE_MIN, Math.min(SMOOTH.ledge, options.base - SMOOTH.belowCut)) : Math.max(SMOOTH.ledge, options.base - SMOOTH.belowCut);
+    const low = options.baseHeight === "low" && options.smoothShape !== "aligner";
+    const ledgeMin = low ? LOW_LEDGE : SMOOTH.ledge;
+    const ledgeAt = options.smoothShape === "aligner" ? Math.max(ALIGNER_LEDGE_MIN, Math.min(SMOOTH.ledge, options.base - SMOOTH.belowCut)) : Math.max(ledgeMin, options.base - SMOOTH.belowCut);
     // Build 122 (Rakesh): an orthodontic base as a trimmed cast's - its wall rises to just under the lowest of the scan,
     // the anatomy sitting on it with a crisp, slightly rounded edge, no broad sweep.
     const orthoBase = options.smoothShape === "ortho" && !arch.partial;
     const ledge = (arch.partial || orthoBase) && Number.isFinite(scanLow) ? Math.max(ledgeAt, scanLow - floor - (orthoBase ? ORTHO_BELOW_SCAN : SMOOTH.belowCut)) : ledgeAt;
     const crisp = orthoBase ? { fillet: ORTHO_FILLET, edgeRound: ORTHO_EDGE_ROUND } : {};
-    labelTop = floor + ledge - (orthoBase ? ORTHO_EDGE_ROUND : SMOOTH.edgeRound);
+    // Build 268 (Rakesh): a low base with a name - its back raised to the standard ledge, so the name fits on the back wall.
+    const backY = Math.max(...ortho.map(([, y]) => y));
+    const raiseBack = low && labelText(labelLine) && ledge < SMOOTH.ledge && !arch.partial ? SMOOTH.ledge - ledge : 0;
+    const backRaise = raiseBack > 0 ? { from: backY - LOW_NAME_BAND, ramp: LOW_NAME_RAMP, by: raiseBack } : undefined;
+    labelTop = floor + ledge + raiseBack - (orthoBase ? ORTHO_EDGE_ROUND : SMOOTH.edgeRound);
     // Build 121 (Rakesh): an aligner model is a horseshoe - its outline the arch's own (lib/dentalBase archBand), the scan seen from above grown
     // ALIGNER_GROW outside the scan's edge, open across the palate and the tongue space (the scan already follows the gum there),
     // so the drape runs down inside the arch as well as outside it. A quadrant keeps its block.
@@ -996,7 +1008,7 @@ function buildArch(
       if (band.length >= 3) outline = band;
     }
     dentalStage("base", stageArch);
-    const base = makeSmoothBase(runtime, { scan: cut, teeth: edgeClear, outline, floor, open: true, ledge, ...crisp });
+    const base = makeSmoothBase(runtime, { scan: cut, teeth: edgeClear, outline, floor, open: true, ledge, ...crisp, ...(backRaise ? { backRaise } : {}) });
     dentalStage("join", stageArch);
     keepSolid(base.outer);
     if (base.cover) solid = keepSolid(runtime.Manifold.intersection(solid, keepSolid(base.cover)));
@@ -1443,7 +1455,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
   if (options.hinge && prep.arches.length === 2 || smoothShape) {
     // Build 121 (Rakesh): an articulated aligner pair keeps its horseshoe (its arms squared off at the back for the hinge).
     const shape = smoothShape ?? "ortho";
-    const lowest = shape === "aligner" ? (labelText(options.label) ? ALIGNER_LABEL_LEDGE : ALIGNER_LEDGE_MIN) + SMOOTH.belowCut : SMOOTH.ledge + SMOOTH.belowCut;
+    const lowest = shape === "aligner" ? (labelText(options.label) ? ALIGNER_LABEL_LEDGE : ALIGNER_LEDGE_MIN) + SMOOTH.belowCut : (options.baseHeight === "low" ? LOW_LEDGE : SMOOTH.ledge) + SMOOTH.belowCut;
     // Build 121 (Rakesh): an aligner model is always hollow with the honeycomb base - steadier to thermoform over, no choice to make.
     const aligner = shape === "aligner";
     options = { ...options, baseStyle: "ortho", inside: !aligner && options.inside === "solid" ? "solid" : "open", ...(aligner ? { infill: "base" as const } : {}), smoothBase: true, smoothShape: shape, base: shape === "aligner" ? Math.max(options.base, lowest) : lowest + (options.baseHeight === "tall" ? TALL_BASE : 0) };

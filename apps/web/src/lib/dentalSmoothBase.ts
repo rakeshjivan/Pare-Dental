@@ -202,6 +202,11 @@ export type SmoothBaseInput = {
   /** Build 122: the fillet onto the ledge and the rounding of the wall's top edge, mm (SMOOTH's unless given - tighter on an orthodontic base). */
   fillet?: number;
   edgeRound?: number;
+  /**
+   * Build 268 (Rakesh): a low base with a name - its ledge raised `by` mm along the back (y from `from` back), eased up
+   * over `ramp` mm before it, so the back wall is tall enough for the name. Everywhere else the base stays low.
+   */
+  backRaise?: { from: number; ramp: number; by: number };
 };
 
 export type SmoothBaseFields = { grid: Grid; outer: Float32Array; cavity: Float32Array | null; timing: Record<string, number> };
@@ -435,6 +440,8 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   for (let j = 0; j < ny; j += 1) for (let i = 0; i < nx; i += 1) {
     const c = j * nx + i;
     const list = crossings.subarray(counts[c], counts[c + 1]);
+    const raise = input.backRaise ? input.backRaise.by * smooth01((cy(j) - (input.backRaise.from - input.backRaise.ramp)) / input.backRaise.ramp) : 0;
+    const ledgeHere = ledge + raise;
     let above = list.length, p = 0;
     const easeAt = (_col: number, e: number) => S.inset * (1 - e);
     const edgeHere = edgeAt(c), easeHere = easeAt(c, edgeHere);
@@ -491,7 +498,7 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
       // never the gum itself (it thickened low gum lying near the ledge), and the gum meets the drape with a rounding
       // only over its own last edgeBand (beyond, the scan's own surface).
       const meet = Math.max(S.meetMin, blendHere * edge);
-      bodies[index] = smin(scanSd + easeEdge, smin(drapeSd, z - ledge, fillet), meet);
+      bodies[index] = smin(scanSd + easeEdge, smin(drapeSd, z - ledgeHere, fillet), meet);
       seamW[index] = edge * standOut;
     }
   }

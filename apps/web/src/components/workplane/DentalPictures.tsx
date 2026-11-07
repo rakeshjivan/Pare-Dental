@@ -331,8 +331,8 @@ export function PairPicture({ kind }: { kind: "separate" | "articulated" }) {
   );
 }
 
-export function HeightPicture({ kind }: { kind: "standard" | "tall" }) {
-  const h = kind === "tall" ? 17 : 11;
+export function HeightPicture({ kind }: { kind: "low" | "standard" | "tall" }) {
+  const h = kind === "tall" ? 17 : kind === "low" ? 7 : 11;
   return (
     <svg className="studio-choice-pic" viewBox="0 0 64 40" aria-hidden="true">
       {sideModel(12, 36, 40, h)}

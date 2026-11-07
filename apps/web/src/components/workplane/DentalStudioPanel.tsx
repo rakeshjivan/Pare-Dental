@@ -730,16 +730,16 @@ export function DentalStudioPanel({
     </div>
   ) : null;
   const waxPart: WaxupPart | null = waxStep && ["select", "teeth", "find", "choose", "set", "place", "adjust", "occlusion", "sculpt"].includes(waxStep) ? waxStep as WaxupPart : null;
-  /** Build 120 (Rakesh): the base's height - standard (the smooth base's own) or tall. */
+  /** Build 120 (Rakesh): the base's height - standard (the smooth base's own) or tall. Build 268: or low. */
   const heightChoice = (onPicked?: () => void, shown = true) => (<>
     <h4 className="dental-group">{t("studio.baseHeight")} <HelpTip text={t("studio.baseHeightHint")} /></h4>
-    <div className="studio-pic-choice two" role="radiogroup" aria-label={t("studio.baseHeight")}>
-      {(["standard", "tall"] as const).map((kind) => {
+    <div className="studio-pic-choice" role="radiogroup" aria-label={t("studio.baseHeight")}>
+      {(["low", "standard", "tall"] as const).map((kind) => {
         const on = shown && (options.baseHeight ?? "standard") === kind;
         return (
           <button key={kind} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} onClick={() => { onOptionsChange({ baseHeight: kind }); onPicked?.(); }}>
             <HeightPicture kind={kind} />
-            <span>{t(kind === "tall" ? "studio.baseTall" : "studio.baseStandard")}</span>
+            <span>{t(kind === "tall" ? "studio.baseTall" : kind === "low" ? "studio.baseLow" : "studio.baseStandard")}</span>
           </button>
         );
       })}
@@ -1294,7 +1294,7 @@ export function DentalStudioPanel({
               {done("ovd", true)}
             </>) },
           ] : []),
-          ...(preset === "aligner" ? [] : [{ id: "aheight", title: t("studio.baseHeight"), answer: t(options.baseHeight === "tall" ? "studio.baseTall" : "studio.baseStandard"), body: (<>{heightChoice(() => pick("aheight"), chosen("aheight"))}{done("aheight")}</>) }]),
+          ...(preset === "aligner" ? [] : [{ id: "aheight", title: t("studio.baseHeight"), answer: t(options.baseHeight === "tall" ? "studio.baseTall" : options.baseHeight === "low" ? "studio.baseLow" : "studio.baseStandard"), body: (<>{heightChoice(() => pick("aheight"), chosen("aheight"))}{done("aheight")}</>) }]),
         ];
         return (
           <div className="studio-questions">
