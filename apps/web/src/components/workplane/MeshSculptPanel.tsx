@@ -17,7 +17,7 @@ export type SculptTool = "select" | "unselect" | LiveBrush;
 export type SculptRefine = "off" | "coarse" | "medium" | "fine";
 /** Build 73: a brush also works mirrored across the part's middle, left-right (x) or front-back (z). */
 export type SculptSymmetry = "off" | "x" | "z";
-export type SculptSelectionAction = "fill" | "delete" | "smooth" | "flatten" | "grow" | "shrink" | "smoothEdge" | "connected" | "invertConnected" | "tidy" | "invert" | "clear" | "extrude" | "offset" | "bridge" | "align" | "remeshPart" | "reducePart";
+export type SculptSelectionAction = "loose" | "fill" | "delete" | "smooth" | "flatten" | "grow" | "shrink" | "smoothEdge" | "connected" | "invertConnected" | "tidy" | "invert" | "clear" | "extrude" | "offset" | "bridge" | "align" | "remeshPart" | "reducePart";
 
 /** Build 92: a soft transform's settings - a move (mm, and out along the selection's facing), turns (degrees), a scale (%) and the soft edge (mm). */
 export type SoftTransform = { x: number; y: number; z: number; out: number; tilt: number; turn: number; roll: number; scale: number; soft: number };
@@ -544,6 +544,8 @@ export function MeshSculptPanel({
           </button>
           <button type="button" disabled={busy || !chosen} title={t("sculpt.selection.clearHint")} onClick={() => onSelection("clear")}>{t("sculpt.selection.clear")}</button>
         </div>
+        {/* Build 267 (Rakesh): the scan's loose pieces found and chosen - with Auto delete cut away at once. */}
+        <button type="button" className="secondary sculpt-loose" disabled={busy} title={t("sculpt.selection.looseHint")} onClick={() => onSelection("loose")}>{t("sculpt.selection.loose")}</button>
         <p className="blend-hint" role="status">{t(autoDelete ? "sculpt.trimAutoHint" : "sculpt.trimManualHint")}</p>
       </>) : (
       <div className="dental-trim-buttons sculpt-selection" role="group" aria-label={t("sculpt.selection")}>

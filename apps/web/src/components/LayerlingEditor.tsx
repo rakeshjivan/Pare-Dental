@@ -89,7 +89,7 @@ import { WaxPaintBrush } from "./workplane/WaxPaintBrush";
 import { WaxToolWheel } from "./workplane/WaxToolWheel";
 import { WAXUP_LANDMARKS, WAX_BLUE, WAX_CONFIRMED_COLOURS, WAX_TOOTH_COLOURS, defaultMarkTeeth, archOrder, type WaxupView } from "./workplane/WaxupCard";
 import { brushArea, lassoArea, screenTriangles } from "@/lib/dentalArea";
-import { applyToSelection, brushChoice, lassoChoice, type LassoMode, cornerPositions, growChoice, soupFloat32, invertChoice, sculptMeshOf, soupOf, withoutTriangles, type SculptMesh, type SelectReach } from "@/lib/meshSculpt";
+import { applyToSelection, brushChoice, lassoChoice, type LassoMode, cornerPositions, growChoice, soupFloat32, invertChoice, loosePieces, sculptMeshOf, soupOf, withoutTriangles, type SculptMesh, type SelectReach } from "@/lib/meshSculpt";
 import { remeshRegion, LiveMesh, averageEdgeOf, stampBrush, type LiveBrush, type LivePatch } from "@/lib/liveSculpt";
 import { defaultRemeshDetail, type RemeshMode } from "@/lib/meshRemesh";
 import { MeshSculptPanel, WAX_SCULPT_TOOLS, type SculptBrushOptions, type SoftTransform, type SculptFreezeAction, type SculptRefine, type SculptSelectionAction, type SculptSymmetry, type SculptTool } from "./workplane/MeshSculptPanel";
@@ -10175,6 +10175,16 @@ export function LayerlingEditor({
     const { shape, state } = target;
     const selection = sculptSelectionOf(state);
     const count = () => selection.chosen.reduce((a, b) => a + b, 0);
+    if (action === "loose") {
+      // Build 267 (Rakesh): the loose pieces chosen (in place of what was) - with Auto delete, cut away at once.
+      selection.chosen = loosePieces(selection.mesh);
+      const found = count();
+      setSculptTool((current) => current ? { ...current, chosen: found } : current);
+      if (!found) { setNotice(t("sculpt.noLoose")); return; }
+      setNotice(t("sculpt.looseFound", { count: found.toLocaleString() }));
+      autoDeleteAfterSelect(target.tool, found);
+      return;
+    }
     if (action === "clear" || action === "invert" || action === "grow" || action === "shrink" || action === "smoothEdge" || action === "connected" || action === "invertConnected" || action === "tidy") {
       const { mesh, chosen } = selection;
       selection.chosen = action === "clear" ? new Uint8Array(chosen.length) : action === "invert" ? invertChoice(chosen) : action === "grow" ? growChoice(mesh, chosen) : action === "shrink" ? shrinkChoice(mesh, chosen)

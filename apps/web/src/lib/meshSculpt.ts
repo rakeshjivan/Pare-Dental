@@ -520,6 +520,28 @@ export function withoutTriangles(positions: ArrayLike<number>, chosen: Uint8Arra
 }
 
 /** Every triangle not chosen is chosen, and the other way round. */
+/**
+ * Build 267 (Rakesh): the loose pieces of a scan - every triangle not joined (corner to corner) to its biggest piece:
+ * islands a trim left behind, a fragment the scanner caught. Chosen to see them, and cut away with one click.
+ */
+export function loosePieces(mesh: SculptMesh): Uint8Array {
+  const corners = mesh.points.length / 3, count = mesh.triangles.length / 3;
+  const parent = new Int32Array(corners);
+  for (let i = 0; i < corners; i += 1) parent[i] = i;
+  const find = (v: number) => { let r = v; while (parent[r] !== r) { parent[r] = parent[parent[r]]; r = parent[r]; } return r; };
+  for (let t = 0; t < count; t += 1) {
+    const a = find(mesh.triangles[t * 3]), b = find(mesh.triangles[t * 3 + 1]), c = find(mesh.triangles[t * 3 + 2]);
+    parent[b] = a; parent[find(c)] = a;
+  }
+  const size = new Map<number, number>();
+  for (let t = 0; t < count; t += 1) { const r = find(mesh.triangles[t * 3]); size.set(r, (size.get(r) ?? 0) + 1); }
+  let biggest = -1, most = -1;
+  for (const [r, n] of size) if (n > most) { most = n; biggest = r; }
+  const chosen = new Uint8Array(count);
+  for (let t = 0; t < count; t += 1) if (find(mesh.triangles[t * 3]) !== biggest) chosen[t] = 1;
+  return chosen;
+}
+
 export function invertChoice(chosen: Uint8Array): Uint8Array {
   return chosen.map((value) => (value ? 0 : 1));
 }

@@ -563,6 +563,7 @@
 .studio-dental .dental-studio-panel .dental-picture-tiles button,
 .studio-dental .dental-studio-panel .dental-swap,
 .studio-dental .dental-studio-panel .dental-views button,
+.studio-dental .dental-studio-panel .sculpt-loose,
 .studio-dental .dental-studio-panel .dental-more {
   min-height: 30px;
   color: var(--mm-text);
@@ -576,6 +577,7 @@
 .studio-dental .dental-studio-panel .dental-import:hover:not(:disabled),
 .studio-dental .dental-studio-panel .dental-trim-mode button:hover:not(:disabled),
 .studio-dental .dental-studio-panel .dental-trim-buttons button:hover:not(:disabled),
+.studio-dental .dental-studio-panel .sculpt-loose:hover:not(:disabled),
 .studio-dental .dental-studio-panel .shell-opening-options button:hover:not(:disabled),
 .studio-dental .dental-studio-panel .dental-presets button:hover:not(:disabled),
 .studio-dental .dental-studio-panel .dental-picture-tiles button:hover:not(:disabled) {
@@ -801,3 +803,6 @@
 
 /* Build 110: Keep & erase - the brush over the 3D view. */
 body.wax-painting .workplane-plane canvas, body.wax-painting .three-workplane-host canvas { cursor: crosshair; }
+
+/* Build 267: Select loose pieces - under the trim buttons, as wide as they are. */
+.studio-dental .dental-studio-panel .sculpt-loose { width: 100%; margin-top: 6px; }
