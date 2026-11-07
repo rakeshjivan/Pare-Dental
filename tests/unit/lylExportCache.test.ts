@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { editorHistoryEntry, hydrateEditorHistoryState, type EditorHistoryEntry } from "@/lib/editorHistory";
-import { exportLylProject, importLylProject, type LylProjectExportInput } from "@/lib/lylProject";
+import { exportLylProject, importLylProject, lylSaveCacheHolds, type LylProjectExportInput } from "@/lib/lylProject";
 import { DEFAULT_SNAP_GRID, DEFAULT_WORKPLANE_WORKSPACE } from "@/lib/workplaneSettings";
 import type { WorkplaneShape } from "@/types/layerling";
 
@@ -93,5 +93,18 @@ describe("exporting a project again", () => {
     // With the same inputs a repeated call hands back the remembered entries.
     const again = hydrateEditorHistoryState(shapes, entries, entries.length - 1, "unlimited", []);
     expect(again.entries[0]).toBe(flat.entries[0]);
+  });
+
+  it("keeps the encoded copy of a mesh only while a save still uses it (build 266)", async () => {
+    const mesh = (id: string, x: number): WorkplaneShape => box(id, x, { kind: "mesh", importedMesh: { positions: [0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 10], baseWidth: 10, baseDepth: 10, baseHeight: 10, triangleCount: 1, sourceFormat: "json" } });
+    const old = mesh("old-model", 0), made = mesh("new-model", 40);
+    const before = [editorHistoryEntry([old], [], [], undefined, 1_700_000_000_000)];
+    await exportLylProject(exportInput(before, [old]));
+    expect(lylSaveCacheHolds(old.importedMesh!)).toBe(true);
+    // The model replaced, and its step gone from the history: the next save drops its encoded copy.
+    const after = [editorHistoryEntry([made], [], [], undefined, 1_700_000_001_000)];
+    await exportLylProject(exportInput(after, [made]));
+    expect(lylSaveCacheHolds(old.importedMesh!)).toBe(false);
+    expect(lylSaveCacheHolds(made.importedMesh!)).toBe(true);
   });
 });

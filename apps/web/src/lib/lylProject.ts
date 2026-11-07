@@ -472,9 +472,21 @@ type EncodedAssetPayload = { bytes: Uint8Array; sha256: string };
 // state. Keying the result on the resource itself means an unchanged resource is
 // encoded and hashed exactly once, no matter how many states reference it or how
 // often the project is saved again.
-const encodedAssetPayloads = new WeakMap<object, Promise<EncodedAssetPayload>>();
+//
+// Build 266: kept only for what the last save used - a Map pruned after every save, not a WeakMap. A part that
+// left the design (a model an Update replaced) can stay reachable a while from old copies of the editor's state;
+// as a WeakMap entry its encoded copy, as big as the mesh itself, stayed with it.
+const encodedAssetPayloads = new Map<object, Promise<EncodedAssetPayload>>();
+/** What the saves running now (or the last one) have used: everything else is dropped when they are done. */
+const usedInSave = { assets: new Set<object>(), states: new Set<object>() };
+let savesRunning = 0;
+/** For tests: whether a save's encoded copy of `resource` (a mesh, its edges, a source file) is still kept. */
+export function lylSaveCacheHolds(resource: object) {
+  return encodedAssetPayloads.has(resource);
+}
 
 function encodedAssetPayload(resource: object, encode: () => Uint8Array) {
+  usedInSave.assets.add(resource);
   const cached = encodedAssetPayloads.get(resource);
   if (cached) return cached;
   const pending = (async () => {
@@ -525,7 +537,7 @@ function encodedTextPayload(text: string) {
 const STATES_PLACEHOLDER = "@@layerling-states-placeholder-7f3a1c@@";
 
 /** The serialized text of a history state and the assets it used, remembered per history entry. */
-const serializedStateCache = new WeakMap<object, {
+const serializedStateCache = new Map<object, {
   stateId: string;
   sourceKey: string;
   json: string;
@@ -992,6 +1004,22 @@ function unzipAsync(bytes: Uint8Array) {
 }
 
 export async function exportLylProject(input: LylProjectExportInput) {
+  savesRunning += 1;
+  try {
+    return await exportLylProjectNow(input);
+  } finally {
+    savesRunning -= 1;
+    // Build 266: once no save is running, only what they used is kept.
+    if (savesRunning === 0) {
+      for (const resource of [...encodedAssetPayloads.keys()]) if (!usedInSave.assets.has(resource)) encodedAssetPayloads.delete(resource);
+      for (const entry of [...serializedStateCache.keys()]) if (!usedInSave.states.has(entry)) serializedStateCache.delete(entry);
+      usedInSave.assets.clear();
+      usedInSave.states.clear();
+    }
+  }
+}
+
+async function exportLylProjectNow(input: LylProjectExportInput) {
   const placementElevation = Number.isFinite(input.placementElevation) ? input.placementElevation : 0;
   const placementWorkplane = normalizePlacementWorkplane(input.placementWorkplane, placementElevation);
   const hydrated = hydrateEditorHistoryState(input.shapes, input.history, input.historyIndex, "unlimited", normalizeNotes(input.notes), placementWorkplane);
@@ -1022,6 +1050,7 @@ export async function exportLylProject(input: LylProjectExportInput) {
     let stateId = stateIdByFingerprint.get(entry.fingerprint);
     if (!stateId) {
       stateId = `state-${stateTexts.length + 1}`;
+      usedInSave.states.add(entry);
       const cached = serializedStateCache.get(entry);
       if (cached && cached.stateId === stateId && cached.sourceKey === sourceKey) {
         builder.adopt(cached.used);
