@@ -2,6 +2,7 @@
  * Fork (build 35): runs heavy mesh work in a worker (workers/meshJobs.worker.ts). Where a worker
  * cannot start - an old browser, the tests - the same work runs here as before.
  */
+import type { DentalStage } from "@/lib/dentalStages";
 import type { BiteContactMap } from "@/lib/biteContacts";
 import type { MeshRoundMode, MeshRoundResult } from "@/lib/meshRound";
 import type { FitReport } from "@/lib/partTools";
@@ -46,7 +47,7 @@ export type MeshJobResponse =
   | { id: number; ok: true; kind: "biteContacts"; map: BiteContactMap }
   | { id: number; ok: true; kind: "remesh"; remesh: { positions: Float32Array; voxel: number; coarse: boolean; triangles: number } }
   | { id: number; ok: true; kind: "findTeeth"; teeth: ScanTeeth }
-  | { id: number; ok: true; kind: "progress"; share: number }
+  | { id: number; ok: true; kind: "progress"; share: number; /** Build 267: what Make is doing (lib/dentalStages). */ stage?: string; arch?: "upper" | "lower" }
   | { id: number; ok: true; kind: "occlusion"; result: OcclusionResult }
   | { id: number; ok: true; kind: "biteHinge"; hinge: BiteHinge }
   | { id: number; ok: true; kind: "waxContacts"; distances: Float32Array[] }
@@ -57,7 +58,7 @@ let worker: Worker | null = null;
 let failed = false;
 let nextId = 1;
 const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
-const progress = new Map<number, (share: number) => void>();
+const progress = new Map<number, (share: number, stage?: string, arch?: "upper" | "lower") => void>();
 
 function meshWorker(): Worker | null {
   if (failed || typeof window === "undefined" || typeof Worker === "undefined") return null;
@@ -66,7 +67,7 @@ function meshWorker(): Worker | null {
     worker = new Worker(new URL("../workers/meshJobs.worker.ts", import.meta.url), { type: "module" });
     worker.onmessage = (event: MessageEvent<MeshJobResponse>) => {
       const reply = event.data;
-      if (reply.ok && reply.kind === "progress") { progress.get(reply.id)?.(reply.share); return; }
+      if (reply.ok && reply.kind === "progress") { progress.get(reply.id)?.(reply.share, reply.stage, reply.arch); return; }
       const waiting = pending.get(reply.id);
       if (!waiting) return;
       pending.delete(reply.id);
@@ -263,7 +264,7 @@ function helperWorker(): Worker | null {
     helper = new Worker(new URL("../workers/meshJobs.worker.ts", import.meta.url), { type: "module" });
     helper.onmessage = (event: MessageEvent<MeshJobResponse>) => {
       const reply = event.data;
-      if (reply.ok && reply.kind === "progress") { progress.get(reply.id)?.(reply.share); return; }
+      if (reply.ok && reply.kind === "progress") { progress.get(reply.id)?.(reply.share, reply.stage, reply.arch); return; }
       const waiting = pending.get(reply.id);
       if (!waiting) return;
       pending.delete(reply.id);
@@ -314,17 +315,42 @@ function archPartBuffers(part: DentalArchPart): ArrayBuffer[] {
   return buffers as ArrayBuffer[];
 }
 
+/** Build 267: how far a Make has got - its share (0 to 1) and the stage it is in, of the slower arch while both are made. */
+export type DentalMakeProgress = { share: number; stage: DentalStage; arch?: "upper" | "lower" };
+
 /** Dental Studio: makes the models (Z-up positions) - a pair's two arches side by side in two workers (build 68). */
-export async function makeDentalStudioInBackground(input: DentalStudioInput, options: DentalStudioOptions): Promise<DentalStudioResult> {
+export async function makeDentalStudioInBackground(input: DentalStudioInput, options: DentalStudioOptions, onProgress?: (made: DentalMakeProgress) => void): Promise<DentalStudioResult> {
   const main = meshWorker();
   const second = input.arches.length === 2 && main ? helperWorker() : null;
+  // Build 267: what it is doing, as it goes - each arch's model made in its own worker; the pair's work after both.
+  const latest: { arch: Partial<Record<"upper" | "lower", { share: number; stage: DentalStage }>>; pair: { share: number; stage: DentalStage } | null } = { arch: {}, pair: null };
+  const heard = (share: number, stage?: string, arch?: "upper" | "lower") => {
+    if (!onProgress || !stage) return;
+    if (arch) latest.arch[arch] = { share, stage: stage as DentalStage };
+    else latest.pair = { share, stage: stage as DentalStage };
+    const arches = Object.entries(latest.arch) as Array<["upper" | "lower", { share: number; stage: DentalStage }]>;
+    const slowest = arches.reduce<["upper" | "lower", { share: number; stage: DentalStage }] | null>((best, item) => (!best || item[1].share < best[1].share ? item : best), null);
+    if (latest.pair && (!slowest || latest.pair.share >= slowest[1].share)) onProgress({ share: latest.pair.share, stage: latest.pair.stage });
+    else if (slowest) onProgress({ share: slowest[1].share, stage: slowest[1].stage, ...(arches.length > 1 || input.arches.length > 1 ? { arch: slowest[0] } : {}) });
+  };
   if (!main || !second) {
-    return dentalJob((id, base, data) => ({ id, base, kind: "dentalStudio", input: data, options }), input, async (data) => (await import("@/lib/dentalModel")).makeDentalStudio(data, options));
+    const id = nextId;
+    if (onProgress) progress.set(id, heard);
+    try {
+      return await dentalJob((jobId, base, data) => ({ id: jobId, base, kind: "dentalStudio", input: data, options }), input, async (data) => {
+        const { onDentalStage } = await import("@/lib/dentalStages");
+        onDentalStage((stage, share, arch) => heard(share, stage, arch));
+        try { return await (await import("@/lib/dentalModel")).makeDentalStudio(data, options); } finally { onDentalStage(null); }
+      });
+    } finally {
+      progress.delete(id);
+    }
   }
   const base = new URL(".", window.location.href).href;
   const id = nextId;
   const partId = nextId + 1;
   nextId += 2;
+  if (onProgress) { progress.set(id, heard); progress.set(partId, heard); }
   const buffersOf = (data: DentalStudioInput) => [
     ...data.arches.flatMap((arch) => [(arch.positions as Float32Array).buffer, ...(arch.area ? [arch.area.buffer] : [])]),
     ...(data.bite ? [(data.bite as Float32Array).buffer] : []),
@@ -348,6 +374,9 @@ export async function makeDentalStudioInBackground(input: DentalStudioInput, opt
   } catch (error) {
     if (error instanceof Error && error.message === "worker-unavailable") return (await import("@/lib/dentalModel")).makeDentalStudio(input, options);
     throw error;
+  } finally {
+    progress.delete(id);
+    progress.delete(partId);
   }
 }
 

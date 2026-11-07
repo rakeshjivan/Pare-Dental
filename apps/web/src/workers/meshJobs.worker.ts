@@ -49,12 +49,17 @@ scope.onmessage = async (event: MessageEvent<MeshJobRequest | { archPartFor: num
       scope.postMessage(reply);
     } else if (job.kind === "dentalStudio") {
       const { makeDentalStudio } = await import("@/lib/dentalModel");
+      // Build 267: what it is doing, as it goes.
+      const { onDentalStage } = await import("@/lib/dentalStages");
+      onDentalStage((stage, share, arch) => scope.postMessage({ id: job.id, ok: true, kind: "progress", share, stage, ...(arch ? { arch } : {}) } satisfies MeshJobResponse));
       const remote = job.remoteIndex !== undefined ? { index: job.remoteIndex, part: archPartFor(job.id) } : undefined;
       const result = await makeDentalStudio(job.input, job.options, undefined, remote);
       const reply: MeshJobResponse = { id: job.id, ok: true, kind: "dentalStudio", result };
       scope.postMessage(reply, result.parts.map((part) => part.positions.buffer));
     } else if (job.kind === "dentalArch") {
       const { makeDentalArchPart } = await import("@/lib/dentalModel");
+      const { onDentalStage } = await import("@/lib/dentalStages");
+      onDentalStage((stage, share, arch) => scope.postMessage({ id: job.id, ok: true, kind: "progress", share, stage, ...(arch ? { arch } : {}) } satisfies MeshJobResponse));
       const part = await makeDentalArchPart(job.input, job.options, job.index);
       const reply: MeshJobResponse = { id: job.id, ok: true, kind: "dentalArch", part };
       const buffers: ArrayBuffer[] = [part.mesh.vertProperties.buffer as ArrayBuffer, part.mesh.triVerts.buffer as ArrayBuffer];

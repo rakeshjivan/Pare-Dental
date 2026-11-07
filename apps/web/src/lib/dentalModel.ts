@@ -22,6 +22,7 @@ import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
 import { GUM_REACH, marginRegion, moveGumCut, type GumCut } from "@/lib/waxGum";
 import { smoothBase as makeSmoothBase, SMOOTH } from "@/lib/dentalSmoothBase";
+import { dentalStage } from "@/lib/dentalStages";
 import { smoothSeam } from "@/lib/dentalSeam";
 import { articulatorParts, incisalPins, pinRisers, PIN, PIN_BAND, PIN_CLEAR, PIN_HALF, PIN_MAX, PIN_SET, POST_BACK, restAngle, type ArticulatorSides, type PinStyle } from "@/lib/dentalArticulator";
 import {
@@ -788,6 +789,9 @@ function buildArch(
   cutAway?: DentalArchInput["cuts"],
   gumCuts?: GumCut[],
 ): Built {
+  // Build 267: Make says what it is doing as it goes (lib/dentalStages).
+  const stageArch = arch.role === "lower" ? "lower" : "upper" as const;
+  dentalStage("prepare", stageArch);
   const warnings: string[] = [];
   const m = cloneMesh(arch.clean.mesh);
   applyMatrix(m, arch.frame);
@@ -991,7 +995,9 @@ function buildArch(
       if (options.hinge && band.length >= 3) band = bandToBack(runtime, band, Math.max(...ortho.map(([, y]) => y)));
       if (band.length >= 3) outline = band;
     }
+    dentalStage("base", stageArch);
     const base = makeSmoothBase(runtime, { scan: cut, teeth: edgeClear, outline, floor, open: true, ledge, ...crisp });
+    dentalStage("join", stageArch);
     keepSolid(base.outer);
     if (base.cover) solid = keepSolid(runtime.Manifold.intersection(solid, keepSolid(base.cover)));
     solid = keepSolid(runtime.Manifold.union(solid, base.outer));
@@ -1003,6 +1009,7 @@ function buildArch(
       const edges = boundaryLoops(cut).map((loop) => loop.flatMap((i) => [cut.v[i * 3], cut.v[i * 3 + 1], cut.v[i * 3 + 2]]));
       const along = distanceFromEdge(cut, EDGE_SMOOTH + 0.01), keepAt: number[] = [];
       for (const i of new Set(cut.f)) if (along[i] > EDGE_SMOOTH) keepAt.push(cut.v[i * 3], cut.v[i * 3 + 1], cut.v[i * 3 + 2]);
+      dentalStage("edge", stageArch);
       const smoothed = smoothSeam(runtime, solid, edges, keepAt);
       if (smoothed !== solid) solid = keepSolid(smoothed);
     }
@@ -1076,6 +1083,7 @@ function buildArch(
     }
   }
   let voxel: number | null = null;
+  dentalStage("hollow", stageArch);
   // Build 74: the model before hollowing, and the wall, so cuts made after it keep a wall round them.
   let unhollowed: ManifoldSolid | null = null;
   // Build 107: the drain slots, cut once everything else on the base is made (so no collar or bar fills one in).
@@ -1225,6 +1233,7 @@ function buildArch(
       warnings.push("wax");
     }
   }
+  dentalStage("details", stageArch);
   const text = labelText(labelLine);
   if (text) {
     if ((options.baseStyle === "ortho" || options.baseStyle === "articulator" || options.smoothBase) && labelRing && options.base >= 3) {
@@ -1287,6 +1296,7 @@ function buildArch(
       warnings.push("label");
     }
   }
+  dentalStage("check", stageArch);
   if (solid.status() !== "NoError" || solid.isEmpty()) throw new Error("The model did not come out as a closed solid");
   // Hand the result out; free everything else.
   const result = solid;
@@ -1632,6 +1642,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     // Build 78: the one articulator - kinematic seats and the incisal pin (lib/dentalArticulator).
     const raise = options.incisalPin === false ? 0 : Math.max(0, Math.min(PIN_MAX, options.pinRaise ?? 0));
     // Build 117: the cups' fit as chosen; on the dental midline (x = 0 here) when it was found.
+    dentalStage("hinge");
     const parts = articulatorParts(runtime, back, xMin, xMax, depth, -depth, stop, raise, { upper: heelsOf("upper"), lower: heelsOf("lower") }, options.pinStyle ?? "fused", { fit: options.hingeFit, riserGroove: Boolean(options.risers), ...(midline !== null ? { centre: 0 } : {}), ...(options.smoothBase ? { smooth: true } : {}), ...(options.smoothBase && options.hingeStyle === "snap" ? { snap: { grip: options.snapGrip } } : {}) });
     if (stop && Number.isFinite(parts.pinY)) pinGeometry = { axleY: parts.axleY, pinY: parts.pinY };
     if (stop && Number.isFinite(parts.pinY) && options.pinStyle === "set") {
@@ -1784,6 +1795,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     for (let i = 0; i < p.length; i += 3) { p[i] += dx; p[i + 1] += dy; p[i + 2] += dz; }
   }
   toFree.forEach((solid) => { try { solid.delete(); } catch { /* gone */ } });
+  dentalStage("done");
   return {
     parts: out,
     worn: built.reduce((sum, { built: b }) => sum + b.worn, 0),

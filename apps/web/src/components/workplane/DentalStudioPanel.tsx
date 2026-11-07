@@ -10,7 +10,8 @@ import { biteOpenings } from "@/lib/waxOcclusion";
 const BITE_KEPT_CHECK = 0.5;
 
 import { ArrowLeft, ArrowLeftRight, ArrowRight, Check, ChevronDown, FileDown, FilePlus2, LoaderCircle, Redo2, Undo2, Upload, X } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import type { DentalMakeProgress } from "@/lib/meshJobs";
 import { createPortal } from "react-dom";
 import { setStudioSlot, useStudioSlot } from "@/lib/studioSlots";
 const toolSlot = (element: HTMLElement | null) => setStudioSlot("tool", element);
@@ -151,6 +152,7 @@ export function DentalStudioPanel({
   parts,
   slots,
   stage,
+  makeProgress,
   trimming,
   trimMode,
   onTrimModeChange,
@@ -214,6 +216,8 @@ export function DentalStudioPanel({
   parts: DentalPartChoice[];
   slots: Record<DentalSlot, string | null>;
   stage: "analysing" | "ready" | "making" | "trimming" | "made";
+  /** Build 267: how far the Make under way has got - its button says the stage and fills as it goes. */
+  makeProgress?: DentalMakeProgress | null;
   /** Build 79: after Make - open the design again, or finish. */
   onEditDesign?: () => void;
   /** Build 117: marking the dental midline on the upper for an articulated pair - start (or stop) marking, and whether it is being marked. */
@@ -689,10 +693,13 @@ export function DentalStudioPanel({
   // button stays, fills slowly and says what is happening - the work can hold the screen for a minute.
   const fitting = Boolean(waxup?.view.occlusion.busy);
   const makingNow = stage === "making" || fitting;
+  // Build 267: what Make is doing ("Building the base - upper"), and the button filled as far as it has got.
+  const staged = stage === "making" && !fitting && makeProgress ? makeProgress : null;
+  const stageText = staged ? `${t(`dental.stage.${staged.stage}` as "dental.stage.base")}${staged.arch ? ` · ${t(`dental.stage.${staged.arch}` as "dental.stage.upper")}` : ""}` : null;
   const makeButton = (
-    <button type="button" className={`primary${makingNow ? " studio-make-filling" : ""}`} disabled={!ready || makingNow} aria-busy={makingNow} onClick={onApply}>
+    <button type="button" className={`primary${makingNow ? " studio-make-filling" : ""}${staged ? " studio-make-staged" : ""}`} style={staged ? ({ "--make-share": Math.max(0.04, Math.min(0.97, staged.share)) } as CSSProperties) : undefined} disabled={!ready || makingNow} aria-busy={makingNow} onClick={onApply}>
       {makingNow ? <LoaderCircle className="edge-modifier-spinner" size={17} /> : <Check size={17} />}
-      <span>{fitting ? t("waxup.fittingBiteShort") : stage === "making" ? t("dental.working") : editing ? t("dental.updateModels") : t(pair ? "dental.applyPair" : "dental.apply")}</span>
+      <span>{fitting ? t("waxup.fittingBiteShort") : stage === "making" ? (stageText ?? t("dental.working")) : editing ? t("dental.updateModels") : t(pair ? "dental.applyPair" : "dental.apply")}</span>
     </button>
   );
   const frameNav = !framed ? null : stage === "made" ? (<>

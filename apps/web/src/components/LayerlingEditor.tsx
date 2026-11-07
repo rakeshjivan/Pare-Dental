@@ -65,7 +65,7 @@ import { faceComponents } from "@/lib/meshComponents";
 import { movedPointIds, solveSketchConstraints } from "@/lib/sketchConstraints";
 import { hullPositions, type FitReport } from "@/lib/partTools";
 import { smallestRoundingRadius, type MeshRoundMode } from "@/lib/meshRound";
-import { analyseDentalInBackground, biteContactsInBackground, stopMeshJobs, checkFitInBackground, dentalAreaInBackground, makeDentalStudioInBackground, remeshInBackground, roundMeshInBackground, textureMeshInBackground, trimDentalScanInBackground, waxupInBackground, findTeethInBackground, resetToothFinder, occlusionInBackground } from "@/lib/meshJobs";
+import { analyseDentalInBackground, biteContactsInBackground, stopMeshJobs, checkFitInBackground, dentalAreaInBackground, makeDentalStudioInBackground, type DentalMakeProgress, remeshInBackground, roundMeshInBackground, textureMeshInBackground, trimDentalScanInBackground, waxupInBackground, findTeethInBackground, resetToothFinder, occlusionInBackground } from "@/lib/meshJobs";
 import { AVERAGE_ARTICULATOR, openedLowerPose } from "@/lib/waxOcclusion";
 import { PIN_MAX, PIN_STEP } from "@/lib/dentalArticulator";
 import { BUILT_IN_FINDER, finderBytes, loadStoredFinder, storeFinder } from "@/lib/toothFinderStore";
@@ -10857,6 +10857,8 @@ export function LayerlingEditor({
   /** Build 96: the last map worked out, kept to colour again (Contact only) without working it out again. */
   // Build 101: each made model's triangles where they stand in the bite, from Make - its contacts are measured there.
   const madeBiteRef = useRef(new Map<string, Float32Array>());
+  /** Build 267: how far the Make under way has got (lib/dentalStages), for its button. */
+  const [makeProgress, setMakeProgress] = useState<DentalMakeProgress | null>(null);
   const biteMapLast = useRef<{ key: string; upperId: string; lowerId: string; upper: Float32Array; lower: Float32Array; upperColor: string; lowerColor: string; /** Where the arches stood when last drawn. */ drawn?: string } | null>(null);
   const biteMapRun = useRef(0);
   const biteMapRef = useRef(biteMap);
@@ -11843,6 +11845,7 @@ export function LayerlingEditor({
     });
     const offset = { x: (minX + maxX) / 2, z: (minZ + maxZ) / 2 };
     setDentalStudio({ ...state, stage: "making", error: null, notes: [] });
+    setMakeProgress(null);
     const run = ++dentalMakeRun.current;
     window.setTimeout(async () => {
       try {
@@ -11862,7 +11865,11 @@ export function LayerlingEditor({
           const midline = state.options.midlineMark && state.options.midlineScan === markId ? state.options.midlineMark : null;
           if (midline) madeInput = { ...fixedInput, arches: fixedInput.arches.map((arch) => (arch.id === markId ? { ...arch, midline } : arch)) };
         }
-        const result = await makeDentalStudioInBackground(madeInput, makeOptions);
+        // Build 267: the button says what Make is doing and fills as it goes - only when the stage changes, and only for this run.
+        const result = await makeDentalStudioInBackground(madeInput, makeOptions, (made) => {
+          if (run !== dentalMakeRun.current) return;
+          setMakeProgress((was) => (was && was.stage === made.stage && was.arch === made.arch ? was : made));
+        });
         // Build 79: stopped with Cancel while it was making - nothing is changed.
         if (run !== dentalMakeRun.current) return;
         const current = shapesRef.current.filter((shape) => involved.includes(shape.id));
@@ -21958,6 +21965,7 @@ export function LayerlingEditor({
           parts={dentalCandidates().map((shape) => ({ id: shape.id, name: displayShapeName(shape) }))}
           slots={dentalStudio.slots}
           stage={dentalStudio.stage}
+          makeProgress={dentalStudio.stage === "making" ? makeProgress : null}
           trimming={dentalTrim}
           trimMode={dentalTrimMode}
           onTrimModeChange={setDentalTrimMode}
