@@ -11977,6 +11977,8 @@ export function LayerlingEditor({
         next = next.map((shape) => (madeIds.includes(shape.id) ? { ...shape, dentalSource: source, dentalMadeAt: localToWorld(shape)?.toArray() } : shape));
         const heights = result.parts.map((part) => part.height.toFixed(1)).join(" / ");
         const kind = t(state.options.inside === "solid" ? "dental.doneSolid" : state.options.inside === "open" ? "dental.doneHollow" : "dental.doneClosed", { wall: state.options.wall.toFixed(1) });
+        // Build 266: the bite copies of models an Update replaced go with them (each was kept for good before).
+        for (const id of [...madeBiteRef.current.keys()]) if (!next.some((shape) => shape.id === id)) madeBiteRef.current.delete(id);
         commitShapes(next, madeIds, t(result.parts.length > 1 ? "dental.donePair" : "dental.done", { height: heights, kind }));
         // Build 116: the workers that made them closed a moment later, so the memory the making took is given back.
         window.setTimeout(() => { recycleMeshWorkers(); closeEraseWorkers(); }, 2000);
@@ -12113,7 +12115,27 @@ export function LayerlingEditor({
   const waxupRef = useRef(waxup);
   waxupRef.current = waxup;
   // For checks: the wax-up's set and arch state.
-  useEffect(() => { (window as unknown as { layerlingWaxupState?: () => unknown }).layerlingWaxupState = () => { const w = waxupRef.current; return { slot: w.slot, setId: w.setId, setIds: w.setIds, setName: w.setName, single: w.single, placed: w.placed.length, busy: w.busy, error: w.error }; }; }, []);
+  // Build 266: what holds the memory - the mesh numbers in the parts on screen, those only the undo history holds, and the made models' bite copies.
+  useEffect(() => {
+    (window as unknown as { layerlingMemoryInfo?: () => unknown }).layerlingMemoryInfo = () => {
+      const seen = new Set<unknown>();
+      const count = (shapes: WorkplaneShape[]) => {
+        let numbers = 0;
+        const walk = (shape: WorkplaneShape) => {
+          for (const array of [shape.importedMesh?.positions, shape.importedMesh?.normals]) if (array && !seen.has(array)) { seen.add(array); numbers += array.length; }
+          shape.groupedShapes?.forEach(walk);
+        };
+        shapes.forEach(walk);
+        return numbers;
+      };
+      const shown = count(shapesRef.current);
+      const history = historyRef.current.map((entry) => count(entry.shapes));
+      let bite = 0;
+      madeBiteRef.current.forEach((soup) => { bite += soup.length; });
+      return { shapes: shapesRef.current.length, shownMillions: shown / 1e6, historySteps: history.length, historyIndex: historyIndexRef.current, historyOnlyMillions: history.map((n) => +(n / 1e6).toFixed(1)), biteCopies: madeBiteRef.current.size, biteMillions: bite / 1e6 };
+    };
+  }, []);
+  useEffect(() => { (window as unknown as { layerlingWaxupState?: () => unknown }).layerlingWaxupState =() => { const w = waxupRef.current; return { slot: w.slot, setId: w.setId, setIds: w.setIds, setName: w.setName, single: w.single, placed: w.placed.length, busy: w.busy, error: w.error }; }; }, []);
   /**
    * Build 101: Wax-up Studio's own Undo and Redo - every step (placing, the sliders, nudges, the teeth
    * chosen, the set, the occlusion) records the wax-up's settings with the design's place in its history;
