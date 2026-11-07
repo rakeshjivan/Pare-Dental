@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, LoaderCircle, Redo2, Undo2, X, Gauge, ListChecks } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GuideHelpLink } from "@/components/GuideHelpLink";
 import { MovableToolPanel } from "@/components/workplane/MovableToolPanel";
 import { EdgeModifierSlider } from "@/components/workplane/EdgeModifierPanel";
@@ -224,6 +224,10 @@ export function MeshSculptPanel({
   useLanguage();
   // Build 92: a list of every tool and button with a line on what it does, opened from the header.
   const [helpOpen, setHelpOpen] = useState(false);
+  /** Build 267: Select loose pieces was pressed and found none (said here: the studios show no message over the view). */
+  const [noLoose, setNoLoose] = useState(false);
+  // Once anything is chosen (loose pieces found, or painted), the line goes.
+  useEffect(() => { if (chosen) setNoLoose(false); }, [chosen]);
   // Build 107: in the studio frame it is just "Trim the scan" - the scan's file name is not shown under it.
   const title = t(studioTrim ? "studio.trimScan" : trim ? "sculpt.trimTitle" : "sculpt.title");
   // Build 94: the tab in view - Select while a select tool is in hand.
@@ -545,7 +549,8 @@ export function MeshSculptPanel({
           <button type="button" disabled={busy || !chosen} title={t("sculpt.selection.clearHint")} onClick={() => onSelection("clear")}>{t("sculpt.selection.clear")}</button>
         </div>
         {/* Build 267 (Rakesh): the scan's loose pieces found and chosen - with Auto delete cut away at once. */}
-        <button type="button" className="secondary sculpt-loose" disabled={busy} title={t("sculpt.selection.looseHint")} onClick={() => onSelection("loose")}>{t("sculpt.selection.loose")}</button>
+        <button type="button" className="secondary sculpt-loose" disabled={busy} title={t("sculpt.selection.looseHint")} onClick={() => { onSelection("loose"); setNoLoose(true); }}>{t("sculpt.selection.loose")}</button>
+        {noLoose && !chosen ? <p className="blend-hint" role="status">{t("sculpt.noLoose")}</p> : null}
         <p className="blend-hint" role="status">{t(autoDelete ? "sculpt.trimAutoHint" : "sculpt.trimManualHint")}</p>
       </>) : (
       <div className="dental-trim-buttons sculpt-selection" role="group" aria-label={t("sculpt.selection")}>
