@@ -2748,6 +2748,17 @@
   color: #5d6c80;
 }
 
+:where(html[data-palette="classic"]) .vase-drawing {
+  --surface: #fbfcfd;
+  --grid: #c5cad1;
+  --grid-major: #4884c3;
+  --label: #5b6a7d;
+}
+
+:where(html[data-palette="classic"]) .vase-print-notes {
+  color: #4c5868;
+}
+
 :where(html[data-palette="classic"]) .text-layers-body .text-layers-names {
   color: #434e5d;
 }
@@ -2851,6 +2862,48 @@
 
 :where(html[data-palette="classic"]) .select-property-hint {
   color: #5d6c80;
+}
+
+:where(html[data-palette="classic"]) .font-picker-button {
+  color: #4b5767;
+  border: 1px solid #c6cbd2;
+  box-shadow: inset 0 1px 1px rgba(34, 40, 47, 0.04);
+}
+
+:where(html[data-palette="classic"]) .font-picker-button:focus-visible {
+  border-color: #2b85e5;
+  box-shadow: 0 0 0 3px rgba(17, 75, 136, 0.14);
+}
+
+:where(html[data-palette="classic"]) .font-picker-current small,
+:where(html[data-palette="classic"]) .font-picker-option small {
+  color: #798595;
+}
+
+:where(html[data-palette="classic"]) .font-preview-line {
+  color: #363f4a;
+}
+
+:where(html[data-palette="classic"]) .font-picker-list {
+  color: #363f4a;
+  border: 1px solid #c6cbd2;
+  box-shadow: 0 10px 28px rgba(34, 40, 47, 0.22);
+}
+
+:where(html[data-palette="classic"]) .font-picker-group {
+  color: #798595;
+}
+
+:where(html[data-palette="classic"]) .font-picker-option.active {
+  background: #e1e5ec;
+}
+
+:where(html[data-palette="classic"]) .font-picker-option.selected {
+  box-shadow: inset 3px 0 0 #2b85e5;
+}
+
+:where(html[data-palette="classic"]) .font-picker-option.action {
+  color: #1a4b7f;
 }
 
 :where(html[data-palette="classic"]) .text-property input:focus,
@@ -3615,6 +3668,27 @@
 }
 
 :where(html[data-palette="classic"]) .history-view-step.none .history-view-step-text {
+  color: #7b8898;
+}
+
+:where(html[data-palette="classic"]) .history-view-head .panel-header-actions button.active {
+  color: #135398;
+  background: #e4e8ed;
+}
+
+:where(html[data-palette="classic"]) .history-view-list {
+  border: 1px solid #d3d7dd;
+}
+
+:where(html[data-palette="classic"]) .history-view-list button:hover {
+  background: #eaeef2;
+}
+
+:where(html[data-palette="classic"]) .history-view-list button.shown {
+  background: #1663b5;
+}
+
+:where(html[data-palette="classic"]) .history-view-list button.ahead:not(.shown) {
   color: #7b8898;
 }
 
