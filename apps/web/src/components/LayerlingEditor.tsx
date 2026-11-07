@@ -11885,7 +11885,9 @@ export function LayerlingEditor({
         if (markId) {
           // Build 117: the midline the dentist marked on this arch (no tooth finder at Make).
           const midline = state.options.midlineMark && state.options.midlineScan === markId ? state.options.midlineMark : null;
-          if (midline) madeInput = { ...fixedInput, arches: fixedInput.arches.map((arch) => (arch.id === markId ? { ...arch, midline } : arch)) };
+          // Build 271: and the second point, further back, that squares the arch on its base.
+          const midlineBack = midline ? state.options.midlineBack ?? null : null;
+          if (midline) madeInput = { ...fixedInput, arches: fixedInput.arches.map((arch) => (arch.id === markId ? { ...arch, midline, ...(midlineBack ? { midlineBack } : {}) } : arch)) };
         }
         // Build 267: the button says what Make is doing and fills as it goes - only when the stage changes, and only for this run.
         const result = await makeDentalStudioInBackground(madeInput, makeOptions, (made) => {
@@ -19375,7 +19377,9 @@ export function LayerlingEditor({
     if (moved.size) commitShapes(shapesRef.current.map((shape) => moved.get(shape.id) ?? shape), selectedIdsRef.current, t("studio.snapMade"));
   };
   /** Build 117: Model Builder's articulator - the dental midline marked with a click on the upper (studio coordinates). */
-  const [midlinePicking, setMidlinePicking] = useState(false);
+  // Build 271 (Rakesh): two clicks - between the centrals, then further back on the midline (the palate's middle), which
+  // squares the arch on its base; Esc at the second keeps the first alone.
+  const [midlinePicking, setMidlinePicking] = useState<false | "front" | "back">(false);
   const midlineGrid = useRef<{ key: string; grid: RayGrid } | null>(null);
   const pickMidline = (x: number, y: number) => {
     const state = dentalStudioRef.current;
@@ -19389,11 +19393,16 @@ export function LayerlingEditor({
     const hit = rayHitGrid(midlineGrid.current.grid, ray.origin, ray.direction);
     if (!hit) return;
     const mark = new THREE.Vector3(...hit).applyMatrix4(toInput).toArray() as [number, number, number];
-    setDentalStudio((current) => current ? { ...current, options: { ...current.options, midlineMark: mark, midlineScan: upper.id }, optionsTouched: true } : current);
-    setMidlinePicking(false);
+    if (midlinePicking === "back") {
+      setDentalStudio((current) => current ? { ...current, options: { ...current.options, midlineBack: mark }, optionsTouched: true } : current);
+      setMidlinePicking(false);
+      return;
+    }
+    setDentalStudio((current) => current ? { ...current, options: { ...current.options, midlineMark: mark, midlineBack: undefined, midlineScan: upper.id }, optionsTouched: true } : current);
+    setMidlinePicking("back");
   };
   // Build 117: the marked midline shown as a dot on the upper while its options are open.
-  const midlineShownKey = dentalStudio && dentalStudio.stage === "ready" && dentalStudio.options.midlineMark && dentalStudio.options.midlineScan === (dentalStudio.slots.upper ?? dentalStudio.slots.lower) && studioMbStep === "label" ? dentalStudio.options.midlineMark.join(",") : "";
+  const midlineShownKey = dentalStudio && dentalStudio.stage === "ready" && dentalStudio.options.midlineMark && dentalStudio.options.midlineScan === (dentalStudio.slots.upper ?? dentalStudio.slots.lower) && studioMbStep === "label" ? `${dentalStudio.options.midlineMark.join(",")}|${dentalStudio.options.midlineBack?.join(",") ?? ""}` : "";
   useEffect(() => {
     if (!midlineShownKey) return;
     const state = dentalStudioRef.current;
@@ -19401,8 +19410,9 @@ export function LayerlingEditor({
     const upper = markId ? shapesRef.current.find((shape) => shape.id === markId) : undefined;
     const toInput = upper ? waxArchInput(upper) : null;
     if (!state?.options.midlineMark || !toInput) return;
-    const at = new THREE.Vector3(...state.options.midlineMark).applyMatrix4(toInput.clone().invert()).toArray() as [number, number, number];
-    window.layerlingMarkDots?.([at], 0.35, { colors: [0x1f8fe0], sizes: [0.9] });
+    const back = toInput.clone().invert();
+    const dots = [state.options.midlineMark, ...(state.options.midlineBack ? [state.options.midlineBack] : [])].map((p) => new THREE.Vector3(...p).applyMatrix4(back).toArray() as [number, number, number]);
+    window.layerlingMarkDots?.(dots, 0.35, { colors: dots.map(() => 0x1f8fe0), sizes: dots.map(() => 0.9) });
     return () => { window.layerlingMarkDots?.(null, 0.35); };
   }, [midlineShownKey]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Build 117: the STL's header says what the model is for (slicers show it). */
@@ -22028,8 +22038,8 @@ export function LayerlingEditor({
             if (current.stage === "ready" || (onlyLabel && current.stage !== "making")) return { ...current, options: { ...current.options, ...patch }, ...(onlyLabel ? {} : { optionsTouched: true }), error: null };
             return current;
           })}
-          onMidlinePick={(on: boolean) => setMidlinePicking(on)}
-          midlinePicking={midlinePicking}
+          onMidlinePick={(on: boolean) => setMidlinePicking(on ? "front" : false)}
+          midlinePicking={Boolean(midlinePicking)}
           onAdvancedChange={(advanced) => setDentalStudio((current) => current ? { ...current, advanced } : current)}
           onApply={() => void makeDentalModels()}
           onImport={() => fileInputRef.current?.click()}
@@ -22267,7 +22277,7 @@ export function LayerlingEditor({
       ) : null}
       {/* Build 117: the dental midline being marked on the upper (Model Builder's articulator). */}
       {midlinePicking && dentalStudio ? (
-        <WaxupPointOverlay hint={t("studio.midlinePicking")} onPick={pickMidline} onCancel={() => setMidlinePicking(false)} />
+        <WaxupPointOverlay hint={t(midlinePicking === "back" ? "studio.midlineBackPicking" : "studio.midlinePicking")} onPick={pickMidline} onCancel={() => setMidlinePicking(false)} />
       ) : null}
       {/* Build 117: before the models are written - what they may be used for (no TGA pathway for anything printed to stay in the mouth). */}
       {exportNoticeOpen ? (

@@ -17,6 +17,7 @@ import * as THREE from "three";
 import { getManifoldRuntime } from "@/lib/editorMeshCore";
 import { alignToBite, archFrame, biteResidual, contacts, vertexNormals, canineWidth, cleanScan, frontOf, isPartialArch, marginUp, pairFrame, palateScore, type CleanArch, type CleanReport } from "@/lib/dentalArch";
 import { archBand, sideRun, bandToBack, ringCentroid, blockOutline, cleanOutline, closeToFloor, distanceFrom, relaxFringe, distanceFromEdge, honeycombIn, HONEYCOMB_BASE_HEIGHT, prismOf, articulatorOutline, articulatorPockets, locatorNotches, tieBar, EDGE_FRINGE, hingeOpening, withoutDebris, hollowCavity, orthoOutline, outlineSide, prism, roundOutline, smoothEdge, CROWN_REACH, TOOTH_CROWN, TOOTH_REACH, TIP_CEILING, TIP_FLOOR, TIP_LONELY, toothZone } from "@/lib/dentalBase";
+import { polygonDistance } from "@/lib/dentalSnapHinge";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
@@ -26,7 +27,7 @@ import { dentalStage } from "@/lib/dentalStages";
 import { smoothSeam } from "@/lib/dentalSeam";
 import { articulatorParts, incisalPins, pinRisers, PIN, PIN_BAND, PIN_CLEAR, PIN_HALF, PIN_MAX, PIN_SET, POST_BACK, restAngle, type ArticulatorSides, type PinStyle } from "@/lib/dentalArticulator";
 import {
-  applyMatrix, boundaryLoops, cloneMesh, transformSoup, convexHull, cutAlongField, cutBelow, dropFragments, smoothField, faceArea, loopLength, surfaceKept, surfaceKeptOf, pinchedEdges, PointGrid, solidPositions, toManifold, upwardness, weld,
+  applyMatrix, boundaryLoops, cloneMesh, transformSoup, convexHull, pointInPolygon, cutAlongField, cutBelow, dropFragments, smoothField, faceArea, loopLength, surfaceKept, surfaceKeptOf, pinchedEdges, PointGrid, solidPositions, toManifold, upwardness, weld,
   type ManifoldRuntime, type ManifoldSolid, type Mesh, type Ring,
 } from "@/lib/dentalMesh";
 
@@ -80,6 +81,12 @@ export type DentalArchInput = {
    * centred on it (the upper's is used); without it, on the middle of the arch, as before.
    */
   midline?: [number, number, number] | null;
+  /**
+   * Build 271 (Rakesh): a second point on the midline, further back (the palate's middle, or on a lower the middle
+   * between the molars) - the arch is then turned so the line from `midline` to it runs straight front to back, square
+   * to the base and the hinge, and stands on x = 0.
+   */
+  midlineBack?: [number, number, number] | null;
 };
 export type DentalStudioInput = {
   arches: DentalArchInput[];
@@ -171,6 +178,8 @@ export type DentalStudioOptions = {
   risers?: boolean;
   /** Build 117: the dental midline the dentist marked on the upper scan (`midlineScan`), in the studio's coordinates; the articulated pair is centred on it. */
   midlineMark?: [number, number, number];
+  /** Build 271: a second point on that midline, further back (the palate's middle): the models are squared to the line too. */
+  midlineBack?: [number, number, number];
   midlineScan?: string;
   /** A pair only: laid out base-down for printing, or upper on lower in occlusion. */
   layout: "print" | "occlusion";
@@ -181,6 +190,15 @@ export type DentalStudioOptions = {
    * more (palate and floor of the mouth go). Null or left out: cut straight across at `keep`.
    */
   gum?: number | null;
+  /**
+   * Build 271 (Rakesh): an upper's palate kept whole, deepest vault and all - the gum band (gum) and the depth kept
+   * otherwise take it away with the rest of an untrimmed scan. The palate: the scan within the teeth's outline seen from
+   * above, not teeth. Off unless true; a lower is not affected.
+   */
+  keepPalate?: boolean;
+  /** Build 271: (set by makeDentalStudio) how much deeper the floors stand for a kept palate, mm - the ledge rises as much
+   * round the outside, so it still meets the scan's edge there. */
+  palateLift?: number;
   /** Fork (build 48): smooth the scan's ragged edge before the base goes on (never the teeth). */
   smooth?: DentalSmooth;
   /** Fork (build 49/50): what fills a hollow model - a honeycomb all the way up (the default), a
@@ -488,30 +506,37 @@ export const LOW_NAME_RAMP = 4;
  * upper's centrals (DentalArchInput.midline) - or null, to keep the middle (no centrals given, a
  * quadrant, scans set up apart, or a point too far off to be the centrals' contact).
  */
-function midlineOffset(prep: Prepared, input: DentalStudioInput): { x: number; y: number; single?: boolean } | null {
+function midlineOffset(prep: Prepared, input: DentalStudioInput): { x: number; y: number; single?: boolean; back?: { x: number; y: number } } | null {
   if (prep.arches.some((arch) => arch.partial)) return null;
   // Build 120 (Rakesh): a single model is centred on its midline too - the teeth's midline on the base's (x = 0 of its own frame).
   if (prep.arches.length === 1) {
     const only = prep.arches[0];
-    const mark = input.arches.find((arch) => arch.id === only.id)?.midline;
+    const entry = input.arches.find((arch) => arch.id === only.id);
+    const mark = entry?.midline;
     if (!mark || !mark.every(Number.isFinite)) return null;
     const point = new THREE.Vector3(...mark).applyMatrix4(only.frame);
+    const backMark = entry?.midlineBack && entry.midlineBack.every(Number.isFinite) ? new THREE.Vector3(...entry.midlineBack).applyMatrix4(only.frame) : null;
     // Build 124 (Rakesh): the dentist's own mark is always believed, however far it is from the arch's middle (a scan with
     // missing teeth has its middle well off the centrals).
-    return { x: point.x, y: point.y, single: true };
+    return { x: point.x, y: point.y, single: true, ...(backMark && backMark.distanceTo(point) > MIDLINE_BACK_MIN ? { back: { x: backMark.x, y: backMark.y } } : {}) };
   }
   if (prep.arches.length !== 2 || prep.analysis.pair?.apart) return null;
   const upper = prep.arches.find((arch) => arch.role === "upper");
-  const given = upper ? input.arches.find((arch) => arch.id === upper.id)?.midline : null;
+  const entry = upper ? input.arches.find((arch) => arch.id === upper.id) : undefined;
+  const given = entry?.midline;
   if (!upper || !given || !given.every(Number.isFinite)) return null;
-  const point = new THREE.Vector3(...given);
-  // Lined up on a bite scan, the cleaned scan was moved: the point goes with it.
+  // Lined up on a bite scan, the cleaned scan was moved: the points go with it.
   const fit = prep.analysis.pair?.bite?.fit?.[upper.id];
-  if (fit) point.applyMatrix4(new THREE.Matrix4().fromArray(fit));
   // The upper's frame is the pair's turned over (FLIP: x the other way).
-  point.applyMatrix4(upper.frame);
-  const x = -point.x;
-  return { x, y: point.y };
+  const toPair = (at: [number, number, number]) => {
+    const point = new THREE.Vector3(...at);
+    if (fit) point.applyMatrix4(new THREE.Matrix4().fromArray(fit));
+    point.applyMatrix4(upper.frame);
+    return { x: -point.x, y: point.y };
+  };
+  const front = toPair(given);
+  const back = entry?.midlineBack && entry.midlineBack.every(Number.isFinite) ? toPair(entry.midlineBack) : null;
+  return { ...front, ...(back && Math.hypot(back.x - front.x, back.y - front.y) > MIDLINE_BACK_MIN ? { back } : {}) };
 }
 
 /** Build 117: the pair is turned about a point this far behind the midline (about the first molars), mm. */
@@ -529,7 +554,25 @@ export function midlineTurn(at: { x: number; y: number }, role: "upper" | "lower
   const angle = Math.atan2(at.x, pivotY - at.y);
   return new THREE.Matrix4().makeTranslation(0, pivotY, 0).multiply(new THREE.Matrix4().makeRotationZ(role === "upper" ? angle : -angle)).multiply(new THREE.Matrix4().makeTranslation(0, -pivotY, 0));
 }
-function onMidline(prep: Prepared, at: { x: number; y: number; single?: boolean }): Prepared {
+/** Build 271: a second midline point nearer the first than this (mm, seen from above) is not used - too short a line to square by. */
+export const MIDLINE_BACK_MIN = 8;
+
+/**
+ * Build 271 (Rakesh): with a second point on the midline, the turn (and shift) of the lower's frame (the pair's own)
+ * that lays the line from `at` to `back` along +y (front to back) on x = 0. The upper's is the same seen through FLIP.
+ */
+export function midlineSquare(at: { x: number; y: number }, back: { x: number; y: number }, role: "upper" | "lower") {
+  const angle = Math.atan2(back.x - at.x, back.y - at.y);
+  const pair = new THREE.Matrix4().makeTranslation(-at.x, 0, 0)
+    .multiply(new THREE.Matrix4().makeTranslation(at.x, at.y, 0))
+    .multiply(new THREE.Matrix4().makeRotationZ(angle))
+    .multiply(new THREE.Matrix4().makeTranslation(-at.x, -at.y, 0));
+  return role === "upper" ? FLIP.clone().multiply(pair).multiply(FLIP) : pair;
+}
+
+function onMidline(prep: Prepared, at: { x: number; y: number; single?: boolean; back?: { x: number; y: number } }): Prepared {
+  const back = at.back;
+  if (back) return { ...prep, arches: prep.arches.map((arch) => ({ ...arch, frame: midlineSquare(at, back, at.single || arch.role !== "upper" ? "lower" : "upper").multiply(arch.frame) })) };
   if (!at.x) return prep;
   // A single arch is turned in its own frame (the turn that brings a point of that frame onto x = 0).
   return { ...prep, arches: prep.arches.map((arch) => ({ ...arch, frame: midlineTurn(at, at.single || arch.role !== "upper" ? "lower" : "upper").multiply(arch.frame) })) };
@@ -728,6 +771,42 @@ export const HORSESHOE_MARGIN = 0.5;
 export const HORSESHOE_THICKNESS = 3;
 const mirrorRing = (ring: Ring): Ring => ring.map(([x, y]) => [-x, y] as [number, number]).reverse();
 
+/**
+ * Build 271 (Rakesh): an upper's palate - the corners of `m` (an arch in its frame, teeth up) not on the teeth that lie,
+ * seen from above, PALATE_IN or more within the outline round the teeth (their convex hull: across the back from last
+ * molar to last molar, round the front through the incisors - so the cheeks, lips and vestibule are outside it).
+ */
+function palateOf(m: Mesh, teeth: Uint8Array): Uint8Array {
+  return palateAndOutline(m, teeth).palate;
+}
+
+function palateAndOutline(m: Mesh, teeth: Uint8Array): { palate: Uint8Array; hull: Ring | null } {
+  const band: Ring = [];
+  for (let i = 0; i < teeth.length; i += 1) if (teeth[i]) band.push([m.v[i * 3], m.v[i * 3 + 1]]);
+  const palate = new Uint8Array(m.v.length / 3);
+  if (band.length < 10) return { palate, hull: null };
+  const hull = convexHull(band);
+  // (More than PALATE_IN inside it: the gum just under the front teeth, under proclined incisors, lies inside it too.)
+  for (let i = 0; i < palate.length; i += 1) if (!teeth[i] && polygonDistance(hull, m.v[i * 3], m.v[i * 3 + 1]) < -PALATE_IN) palate[i] = 1;
+  return { palate, hull };
+}
+
+/** Build 271: the palate is the scan this far and more inside the outline round the teeth, mm. */
+export const PALATE_IN = 3;
+
+/** Build 271: under a kept palate's deepest point, the floor stands the hollow's wall and this much more below it, mm. */
+export const PALATE_UNDER = 0.8;
+
+/** Build 271: how deep below the occlusal plane an upper's palate reaches (palateOf), with a millimetre to spare; 0 for none. */
+function palateDepth(mesh: Mesh, frame: THREE.Matrix4): number {
+  const m = cloneMesh(mesh);
+  applyMatrix(m, frame);
+  const palate = palateOf(m, toothZone(m, undefined, undefined, undefined, TIP_CEILING));
+  let low = Infinity;
+  for (let i = 0; i < palate.length; i += 1) if (palate[i]) low = Math.min(low, m.v[i * 3 + 2]);
+  return Number.isFinite(low) ? -low + 1 : 0;
+}
+
 /** Build 271: how far out in front of a crown face the base is cut back, mm (the drape is kept under the crowns: this
  * takes what the base's voxel surface still lays over them, a few tenths). */
 export const CROWN_UNCOVER = 0.35;
@@ -863,7 +942,12 @@ function buildArch(
   // The cut never passes through the approved area either.
   let areaLow = Infinity;
   if (area) for (let i = 0; i < area.length; i += 1) if (area[i]) areaLow = Math.min(areaLow, m.v[i * 3 + 2]);
-  const level = Math.min(-keep, areaLow - 1);
+  // Build 271: the palate kept whole (an upper, when asked): nor does the cut pass through it.
+  const palateKept = options.keepPalate && arch.role === "upper" && !arch.partial ? palateAndOutline(m, scanTeeth) : null;
+  const palate = palateKept ? palateKept.palate : null;
+  let palateLow = Infinity;
+  if (palate) for (let i = 0; i < palate.length; i += 1) if (palate[i]) palateLow = Math.min(palateLow, m.v[i * 3 + 2]);
+  const level = Math.min(-keep, areaLow - 1, palateLow - 1);
   const cut = level <= low + 1e-6 ? m : cutBelow(m, level);
   // A mark on the scan's corners, carried over to the corners of the cut (which keeps them in place).
   const onCut = (mark: Uint8Array) => {
@@ -898,6 +982,12 @@ function buildArch(
       const along = distanceFrom(cut, teeth, gum + 3);
       for (let i = 0; i < field.length; i += 1) field[i] = gum - Math.min(along[i], gum + 3);
     } else toothZone(cut, TOOTH_CROWN + gum, TOOTH_REACH + gum + EDGE_FRINGE, undefined, TIP_CEILING, -Infinity, Infinity, field);
+    // Build 271: the palate kept, when asked, however far it lies from the teeth.
+    // (Everywhere else the cut still stands where it would have, the depth kept: the floors went deeper for the palate alone.)
+    if (palate) {
+      const onPalate = onCut(palate);
+      for (let i = 0; i < field.length; i += 1) field[i] = onPalate[i] ? Math.max(field[i], gum) : Math.min(field[i], cut.v[i * 3 + 2] + keep);
+    }
     const smoothed = smoothField(cut, field, MARGIN_SMOOTHING, teeth);
     const trimmed = cutAlongField(cut, smoothed, teeth);
     const grown = new Uint8Array(trimmed.v.length / 3);
@@ -1043,7 +1133,13 @@ function buildArch(
     const backY = Math.max(...ortho.map(([, y]) => y));
     const raiseBack = low && labelText(labelLine) && ledge < SMOOTH.ledge ? SMOOTH.ledge - ledge : 0;
     const backRaise = raiseBack > 0 ? { from: backY - LOW_NAME_BAND, ramp: LOW_NAME_RAMP, by: raiseBack } : undefined;
-    labelTop = floor + ledge + raiseBack - (orthoBase ? ORTHO_EDGE_ROUND : SMOOTH.edgeRound);
+    // Build 271: floors deepened for a kept palate - the ledge raised as much: round the outside of an upper whose palate
+    // is kept (not inside the teeth, where the palate runs on down), everywhere on the other.
+    const lift = options.palateLift ?? 0;
+    // Inside the teeth, where the palate is kept, the ledge stands under its deepest point instead.
+    const inside = palateKept?.hull && Number.isFinite(palateLow) ? Math.min(0, palateLow - 1 - floor - ledge) : 0;
+    const liftRaise = lift > 0 || inside < 0 ? { by: lift, insideBy: inside, inside: palateKept?.hull ?? null } : undefined;
+    labelTop = floor + ledge + raiseBack + lift - (orthoBase ? ORTHO_EDGE_ROUND : SMOOTH.edgeRound);
     // Build 121 (Rakesh): an aligner model is a horseshoe - its outline the arch's own (lib/dentalBase archBand), the scan seen from above grown
     // ALIGNER_GROW outside the scan's edge, open across the palate and the tongue space (the scan already follows the gum there),
     // so the drape runs down inside the arch as well as outside it. A quadrant keeps its block.
@@ -1056,7 +1152,7 @@ function buildArch(
       if (band.length >= 3) outline = band;
     }
     dentalStage("base", stageArch);
-    const base = makeSmoothBase(runtime, { scan: cut, teeth: edgeClear, crowns: crownOnCut, outline, floor, open: true, ledge, ...crisp, ...(backRaise ? { backRaise } : {}) });
+    const base = makeSmoothBase(runtime, { scan: cut, teeth: edgeClear, crowns: crownOnCut, outline, floor, open: true, ledge, ...crisp, ...(backRaise ? { backRaise } : {}), ...(liftRaise ? { liftRaise } : {}) });
     dentalStage("join", stageArch);
     keepSolid(base.outer);
     if (base.cover) solid = keepSolid(runtime.Manifold.intersection(solid, keepSolid(base.cover)));
@@ -1516,8 +1612,14 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
   const runtime = given ?? (await getManifoldRuntime());
   const base = Math.max(DENTAL_MIN_BASE, Math.min(DENTAL_MAX_BASE, options.base));
   const keeps = prep.arches.map((arch) => keptDepthFor(arch, options));
+  // Build 271: an upper whose palate is kept stands a wall and a little more below its palate - the floors that much
+  // deeper (often not at all), the ledges lifted to match round the outside.
+  const asUsual = Math.max(...keeps) + base;
+  const palateFloor = options.keepPalate ? Math.max(0, ...prep.arches.map((arch) => (arch.role === "upper" && !arch.partial ? palateDepth(arch.clean.mesh, arch.frame) + SMOOTH.wall + PALATE_UNDER : 0))) : 0;
+  const palateLift = Math.max(0, palateFloor - asUsual);
+  if (palateLift > 0) options = { ...options, palateLift };
   // A pair stands equally tall: both floors as far from the occlusal plane.
-  const depth = Math.max(...keeps) + base;
+  const depth = asUsual + palateLift;
   const pair = prep.arches.length === 2;
   // Orthodontic outlines from both arches' teeth, so the bases match.
   let footprint: Ring = [];

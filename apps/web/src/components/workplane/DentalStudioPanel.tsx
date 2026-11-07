@@ -744,6 +744,14 @@ export function DentalStudioPanel({
         );
       })}
     </div>
+    {/* Build 271 (Rakesh): an upper's palate kept whole - otherwise it goes with the rest of an untrimmed scan. */}
+    {preset !== "aligner" && analysis?.arches.some((arch) => arch.role === "upper" && !arch.partial) ? (<>
+      <label className="edge-modifier-check" title={t("studio.keepPalateHint")}>
+        <input type="checkbox" checked={options.keepPalate === true} disabled={busy} onChange={(event) => onOptionsChange({ keepPalate: event.currentTarget.checked })} />
+        <span>{t("studio.keepPalate")}</span>
+      </label>
+      <p className="blend-hint">{t("studio.keepPalateHint")}</p>
+    </>) : null}
   </>);
   const card = (number: number, label: string, done: boolean, hint: string | null, summary: string | null, body: ReactNode) => {
     const isFolded = !waxSteps && !mbSteps && Boolean(folded[number]);
@@ -1414,9 +1422,9 @@ export function DentalStudioPanel({
               <h4 className="dental-group">{t("studio.midline")}</h4>
               <div className="dental-trim-buttons">
                 <button type="button" className={midlinePicking ? "" : "secondary"} disabled={busy} onClick={() => onMidlinePick(!midlinePicking)}>{t(midlinePicking ? "studio.midlineStop" : options.midlineMark && options.midlineScan === slots.upper ? "studio.midlineAgain" : "studio.midlineMark")}</button>
-                {options.midlineMark && !midlinePicking ? <button type="button" className="secondary" disabled={busy} onClick={() => onOptionsChange({ midlineMark: undefined, midlineScan: undefined })}>{t("studio.midlineClear")}</button> : null}
+                {options.midlineMark && !midlinePicking ? <button type="button" className="secondary" disabled={busy} onClick={() => onOptionsChange({ midlineMark: undefined, midlineBack: undefined, midlineScan: undefined })}>{t("studio.midlineClear")}</button> : null}
               </div>
-              <p className="blend-hint" role="status">{t(midlinePicking ? "studio.midlinePicking" : options.midlineMark && options.midlineScan === slots.upper ? "studio.midlineSet" : "studio.midlineHint")}</p>
+              <p className="blend-hint" role="status">{t(midlinePicking ? "studio.midlinePicking" : options.midlineMark && options.midlineScan === slots.upper ? (options.midlineBack ? "studio.midlineSquared" : "studio.midlineSet") : "studio.midlineHint")}</p>
             </>) : null}
           </>) : null}
         </>);
@@ -1487,9 +1495,9 @@ export function DentalStudioPanel({
             <h4 className="dental-group">{t("studio.midline")}</h4>
             <div className="dental-trim-buttons">
               <button type="button" className={midlinePicking ? "" : "secondary"} disabled={busy} onClick={() => onMidlinePick(!midlinePicking)}>{t(midlinePicking ? "studio.midlineStop" : marked ? "studio.midlineAgain" : "studio.midlineMark")}</button>
-              {marked && !midlinePicking ? <button type="button" className="secondary" disabled={busy} onClick={() => onOptionsChange({ midlineMark: undefined, midlineScan: undefined })}>{t("studio.midlineClear")}</button> : null}
+              {marked && !midlinePicking ? <button type="button" className="secondary" disabled={busy} onClick={() => onOptionsChange({ midlineMark: undefined, midlineBack: undefined, midlineScan: undefined })}>{t("studio.midlineClear")}</button> : null}
             </div>
-            <p className="blend-hint" role="status">{t(midlinePicking ? "studio.midlinePicking" : marked ? "studio.midlineSet" : "studio.midlineHint")}</p>
+            <p className="blend-hint" role="status">{t(midlinePicking ? "studio.midlinePicking" : marked ? (options.midlineBack ? "studio.midlineSquared" : "studio.midlineSet") : "studio.midlineHint")}</p>
           </>);
         })() : null}
         {/* Build 106: in the frame, Make models closes the step's panel (not the bar below). */}

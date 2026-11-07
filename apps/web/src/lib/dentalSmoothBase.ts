@@ -101,6 +101,17 @@ const MAX_VOXELS = 14_000_000;
 
 const smin = (a: number, b: number, k: number) => { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k * 0.25; };
 const smax = (a: number, b: number, k: number) => -smin(-a, -b, k);
+/** Build 271: over how much the lifted ledge eases down into a kept palate, mm (inside the teeth's outline). */
+export const LIFT_RAMP = 4;
+/** Build 271: the lifted ledge stays in full this far inside the teeth's outline, mm (where the palate starts). */
+export const LIFT_IN = 3;
+function liftAt(lift: { by: number; insideBy?: number; inside: Ring | null }, x: number, y: number) {
+  if (!lift.inside) return lift.by;
+  // (The ease wholly inside the outline, from LIFT_IN in: nearer it - the cheek side of the teeth, and the gum under the
+  // front teeth - the ledge is lifted in full.)
+  const w = smooth01((polygonDistance(lift.inside, x, y) + LIFT_IN + LIFT_RAMP) / LIFT_RAMP);
+  return (lift.insideBy ?? 0) + (lift.by - (lift.insideBy ?? 0)) * w;
+}
 const smooth01 = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
 /** The barycentric coordinates of point p (on triangle t of a soup) into out; false for a degenerate triangle. */
@@ -213,6 +224,12 @@ export type SmoothBaseInput = {
    * over `ramp` mm before it, so the back wall is tall enough for the name. Everywhere else the base stays low.
    */
   backRaise?: { from: number; ramp: number; by: number };
+  /**
+   * Build 271 (Rakesh): the ledge raised `by` outside `inside` (the outline round an upper's teeth, its palate kept) and
+   * `insideBy` (lowered, under the palate's deepest point) within it, easing between over LIFT_RAMP; `by` everywhere when
+   * `inside` is null.
+   */
+  liftRaise?: { by: number; insideBy?: number; inside: Ring | null };
 };
 
 export type SmoothBaseFields = { grid: Grid; outer: Float32Array; cavity: Float32Array | null; timing: Record<string, number> };
@@ -476,7 +493,8 @@ export function smoothBaseFields(input: SmoothBaseInput): SmoothBaseFields {
   for (let j = 0; j < ny; j += 1) for (let i = 0; i < nx; i += 1) {
     const c = j * nx + i;
     const list = crossings.subarray(counts[c], counts[c + 1]);
-    const raise = input.backRaise ? input.backRaise.by * smooth01((cy(j) - (input.backRaise.from - input.backRaise.ramp)) / input.backRaise.ramp) : 0;
+    const raise = (input.backRaise ? input.backRaise.by * smooth01((cy(j) - (input.backRaise.from - input.backRaise.ramp)) / input.backRaise.ramp) : 0)
+      + (input.liftRaise ? liftAt(input.liftRaise, cx(i), cy(j)) : 0);
     const ledgeHere = ledge + raise;
     let above = list.length, p = 0;
     const easeAt = (_col: number, e: number) => S.inset * (1 - e);
