@@ -272,8 +272,8 @@ describe("exact Gridfinity bins with dividers", () => {
     const solid = gridfinityPartSolid(cad, divided({ gridfinityScoopFront: true }));
     expect(cad.isValid(solid)).toBe(true);
     expect(cad.isSolid(solid) ? 1 : cad.getSubShapes(solid, "solid").length).toBe(1);
-    // 28347.64 mm³, measured with OCCT when this was written.
-    expect(Math.abs(Math.abs(cad.getVolume(solid)) - 28347.64)).toBeLessThan(0.05);
+    // 28347.58 mm³, measured with occt-wasm 5.11, which measures the curved scoop exactly (28347.64 before).
+    expect(Math.abs(Math.abs(cad.getVolume(solid)) - 28347.58)).toBeLessThan(0.05);
     expect(shortEdges(solid)).toHaveLength(0);
     expectMeshOf(divided({ gridfinityScoopFront: true }), solid);
   });
@@ -531,9 +531,9 @@ describe("exact Gridfinity bins with every side closed, unchanged by open sides"
     const closed = { gridfinityOpenBack: false, gridfinityOpenFront: false, gridfinityOpenLeft: false, gridfinityOpenRight: false };
     for (const [part, volume, faces, edges] of [
       [bin(), 23248.7382, 100, 210],
-      [bin({ gridfinityScoopFront: true }), 24249.8297, 108, 228],
+      [bin({ gridfinityScoopFront: true }), 24249.8041, 108, 228],
       [bin({ gridfinityLabelBack: true, gridfinityLabelLeft: true, gridfinityLabelRight: true }), 35470.5361, 127, 285],
-      [bin({ gridfinityCompartmentsX: 3, gridfinityCompartmentsZ: 2, gridfinityScoopFront: true, gridfinityCompartmentLabels: [{ column: 1, row: 1, side: "back" }] }), 29877.6412, 203, 481],
+      [bin({ gridfinityCompartmentsX: 3, gridfinityCompartmentsZ: 2, gridfinityScoopFront: true, gridfinityCompartmentLabels: [{ column: 1, row: 1, side: "back" }] }), 29877.5811, 203, 481],
       [bin({ gridfinityLip: false, height: 21 }), 21312.6174, 69, 154],
     ] as const) {
       for (const each of [part, { ...part, ...closed }]) {

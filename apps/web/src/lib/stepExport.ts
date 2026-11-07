@@ -563,10 +563,9 @@ async function buildScope(brep: Brep, shapes: WorkplaneShape[], skipped: Skipped
  */
 export function stepColorForKernel(color: string): [number, number, number, number] {
   const hex = /^#?([0-9a-f]{6})$/i.exec(color)?.[1] ?? "ff0000";
-  const channel = (offset: number) => {
-    const value = parseInt(hex.slice(offset, offset + 2), 16) / 255;
-    return (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4) * 255;
-  };
+  // Port from layerling ae52c67d: since occt-wasm 5.9 the kernel stores the colour as given (sRGB on the 0-255 scale);
+  // linearised as it was for 5.8, #d12a2a came out as #a30606.
+  const channel = (offset: number) => parseInt(hex.slice(offset, offset + 2), 16);
   return [channel(0), channel(2), channel(4), 255];
 }
 
