@@ -1008,7 +1008,9 @@ function buildArch(
     {
       const edges = boundaryLoops(cut).map((loop) => loop.flatMap((i) => [cut.v[i * 3], cut.v[i * 3 + 1], cut.v[i * 3 + 2]]));
       const along = distanceFromEdge(cut, EDGE_SMOOTH + 0.01), keepAt: number[] = [];
-      for (const i of new Set(cut.f)) if (along[i] > EDGE_SMOOTH) keepAt.push(cut.v[i * 3], cut.v[i * 3 + 1], cut.v[i * 3 + 2]);
+      // Build 267 (Rakesh): and the teeth held above (edgeClear) wherever they are - a scan trimmed close under the teeth
+      // has crown within EDGE_SMOOTH of its edge, which this smoothing moved (a thin strip at the necks, flagged "teeth").
+      for (const i of new Set(cut.f)) if (along[i] > EDGE_SMOOTH || edgeClear[i]) keepAt.push(cut.v[i * 3], cut.v[i * 3 + 1], cut.v[i * 3 + 2]);
       dentalStage("edge", stageArch);
       const smoothed = smoothSeam(runtime, solid, edges, keepAt);
       if (smoothed !== solid) solid = keepSolid(smoothed);
@@ -1332,7 +1334,7 @@ function buildArch(
     const gone = (i: number) => !grid.within(m.v[i * 3], m.v[i * 3 + 1], m.v[i * 3 + 2], 0.01);
     for (let t = 0; t < m.f.length / 3; t += 1) {
       const a = m.f[t * 3], b = m.f[t * 3 + 1], c = m.f[t * 3 + 2];
-      if (promised[a] && promised[b] && promised[c] && (gone(a) || gone(b) || gone(c))) for (const v of [a, b, c]) soup.push(m.v[v * 3], m.v[v * 3 + 1], m.v[v * 3 + 2]);
+      if (promisedCrowns[a] && promisedCrowns[b] && promisedCrowns[c] && (gone(a) || gone(b) || gone(c))) for (const v of [a, b, c]) soup.push(m.v[v * 3], m.v[v * 3 + 1], m.v[v * 3 + 2]);
     }
     teethLost(arch.role, soup);
     (globalThis as { __afterBuild?: (role: string, p: Float32Array) => void }).__afterBuild?.(arch.role, Float32Array.from(out));
