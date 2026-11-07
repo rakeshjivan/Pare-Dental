@@ -1321,6 +1321,22 @@ function buildArch(
   for (const depth of [2, 4, 6, 8, 10, 12]) kept[depth] = keptShare(-depth, scanTeeth);
   kept[-3] = keptShare(-Infinity, scanTeeth);
   kept[-1] = keptShare(-Infinity, promised);
+  // Build 267 (Rakesh): the crowns alone (CROWN_REACH from their tips), all but the fringe and what the wax-up covers -
+  // the tooth surface the model must keep. The wider zone above takes in flaps of cheek or tongue standing beside the teeth.
+  const promisedCrowns = crowns.map((inCrown, i) => (inCrown && !waxedCorner[i] && fromEdge[i] > EDGE_FRINGE ? 1 : 0));
+  kept[-5] = keptShare(-Infinity, promisedCrowns);
+  // Test hook (offline only): the promised tooth triangles that did not come through, to see where they are.
+  const teethLost = (globalThis as { __teethLost?: (role: string, soup: number[]) => void }).__teethLost;
+  if (teethLost) {
+    const grid = new PointGrid(out, 0.05), soup: number[] = [];
+    const gone = (i: number) => !grid.within(m.v[i * 3], m.v[i * 3 + 1], m.v[i * 3 + 2], 0.01);
+    for (let t = 0; t < m.f.length / 3; t += 1) {
+      const a = m.f[t * 3], b = m.f[t * 3 + 1], c = m.f[t * 3 + 2];
+      if (promised[a] && promised[b] && promised[c] && (gone(a) || gone(b) || gone(c))) for (const v of [a, b, c]) soup.push(m.v[v * 3], m.v[v * 3 + 1], m.v[v * 3 + 2]);
+    }
+    teethLost(arch.role, soup);
+    (globalThis as { __afterBuild?: (role: string, p: Float32Array) => void }).__afterBuild?.(arch.role, Float32Array.from(out));
+  }
   // The teeth as found before build 50 (wider: within TOOTH_REACH of every tip), all but the fringe.
   kept[-4] = keptShare(-Infinity, scanTeeth.map((inZone, i) => (inZone && fromEdge[i] > EDGE_FRINGE ? 1 : 0)));
   let toothArea = 0;
