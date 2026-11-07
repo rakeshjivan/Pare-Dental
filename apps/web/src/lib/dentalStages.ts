@@ -7,8 +7,8 @@
 export type DentalStage = "prepare" | "base" | "join" | "edge" | "hollow" | "details" | "hinge" | "check" | "done";
 export type DentalArchRole = "upper" | "lower";
 
-/** About how much of a Make each stage takes (measured on full arches), so the button fills at a fair pace. */
-const STAGE_SHARE: Record<DentalStage, number> = { prepare: 0.02, base: 0.1, join: 0.45, edge: 0.55, hollow: 0.65, details: 0.75, check: 0.82, hinge: 0.9, done: 1 };
+/** Where a Make is when each stage starts (timed on a full articulated pair, build 267), so the button fills at an even pace. */
+const STAGE_SHARE: Record<DentalStage, number> = { prepare: 0.02, base: 0.12, join: 0.4, edge: 0.41, hollow: 0.49, details: 0.53, check: 0.54, hinge: 0.69, done: 1 };
 
 type Sink = (stage: DentalStage, share: number, arch?: DentalArchRole) => void;
 let sink: Sink | null = null;
