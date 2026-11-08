@@ -792,7 +792,14 @@ function palateAndOutline(m: Mesh, teeth: Uint8Array, crowns: Uint8Array): { pal
   if (crownBand.length < 10) return { palate, hull: null };
   const round = convexHull(crownBand);
   const band: Ring = [];
-  for (let i = 0; i < teeth.length; i += 1) if (teeth[i] && polygonDistance(round, m.v[i * 3], m.v[i * 3 + 1]) < PALATE_HULL_REACH) band.push([m.v[i * 3], m.v[i * 3 + 1]]);
+  // (Further behind the last molars - the gum there runs on into the back of the palate, and the ledge must stand clear of it.)
+  let back = -Infinity;
+  for (const [, y] of round) back = Math.max(back, y);
+  for (let i = 0; i < teeth.length; i += 1) {
+    if (!teeth[i]) continue;
+    const x = m.v[i * 3], y = m.v[i * 3 + 1];
+    if (polygonDistance(round, x, y) < (y > back - PALATE_BACK_BAND ? PALATE_HULL_BACK_REACH : PALATE_HULL_REACH)) band.push([x, y]);
+  }
   const hull = convexHull(band);
   // (More than PALATE_IN inside it: the gum just under the front teeth, under proclined incisors, lies inside it too.)
   for (let i = 0; i < palate.length; i += 1) if (!teeth[i] && polygonDistance(hull, m.v[i * 3], m.v[i * 3 + 1]) < -PALATE_IN) palate[i] = 1;
@@ -801,6 +808,9 @@ function palateAndOutline(m: Mesh, teeth: Uint8Array, crowns: Uint8Array): { pal
 
 /** Build 272: teeth further than this outside the outline round the crowns are left out of the palate's outline, mm. */
 export const PALATE_HULL_REACH = 2;
+/** ...and this far behind them, within this band of the back of the crowns, mm. */
+export const PALATE_HULL_BACK_REACH = 6;
+export const PALATE_BACK_BAND = 10;
 /** Build 271: the palate is the scan this far and more inside the outline round the teeth, mm. */
 export const PALATE_IN = 3;
 
