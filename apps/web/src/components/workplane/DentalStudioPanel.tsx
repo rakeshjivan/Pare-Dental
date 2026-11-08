@@ -221,6 +221,7 @@ export function DentalStudioPanel({
   onEditDesign,
   onMidlinePick,
   midlinePicking = false,
+  madeSettings,
   finishedCase = false,
   onDone,
   onSaveExport,
@@ -245,7 +246,9 @@ export function DentalStudioPanel({
   /** Build 117: marking the dental midline on the upper for an articulated pair - start (or stop) marking, and whether it is being marked. */
   onMidlinePick?: (on: boolean) => void;
   /** Build 272: which click of the two the midline marking waits for (false: not marking). */
-  midlinePicking?: false | "front" | "back";
+  midlinePicking?: false | "front";
+  /** Build 273 (Rakesh): the choices the models were made with, shown under the hint once they are made. */
+  madeSettings?: string[];
   /** Build 117: a case of finished models - nothing to edit here, the design is in the case they were made in. */
   finishedCase?: boolean;
   onDone?: () => void;
@@ -816,7 +819,7 @@ export function DentalStudioPanel({
       {(handleProps) => (<SmoothSliders.Provider value={framed}>
       {framed && stepsSlot ? createPortal(frameSteps, stepsSlot) : null}
       {framed && navSlot ? createPortal(frameNav, navSlot) : null}
-      {framed && hintSlot && frameHint ? createPortal(<span>{frameHint}</span>, hintSlot) : null}
+      {framed && hintSlot && frameHint ? createPortal(<span>{frameHint}{stage === "made" && madeSettings?.length ? <span className="studio-hint-settings">{madeSettings.join(" · ")}</span> : null}</span>, hintSlot) : null}
       <div className="edge-modifier-header movable" title={t("panel.moveHint")} {...handleProps}>
         <div>
           <strong>{title}</strong>

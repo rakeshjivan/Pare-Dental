@@ -272,6 +272,8 @@ import type { DentalCaseSummary } from "@/lib/pareStudio";
 /** Build 106: the bite scan shown over the scans in Model Builder - a warm amber, see-through. */
 const BITE_OVERLAY_COLOUR = "#e9a23b";
 import { exportMeshesToStl } from "@/lib/stlExport";
+import { dentalSettings, settingsHeader } from "@/lib/dentalSettingsCode";
+import { PARE_BUILD } from "@/lib/pareUpdate";
 import { THREE_MF_MEDIA_TYPE } from "@/lib/threemfExport";
 import { importedShapeFromSvg, invalidSvgMeshReason } from "@/lib/svgImport";
 import { DEFAULT_TAPER_DIMENSION_MAX, readWorkspaceDefault, saveWorkspaceDefault, keyboardNudgeCoarseFactor, keyboardNudgeStep, normalizeSnapGrid, normalizeWorkspaceSettings, shapeDimensionLimit, workplaneSettingsFingerprint, largerMeshLimit } from "@/lib/workplaneSettings";
@@ -10701,6 +10703,8 @@ export function LayerlingEditor({
     made?: string[];
     /** Build 101: the upper and lower models made (the bite contacts measure them once they are made). */
     madeFor?: { upper?: string; lower?: string };
+    /** Build 273 (Rakesh): the choices the models were made with - shown with them, and written into each saved STL's header. */
+    madeSettings?: { code: string; parts: string[] };
     /** Whether the person set who is upper and lower; otherwise it is worked out from the scans. */
     rolesChosen: boolean;
     preset: DentalPreset;
@@ -11893,7 +11897,6 @@ export function LayerlingEditor({
         if (markId) {
           // Build 117: the midline the dentist marked on this arch (no tooth finder at Make).
           const midline = state.options.midlineMark && state.options.midlineScan === markId ? state.options.midlineMark : null;
-          // Build 271: and the second point, further back, that squares the arch on its base.
           if (midline) madeInput = { ...fixedInput, arches: fixedInput.arches.map((arch) => (arch.id === markId ? { ...arch, midline } : arch)) };
         }
         // Build 267: the button says what Make is doing and fills as it goes - only when the stage changes, and only for this run.
@@ -12059,7 +12062,9 @@ export function LayerlingEditor({
         if (notes.length && !(STUDIO_SHELL && dentalWorkspace)) setNotice(`${t(result.parts.length > 1 ? "dental.donePair" : "dental.done", { height: heights, kind })} ${notes.join(" ")}`);
         // Build 79: the studio stays open on the models made: open the design again, or finish.
         const madeFor = { upper: state.slots.upper ? made.get(state.slots.upper)?.id : undefined, lower: state.slots.lower ? made.get(state.slots.lower)?.id : undefined };
-        setDentalStudio({ ...state, stage: "made", made: madeIds, madeFor, editing: undefined, error: null, notes: [] });
+        const marked = Boolean(markId && state.options.midlineMark && state.options.midlineScan === markId);
+        const madeSettings = dentalSettings({ ...makeOptions, midlineMark: marked ? state.options.midlineMark : undefined, build: PARE_BUILD });
+        setDentalStudio({ ...state, stage: "made", made: madeIds, madeFor, madeSettings, editing: undefined, error: null, notes: [] });
         // Build 117: the models also kept as a case of their own ("<case> - models"); this case keeps the design,
         // so it opens again where it was left and can be changed and made again.
         const info = projectInfoRef.current;
@@ -19418,9 +19423,10 @@ export function LayerlingEditor({
     return () => { window.layerlingMarkDots?.(null, MIDLINE_DOT); };
   }, [midlineShownKey]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Build 117: the STL's header says what the model is for (slicers show it). */
-  const stampedForUse = (buffer: ArrayBuffer) => {
+  // Build 273 (Rakesh): with the settings the models were made with after the notice (lib/dentalSettingsCode).
+  const stampedForUse = (buffer: ArrayBuffer, settings?: string) => {
     const header = new Uint8Array(buffer, 0, Math.min(80, buffer.byteLength));
-    const text = new TextEncoder().encode("Pare 3D model - for laboratory and diagnostic use only".padEnd(80, " ").slice(0, 80));
+    const text = settingsHeader(settings ?? "");
     header.set(text.subarray(0, header.length));
     return buffer;
   };
@@ -19493,7 +19499,7 @@ export function LayerlingEditor({
         if (!meshes.length) continue;
         const which = part.id === state.madeFor?.upper ? t("dental.upper") : part.id === state.madeFor?.lower ? t("dental.lower") : displayShapeName(part);
         const name = projectExportFileName([label, which, date].filter(Boolean).join(" - "), "stl");
-        const answer = await saveUserFile(name, new Blob([new Uint8Array(stampedForUse(await printReadyStl(cleanStlBinary(exportMeshesToStl(meshes)), which)))], { type: "model/stl" }), t("files.saveExport"));
+        const answer = await saveUserFile(name, new Blob([new Uint8Array(stampedForUse(await printReadyStl(cleanStlBinary(exportMeshesToStl(meshes)), which), state.madeSettings?.code))], { type: "model/stl" }), t("files.saveExport"));
         if (answer === "cancelled") return;
         saved.push(name);
       }
@@ -22047,6 +22053,7 @@ export function LayerlingEditor({
             if (on && markId) window.layerlingShowParts?.([markId], dentalStudioRef.current?.slots.upper ? [0, -1, 0] : [0, 1, 0]);
           }}
           midlinePicking={midlinePicking}
+          madeSettings={dentalStudio.madeSettings?.parts}
           onAdvancedChange={(advanced) => setDentalStudio((current) => current ? { ...current, advanced } : current)}
           onApply={() => void makeDentalModels()}
           onImport={() => fileInputRef.current?.click()}

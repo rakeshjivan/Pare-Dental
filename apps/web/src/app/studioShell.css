@@ -478,6 +478,15 @@
   border-radius: 10px;
 }
 
+/* Build 273 (Rakesh): the settings the models were made with, under the hint - in every screenshot of them. */
+.studio-hint .studio-hint-settings {
+  display: block;
+  margin-top: 2px;
+  font-weight: 400;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
 .studio-hint:empty {
   display: none;
 }
