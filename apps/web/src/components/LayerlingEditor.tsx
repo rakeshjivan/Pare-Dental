@@ -11656,10 +11656,11 @@ export function LayerlingEditor({
     }
     // Build 108: Gum line - the scans see-through, so the wax under the gum and the gum line on it show.
     if (studio?.waxStudio && studioWaxStep === "gum") for (const id of [studio.slots.upper, studio.slots.lower]) if (id) out[id] = Math.min(out[id] ?? 1, 0.45);
-    // Build 272 (Rakesh): while the midline is marked on the upper, the lower is out of the way.
-    if (midlinePicking && studio?.slots.upper && studio.slots.lower) out[studio.slots.lower] = 0;
+    // Build 272 (Rakesh): while the midline is marked on the upper - and while its marks show, on Finish - the lower is out of the way.
+    const marksShown = studio?.stage === "ready" && studioMbStep === "label" && Boolean(studio.options.midlineMark);
+    if ((midlinePicking || marksShown) && studio?.slots.upper && studio.slots.lower) out[studio.slots.lower] = 0;
     window.layerlingPartOpacity?.(Object.keys(out).length ? out : null);
-  }, [biteMap?.on, biteMap?.upperOpacity, biteMap?.lowerOpacity, dentalStudio?.layout, dentalStudio?.slots.upper, dentalStudio?.slots.lower, studioShellOn, studioOpacity, studioWaxStep, midlinePicking]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [biteMap?.on, biteMap?.upperOpacity, biteMap?.lowerOpacity, dentalStudio?.layout, dentalStudio?.slots.upper, dentalStudio?.slots.lower, studioShellOn, studioOpacity, studioWaxStep, midlinePicking, dentalStudio?.stage, studioMbStep, dentalStudio?.options.midlineMark]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => window.layerlingPartOpacity?.(null), []);
   // The map goes when Dental Studio closes.
   const studioOpen = Boolean(dentalStudio);
