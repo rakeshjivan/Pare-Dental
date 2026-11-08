@@ -49,7 +49,8 @@ export function dentalPreset(preset: DentalPreset, depth: number, pair: boolean,
   if (preset === "ortho") {
     // The trimmed base is about a third of the model's height (the art portion), the anatomy two thirds.
     // Build 78: records keep the scans whole - no soft tissue trimmed (the ABO counts any change as altered records).
-    return { ...common, keep: null, base: Math.round(Math.max(6, Math.min(15, depth / 2))), baseStyle: "ortho", inside: "open", infill: "base", layout: pair ? "occlusion" : "print", relief: false };
+    // Build 274 (Rakesh): the palate kept - an upper's floor deeper only where its palate needs it.
+    return { ...common, keep: null, base: Math.round(Math.max(6, Math.min(15, depth / 2))), baseStyle: "ortho", inside: "open", infill: "base", layout: pair ? "occlusion" : "print", relief: false, keepPalate: true };
   }
   if (preset === "aligner") {
     // Thermoforming: solid, 15-20 mm in all (Formlabs' thermoforming guide) - floor to the tallest
@@ -61,7 +62,8 @@ export function dentalPreset(preset: DentalPreset, depth: number, pair: boolean,
   // Study model: hollow and open underneath to save resin, all the anatomy kept.
   // Fork (build 49): on a clean base - trimmed to a smooth outline a few mm round the teeth, low.
   // Build 104: hollow with the honeycomb in the base only, by default.
-  return { ...common, keep: null, base: 3, baseStyle: "clean", gum: 3, inside: "open", infill: "base" };
+  // Build 274: the palate kept, as on the ABO base.
+  return { ...common, keep: null, base: 3, baseStyle: "clean", gum: 3, inside: "open", infill: "base", keepPalate: true };
 }
 
 export type DentalPartChoice = { id: string; name: string };
@@ -153,21 +155,22 @@ const REPLACE_SCAN = "__replace_scan__";
  * biting side - between the central incisors. Build 273 (Rakesh): back to one click, so one point.
  */
 function MidlinePicture({ marked }: { marked: boolean }) {
+  // Build 274 (Rakesh: "present the upper arch facing forwards and level"): the upper seen from the front, level, its
+  // teeth hanging from the gum - the click between the two central incisors.
   return (
     <svg className="wax-guide-picture" viewBox="0 0 336 214" role="img" aria-label={t("studio.midlinePicture")}>
-      <path d="M84 52 A84 108 0 0 0 252 52 Z" fill="#f3d9d4" />
-      {MIDLINE_PICTURE_TEETH.map(([x, y, rx, ry, a], i) => <ellipse key={i} cx={x} cy={y} rx={rx} ry={ry} transform={`rotate(${a} ${x} ${y})`} fill="#f2efe6" stroke="#8a8170" strokeWidth={1.1} />)}
-      <line x1={168} y1={182} x2={168} y2={34} stroke="#2f7d6d" strokeWidth={1.6} strokeDasharray="6 5" />
-      <circle cx={168} cy={162} r={marked ? 10 : 14} fill={marked ? "#2563eb" : "#2f7d6d"} />
+      <path d="M28 40 Q168 18 308 40 L308 92 Q168 78 28 92 Z" fill="#f3d9d4" />
+      {MIDLINE_FRONT_TEETH.map(([x, w, h], i) => <rect key={i} x={x - w / 2} y={74} width={w} height={h} rx={w / 3.2} fill="#f2efe6" stroke="#8a8170" strokeWidth={1.1} />)}
+      <line x1={168} y1={30} x2={168} y2={178} stroke="#2f7d6d" strokeWidth={1.6} strokeDasharray="6 5" />
+      <circle cx={168} cy={112} r={marked ? 10 : 14} fill={marked ? "#2563eb" : "#2f7d6d"} />
       <text x={168} y={204} textAnchor="middle" fontSize={12} fill="#4b5563">{t("studio.midlinePictureNote")}</text>
     </svg>
   );
 }
 
-/** The picture's teeth (x, y, half width, half depth, turn in degrees): incisors to second molars round a U, front at the bottom. */
-const MIDLINE_PICTURE_TEETH: ReadonlyArray<readonly [number, number, number, number, number]> = [
-  [155.4, 164.8, 11.1, 8.9, 11.1], [136.1, 157.8, 8.3, 8.3, 27.8], [120.2, 146.9, 9.7, 10.3, 40.5], [106.4, 132.6, 9, 12.4, 51.1], [95.8, 117.4, 8.3, 12.4, 59], [85.6, 97.2, 13.2, 15.1, 67.2], [77, 71.8, 12.5, 15.1, 75.3],
-  [180.6, 164.8, 11.1, 8.9, -11.1], [199.9, 157.8, 8.3, 8.3, -27.8], [215.8, 146.9, 9.7, 10.3, -40.5], [229.6, 132.6, 9, 12.4, -51.1], [240.2, 117.4, 8.3, 12.4, -59], [250.4, 97.2, 13.2, 15.1, -67.2], [259, 71.8, 12.5, 15.1, -75.3],
+/** The picture's front teeth (centre x, width, length): canine to canine and a premolar each side, centrals in the middle. */
+const MIDLINE_FRONT_TEETH: ReadonlyArray<readonly [number, number, number]> = [
+  [48, 22, 46], [76, 26, 60], [106, 28, 64], [138, 32, 70], [198, 32, 70], [230, 28, 64], [260, 26, 60], [288, 22, 46],
 ];
 
 export function DentalStudioPanel({
@@ -626,10 +629,19 @@ export function DentalStudioPanel({
   // Build 120: Model is done once its choices are made (the type; a pair separate or articulated; separate, the height),
   // the Articulator once each of its questions is answered.
   // (An aligner model keeps its own low height: no height to choose.)
-  const modelDone = asked.type && (pair ? asked.layout && (options.hinge || preset === "aligner" || asked.height) : preset === "aligner" || asked.height);
-  const articOrder = ["hinge", "fit", "pins", ...(options.incisalPin !== false ? ["gap", "ovd"] : []), ...(preset === "aligner" ? [] : ["aheight"])];
+  // Build 274 (Rakesh: "the base height auto ... so the user never needs to select this"): the base's height is not
+  // asked on the way through - it is set by the scan - only offered again in Edit design.
+  const askHeight = editing && preset !== "aligner";
+  const modelDone = asked.type && (pair ? asked.layout && (options.hinge || !askHeight || asked.height) : !askHeight || asked.height);
+  const articOrder = ["hinge", "fit", "pins", ...(options.incisalPin !== false ? ["gap", "ovd"] : []), ...(askHeight ? ["aheight"] : [])];
   const articDone = articOrder.every((id) => asked[id]);
-  const mbStepDone = (id: ModelStepId) => (id === "scans" ? scansDone : id === "prepare" && shell && trimmedDone ? (["upper", "lower"] as const).every((slot) => !slots[slot] || trimmedDone.includes(slot)) : shell && id === "model" ? Boolean(modelDone) : shell && id === "articulator" ? articDone : true);
+  // Build 274 (Rakesh: "we shouldn't allow the user to move to trimming without midline marking"): in the Model Builder the
+  // midline is marked at the first step, once the scans are in, before anything else.
+  const midlineOn = slots.upper ?? slots.lower;
+  const midlineMarked = Boolean(options.midlineMark) && options.midlineScan === midlineOn;
+  // (A function: the frame is known further down.)
+  const needMidline = () => Boolean(mbSteps) && framed && Boolean(onMidlinePick) && Boolean(midlineOn);
+  const mbStepDone = (id: ModelStepId) => (id === "scans" ? scansDone && (!needMidline() || midlineMarked) : id === "prepare" && shell && trimmedDone ? (["upper", "lower"] as const).every((slot) => !slots[slot] || trimmedDone.includes(slot)) : shell && id === "model" ? Boolean(modelDone) : shell && id === "articulator" ? articDone : true);
   const inMb = (id: ModelStepId) => !mbSteps || mbStep === id;
   // Build 120 (Rakesh): Articulated chosen, on to the Articulator step.
   useEffect(() => {
@@ -908,6 +920,16 @@ export function DentalStudioPanel({
             </div>
           ) : null}
         </div>
+        {/* Build 274 (Rakesh): the dental midline, marked here - first of all, before the scans are trimmed - on the upper seen
+            from the front and level. Every model is centred on it (the teeth on the base, and an articulated pair's pins and posts). */}
+        {needMidline() && scansDone ? (<>
+          <h4 className="dental-group">{t("studio.midline")}</h4>
+          <MidlinePicture marked={!midlinePicking && midlineMarked} />
+          <div className="dental-trim-buttons">
+            <button type="button" className={midlinePicking || midlineMarked ? "secondary" : ""} disabled={busy} onClick={() => onMidlinePick?.(!midlinePicking)}>{t(midlinePicking ? "studio.midlineStop" : midlineMarked ? "studio.midlineAgain" : "studio.midlineMark")}</button>
+          </div>
+          <p className="blend-hint" role="status">{t(midlinePicking ? "studio.midlinePicking" : midlineMarked ? "studio.midlineSet" : "studio.midlineNeeded")}</p>
+        </>) : null}
       </>)) : null}
 
       {/* Build 106: Wax-up Studio's Import step holds the trim too. */}
@@ -1125,8 +1147,9 @@ export function DentalStudioPanel({
       {inMb("model") ? card(n(4), t("dental.step3"), scansDone, t("dental.step3Hint"), modelSummary, (<>
         <div className="dental-presets" role="radiogroup" aria-label={t("dental.purpose")}>
           {([
-            ["study", t("dental.study"), t("dental.studyHint")],
+            // Build 274 (Rakesh): the choice is the base's shape, ABO first.
             ["ortho", t("dental.ortho"), t("dental.orthoHint")],
+            ["study", t("dental.study"), t("dental.studyHint")],
             ["aligner", t("dental.aligner"), t("dental.alignerHint")],
           ] as const).map(([value, label, hint]) => (
             <button key={value} type="button" role="radio" aria-checked={preset === value && (!shell || Boolean(asked.type))} className={preset === value && (!shell || asked.type) ? (custom ? "active custom" : "active") : ""} disabled={busy} title={framed ? hint : undefined} onClick={() => { onPresetChange(value); answer("type"); }}>
@@ -1155,7 +1178,7 @@ export function DentalStudioPanel({
             })}
           </div>
         </>) : null}
-        {framed && !articulated && preset !== "aligner" && asked.type && (!pair || asked.layout) ? heightChoice(() => answer("height")) : null}
+        {framed && !articulated && askHeight && asked.type && (!pair || asked.layout) ? heightChoice(() => answer("height")) : null}
         {!framed && (options.baseStyle === "clean" || options.baseStyle === "articulator") ? (
           <>
             {options.baseStyle === "clean" ? (
@@ -1328,7 +1351,7 @@ export function DentalStudioPanel({
               {done("ovd", true)}
             </>) },
           ] : []),
-          ...(preset === "aligner" ? [] : [{ id: "aheight", title: t("studio.baseHeight"), answer: t(options.baseHeight === "tall" ? "studio.baseTall" : options.baseHeight === "low" ? "studio.baseLow" : "studio.baseStandard"), body: (<>{heightChoice(() => pick("aheight"), chosen("aheight"))}{done("aheight")}</>) }]),
+          ...(!askHeight ? [] : [{ id: "aheight", title: t("studio.baseHeight"), answer: t(options.baseHeight === "tall" ? "studio.baseTall" : options.baseHeight === "low" ? "studio.baseLow" : "studio.baseStandard"), body: (<>{heightChoice(() => pick("aheight"), chosen("aheight"))}{done("aheight")}</>) }]),
         ];
         return (
           <div className="studio-questions">
@@ -1514,20 +1537,6 @@ export function DentalStudioPanel({
         </label>
         {options.label.trim() ? <p className="blend-hint">{t(options.baseStyle === "ortho" || options.baseStyle === "articulator" ? "dental.labelOrtho" : options.inside === "open" ? "dental.labelClosed" : "dental.labelPlate")}</p> : null}
         </>)}
-        {/* Build 120 (Rakesh): the dental midline, last of all - every model centred on it (the teeth on the base, and an articulated pair's pins and posts). */}
-        {framed && onMidlinePick && (slots.upper || slots.lower) ? (() => {
-          const markOn = slots.upper ?? slots.lower;
-          const marked = Boolean(options.midlineMark) && options.midlineScan === markOn;
-          return (<>
-            <h4 className="dental-group">{t("studio.midline")}</h4>
-            <div className="dental-trim-buttons">
-              <button type="button" className={midlinePicking ? "" : "secondary"} disabled={busy} onClick={() => onMidlinePick(!midlinePicking)}>{t(midlinePicking ? "studio.midlineStop" : marked ? "studio.midlineAgain" : "studio.midlineMark")}</button>
-              {marked && !midlinePicking ? <button type="button" className="secondary" disabled={busy} onClick={() => onOptionsChange({ midlineMark: undefined, midlineBack: undefined, midlineScan: undefined })}>{t("studio.midlineClear")}</button> : null}
-            </div>
-            <MidlinePicture marked={!midlinePicking && Boolean(marked)} />
-            <p className="blend-hint" role="status">{t(midlinePicking ? "studio.midlinePicking" : marked ? "studio.midlineSet" : "studio.midlineHint")}</p>
-          </>);
-        })() : null}
         {/* Build 106: in the frame, Make models closes the step's panel (not the bar below). */}
         {framed ? <div className="studio-make">{makeButton}</div> : null}
       </>)) : null}

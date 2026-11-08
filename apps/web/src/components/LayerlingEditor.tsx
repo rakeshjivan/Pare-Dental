@@ -11321,8 +11321,9 @@ export function LayerlingEditor({
     stage: "analysing",
     analysis: null,
     rolesChosen,
-    preset: "study",
-    options: dentalPreset("study", 15, Boolean(slots.upper && slots.lower)),
+    // Build 274 (Rakesh): the ABO (orthodontic) base first - the one most models are made on.
+    preset: "ortho",
+    options: dentalPreset("ortho", 15, Boolean(slots.upper && slots.lower)),
     optionsTouched: false,
     patientDetails: readPatientDetails(),
     advanced: false,
@@ -11661,8 +11662,8 @@ export function LayerlingEditor({
     // Build 108: Gum line - the scans see-through, so the wax under the gum and the gum line on it show.
     if (studio?.waxStudio && studioWaxStep === "gum") for (const id of [studio.slots.upper, studio.slots.lower]) if (id) out[id] = Math.min(out[id] ?? 1, 0.45);
     // Build 272 (Rakesh): while the midline is marked on the upper - and while its marks show, on Finish - the lower is out of the way.
-    const marksShown = studio?.stage === "ready" && studioMbStep === "label" && Boolean(studio.options.midlineMark);
-    if ((midlinePicking || marksShown) && studio?.slots.upper && studio.slots.lower) out[studio.slots.lower] = 0;
+    // Build 274: marked at the first step now, the lower is out of the way only while the click is awaited.
+    if (midlinePicking && studio?.slots.upper && studio.slots.lower) out[studio.slots.lower] = 0;
     window.layerlingPartOpacity?.(Object.keys(out).length ? out : null);
   }, [biteMap?.on, biteMap?.upperOpacity, biteMap?.lowerOpacity, dentalStudio?.layout, dentalStudio?.slots.upper, dentalStudio?.slots.lower, studioShellOn, studioOpacity, studioWaxStep, midlinePicking, dentalStudio?.stage, studioMbStep, dentalStudio?.options.midlineMark]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => window.layerlingPartOpacity?.(null), []);
@@ -19408,7 +19409,7 @@ export function LayerlingEditor({
     setMidlinePicking(false);
   };
   // Build 117: the marked midline shown as a dot on the upper while its options are open.
-  const midlineShownKey = dentalStudio && dentalStudio.stage === "ready" && dentalStudio.options.midlineMark && dentalStudio.options.midlineScan === (dentalStudio.slots.upper ?? dentalStudio.slots.lower) && studioMbStep === "label" ? `${dentalStudio.options.midlineMark.join(",")}|${dentalStudio.options.midlineBack?.join(",") ?? ""}` : "";
+  const midlineShownKey = dentalStudio && dentalStudio.stage === "ready" && dentalStudio.options.midlineMark && dentalStudio.options.midlineScan === (dentalStudio.slots.upper ?? dentalStudio.slots.lower) && studioMbStep === "scans" ? `${dentalStudio.options.midlineMark.join(",")}|${dentalStudio.options.midlineBack?.join(",") ?? ""}` : "";
   useEffect(() => {
     if (!midlineShownKey) return;
     const state = dentalStudioRef.current;
@@ -22037,7 +22038,8 @@ export function LayerlingEditor({
             const depth = arches.length ? Math.max(...arches.map((arch) => arch.depth)) : 15;
             const above = arches.length ? Math.max(...arches.map((arch) => arch.above)) : 0;
             const teeth = arches.length ? Math.max(...arches.map((arch) => arch.teeth)) : 0;
-            return { ...current, preset, optionsTouched: false, options: { ...dentalPreset(preset, depth, Boolean(current.slots.upper && current.slots.lower), above, teeth), label: current.options.label }, error: null };
+            // Build 274: the midline, marked at the first step, stays when the base is chosen.
+            return { ...current, preset, optionsTouched: false, options: { ...dentalPreset(preset, depth, Boolean(current.slots.upper && current.slots.lower), above, teeth), label: current.options.label, midlineMark: current.options.midlineMark, midlineScan: current.options.midlineScan }, error: null };
           })}
           onOptionsChange={(patch) => setDentalStudio((current) => {
             if (!current) return current;
@@ -22048,9 +22050,10 @@ export function LayerlingEditor({
           })}
           onMidlinePick={(on: boolean) => {
             setMidlinePicking(on ? "front" : false);
-            // Build 272 (Rakesh): the arch to mark turned to face the dentist - its biting side, front at the bottom.
+            // Build 274 (Rakesh: "present the upper arch facing forwards and level"): seen from the front - the scans already stand
+            // level, front towards +Z, once they are laid out (arrangedDentalScans).
             const markId = dentalStudioRef.current?.slots.upper ?? dentalStudioRef.current?.slots.lower;
-            if (on && markId) window.layerlingShowParts?.([markId], dentalStudioRef.current?.slots.upper ? [0, -1, 0] : [0, 1, 0]);
+            if (on && markId) window.layerlingShowParts?.([markId], [0, 0, 1]);
           }}
           midlinePicking={midlinePicking}
           madeSettings={dentalStudio.madeSettings?.parts}
