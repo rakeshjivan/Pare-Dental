@@ -22039,7 +22039,7 @@ export function LayerlingEditor({
             return current;
           })}
           onMidlinePick={(on: boolean) => setMidlinePicking(on ? "front" : false)}
-          midlinePicking={Boolean(midlinePicking)}
+          midlinePicking={midlinePicking}
           onAdvancedChange={(advanced) => setDentalStudio((current) => current ? { ...current, advanced } : current)}
           onApply={() => void makeDentalModels()}
           onImport={() => fileInputRef.current?.click()}

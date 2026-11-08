@@ -222,7 +222,8 @@ export function DentalStudioPanel({
   onEditDesign?: () => void;
   /** Build 117: marking the dental midline on the upper for an articulated pair - start (or stop) marking, and whether it is being marked. */
   onMidlinePick?: (on: boolean) => void;
-  midlinePicking?: boolean;
+  /** Build 272: which click of the two the midline marking waits for (false: not marking). */
+  midlinePicking?: false | "front" | "back";
   /** Build 117: a case of finished models - nothing to edit here, the design is in the case they were made in. */
   finishedCase?: boolean;
   onDone?: () => void;
@@ -1424,7 +1425,7 @@ export function DentalStudioPanel({
                 <button type="button" className={midlinePicking ? "" : "secondary"} disabled={busy} onClick={() => onMidlinePick(!midlinePicking)}>{t(midlinePicking ? "studio.midlineStop" : options.midlineMark && options.midlineScan === slots.upper ? "studio.midlineAgain" : "studio.midlineMark")}</button>
                 {options.midlineMark && !midlinePicking ? <button type="button" className="secondary" disabled={busy} onClick={() => onOptionsChange({ midlineMark: undefined, midlineBack: undefined, midlineScan: undefined })}>{t("studio.midlineClear")}</button> : null}
               </div>
-              <p className="blend-hint" role="status">{t(midlinePicking ? "studio.midlinePicking" : options.midlineMark && options.midlineScan === slots.upper ? (options.midlineBack ? "studio.midlineSquared" : "studio.midlineSet") : "studio.midlineHint")}</p>
+              <p className="blend-hint" role="status">{t(midlinePicking === "back" ? "studio.midlineBackPicking" : midlinePicking ? "studio.midlinePicking" : options.midlineMark && options.midlineScan === slots.upper ? (options.midlineBack ? "studio.midlineSquared" : "studio.midlineSet") : "studio.midlineHint")}</p>
             </>) : null}
           </>) : null}
         </>);
@@ -1497,7 +1498,7 @@ export function DentalStudioPanel({
               <button type="button" className={midlinePicking ? "" : "secondary"} disabled={busy} onClick={() => onMidlinePick(!midlinePicking)}>{t(midlinePicking ? "studio.midlineStop" : marked ? "studio.midlineAgain" : "studio.midlineMark")}</button>
               {marked && !midlinePicking ? <button type="button" className="secondary" disabled={busy} onClick={() => onOptionsChange({ midlineMark: undefined, midlineBack: undefined, midlineScan: undefined })}>{t("studio.midlineClear")}</button> : null}
             </div>
-            <p className="blend-hint" role="status">{t(midlinePicking ? "studio.midlinePicking" : marked ? (options.midlineBack ? "studio.midlineSquared" : "studio.midlineSet") : "studio.midlineHint")}</p>
+            <p className="blend-hint" role="status">{t(midlinePicking === "back" ? "studio.midlineBackPicking" : midlinePicking ? "studio.midlinePicking" : marked ? (options.midlineBack ? "studio.midlineSquared" : "studio.midlineSet") : "studio.midlineHint")}</p>
           </>);
         })() : null}
         {/* Build 106: in the frame, Make models closes the step's panel (not the bar below). */}
