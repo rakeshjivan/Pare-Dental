@@ -814,10 +814,11 @@ export const PALATE_BACK_BAND = 10;
 /** Build 271: the palate is the scan this far and more inside the outline round the teeth, mm. */
 export const PALATE_IN = 3;
 
-/** Build 271: under a kept palate's deepest point, the floor stands the hollow's wall and this much more below it, mm. */
-export const PALATE_UNDER = 0.8;
+/** Build 274 (Rakesh: "the base doesn't have to be taller than the palate"): how far an upper's floor stands below the
+ * deepest point of its kept palate, mm - the shell under the vault and a little to spare (it was 4 mm: 1 + the wall + 0.8). */
+export const PALATE_CLEAR = 2.5;
 
-/** Build 271: how deep below the occlusal plane an upper's palate reaches (palateOf), with a millimetre to spare; 0 for none. */
+/** Build 271: how deep below the occlusal plane an upper's palate reaches (palateOf); 0 for none. */
 function palateDepth(mesh: Mesh, frame: THREE.Matrix4): number {
   const m = cloneMesh(mesh);
   applyMatrix(m, frame);
@@ -826,7 +827,7 @@ function palateDepth(mesh: Mesh, frame: THREE.Matrix4): number {
   const palate = palateOf(m, teeth, crowns);
   let low = Infinity;
   for (let i = 0; i < palate.length; i += 1) if (palate[i]) low = Math.min(low, m.v[i * 3 + 2]);
-  return Number.isFinite(low) ? -low + 1 : 0;
+  return Number.isFinite(low) ? -low : 0;
 }
 
 /** Build 271: how far out in front of a crown face the base is cut back, mm (the drape is kept under the crowns: this
@@ -1641,7 +1642,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
   // Build 271: an upper whose palate is kept stands a wall and a little more below its palate - its floor that much
   // deeper (often not at all), its ledge lifted to match round the outside.
   const asUsuals = keeps.map((keep) => keep + base);
-  const lifts = prep.arches.map((arch, i) => (options.keepPalate && arch.role === "upper" && !arch.partial ? Math.max(0, palateDepth(arch.clean.mesh, arch.frame) + SMOOTH.wall + PALATE_UNDER - asUsuals[i]) : 0));
+  const lifts = prep.arches.map((arch, i) => (options.keepPalate && arch.role === "upper" && !arch.partial ? Math.max(0, palateDepth(arch.clean.mesh, arch.frame) + PALATE_CLEAR - asUsuals[i]) : 0));
   const depths = asUsuals.map((usual, i) => usual + lifts[i]);
   const depthOf = (arch: (typeof prep.arches)[number]) => depths[prep.arches.indexOf(arch)];
   const pair = prep.arches.length === 2;
