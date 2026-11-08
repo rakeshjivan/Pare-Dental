@@ -5448,6 +5448,8 @@ export const MESSAGES_EN = {
   "studio.midlinePicking": "Click 1 of 2: on the model at the midline, between the central incisors. Esc stops.",
   "studio.midlineBackPicking": "Click 2 of 2: now further back on the midline - the middle of the palate (on a lower, midway between the molars) - to square the arch on its base. Esc keeps the first point only: centred, not squared.",
   "studio.midlineSquared": "Midline marked (the blue dots): the models are centred on it and squared to it. Mark it again to move it.",
+  "studio.midlinePicture": "The upper seen from its biting side: click 1 between the central incisors, click 2 further back on the midline, at the middle of the palate",
+  "studio.midlinePictureNote": "1 between the centrals  ·  2 middle of the palate",
   "studio.midlineSet": "Only the front point is marked (the blue dot): the models are centred on it but not squared to it. Mark it again and give the second click, further back, to square them.",
   "studio.risers": "Also make bite-opening risers (1-5 mm, two of each)",
   "studio.risersHint": "Tubes that click over the lower side posts and raise them by 1, 2, 3, 4 or 5 mm - two of each, printed apart and kept for any case. The posts get a shallow groove the tubes snap into. With one on each post the upper rests on them, so the models are held open by exactly that much at the posts (less at the back teeth, more at the front).",

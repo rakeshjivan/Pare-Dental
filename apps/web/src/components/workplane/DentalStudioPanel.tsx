@@ -148,6 +148,33 @@ function HelpTip({ text }: { text: string }) {
 /** Build 124: the slot list's "replace with another file" entry. */
 const REPLACE_SCAN = "__replace_scan__";
 
+/**
+ * Build 272 (Rakesh: "we need an image in the marking step"): the two midline clicks on an upper seen from its biting side -
+ * 1 between the central incisors, 2 further back at the middle of the palate - the click being waited for lit.
+ */
+function MidlinePicture({ next }: { next: number }) {
+  return (
+    <svg className="wax-guide-picture" viewBox="0 0 336 214" role="img" aria-label={t("studio.midlinePicture")}>
+      <path d="M84 52 A84 108 0 0 0 252 52 Z" fill="#f3d9d4" />
+      {MIDLINE_PICTURE_TEETH.map(([x, y, rx, ry, a], i) => <ellipse key={i} cx={x} cy={y} rx={rx} ry={ry} transform={`rotate(${a} ${x} ${y})`} fill="#f2efe6" stroke="#8a8170" strokeWidth={1.1} />)}
+      <line x1={168} y1={182} x2={168} y2={34} stroke="#2f7d6d" strokeWidth={1.6} strokeDasharray="6 5" />
+      {([[168, 162, "1"], [168, 100, "2"]] as const).map(([x, y, n], i) => (
+        <g key={n}>
+          <circle cx={x} cy={y} r={i === next ? 14 : 10} fill={i === next ? "#2f7d6d" : next < 0 || i < next ? "#2563eb" : "#9ca3af"} />
+          <text x={x} y={y + 4.5} textAnchor="middle" fontSize={i === next ? 13 : 12} fontWeight={700} fill="#ffffff">{n}</text>
+        </g>
+      ))}
+      <text x={168} y={204} textAnchor="middle" fontSize={12} fill="#4b5563">{t("studio.midlinePictureNote")}</text>
+    </svg>
+  );
+}
+
+/** The picture's teeth (x, y, half width, half depth, turn in degrees): incisors to second molars round a U, front at the bottom. */
+const MIDLINE_PICTURE_TEETH: ReadonlyArray<readonly [number, number, number, number, number]> = [
+  [155.4, 164.8, 11.1, 8.9, 11.1], [136.1, 157.8, 8.3, 8.3, 27.8], [120.2, 146.9, 9.7, 10.3, 40.5], [106.4, 132.6, 9, 12.4, 51.1], [95.8, 117.4, 8.3, 12.4, 59], [85.6, 97.2, 13.2, 15.1, 67.2], [77, 71.8, 12.5, 15.1, 75.3],
+  [180.6, 164.8, 11.1, 8.9, -11.1], [199.9, 157.8, 8.3, 8.3, -27.8], [215.8, 146.9, 9.7, 10.3, -40.5], [229.6, 132.6, 9, 12.4, -51.1], [240.2, 117.4, 8.3, 12.4, -59], [250.4, 97.2, 13.2, 15.1, -67.2], [259, 71.8, 12.5, 15.1, -75.3],
+];
+
 export function DentalStudioPanel({
   parts,
   slots,
@@ -1425,6 +1452,7 @@ export function DentalStudioPanel({
                 <button type="button" className={midlinePicking ? "" : "secondary"} disabled={busy} onClick={() => onMidlinePick(!midlinePicking)}>{t(midlinePicking ? "studio.midlineStop" : options.midlineMark && options.midlineScan === slots.upper ? "studio.midlineAgain" : "studio.midlineMark")}</button>
                 {options.midlineMark && !midlinePicking ? <button type="button" className="secondary" disabled={busy} onClick={() => onOptionsChange({ midlineMark: undefined, midlineBack: undefined, midlineScan: undefined })}>{t("studio.midlineClear")}</button> : null}
               </div>
+              <MidlinePicture next={midlinePicking === "back" ? 1 : midlinePicking ? 0 : options.midlineMark && options.midlineScan === slots.upper ? (options.midlineBack ? -1 : 1) : 0} />
               <p className="blend-hint" role="status">{t(midlinePicking === "back" ? "studio.midlineBackPicking" : midlinePicking ? "studio.midlinePicking" : options.midlineMark && options.midlineScan === slots.upper ? (options.midlineBack ? "studio.midlineSquared" : "studio.midlineSet") : "studio.midlineHint")}</p>
             </>) : null}
           </>) : null}
@@ -1498,6 +1526,7 @@ export function DentalStudioPanel({
               <button type="button" className={midlinePicking ? "" : "secondary"} disabled={busy} onClick={() => onMidlinePick(!midlinePicking)}>{t(midlinePicking ? "studio.midlineStop" : marked ? "studio.midlineAgain" : "studio.midlineMark")}</button>
               {marked && !midlinePicking ? <button type="button" className="secondary" disabled={busy} onClick={() => onOptionsChange({ midlineMark: undefined, midlineBack: undefined, midlineScan: undefined })}>{t("studio.midlineClear")}</button> : null}
             </div>
+            <MidlinePicture next={midlinePicking === "back" ? 1 : midlinePicking ? 0 : marked ? (options.midlineBack ? -1 : 1) : 0} />
             <p className="blend-hint" role="status">{t(midlinePicking === "back" ? "studio.midlineBackPicking" : midlinePicking ? "studio.midlinePicking" : marked ? (options.midlineBack ? "studio.midlineSquared" : "studio.midlineSet") : "studio.midlineHint")}</p>
           </>);
         })() : null}
