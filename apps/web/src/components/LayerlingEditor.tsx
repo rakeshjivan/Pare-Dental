@@ -11643,7 +11643,7 @@ export function LayerlingEditor({
     drawBiteMap(Boolean(biteMap.contactOnly), biteMap.range ?? 2);
   }, [biteMap?.contactOnly, biteMap?.range]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Build 117 (271, 272): the midline marking - which of its two clicks it waits for (false: not marking). */
-  const [midlinePicking, setMidlinePicking] = useState<false | "front" | "back">(false);
+  const [midlinePicking, setMidlinePicking] = useState<false | "front">(false);
   // Build 97: each arch's opacity, in occlusion, to look through one at the contacts on the other (as
   // Exocad's viewer does) - put back when the map is off or the arches are laid side by side.
   useEffect(() => {
@@ -11894,8 +11894,7 @@ export function LayerlingEditor({
           // Build 117: the midline the dentist marked on this arch (no tooth finder at Make).
           const midline = state.options.midlineMark && state.options.midlineScan === markId ? state.options.midlineMark : null;
           // Build 271: and the second point, further back, that squares the arch on its base.
-          const midlineBack = midline ? state.options.midlineBack ?? null : null;
-          if (midline) madeInput = { ...fixedInput, arches: fixedInput.arches.map((arch) => (arch.id === markId ? { ...arch, midline, ...(midlineBack ? { midlineBack } : {}) } : arch)) };
+          if (midline) madeInput = { ...fixedInput, arches: fixedInput.arches.map((arch) => (arch.id === markId ? { ...arch, midline } : arch)) };
         }
         // Build 267: the button says what Make is doing and fills as it goes - only when the stage changes, and only for this run.
         const result = await makeDentalStudioInBackground(madeInput, makeOptions, (made) => {
@@ -19385,8 +19384,8 @@ export function LayerlingEditor({
     if (moved.size) commitShapes(shapesRef.current.map((shape) => moved.get(shape.id) ?? shape), selectedIdsRef.current, t("studio.snapMade"));
   };
   /** Build 117: Model Builder's articulator - the dental midline marked with a click on the upper (studio coordinates). */
-  // Build 271 (Rakesh): two clicks - between the centrals, then further back on the midline (the palate's middle), which
-  // squares the arch on its base; Esc at the second keeps the first alone.
+  // Build 273 (Rakesh: "revert to how it was with the single midline marker"): one click again - Build 271's second click,
+  // further back to square the arch, is gone, and a second point is never sent to the models.
   const midlineGrid = useRef<{ key: string; grid: RayGrid } | null>(null);
   const pickMidline = (x: number, y: number) => {
     const state = dentalStudioRef.current;
@@ -19400,13 +19399,8 @@ export function LayerlingEditor({
     const hit = rayHitGrid(midlineGrid.current.grid, ray.origin, ray.direction);
     if (!hit) return;
     const mark = new THREE.Vector3(...hit).applyMatrix4(toInput).toArray() as [number, number, number];
-    if (midlinePicking === "back") {
-      setDentalStudio((current) => current ? { ...current, options: { ...current.options, midlineBack: mark }, optionsTouched: true } : current);
-      setMidlinePicking(false);
-      return;
-    }
     setDentalStudio((current) => current ? { ...current, options: { ...current.options, midlineMark: mark, midlineBack: undefined, midlineScan: upper.id }, optionsTouched: true } : current);
-    setMidlinePicking("back");
+    setMidlinePicking(false);
   };
   // Build 117: the marked midline shown as a dot on the upper while its options are open.
   const midlineShownKey = dentalStudio && dentalStudio.stage === "ready" && dentalStudio.options.midlineMark && dentalStudio.options.midlineScan === (dentalStudio.slots.upper ?? dentalStudio.slots.lower) && studioMbStep === "label" ? `${dentalStudio.options.midlineMark.join(",")}|${dentalStudio.options.midlineBack?.join(",") ?? ""}` : "";
@@ -22290,7 +22284,7 @@ export function LayerlingEditor({
       ) : null}
       {/* Build 117: the dental midline being marked on the upper (Model Builder's articulator). */}
       {midlinePicking && dentalStudio ? (
-        <WaxupPointOverlay hint={t(midlinePicking === "back" ? "studio.midlineBackPicking" : "studio.midlinePicking")} onPick={pickMidline} onCancel={() => setMidlinePicking(false)} />
+        <WaxupPointOverlay hint={t("studio.midlinePicking")} onPick={pickMidline} onCancel={() => setMidlinePicking(false)} />
       ) : null}
       {/* Build 117: before the models are written - what they may be used for (no TGA pathway for anything printed to stay in the mouth). */}
       {exportNoticeOpen ? (
