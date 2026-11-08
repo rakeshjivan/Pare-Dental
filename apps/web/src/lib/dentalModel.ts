@@ -1636,12 +1636,14 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
   const keeps = prep.arches.map((arch) => keptDepthFor(arch, options));
   // Build 271: an upper whose palate is kept stands a wall and a little more below its palate - the floors that much
   // deeper (often not at all), the ledges lifted to match round the outside.
-  const asUsual = Math.max(...keeps) + base;
-  const palateFloor = options.keepPalate ? Math.max(0, ...prep.arches.map((arch) => (arch.role === "upper" && !arch.partial ? palateDepth(arch.clean.mesh, arch.frame) + SMOOTH.wall + PALATE_UNDER : 0))) : 0;
-  const palateLift = Math.max(0, palateFloor - asUsual);
-  if (palateLift > 0) options = { ...options, palateLift };
-  // A pair stands equally tall: both floors as far from the occlusal plane.
-  const depth = asUsual + palateLift;
+  // Build 274 (Rakesh: "the lower has a gigantic base"): each arch stands on its own floor, the base under its own
+  // deepest anatomy - no longer as deep as the other arch's (a lower beside a deep upper stood on a tall plain wall).
+  // Build 271: an upper whose palate is kept stands a wall and a little more below its palate - its floor that much
+  // deeper (often not at all), its ledge lifted to match round the outside.
+  const asUsuals = keeps.map((keep) => keep + base);
+  const lifts = prep.arches.map((arch, i) => (options.keepPalate && arch.role === "upper" && !arch.partial ? Math.max(0, palateDepth(arch.clean.mesh, arch.frame) + SMOOTH.wall + PALATE_UNDER - asUsuals[i]) : 0));
+  const depths = asUsuals.map((usual, i) => usual + lifts[i]);
+  const depthOf = (arch: (typeof prep.arches)[number]) => depths[prep.arches.indexOf(arch)];
   const pair = prep.arches.length === 2;
   // Orthodontic outlines from both arches' teeth, so the bases match.
   let footprint: Ring = [];
@@ -1682,7 +1684,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
       for (let i = 0; i < normals.length; i += 3) { normals[i] = -normals[i]; normals[i + 2] = -normals[i + 2]; }
       opponent = { mesh, teeth: otherTeeth, normals };
     }
-    const made = buildArch(runtime, arch, { ...options, base }, -depth, ortho, line, areaOn(arch.id, arch.clean.mesh), opponent, input.arches.find((entry) => entry.id === arch.id)?.wax, input.arches.find((entry) => entry.id === arch.id)?.cuts, input.arches.find((entry) => entry.id === arch.id)?.gum);
+    const made = buildArch(runtime, arch, { ...options, base, palateLift: lifts[index] || undefined }, -depths[index], ortho, line, areaOn(arch.id, arch.clean.mesh), opponent, input.arches.find((entry) => entry.id === arch.id)?.wax, input.arches.find((entry) => entry.id === arch.id)?.cuts, input.arches.find((entry) => entry.id === arch.id)?.gum);
     if (mode.only !== undefined) {
       mode.take?.(archPartOf(made));
       made.solid.delete();
@@ -1841,7 +1843,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     const raise = options.incisalPin === false ? 0 : Math.max(0, Math.min(PIN_MAX, options.pinRaise ?? 0));
     // Build 117: the cups' fit as chosen; on the dental midline (x = 0 here) when it was found.
     dentalStage("hinge");
-    const parts = articulatorParts(runtime, back, xMin, xMax, depth, -depth, stop, raise, { upper: heelsOf("upper"), lower: heelsOf("lower") }, options.pinStyle ?? "fused", { fit: options.hingeFit, riserGroove: Boolean(options.risers), ...(midline !== null ? { centre: 0 } : {}), ...(options.smoothBase ? { smooth: true } : {}), ...(options.smoothBase && options.hingeStyle === "snap" ? { snap: { grip: options.snapGrip } } : {}) });
+    const parts = articulatorParts(runtime, back, xMin, xMax, Math.max(...prep.arches.filter((a) => a.role === "upper").map(depthOf)), -Math.max(...prep.arches.filter((a) => a.role === "lower").map(depthOf)), stop, raise, { upper: heelsOf("upper"), lower: heelsOf("lower") }, options.pinStyle ?? "fused", { fit: options.hingeFit, riserGroove: Boolean(options.risers), ...(midline !== null ? { centre: 0 } : {}), ...(options.smoothBase ? { smooth: true } : {}), ...(options.smoothBase && options.hingeStyle === "snap" ? { snap: { grip: options.snapGrip } } : {}) });
     if (stop && Number.isFinite(parts.pinY)) pinGeometry = { axleY: parts.axleY, pinY: parts.pinY };
     if (stop && Number.isFinite(parts.pinY) && options.pinStyle === "set") {
       const raises = [...new Set([...PIN_SET, raise])].sort((a, b) => a - b);
@@ -1940,8 +1942,8 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
         toFree.push(solid);
         solid = turned;
       }
-      const lifted = solid.translate([0, 0, depth]);
-      laid.premultiply(new THREE.Matrix4().makeTranslation(0, 0, depth));
+      const lifted = solid.translate([0, 0, depthOf(arch)]);
+      laid.premultiply(new THREE.Matrix4().makeTranslation(0, 0, depthOf(arch)));
       toFree.push(solid);
       solid = lifted;
       const box = solid.boundingBox();
