@@ -31,4 +31,9 @@ describe("Build 273: the settings a pair of models was made with", () => {
     const { code, parts } = dentalSettings({ ...ortho, label: "TEST LABEL" } as typeof ortho);
     expect(`${code} ${parts.join(" ")}`).not.toMatch(/TEST|LABEL|0,1,2/);
   });
+  it("says no height for an aligner base, which has only one", () => {
+    const { code, parts } = dentalSettings({ ...ortho, baseStyle: "follow", baseHeight: "low" });
+    expect(code).not.toMatch(/\blow\b|\btall\b/);
+    expect(parts).not.toContain("Low");
+  });
 });

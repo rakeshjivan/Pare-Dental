@@ -37,7 +37,8 @@ export function dentalSettings(input: DentalSettingsInput): { code: string; part
     else if (input.pinPlace === "sides") { codes.push("posts"); parts.push("Side posts"); }
     if (input.risers) { codes.push("risers"); parts.push("Risers"); }
   }
-  const height = input.baseHeight ?? "standard";
+  // An aligner base has one height (the studio offers no choice for it), so a height left over from another model type is not said.
+  const height = input.baseStyle === "follow" ? "standard" : input.baseHeight ?? "standard";
   if (height !== "standard") { codes.push(height); parts.push(height === "tall" ? "Tall" : "Low"); }
   if (input.keepPalate) { codes.push("palate"); parts.push("Palate kept"); }
   if (input.midlineMark) { codes.push("mid"); parts.push("Midline marked"); }
