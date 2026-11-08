@@ -1916,6 +1916,9 @@ const COOKIE_CUTTER_SETTINGS_STORAGE_KEY = "layerling.cookieCutterSettings";
 /** Build 104 (gimbal 2): Dental Studio names the gimbal's directions as the mouth has them (models stand teeth up, front towards you). */
 const DENTAL_GIMBAL_LABELS = { x: "L – R", y: "Occlusal", z: "Front – Back" } as const;
 
+/** Build 272: the midline marks' radius on the scan, mm. */
+const MIDLINE_DOT = 1.2;
+
 export function LayerlingEditor({
   initialAssets = [],
   initialShapes = [],
@@ -11639,6 +11642,8 @@ export function LayerlingEditor({
     if (!biteMap?.on || biteMap.busy || !last || last.key !== biteMap.key) return;
     drawBiteMap(Boolean(biteMap.contactOnly), biteMap.range ?? 2);
   }, [biteMap?.contactOnly, biteMap?.range]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Build 117 (271, 272): the midline marking - which of its two clicks it waits for (false: not marking). */
+  const [midlinePicking, setMidlinePicking] = useState<false | "front" | "back">(false);
   // Build 97: each arch's opacity, in occlusion, to look through one at the contacts on the other (as
   // Exocad's viewer does) - put back when the map is off or the arches are laid side by side.
   useEffect(() => {
@@ -11651,8 +11656,10 @@ export function LayerlingEditor({
     }
     // Build 108: Gum line - the scans see-through, so the wax under the gum and the gum line on it show.
     if (studio?.waxStudio && studioWaxStep === "gum") for (const id of [studio.slots.upper, studio.slots.lower]) if (id) out[id] = Math.min(out[id] ?? 1, 0.45);
+    // Build 272 (Rakesh): while the midline is marked on the upper, the lower is out of the way.
+    if (midlinePicking && studio?.slots.upper && studio.slots.lower) out[studio.slots.lower] = 0;
     window.layerlingPartOpacity?.(Object.keys(out).length ? out : null);
-  }, [biteMap?.on, biteMap?.upperOpacity, biteMap?.lowerOpacity, dentalStudio?.layout, dentalStudio?.slots.upper, dentalStudio?.slots.lower, studioShellOn, studioOpacity, studioWaxStep]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [biteMap?.on, biteMap?.upperOpacity, biteMap?.lowerOpacity, dentalStudio?.layout, dentalStudio?.slots.upper, dentalStudio?.slots.lower, studioShellOn, studioOpacity, studioWaxStep, midlinePicking]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => window.layerlingPartOpacity?.(null), []);
   // The map goes when Dental Studio closes.
   const studioOpen = Boolean(dentalStudio);
@@ -19379,7 +19386,6 @@ export function LayerlingEditor({
   /** Build 117: Model Builder's articulator - the dental midline marked with a click on the upper (studio coordinates). */
   // Build 271 (Rakesh): two clicks - between the centrals, then further back on the midline (the palate's middle), which
   // squares the arch on its base; Esc at the second keeps the first alone.
-  const [midlinePicking, setMidlinePicking] = useState<false | "front" | "back">(false);
   const midlineGrid = useRef<{ key: string; grid: RayGrid } | null>(null);
   const pickMidline = (x: number, y: number) => {
     const state = dentalStudioRef.current;
@@ -19412,8 +19418,9 @@ export function LayerlingEditor({
     if (!state?.options.midlineMark || !toInput) return;
     const back = toInput.clone().invert();
     const dots = [state.options.midlineMark, ...(state.options.midlineBack ? [state.options.midlineBack] : [])].map((p) => new THREE.Vector3(...p).applyMatrix4(back).toArray() as [number, number, number]);
-    window.layerlingMarkDots?.(dots, 0.35, { colors: dots.map(() => 0x1f8fe0), sizes: dots.map(() => 0.9) });
-    return () => { window.layerlingMarkDots?.(null, 0.35); };
+    // Build 272 (Rakesh: "large enough to be seen"): 1.2 mm balls, and the two joined by the line they set.
+    window.layerlingMarkDots?.(dots, MIDLINE_DOT, { colors: dots.map(() => 0x1f8fe0), joined: true });
+    return () => { window.layerlingMarkDots?.(null, MIDLINE_DOT); };
   }, [midlineShownKey]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Build 117: the STL's header says what the model is for (slicers show it). */
   const stampedForUse = (buffer: ArrayBuffer) => {
@@ -22038,7 +22045,12 @@ export function LayerlingEditor({
             if (current.stage === "ready" || (onlyLabel && current.stage !== "making")) return { ...current, options: { ...current.options, ...patch }, ...(onlyLabel ? {} : { optionsTouched: true }), error: null };
             return current;
           })}
-          onMidlinePick={(on: boolean) => setMidlinePicking(on ? "front" : false)}
+          onMidlinePick={(on: boolean) => {
+            setMidlinePicking(on ? "front" : false);
+            // Build 272 (Rakesh): the arch to mark turned to face the dentist - its biting side, front at the bottom.
+            const markId = dentalStudioRef.current?.slots.upper ?? dentalStudioRef.current?.slots.lower;
+            if (on && markId) window.layerlingShowParts?.([markId], dentalStudioRef.current?.slots.upper ? [0, -1, 0] : [0, 1, 0]);
+          }}
           midlinePicking={midlinePicking}
           onAdvancedChange={(advanced) => setDentalStudio((current) => current ? { ...current, advanced } : current)}
           onApply={() => void makeDentalModels()}

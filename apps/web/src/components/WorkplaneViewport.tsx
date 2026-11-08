@@ -718,7 +718,7 @@ declare global {
     /** `owners` (build 74): which part each run of triangles belongs to, in order - each run then moves with its part. */
     layerlingHighlight?: (triangles: Float32Array | null, owners?: Array<{ shapeId: string; triangles: number }>) => void;
     /** Build 107: Wax-up's landmark dots - small red balls, moved in place (no new geometry) while one is dragged; null clears them. */
-    layerlingMarkDots?: (points: Array<[number, number, number]> | null, radius?: number, look?: { colors?: number[]; sizes?: number[] }) => void;
+    layerlingMarkDots?: (points: Array<[number, number, number]> | null, radius?: number, look?: { colors?: number[]; sizes?: number[]; /** Build 272: each dot joined to the next by a line, drawn over the scan. */ joined?: boolean }) => void;
     /** Build 69: Sculpt's working copy of a part (world soup) drawn in its place while it is worked on; null puts the part back. */
     layerlingSculptPreview?: (shapeId: string, triangles: Float32Array | null, color?: string) => void;
     /** Build 73: live Sculpt - the engine's own geometry drawn in the part's place (it updates the buffers itself); null puts the part back. */
@@ -9835,13 +9835,20 @@ export function WorkplaneViewport({
   // Build 107: Wax-up's landmark dots - one instanced ball, its instances moved in place.
   useEffect(() => {
     let dots: THREE.InstancedMesh | null = null;
+    let joins: THREE.Mesh[] = [];
     const dummy = new THREE.Object3D();
+    const clearJoins = () => {
+      const state = threeRef.current;
+      for (const join of joins) { state?.scene.remove(join); join.geometry.dispose(); (join.material as THREE.Material).dispose(); }
+      joins = [];
+    };
     const clear = () => {
       const state = threeRef.current;
       if (dots && state) state.scene.remove(dots);
       dots?.geometry.dispose();
       (dots?.material as THREE.Material | undefined)?.dispose();
       dots = null;
+      clearJoins();
       if (state) state.needsRender = true;
     };
     window.layerlingMarkDots = (points, radius = 0.45, look) => {
@@ -9866,6 +9873,20 @@ export function WorkplaneViewport({
       });
       dots.instanceMatrix.needsUpdate = true;
       if (dots.instanceColor) dots.instanceColor.needsUpdate = true;
+      // Build 272 (Rakesh): the midline's two marks joined - a rod a third of the dots' width, seen through the scan.
+      clearJoins();
+      if (look?.joined) for (let i = 0; i + 1 < points.length; i += 1) {
+        const from = new THREE.Vector3(...points[i]), to = new THREE.Vector3(...points[i + 1]);
+        const length = from.distanceTo(to);
+        if (length < 1e-6) continue;
+        const join = new THREE.Mesh(new THREE.CylinderGeometry(radius / 3, radius / 3, length, 10), new THREE.MeshBasicMaterial({ color: look.colors?.[i] ?? 0xe0322f, transparent: true, opacity: 0.85, depthTest: false }));
+        join.position.copy(from).add(to).multiplyScalar(0.5);
+        join.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), to.clone().sub(from).normalize());
+        join.renderOrder = 13;
+        join.frustumCulled = false;
+        state.scene.add(join);
+        joins.push(join);
+      }
       state.needsRender = true;
     };
     return () => { clear(); delete window.layerlingMarkDots; };
