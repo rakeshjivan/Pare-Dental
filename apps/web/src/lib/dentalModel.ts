@@ -776,21 +776,31 @@ const mirrorRing = (ring: Ring): Ring => ring.map(([x, y]) => [-x, y] as [number
  * seen from above, PALATE_IN or more within the outline round the teeth (their convex hull: across the back from last
  * molar to last molar, round the front through the incisors - so the cheeks, lips and vestibule are outside it).
  */
-function palateOf(m: Mesh, teeth: Uint8Array): Uint8Array {
-  return palateAndOutline(m, teeth).palate;
+function palateOf(m: Mesh, teeth: Uint8Array, crowns: Uint8Array): Uint8Array {
+  return palateAndOutline(m, teeth, crowns).palate;
 }
 
-function palateAndOutline(m: Mesh, teeth: Uint8Array): { palate: Uint8Array; hull: Ring | null } {
-  const band: Ring = [];
-  for (let i = 0; i < teeth.length; i += 1) if (teeth[i]) band.push([m.v[i * 3], m.v[i * 3 + 1]]);
+/**
+ * Build 272: the outline is drawn round the teeth that lie near the crowns - the wider tooth zone can take in a ragged flap
+ * of cheek standing out beside the molars (DA's reached 14 mm further out on one side), and the vestibule inside it was
+ * taken for palate.
+ */
+function palateAndOutline(m: Mesh, teeth: Uint8Array, crowns: Uint8Array): { palate: Uint8Array; hull: Ring | null } {
+  const crownBand: Ring = [];
+  for (let i = 0; i < crowns.length; i += 1) if (crowns[i]) crownBand.push([m.v[i * 3], m.v[i * 3 + 1]]);
   const palate = new Uint8Array(m.v.length / 3);
-  if (band.length < 10) return { palate, hull: null };
+  if (crownBand.length < 10) return { palate, hull: null };
+  const round = convexHull(crownBand);
+  const band: Ring = [];
+  for (let i = 0; i < teeth.length; i += 1) if (teeth[i] && polygonDistance(round, m.v[i * 3], m.v[i * 3 + 1]) < PALATE_HULL_REACH) band.push([m.v[i * 3], m.v[i * 3 + 1]]);
   const hull = convexHull(band);
   // (More than PALATE_IN inside it: the gum just under the front teeth, under proclined incisors, lies inside it too.)
   for (let i = 0; i < palate.length; i += 1) if (!teeth[i] && polygonDistance(hull, m.v[i * 3], m.v[i * 3 + 1]) < -PALATE_IN) palate[i] = 1;
   return { palate, hull };
 }
 
+/** Build 272: teeth further than this outside the outline round the crowns are left out of the palate's outline, mm. */
+export const PALATE_HULL_REACH = 2;
 /** Build 271: the palate is the scan this far and more inside the outline round the teeth, mm. */
 export const PALATE_IN = 3;
 
@@ -801,7 +811,9 @@ export const PALATE_UNDER = 0.8;
 function palateDepth(mesh: Mesh, frame: THREE.Matrix4): number {
   const m = cloneMesh(mesh);
   applyMatrix(m, frame);
-  const palate = palateOf(m, toothZone(m, undefined, undefined, undefined, TIP_CEILING));
+  const teeth = toothZone(m, undefined, undefined, undefined, TIP_CEILING);
+  const crowns = toothZone(m, TOOTH_CROWN, CROWN_REACH, undefined, TIP_CEILING, TIP_FLOOR, TIP_LONELY).map((inZone, i) => (inZone && teeth[i] ? 1 : 0));
+  const palate = palateOf(m, teeth, crowns);
   let low = Infinity;
   for (let i = 0; i < palate.length; i += 1) if (palate[i]) low = Math.min(low, m.v[i * 3 + 2]);
   return Number.isFinite(low) ? -low + 1 : 0;
@@ -943,7 +955,7 @@ function buildArch(
   let areaLow = Infinity;
   if (area) for (let i = 0; i < area.length; i += 1) if (area[i]) areaLow = Math.min(areaLow, m.v[i * 3 + 2]);
   // Build 271: the palate kept whole (an upper, when asked): nor does the cut pass through it.
-  const palateKept = options.keepPalate && arch.role === "upper" && !arch.partial ? palateAndOutline(m, scanTeeth) : null;
+  const palateKept = options.keepPalate && arch.role === "upper" && !arch.partial ? palateAndOutline(m, scanTeeth, crowns) : null;
   const palate = palateKept ? palateKept.palate : null;
   let palateLow = Infinity;
   if (palate) for (let i = 0; i < palate.length; i += 1) if (palate[i]) palateLow = Math.min(palateLow, m.v[i * 3 + 2]);
