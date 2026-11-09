@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { affineBetween, CANINE_TIP, layoutSmileSet, SET_DEFAULTS, type SetAnchors, type SetTooth } from "@/lib/waxSmileSet";
+import { affineBetween, CANINE_TIP, layoutSmileSet, restFrames, SET_DEFAULTS, type SetAnchors, type SetTooth } from "@/lib/waxSmileSet";
 import type { ToothKind } from "@/lib/dentalWaxup";
 
 /** Build 277: the six front teeth set out together from whole-set controls. Synthetic teeth only. */
@@ -135,5 +135,25 @@ describe("affineBetween", () => {
     const after = soup.slice();
     after[30] += 0.5;
     expect(affineBetween(soup, after)!.miss).toBeGreaterThan(0.3);
+  });
+});
+
+describe("restFrames", () => {
+  // Two boxes standing at an angle, as a set turns its laterals along the arch: the lateral's mesial points at the central.
+  const box = (cx: number, cy: number, turn: number, w: number) => {
+    const pts: number[] = [];
+    for (const a of [-w / 2, w / 2]) for (const b of [0, 2]) for (const z of [-9, 0]) {
+      pts.push(cx + a * Math.cos(turn) - b * Math.sin(turn), cy + a * Math.sin(turn) + b * Math.cos(turn) - 2, z);
+    }
+    return pts;
+  };
+  it("reads each tooth's mesial towards its mesial neighbour, its width along it and its length", () => {
+    const f = restFrames([{ fdi: 11, soup: box(-4, 0, 0, 8) }, { fdi: 21, soup: box(4, 0, 0, 8) }, { fdi: 12, soup: box(-10, -2, -0.4, 6) }], [0, 0, 1], [0, -1, 0]);
+    const lateral = f.get(12)!;
+    expect(lateral.frame.mesial[0]).toBeGreaterThan(0.85);
+    expect(lateral.frame.out[1]).toBeLessThan(0);
+    expect(lateral.length).toBeCloseTo(9, 5);
+    expect(f.get(11)!.frame.mesial[0]).toBeCloseTo(1, 5);
+    expect(f.get(11)!.width).toBeCloseTo(8, 5);
   });
 });

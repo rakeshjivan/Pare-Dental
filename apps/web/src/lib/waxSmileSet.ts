@@ -270,3 +270,43 @@ export type SmileRecord = {
 
 /** How far a tooth may have been reshaped (not just moved, turned or sized) and still follow the set, mm. */
 export const SCULPTED_MISS = 0.02;
+
+/**
+ * Each front tooth's rest frame read from the teeth themselves, as a tooth set has them already turned
+ * along its own arch: mesial towards the neighbour mesial to it (the centrals towards each other), in the
+ * plane square to `up`; out labial (the side `out` points); the origin the middle of its incisal edge on
+ * its labial face; width along mesial and length along up, mm. Teeth by FDI with their soups (scene coordinates).
+ */
+export function restFrames(teeth: Array<{ fdi: number; soup: ArrayLike<number> }>, up: Vec3, out: Vec3): Map<number, { frame: ToothFrame; width: number; length: number }> {
+  const u = v(up).normalize();
+  const centroid = (soup: ArrayLike<number>) => {
+    const c = new THREE.Vector3();
+    const n = Math.max(1, soup.length / 3);
+    for (let i = 0; i + 2 < soup.length; i += 3) c.x += soup[i] / n, c.y += soup[i + 1] / n, c.z += soup[i + 2] / n;
+    return c;
+  };
+  const centres = new Map(teeth.map((t) => [t.fdi, centroid(t.soup)]));
+  const result = new Map<number, { frame: ToothFrame; width: number; length: number }>();
+  for (const tooth of teeth) {
+    const q = Math.floor(tooth.fdi / 10), n = tooth.fdi % 10;
+    const towards = n === 1 ? centres.get((q === 1 ? 2 : q === 2 ? 1 : q === 3 ? 4 : 3) * 10 + 1) : centres.get(q * 10 + n - 1);
+    const c = centres.get(tooth.fdi)!;
+    let mesial = towards ? towards.clone().sub(c) : new THREE.Vector3();
+    mesial.addScaledVector(u, -mesial.dot(u));
+    if (mesial.length() < 1e-6) mesial = new THREE.Vector3().crossVectors(u, v(out)).normalize();
+    mesial.normalize();
+    const o = new THREE.Vector3().crossVectors(u, mesial).normalize();
+    if (o.dot(v(out)) < 0) o.negate();
+    let lo = Infinity, hi = -Infinity, top = -Infinity, bottom = Infinity, front = -Infinity;
+    const p = new THREE.Vector3();
+    for (let i = 0; i + 2 < tooth.soup.length; i += 3) {
+      p.set(tooth.soup[i], tooth.soup[i + 1], tooth.soup[i + 2]).sub(c);
+      const a = p.dot(mesial), b = p.dot(u), f = p.dot(o);
+      lo = Math.min(lo, a); hi = Math.max(hi, a); top = Math.max(top, b); bottom = Math.min(bottom, b); front = Math.max(front, f);
+    }
+    if (!Number.isFinite(lo)) continue;
+    const origin = c.clone().addScaledVector(mesial, (lo + hi) / 2).addScaledVector(u, top).addScaledVector(o, front);
+    result.set(tooth.fdi, { frame: { origin: origin.toArray() as Vec3, mesial: mesial.toArray() as Vec3, out: o.toArray() as Vec3, up: u.toArray() as Vec3 }, width: hi - lo, length: top - bottom });
+  }
+  return result;
+}

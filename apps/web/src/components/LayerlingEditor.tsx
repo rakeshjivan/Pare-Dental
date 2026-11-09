@@ -110,7 +110,7 @@ import { looksLikeDentalScan, type DentalAnalysis, type DentalRole, type DentalS
 import { DentalChrome } from "./workplane/DentalChrome";
 import { STUDIO_SHELL, WAXUP_ENABLED } from "@/lib/pareFeatures";
 import { fitArchLine, layOnArchLine, type ArchTooth } from "@/lib/waxArchLine";
-import { affineBetween, clampControls, layoutSmileSet, SCULPTED_MISS, SET_DEFAULTS, type SetControls, type SetTooth, type SmileRecord } from "@/lib/waxSmileSet";
+import { affineBetween, clampControls, layoutSmileSet, restFrames, SCULPTED_MISS, SET_DEFAULTS, type SetControls, type SetTooth, type SmileRecord } from "@/lib/waxSmileSet";
 import { StudioShell } from "./workplane/StudioShell";
 import { useStudioSlot } from "@/lib/studioSlots";
 import { createPortal } from "react-dom";
@@ -13698,10 +13698,13 @@ export function LayerlingEditor({
         const at = (p: [number, number, number]) => new THREE.Vector3(...p).applyMatrix4(back).toArray() as [number, number, number];
         const sum = (pick: (f: (typeof front)[number]["worldFrame"]) => [number, number, number]) => front.reduce((acc, tooth) => acc.add(new THREE.Vector3(...pick(tooth.worldFrame))), new THREE.Vector3()).normalize().toArray() as [number, number, number];
         const identity = new THREE.Matrix4().toArray();
+        const up = sum((f) => f.up), out = sum((f) => f.out);
+        // Each tooth's rest frame from the teeth themselves (a set has them turned along its own arch already).
+        const frames = restFrames(front.map((tooth) => ({ fdi: tooth.fdi, soup: tooth.soup })), up, out);
         const record: SmileRecord = {
           controls: { ...SET_DEFAULTS },
-          anchors: { midline: at(plan.landmarks.midline), canines: [at(plan.landmarks.canines[0]), at(plan.landmarks.canines[1])], up: sum((f) => f.up), out: sum((f) => f.out) },
-          rest: Object.fromEntries(front.map((tooth) => [tooth.fdi, { frame: tooth.worldFrame, width: tooth.width, length: tooth.length }])),
+          anchors: { midline: at(plan.landmarks.midline), canines: [at(plan.landmarks.canines[0]), at(plan.landmarks.canines[1])], up, out },
+          rest: Object.fromEntries(front.flatMap((tooth) => { const f = frames.get(tooth.fdi); return f ? [[tooth.fdi, f]] : []; })),
           laid: Object.fromEntries(front.map((tooth) => [tooth.fdi, identity])),
         };
         for (const tooth of front) waxSmileRest.current.set(tooth.shape.id, tooth.soup);

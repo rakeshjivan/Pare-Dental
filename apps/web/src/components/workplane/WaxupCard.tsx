@@ -778,10 +778,12 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
         {dropMode ? (
           <>
             {/* Build 107: as Meshmixer - the set dropped whole; the gimbal moves and turns it, the slider sizes it. */}
-            <div className="wax-guide">
-              <strong>{t("waxup.dropTitle")}</strong>
-              <span>{t("waxup.dropHint")}</span>
-            </div>
+            {view.smileSet ? null : (
+              <div className="wax-guide">
+                <strong>{t("waxup.dropTitle")}</strong>
+                <span>{t("waxup.dropHint")}</span>
+              </div>
+            )}
             <div className="studio-mm-choice two" role="radiogroup" aria-label={t("waxup.dropMove")}>
               <button type="button" role="radio" aria-checked={!view.selected || view.selectedAll === true} className={!view.selected || view.selectedAll ? "active" : ""} disabled={working} onClick={() => actions.onSelectSet?.()}>{t("waxup.dropWholeSet")}</button>
               <button type="button" role="radio" aria-checked={Boolean(view.selected) && !view.selectedAll} className={view.selected && !view.selectedAll ? "active" : ""} disabled={working} onClick={() => { const first = [...view.placed].sort((a, b) => a.fdi - b.fdi)[0]; if (first) actions.onSelect(first.id); }}>{t("waxup.dropOneTooth")}</button>
@@ -1177,9 +1179,9 @@ function SmileSetPanel({ set, workspace, disabled, onChange }: { set: NonNullabl
         <span>{t("waxup.smileFit")}</span>
       </label>
       <EdgeModifierSlider label={t("waxup.smileRatio")} title={t("waxup.smileRatioHint")} value={Math.round(c.ratio * 100)} min={r.ratio[0] * 100} max={r.ratio[1] * 100} step={1} unit="%" workspace={workspace} disabled={disabled} onChange={(value) => change({ ratio: Math.round(value) / 100 })} />
-      <p className="blend-hint">{t("waxup.smileCentralIs", { width: set.centralWidth.toFixed(1), length: set.centralLength.toFixed(1) })}</p>
+      <p className="blend-hint" role="status">{t("waxup.smileCentralIs", { width: set.centralWidth.toFixed(1), length: set.centralLength.toFixed(1) })}</p>
       <EdgeModifierSlider label={t("waxup.smileRed")} title={t("waxup.smileRedHint")} value={Math.round(c.red * 100)} min={r.red[0] * 100} max={r.red[1] * 100} step={1} unit="%" workspace={workspace} disabled={disabled} onChange={(value) => change({ red: Math.round(value) / 100 })} />
-      {set.red !== null ? <p className="blend-hint">{t("waxup.smileRedIs", { red: Math.round(set.red * 100) })}</p> : null}
+      {set.red !== null ? <p className="blend-hint" role="status">{t("waxup.smileRedIs", { red: Math.round(set.red * 100) })}</p> : null}
       {mm("arc", "waxup.smileArc", "waxup.smileArcHint")}
       {mm("fullness", "waxup.smileFullness", "waxup.smileFullnessHint")}
       <button type="button" className="secondary" aria-expanded={more} onClick={() => setMore((open) => !open)}>{t(more ? "waxup.smileLess" : "waxup.smileMore")}</button>
