@@ -19,7 +19,8 @@ const BASES: Record<DentalBaseStyle, { outline: string; inner?: string }> = {
   clean: { outline: "M12 44 Q7 44 7 39 L7 30 Q7 20 13 13 Q21 4 32 3 Q43 4 51 13 Q57 20 57 30 L57 39 Q57 44 52 44 Z" },
   // The scan's own edge, as it was taken.
   // Build 120: an aligner model - close round the teeth, low.
-  follow: { outline: "M13 41 Q9 41 9 37 L9 30 Q9 21 14 15 Q22 6 32 6 Q42 6 50 15 Q55 21 55 30 L55 37 Q55 41 51 41 Z" },
+  // Build 274 (Rakesh: "Horseshoe"): open across the palate, so the picture shows the gap inside the teeth.
+  follow: { outline: "M13 41 Q9 41 9 37 L9 30 Q9 21 14 15 Q22 6 32 6 Q42 6 50 15 Q55 21 55 30 L55 37 Q55 41 51 41 L44 41 Q43 27 39 20 Q36 16 32 16 Q28 16 25 20 Q21 27 20 41 Z" },
   // The horseshoe, with the palate or the tongue space closed by a plate.
   plate: { outline: "M8 42 C8 13 19 4 32 4 C45 4 56 13 56 42 Z", inner: "M19 42 C19 22 24 17 32 17 C40 17 45 22 45 42 Z" },
   // Trimmed the ABO way: back square to the midline, heels, angled sides, the front pointed.
@@ -32,7 +33,7 @@ export function BaseStylePicture({ style }: { style: DentalBaseStyle }) {
   const base = BASES[style] ?? BASES.clean;
   return (
     <svg className={`dental-picture base-${style}`} viewBox="0 0 64 48" aria-hidden="true">
-      <path className="base" d={base.outline} />
+      <path className="base" d={base.outline} fillRule="evenodd" />
       {base.inner ? <path className="plate" d={base.inner} /> : null}
       {style === "articulator" ? (
         <g className="pockets">

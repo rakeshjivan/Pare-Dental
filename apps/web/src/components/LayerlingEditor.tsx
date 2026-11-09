@@ -22053,7 +22053,8 @@ export function LayerlingEditor({
             // Build 274 (Rakesh: "present the upper arch facing forwards and level"): seen from the front - the scans already stand
             // level, front towards +Z, once they are laid out (arrangedDentalScans).
             const markId = dentalStudioRef.current?.slots.upper ?? dentalStudioRef.current?.slots.lower;
-            if (on && markId) window.layerlingShowParts?.([markId], [0, 0, 1]);
+            // Close in (0.75): the front teeth fill the view, so the click between the centrals is easy to place.
+            if (on && markId) window.layerlingShowParts?.([markId], [0, 0, 1], 0.75);
           }}
           midlinePicking={midlinePicking}
           madeSettings={dentalStudio.madeSettings?.parts}
