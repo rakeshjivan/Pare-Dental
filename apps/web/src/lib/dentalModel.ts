@@ -1905,6 +1905,8 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
   })));
   // Lay out: base down on the plate, the upper turned over beside the lower; or upper on lower.
   const out: DentalPart[] = [];
+  // Build 275: each part's finished solid, written to its file only once it is in its final place (below).
+  const laidSolids: ManifoldSolid[] = [];
   const pieces: number[] = [];
   let offsetX = 0;
   built.forEach(({ arch }, i) => {
@@ -1962,19 +1964,25 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     if (pair && rest && arch.role === "upper") {
       toBite.premultiply(new THREE.Matrix4().makeTranslation(0, -rest.axleY, 0)).premultiply(new THREE.Matrix4().makeRotationX((-rest.degrees * Math.PI) / 180)).premultiply(new THREE.Matrix4().makeTranslation(0, rest.axleY, 0));
     }
-    out.push({ id: arch.id, role: arch.role, positions: stlPositions(solid), height: own.max[2] - own.min[2], volume: solid.volume(), ...(pair ? { toBite: toBite.toArray() } : {}) });
+    out.push({ id: arch.id, role: arch.role, positions: new Float32Array(0), height: own.max[2] - own.min[2], volume: solid.volume(), ...(pair ? { toBite: toBite.toArray() } : {}) });
+    laidSolids.push(solid);
     toFree.push(solid);
   });
   if (pair && options.layout === "print") {
-    // Centre the pair on the origin.
+    // Centre the pair on the origin. Build 275: the solids are moved, not the written corners - moving 32-bit corners
+    // rounds some together again, and the file would no longer be watertight.
     let minX = Infinity, maxX = -Infinity;
-    out.forEach((part) => { for (let i = 0; i < part.positions.length; i += 3) { minX = Math.min(minX, part.positions[i]); maxX = Math.max(maxX, part.positions[i]); } });
+    laidSolids.forEach((solid) => { const box = solid.boundingBox(); minX = Math.min(minX, box.min[0]); maxX = Math.max(maxX, box.max[0]); });
     const mid = (minX + maxX) / 2;
-    out.forEach((part) => {
-      for (let i = 0; i < part.positions.length; i += 3) part.positions[i] -= mid;
+    laidSolids.forEach((solid, i) => {
+      const centred = solid.translate([-mid, 0, 0]);
+      toFree.push(centred);
+      laidSolids[i] = centred;
+      const part = out[i];
       if (part.toBite) part.toBite = new THREE.Matrix4().fromArray(part.toBite).multiply(new THREE.Matrix4().makeTranslation(mid, 0, 0)).toArray();
     });
   }
+  out.forEach((part, i) => { part.positions = stlPositions(laidSolids[i]); });
   // Build 78: the pin set lies on the plate in front of the models, ready to print with them.
   if (pinSet && out.length) {
     let minX = Infinity, maxX = -Infinity, minY = Infinity, minZ = Infinity;

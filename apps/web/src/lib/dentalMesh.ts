@@ -831,13 +831,15 @@ export function tidyForFile(soup: Float32Array): Float32Array {
 /**
  * Edges that are not shared by exactly two triangles once corners at the same point are joined, as
  * an STL file is read (the 32-bit values it holds): pinched edges and open ones. 0 is a clean,
- * closed surface.
+ * closed surface. With a weld (mm), corners closer than about that are joined too, as programs that read STL with a
+ * tolerance do (Build 275: Manifold can keep corners 0.0000000000003 mm apart, distinct in the file, one point to them).
  */
-export function pinchedEdges(positions: ArrayLike<number>): number {
+export function pinchedEdges(positions: ArrayLike<number>, weld?: number): number {
   const id = new Map<string, number>();
   const ids = new Int32Array(Math.floor(positions.length / 3));
+  const at = weld ? (v: number) => Math.round(Math.fround(v) / weld) : (v: number) => Math.fround(v);
   for (let i = 0; i < ids.length; i += 1) {
-    const key = `${Math.fround(positions[i * 3])},${Math.fround(positions[i * 3 + 1])},${Math.fround(positions[i * 3 + 2])}`;
+    const key = `${at(positions[i * 3])},${at(positions[i * 3 + 1])},${at(positions[i * 3 + 2])}`;
     let n = id.get(key);
     if (n === undefined) { n = id.size; id.set(key, n); }
     ids[i] = n;
@@ -1289,22 +1291,50 @@ export function cleanStlSoup(positions: Float32Array): Float32Array {
  */
 export const STL_TIDY = [0.005, 0.002, 0.01] as const;
 
+/** Build 275: corners closer than this (mm, 0.01 micron) count as one when a written model is checked. */
+export const STL_WELD = 1e-5;
+
 /**
- * Build 275 (final check, Build 274): a model as it will be written. Rounded to 32-bit floats, three corners Manifold
- * kept a few microns apart can fall on one line - a triangle of no area whose edges are then used three or four times
- * (not watertight). cleanStlSoup cannot take those out without leaving a hole; Manifold's own simplify (which keeps the
- * solid closed) merges them first. Tried at each STL_TIDY tolerance only while the file is not yet watertight, and
- * the cleanest result kept - the model as made when none is cleaner.
+ * Build 275: corners within about `weld` (mm) of each other moved onto one (the first met), so a file holds no corners a
+ * hair apart that a reader joining within a tolerance would merge - and leave triangles of no area behind. cleanStlSoup
+ * then drops the triangles that collapse. Moves no corner by more than `weld`.
+ */
+export function snapCorners(positions: Float32Array, weld: number): Float32Array {
+  const first = new Map<string, number>();
+  const out = new Float32Array(positions.length);
+  for (let i = 0; i < positions.length; i += 3) {
+    const key = `${Math.round(positions[i] / weld)},${Math.round(positions[i + 1] / weld)},${Math.round(positions[i + 2] / weld)}`;
+    let at = first.get(key);
+    if (at === undefined) { at = i; first.set(key, i); }
+    out[i] = positions[at]; out[i + 1] = positions[at + 1]; out[i + 2] = positions[at + 2];
+  }
+  return out;
+}
+
+/** Bad edges in a file both as stored and as a reader that joins corners within STL_WELD sees it. */
+function stlBadEdges(positions: Float32Array): number {
+  return pinchedEdges(positions) + pinchedEdges(positions, STL_WELD);
+}
+
+/**
+ * Build 275 (final check, Build 274): a model as it will be written. Manifold keeps some corners a hair apart - down to
+ * 0.0000000000003 mm, or a few microns along a near-flat line. The file is closed as stored, but a program that joins
+ * corners within a tolerance (most STL readers, many slicers) merges them, and the triangles between become slivers of
+ * no area whose edges are used three or four times (not watertight). cleanStlSoup cannot take those out without leaving
+ * a hole; so corners that close are joined first (snapCorners), and where a sliver still remains Manifold's own simplify
+ * (which keeps the solid closed) merges it. Simplify is tried at each STL_TIDY tolerance only while either reading still
+ * finds a bad edge, and the cleanest result kept - the model as made when none is
+ * cleaner.
  */
 export function stlPositions(solid: ManifoldSolid): Float32Array {
-  let best = cleanStlSoup(solidPositions(solid));
-  let bad = pinchedEdges(best);
+  let best = cleanStlSoup(snapCorners(solidPositions(solid), STL_WELD));
+  let bad = stlBadEdges(best);
   for (const tolerance of STL_TIDY) {
     if (bad === 0) break;
     const tidy = solid.simplify(tolerance);
-    const positions = cleanStlSoup(solidPositions(tidy));
+    const positions = cleanStlSoup(snapCorners(solidPositions(tidy), STL_WELD));
     tidy.delete();
-    const left = pinchedEdges(positions);
+    const left = stlBadEdges(positions);
     if (left < bad) { best = positions; bad = left; }
   }
   return best;
