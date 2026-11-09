@@ -1284,6 +1284,33 @@ export function cleanStlSoup(positions: Float32Array): Float32Array {
 }
 
 /**
+ * Build 275: how far (mm) a model may be simplified as it is written, tried in turn until the file is watertight. Each
+ * moves no surface by more than that - a few microns, far under a scan's or a printer's detail.
+ */
+export const STL_TIDY = [0.005, 0.002, 0.01] as const;
+
+/**
+ * Build 275 (final check, Build 274): a model as it will be written. Rounded to 32-bit floats, three corners Manifold
+ * kept a few microns apart can fall on one line - a triangle of no area whose edges are then used three or four times
+ * (not watertight). cleanStlSoup cannot take those out without leaving a hole; Manifold's own simplify (which keeps the
+ * solid closed) merges them first. Tried at each STL_TIDY tolerance only while the file is not yet watertight, and
+ * the cleanest result kept - the model as made when none is cleaner.
+ */
+export function stlPositions(solid: ManifoldSolid): Float32Array {
+  let best = cleanStlSoup(solidPositions(solid));
+  let bad = pinchedEdges(best);
+  for (const tolerance of STL_TIDY) {
+    if (bad === 0) break;
+    const tidy = solid.simplify(tolerance);
+    const positions = cleanStlSoup(solidPositions(tidy));
+    tidy.delete();
+    const left = pinchedEdges(positions);
+    if (left < bad) { best = positions; bad = left; }
+  }
+  return best;
+}
+
+/**
  * Build 116: a binary STL cleaned as written (cleanStlSoup on its 32-bit corners), for Dental Studio's saved models:
  * the model is placed in the scene after it is made, and rounding there can bring corners together again.
  */

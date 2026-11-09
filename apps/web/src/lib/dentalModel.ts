@@ -328,7 +328,7 @@ export { CUT_FRONT, CUT_BEYOND } from "@/lib/dentalMesh";
 export const CUT_SIDE = 2;
 /** Build 103: the band below the ideal tooth's edge from which the patient's tooth is cut whole (palatally too), mm. */
 export const CUT_EDGE_BAND = 1.5;
-import { CUT_FRONT, CUT_BEYOND, cleanStlSoup } from "@/lib/dentalMesh";
+import { CUT_FRONT, CUT_BEYOND, stlPositions } from "@/lib/dentalMesh";
 /** Gum kept below the teeth by a clean base when none is set, mm. */
 export const CLEAN_GUM = 3;
 /** Rounds of smoothing the margin's line gets along the surface before the cut (build 52). */
@@ -1849,14 +1849,14 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     if (stop && Number.isFinite(parts.pinY) && options.pinStyle === "set") {
       const raises = [...new Set([...PIN_SET, raise])].sort((a, b) => a - b);
       const set = incisalPins(runtime, raises, parts.axleY, parts.pinY, parts.bossTop);
-      pinSet = { positions: cleanStlSoup(solidPositions(set)), raises };
+      pinSet = { positions: stlPositions(set), raises };
       set.delete();
     }
     // Build 117: the bite-opening risers for the side posts, a part of their own.
     if (options.risers && stop?.sides && parts.posts.length) {
       const made = pinRisers(runtime, parts.posts, parts.axleY, (parts.rest * Math.PI) / 180, options.hingeFit);
       if (made) {
-        riserSet = { positions: cleanStlSoup(solidPositions(made.set)), heights: made.risers.map((riser) => riser.raise) };
+        riserSet = { positions: stlPositions(made.set), heights: made.risers.map((riser) => riser.raise) };
         made.set.delete();
       } else warnings.push("risers");
     }
@@ -1962,9 +1962,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     if (pair && rest && arch.role === "upper") {
       toBite.premultiply(new THREE.Matrix4().makeTranslation(0, -rest.axleY, 0)).premultiply(new THREE.Matrix4().makeRotationX((-rest.degrees * Math.PI) / 180)).premultiply(new THREE.Matrix4().makeTranslation(0, rest.axleY, 0));
     }
-    // EXPERIMENT (not committed): simplify before export.
-    if (process.env.SIMPLIFY) { const s = solid.simplify(Number(process.env.SIMPLIFY)); toFree.push(solid); solid = s; }
-    out.push({ id: arch.id, role: arch.role, positions: cleanStlSoup(solidPositions(solid)), height: own.max[2] - own.min[2], volume: solid.volume(), ...(pair ? { toBite: toBite.toArray() } : {}) });
+    out.push({ id: arch.id, role: arch.role, positions: stlPositions(solid), height: own.max[2] - own.min[2], volume: solid.volume(), ...(pair ? { toBite: toBite.toArray() } : {}) });
     toFree.push(solid);
   });
   if (pair && options.layout === "print") {
