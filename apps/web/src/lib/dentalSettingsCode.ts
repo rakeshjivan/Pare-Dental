@@ -32,7 +32,8 @@ export function dentalSettings(input: DentalSettingsInput): { code: string; part
   if (input.build > 0) { codes.push(`b${input.build}`); parts.push(`Build ${input.build}`); }
   codes.push(style.code); parts.push(style.word);
   if (input.hinge) {
-    const snap = input.hingeStyle === "snap";
+    // Build 276 (Rakesh): every articulated pair is made with the captive (snap) hinge, whatever an older case saved.
+    const snap = true;
     codes.push(snap ? "snap" : "hinge"); parts.push(snap ? "Snap hinge" : "Standard hinge");
     if (input.incisalPin === false) { codes.push("nopin"); parts.push("No pin"); }
     else if (input.pinPlace === "sides") { codes.push("posts"); parts.push("Side posts"); }

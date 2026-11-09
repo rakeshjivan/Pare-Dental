@@ -1844,7 +1844,7 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     const raise = options.incisalPin === false ? 0 : Math.max(0, Math.min(PIN_MAX, options.pinRaise ?? 0));
     // Build 117: the cups' fit as chosen; on the dental midline (x = 0 here) when it was found.
     dentalStage("hinge");
-    const parts = articulatorParts(runtime, back, xMin, xMax, Math.max(...prep.arches.filter((a) => a.role === "upper").map(depthOf)), -Math.max(...prep.arches.filter((a) => a.role === "lower").map(depthOf)), stop, raise, { upper: heelsOf("upper"), lower: heelsOf("lower") }, options.pinStyle ?? "fused", { fit: options.hingeFit, riserGroove: Boolean(options.risers), ...(midline !== null ? { centre: 0 } : {}), ...(options.smoothBase ? { smooth: true } : {}), ...(options.smoothBase && options.hingeStyle === "snap" ? { snap: { grip: options.snapGrip } } : {}) });
+    const parts = articulatorParts(runtime, back, xMin, xMax, Math.max(...prep.arches.filter((a) => a.role === "upper").map(depthOf)), -Math.max(...prep.arches.filter((a) => a.role === "lower").map(depthOf)), stop, raise, { upper: heelsOf("upper"), lower: heelsOf("lower") }, options.pinStyle ?? "fused", { fit: options.hingeFit, riserGroove: Boolean(options.risers), ...(midline !== null ? { centre: 0 } : {}), ...(options.smoothBase ? { smooth: true } : {}), /* Build 276 (Rakesh): always the captive hinge - the passive one is no longer offered. */ ...(options.smoothBase ? { snap: { grip: options.snapGrip } } : {}) });
     if (stop && Number.isFinite(parts.pinY)) pinGeometry = { axleY: parts.axleY, pinY: parts.pinY };
     if (stop && Number.isFinite(parts.pinY) && options.pinStyle === "set") {
       const raises = [...new Set([...PIN_SET, raise])].sort((a, b) => a - b);

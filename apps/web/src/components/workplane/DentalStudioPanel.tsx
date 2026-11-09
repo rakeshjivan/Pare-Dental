@@ -2,7 +2,7 @@
 
 import type { BiteContactStats } from "@/lib/biteContacts";
 import { SNAP_GRIPS, snapGrip } from "@/lib/dentalSnapHinge";
-import { CUP_FIT, HINGE_FITS, PIN_CLEAR, PIN_GAP_MAX, PIN_MAX, PIN_STEP, PIN_WARN, articulatorPinPatch } from "@/lib/dentalArticulator";
+import { PIN_CLEAR, PIN_GAP_MAX, PIN_MAX, PIN_STEP, PIN_WARN, articulatorPinPatch } from "@/lib/dentalArticulator";
 import { biteOpenings } from "@/lib/waxOcclusion";
 
 /** Build 78: a bite scan further than this from the scanner's bite (mm RMS) is pointed out. */
@@ -18,7 +18,7 @@ const toolSlot = (element: HTMLElement | null) => setStudioSlot("tool", element)
 import { GuideHelpLink } from "@/components/GuideHelpLink";
 import { MovableToolPanel } from "@/components/workplane/MovableToolPanel";
 import { EdgeModifierSlider, SmoothSliders } from "@/components/workplane/EdgeModifierPanel";
-import { ArticulatorPicture, ArticulatorSidesPicture, BaseStylePicture, FitPicture, HeightPicture, HingePicture, ModelHeightPicture, PairPicture } from "@/components/workplane/DentalPictures";
+import { ArticulatorPicture, ArticulatorSidesPicture, BaseStylePicture, FitPicture, HeightPicture, ModelHeightPicture, PairPicture } from "@/components/workplane/DentalPictures";
 import { WaxupCard, archOrder, defaultMarkTeeth, waxupSummary, type WaxupActions, type WaxupPart, type WaxupView } from "@/components/workplane/WaxupCard";
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/lib/useLanguage";
@@ -628,7 +628,7 @@ export function DentalStudioPanel({
   // asked on the way through - it is set by the scan - only offered again in Edit design.
   const askHeight = editing && preset !== "aligner";
   const modelDone = asked.type && (pair ? asked.layout && (options.hinge || !askHeight || asked.height) : !askHeight || asked.height);
-  const articOrder = ["hinge", "fit", "pins", ...(options.incisalPin !== false ? ["gap", "ovd"] : []), ...(askHeight ? ["aheight"] : [])];
+  const articOrder = ["fit", "pins", ...(options.incisalPin !== false ? ["gap", "ovd"] : []), ...(askHeight ? ["aheight"] : [])];
   const articDone = articOrder.every((id) => asked[id]);
   // Build 106: in the studio frame - the steps along its top, Back and Next along its bottom, the step's
   // guidance over the 3D view; the panel keeps the step's own tools.
@@ -1164,7 +1164,7 @@ export function DentalStudioPanel({
             {(["separate", "articulated"] as const).map((kind) => {
               const on = Boolean(asked.layout) && (kind === "articulated" ? options.hinge : !options.hinge);
               return (
-                <button key={kind} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} title={kind === "articulated" ? t("dental.hingeHint") : undefined} onClick={() => { if (kind === "articulated") toArticulator.current = true; onOptionsChange(kind === "articulated" ? { hinge: true, hingeStyle: options.hingeStyle ?? "snap", ...(options.hinge ? {} : articulatorPinPatch({ incisalPin: false })) } : { hinge: false }); answer("layout"); if (kind === "articulated" && options.hinge) setMbStepId("articulator"); }}>
+                <button key={kind} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} title={kind === "articulated" ? t("dental.hingeHint") : undefined} onClick={() => { if (kind === "articulated") toArticulator.current = true; onOptionsChange(kind === "articulated" ? { hinge: true, hingeStyle: "snap", ...(options.hinge ? {} : articulatorPinPatch({ incisalPin: false })) } : { hinge: false }); answer("layout"); if (kind === "articulated" && options.hinge) setMbStepId("articulator"); }}>
                   <PairPicture kind={kind} />
                   <span>{t(kind === "articulated" ? "studio.articulatedModels" : "studio.separateModels")}</span>
                 </button>
@@ -1281,11 +1281,11 @@ export function DentalStudioPanel({
         const pinOn = options.incisalPin !== false;
         const place = options.pinPlace ?? "sides";
         const pins = !pinOn ? "none" : place === "sides" ? "sides" : "front";
-        // Build 120 (Rakesh): Captive (the snap hinge) is set when Articulated is chosen; a case saved before stays as made.
-        const snap = options.hingeStyle === "snap";
-        const fitIndex = snap ? Math.max(0, SNAP_GRIPS.findIndex((grip) => Math.abs(snapGrip(options.snapGrip) - grip) < 1e-6)) : Math.max(0, HINGE_FITS.findIndex((fit) => Math.abs((options.hingeFit ?? CUP_FIT) - fit) < 1e-6));
+        // Build 276 (Rakesh): every articulated pair has the captive hinge (the snap hinge) - the passive hinge is no
+        // longer offered, so there is no hinge to choose; a case saved with the passive one is made with the captive.
+        const fitIndex = Math.max(0, SNAP_GRIPS.findIndex((grip) => Math.abs(snapGrip(options.snapGrip) - grip) < 1e-6));
         const tolNames = ["studio.hingeFitTighter", "studio.hingeFitStandard", "studio.hingeFitLooser"] as const;
-        const tolPos = snap ? 2 - fitIndex : fitIndex;
+        const tolPos = 2 - fitIndex;
         // Build 120 (Rakesh): the questions answered so far (a line each, to change), then the next one open - none after it.
         const order = articOrder;
         const first = order.find((id) => !asked[id]) ?? null;
@@ -1305,15 +1305,10 @@ export function DentalStudioPanel({
         // and only Next opens the following question. A slider always holds a value, so its Next is ready.
         const done = (id: string, ready = chosen(id), note?: string) => <div className="studio-q-done">{note ? <p className="studio-q-note">{note}</p> : null}<button type="button" className={ready ? "studio-q-next ready" : "studio-q-next"} disabled={busy || !ready} onClick={() => answer(id)}>{t("studio.qDone")}</button></div>;
         const questions: Array<{ id: string; title: string; answer: string; body: ReactNode }> = [
-          { id: "hinge", title: t("studio.chooseHinge"), answer: t(snap ? "studio.hingeSnap" : "studio.hingeStandard"), body: (<>
-            {pics("hinge", t("studio.hingeStyle"), snap ? "snap" : "standard", [["snap", <HingePicture key="n" kind="snap" />, t("studio.hingeSnap"), t("studio.hingeSnapHint")], ["standard", <HingePicture key="s" kind="standard" />, t("studio.hingeStandard"), t("studio.hingeStandardHint")]], (hingeStyle) => onOptionsChange({ hingeStyle }))}
-            <p className="blend-hint">{t(snap ? "studio.hingeSnapHint" : "studio.hingeStandardHint")}</p>
-            {done("hinge")}
-          </>) },
-          // Build 120 (Rakesh): the hinge's tolerance - tighter, standard or looser for either hinge (the captive hinge's
-          // firmer grip is tighter), Standard chosen to start with and Next ready.
+          // Build 120 (Rakesh): the hinge's tolerance - tighter, standard or looser (the captive hinge's firmer grip is
+          // tighter), Standard chosen to start with and Next ready.
           { id: "fit", title: t("studio.chooseTolerance"), answer: t(tolNames[tolPos]), body: (<>
-            {pics("fit", t("studio.tolerance"), String(tolPos), ([0, 1, 2] as const).map((pos) => [String(pos), <FitPicture key={pos} level={pos} />, t(tolNames[pos]), `${(snap ? SNAP_GRIPS[2 - pos] : HINGE_FITS[pos]).toFixed(2)} mm`] as [string, ReactNode, string, string]), (v) => onOptionsChange(snap ? { snapGrip: SNAP_GRIPS[2 - Number(v)] } : { hingeFit: HINGE_FITS[Number(v)] }), true)}
+            {pics("fit", t("studio.tolerance"), String(tolPos), ([0, 1, 2] as const).map((pos) => [String(pos), <FitPicture key={pos} level={pos} />, t(tolNames[pos]), `${SNAP_GRIPS[2 - pos].toFixed(2)} mm`] as [string, ReactNode, string, string]), (v) => onOptionsChange({ snapGrip: SNAP_GRIPS[2 - Number(v)] }), true)}
             {done("fit", true, t("studio.toleranceNote"))}
           </>) },
           { id: "pins", title: t("studio.choosePins"), answer: t(pins === "none" ? "studio.pinsNone" : pins === "sides" ? "studio.pinsSides" : "studio.pinsFront"), body: (<>
@@ -1430,36 +1425,16 @@ export function DentalStudioPanel({
                 {options.risers ? <p className="blend-hint">{t("studio.risersHint")}</p> : null}
               </>) : null}
             </>) : null}
-            {/* Build 119 (on test): the hinge - the drop-in cups, or the snap hinge on the smooth base. */}
-            <h4 className="dental-group">{t("studio.hingeStyle")}</h4>
-            <div className="studio-mm-choice two" role="radiogroup" aria-label={t("studio.hingeStyle")}>
-              {(["standard", "snap"] as const).map((style) => {
-                const on = (options.hingeStyle ?? "standard") === style;
-                return <button key={style} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} onClick={() => onOptionsChange({ hingeStyle: style })}>{t(style === "snap" ? "studio.hingeSnap" : "studio.hingeStandard")}</button>;
+            {/* Build 276 (Rakesh): the captive hinge only - the passive hinge is no longer offered. */}
+            {/* Build 119: the snap's grip - how much narrower than the ball the throat is. */}
+            <h4 className="dental-group">{t("studio.snapGrip")}</h4>
+            <div className="studio-mm-choice three" role="radiogroup" aria-label={t("studio.snapGrip")}>
+              {SNAP_GRIPS.map((grip, index) => {
+                const on = Math.abs(snapGrip(options.snapGrip) - grip) < 1e-6;
+                return <button key={grip} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} title={`${grip.toFixed(2)} mm`} onClick={() => onOptionsChange({ snapGrip: grip })}>{t((["studio.snapGripLighter", "studio.hingeFitStandard", "studio.snapGripFirmer"] as const)[index])}</button>;
               })}
             </div>
-            <p className="blend-hint">{t(options.hingeStyle === "snap" ? "studio.hingeSnapHint" : "studio.hingeStandardHint")}</p>
-            {options.hingeStyle === "snap" ? (<>
-              {/* Build 119: the snap's grip - how much narrower than the ball the throat is. */}
-              <h4 className="dental-group">{t("studio.snapGrip")}</h4>
-              <div className="studio-mm-choice three" role="radiogroup" aria-label={t("studio.snapGrip")}>
-                {SNAP_GRIPS.map((grip, index) => {
-                  const on = Math.abs(snapGrip(options.snapGrip) - grip) < 1e-6;
-                  return <button key={grip} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} title={`${grip.toFixed(2)} mm`} onClick={() => onOptionsChange({ snapGrip: grip })}>{t((["studio.snapGripLighter", "studio.hingeFitStandard", "studio.snapGripFirmer"] as const)[index])}</button>;
-                })}
-              </div>
-              <p className="blend-hint">{t("studio.snapGripHint")}</p>
-            </>) : (<>
-            {/* Build 117: the ball-and-socket's fit - tighter, standard or looser, the clearance all round the ball. */}
-            <h4 className="dental-group">{t("studio.hingeFit")}</h4>
-            <div className="studio-mm-choice three" role="radiogroup" aria-label={t("studio.hingeFit")}>
-              {HINGE_FITS.map((fit, index) => {
-                const on = Math.abs((options.hingeFit ?? CUP_FIT) - fit) < 1e-6;
-                return <button key={fit} type="button" role="radio" aria-checked={on} className={on ? "active" : ""} disabled={busy} title={`${fit.toFixed(2)} mm`} onClick={() => onOptionsChange({ hingeFit: fit })}>{t((["studio.hingeFitTighter", "studio.hingeFitStandard", "studio.hingeFitLooser"] as const)[index])}</button>;
-              })}
-            </div>
-            <p className="blend-hint">{t("studio.hingeFitHint")}</p>
-            </>)}
+            <p className="blend-hint">{t("studio.snapGripHint")}</p>
             {/* Build 117: the dental midline, marked by the dentist - the models, the front pin and the side posts centred on it. */}
             {onMidlinePick && slots.upper ? (<>
               <h4 className="dental-group">{t("studio.midline")}</h4>
