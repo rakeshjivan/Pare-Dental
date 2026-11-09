@@ -8,7 +8,6 @@ import type { MeshJobRequest, MeshJobResponse } from "@/lib/meshJobs";
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 /** Build 94: the tooth finder, kept once its weights have come. */
-let finder: import("@/lib/toothNet").ToothNet | null = null;
 
 /** Build 68: arches made in the second worker, waited for by the job that puts the pair together. */
 const archParts = new Map<number, { resolve: (part: DentalArchPart) => void; reject: (error: Error) => void }>();
@@ -78,14 +77,6 @@ scope.onmessage = async (event: MessageEvent<MeshJobRequest | { archPartFor: num
       const plan = job.shells ? (job.options?.drop ? dropSet(job.scan, job.shells) : job.teeth?.marks ? planWaxupOnMarks(job.scan, job.shells, job.teeth.marks, job.teeth.arch, { exact: job.teeth.exact, lengthen: job.options.lengthen, centralRatio: job.teeth.centralRatio, arcDepth: job.teeth.arcDepth, adjust: job.teeth.adjust, blend: job.teeth.blend }) : job.teeth ? planWaxupOnTeeth(job.scan, job.shells, job.teeth.fdi, job.teeth.chosen, job.teeth.arch, { lengthen: job.options.lengthen, ideal: job.teeth.ideal, red: job.teeth.red, centralRatio: job.teeth.centralRatio, arcDepth: job.teeth.arcDepth, adjust: job.teeth.adjust, blend: job.teeth.blend }) : planWaxup(job.scan, job.shells, job.landmarks, job.options)) : null;
       const reply: MeshJobResponse = { id: job.id, ok: true, kind: "waxup", plan, landmarks: plan ? plan.landmarks ?? job.landmarks : guessLandmarks(job.scan) };
       scope.postMessage(reply, plan ? plan.teeth.map((tooth) => tooth.positions.buffer as ArrayBuffer) : []);
-    } else if (job.kind === "findTeeth") {
-      const { readWeights, ToothNet } = await import("@/lib/toothNet");
-      const { findTeethOnScan } = await import("@/lib/toothSegment");
-      if (job.weights) finder = new ToothNet(readWeights(job.weights));
-      if (!finder) throw new Error("tooth-finder-missing");
-      const teeth = await findTeethOnScan(job.scan, job.arch, finder, (share) => scope.postMessage({ id: job.id, ok: true, kind: "progress", share } satisfies MeshJobResponse));
-      const reply: MeshJobResponse = { id: job.id, ok: true, kind: "findTeeth", teeth };
-      scope.postMessage(reply, [teeth.fdi.buffer]);
     } else if (job.kind === "occlusion") {
       const { occlusionInScanFrame } = await import("@/lib/waxOcclusion");
       const result = occlusionInScanFrame(job.input);

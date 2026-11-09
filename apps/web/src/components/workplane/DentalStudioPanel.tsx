@@ -494,7 +494,7 @@ export function DentalStudioPanel({
     if (["select", "teeth", "set", "place"].includes(waxStep) && !waxAutoDone.current.has(key)) { waxAutoDone.current.add(key); waxAutoDone.current.add(wv.slot); setWaxAuto(true); }
   }, [waxStep, wv?.slot]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!waxAuto || !waxStep || !wv || !waxup || busy || wv.busy || wv.finder.busy) return;
+    if (!waxAuto || !waxStep || !wv || !waxup || busy || wv.busy) return;
     const once = (what: string, run: () => void) => { const key = `${wv.slot}:${what}`; if (waxAutoTried.current.has(key)) return false; waxAutoTried.current.add(key); run(); return true; };
     const next = () => setWaxAuto(false);
     // Build 105: the teeth found and marked for the dentist; without the finder (or nothing found) the dentist marks them.
@@ -507,7 +507,7 @@ export function DentalStudioPanel({
     // Build 108: the other arch's set still loading (both arches) - wait for it rather than stop.
     if (waxStep === "place") { if (waxStepDone("place")) setWaxAuto(false); else if (!waxPlaceable && bothArches && wv.setIds?.[wv.slot]) return; else if (!waxPlaceable || !once("place", waxup.actions.onPlace)) setWaxAuto(false); return; }
     setWaxAuto(false);
-  }, [waxAuto, waxStep, busy, wv?.busy, wv?.finder.busy, wv?.found?.length, wv?.chosen.length, wv?.markedTeeth.length, wv?.setName, wv?.placed.length, wv?.slot]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [waxAuto, waxStep, busy, wv?.busy, wv?.found?.length, wv?.chosen.length, wv?.markedTeeth.length, wv?.setName, wv?.placed.length, wv?.slot]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 108: a different set chosen in Library after this arch's teeth were placed - back at Position its
   // teeth are dropped in place of the old set's (one step, so Undo brings the old set back).
   const waxPlacedWith = useRef<Record<string, string | null>>({});
@@ -955,13 +955,8 @@ export function DentalStudioPanel({
         const pick = wv.marginPick ?? null;
         const found = new Set((wv.found ?? []).map((tooth) => tooth.fdi));
         const done = teeth.filter((fdi) => (lines[fdi]?.length ?? 0) >= 3 || found.has(fdi));
-        // Build 114: the margins found by the tooth finder (each tooth's own surface on the scan), drawn by hand only to correct one.
-        const finding = Boolean(wv.finder?.busy);
+        // Build 277 (Rakesh): the tooth finder is removed - margins are drawn by hand.
         return (<>
-          <div className="dental-trim-buttons">
-            <button type="button" className="primary" disabled={busy || finding} title={t("waxup.marginFindHint")} onClick={() => { if (pick) waxup.actions.onMarginCancel?.(); waxup.actions.onFindTeeth?.(); }}>{finding ? <LoaderCircle className="edge-modifier-spinner" size={15} aria-hidden="true" /> : null} {t(found.size ? "waxup.marginFindAgain" : "waxup.marginFind")}</button>
-          </div>
-          {finding ? <p className="dental-status" role="status">{t("waxup.marginFinding", { n: Math.round((wv.finder?.progress ?? 0) * 100) })}</p> : found.size ? <p className="blend-hint" role="status">{t("waxup.marginFound", { n: teeth.filter((fdi) => found.has(fdi)).length })}</p> : null}
           {bothArches ? (
             <div className="dental-trim-mode" role="radiogroup" aria-label={t("waxup.arch")}>
               {(["upper", "lower"] as const).map((slot) => (

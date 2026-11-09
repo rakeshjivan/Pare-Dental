@@ -117,8 +117,6 @@ export type WaxupView = {
   /** Adjusting a tooth adjusts the same tooth on the other side too. */
   mirror: boolean;
   error: string | null;
-  /** Build 94: the tooth finder - loaded (its file's name) or not, at work (share done). */
-  finder: { name: string | null; busy: boolean; progress: number | null };
   /** Build 94: the teeth found on this arch (FDI; agreed = the network's own number), and those chosen for the wax-up. */
   found: Array<{ fdi: number; agreed: boolean }> | null;
   chosen: number[];
@@ -246,8 +244,6 @@ export type WaxupActions = {
   onEggshell: (wall: number) => void;
   onMirror: (on: boolean) => void;
   onAlternate: (on: boolean) => void;
-  onLoadFinder: (file: File) => void;
-  onFindTeeth: () => void;
   /** Build 105: the four marks on each tooth - start (all open teeth, or these), take back a point, skip a tooth, stop; the finder's marks; a tooth in or out. */
   onMarkTeeth?: (only?: number[]) => void;
   onUndoMarkPoint?: () => void;
@@ -488,7 +484,6 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
     return () => onMarksEditing(false);
   }, [marksEditing]); // eslint-disable-line react-hooks/exhaustive-deps
   const file = useRef<HTMLInputElement>(null);
-  const finderFile = useRef<HTMLInputElement>(null);
   const [eggshellWall, setEggshellWall] = useState(EGGSHELL_WALL);
   // Build 107: Landmarks - the tooth buttons add or take out teeth while this is on.
   const [choosing, setChoosing] = useState(false);
@@ -528,54 +523,7 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
           ))}
         </div>
       ) : null}
-      {/* Build 94: the teeth found on the scan, and those to wax up. */}
-      {show("find") || show("choose") ? (
-      <div className="dental-substep">
-        {part ? null : <h4 className="dental-substep-title">{t("waxup.findStep")}</h4>}
-        <input ref={finderFile} type="file" accept=".ptw" hidden onChange={(event) => { const f = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (f) actions.onLoadFinder(f); }} />
-        {view.finder.name ? (
-          <>
-            {show("find") ? (<>
-            <div className="dental-trim-buttons">
-              <button type="button" className={view.found ? "" : "active"} disabled={working || view.finder.busy} onClick={actions.onFindTeeth}>
-                {view.finder.busy ? <LoaderCircle className="edge-modifier-spinner" size={15} /> : null} {t(view.found ? "waxup.findAgain" : "waxup.find")}
-              </button>
-            </div>
-            {view.finder.busy && view.finder.progress !== null ? <p className="blend-hint" role="status">{t("waxup.finding", { share: Math.round(view.finder.progress * 100) })}</p> : null}
-            </>) : null}
-            {view.found && part === "find" ? <p className="blend-hint">{t(view.found.length ? "waxup.foundHint" : "waxup.foundNone", { count: view.found.length })}</p> : null}
-            {view.found && show("choose") ? (
-              <>
-                <p className="blend-hint">{t(view.found.length ? "waxup.foundHint" : "waxup.foundNone", { count: view.found.length })}</p>
-                <div className="waxup-teeth waxup-found" role="group" aria-label={t("waxup.chooseTeeth")}>
-                  {/* Build 94: phase 1 is the anterior wax-up - premolar to premolar at most (IMT's range); molars wait for the posterior studio. */}
-                  {[...view.found].filter((tooth) => tooth.fdi % 10 <= 5).sort((a, b) => archOrder(a.fdi) - archOrder(b.fdi)).map((tooth) => (
-                    <button key={tooth.fdi} type="button" aria-pressed={view.chosen.includes(tooth.fdi)} className={`waxup-tooth${view.chosen.includes(tooth.fdi) ? " active" : ""}${tooth.agreed ? "" : " unsure"}`} title={t(tooth.agreed ? "waxup.toothFound" : "waxup.toothRenumbered", { fdi: tooth.fdi })} disabled={working} onClick={() => actions.onChoose(tooth.fdi)}>
-                      {tooth.fdi}
-                    </button>
-                  ))}
-                </div>
-                <div className="dental-trim-buttons waxup-groups">
-                  {(["front", "front-premolars", "none"] as const).map((group) => (
-                    <button key={group} type="button" className="secondary" disabled={working} onClick={() => actions.onChooseGroup(group)}>{t(`waxup.group.${group}`)}</button>
-                  ))}
-                </div>
-                <label className="edge-modifier-check">
-                  <input type="checkbox" checked={view.teethShown} onChange={(event) => actions.onTeethShown(event.currentTarget.checked)} />
-                  <span>{t("waxup.showTeeth")}</span>
-                </label>
-              </>
-            ) : show("find") && !view.found ? <p className="blend-hint">{t("waxup.findHint")}</p> : show("choose") && !view.found ? <p className="blend-hint">{t("waxup.chooseNeedsFind")}</p> : null}
-            {show("find") ? <p className="blend-hint">{t("waxup.finderLoaded", { name: view.finder.name })} <button type="button" className="link-button" disabled={working} onClick={() => finderFile.current?.click()}>{t("waxup.finderChange")}</button></p> : null}
-          </>
-        ) : (
-          <>
-            <p className="blend-hint">{t("waxup.finderNone")}</p>
-            <button type="button" className="dental-import" disabled={working} onClick={() => finderFile.current?.click()}><Upload size={15} /> {t("waxup.loadFinder")}</button>
-          </>
-        )}
-      </div>
-      ) : null}
+      {/* Build 277 (Rakesh): the tooth finder (a network the dentist loaded) is removed - the dentist marks the anchors. */}
 
       {/* Build 106: Select teeth - the teeth to wax up, before their marks. */}
       {part === "select" ? (

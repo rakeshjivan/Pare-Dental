@@ -65,10 +65,9 @@ import { faceComponents } from "@/lib/meshComponents";
 import { movedPointIds, solveSketchConstraints } from "@/lib/sketchConstraints";
 import { hullPositions, type FitReport } from "@/lib/partTools";
 import { smallestRoundingRadius, type MeshRoundMode } from "@/lib/meshRound";
-import { analyseDentalInBackground, biteContactsInBackground, stopMeshJobs, checkFitInBackground, dentalAreaInBackground, makeDentalStudioInBackground, type DentalMakeProgress, remeshInBackground, roundMeshInBackground, textureMeshInBackground, trimDentalScanInBackground, waxupInBackground, findTeethInBackground, resetToothFinder, occlusionInBackground } from "@/lib/meshJobs";
+import { analyseDentalInBackground, biteContactsInBackground, stopMeshJobs, checkFitInBackground, dentalAreaInBackground, makeDentalStudioInBackground, type DentalMakeProgress, remeshInBackground, roundMeshInBackground, textureMeshInBackground, trimDentalScanInBackground, waxupInBackground, occlusionInBackground } from "@/lib/meshJobs";
 import { AVERAGE_ARTICULATOR, openedLowerPose } from "@/lib/waxOcclusion";
 import { PIN_MAX, PIN_STEP } from "@/lib/dentalArticulator";
-import { BUILT_IN_FINDER, finderBytes, loadStoredFinder, storeFinder } from "@/lib/toothFinderStore";
 import { toothColour, transferLabels, type ScanTeeth } from "@/lib/toothSegment";
 import { smoothOpenEdges, smoothOpenEdgesOf } from "@/lib/edgeSmooth";
 import { solidPositions, toManifold, transformSoup, weld, type ManifoldSolid, cleanStlBinary, stlBinaryOf, stlSoupOf } from "@/lib/dentalMesh";
@@ -12098,7 +12097,7 @@ export function LayerlingEditor({
     archLine: boolean; archCurve: number; archFollow: boolean;
     /** Build 277: each arch's front teeth as one set laid on the arch from whole-set controls (lib/waxSmileSet). */
     smile: Partial<Record<"upper" | "lower", SmileRecord>> };
-  const [waxup, setWaxup] = useState<WaxupState>({ slot: "upper", setName: null, teeth: 0, picking: null, lengthen: 0, centralRatio: CENTRAL_RATIO, arcDepth: null, arcUsed: null, proportions: "natural", builtIn: [], builtInCredit: null, setId: null, busy: false, placed: [], alternate: false, error: null, landmarks: null, guessed: false, marks: [], finder: { name: BUILT_IN_FINDER.name, busy: false, progress: null }, teethShown: true, fit: "teeth", ghost: 1, ideal: 1, red: null, checks: null, adjust: {}, stage: "position", setMove: { width: 0, depth: 0, midline: 0, height: 0 }, setScale: 1, setCurve: 0, chain: true, restrict: "free", moveAll: false, locks: {}, manual: true, toothMarks: {}, anchors: {}, archDots: { upper: [], lower: [] }, lateralShorter: LATERAL_SHORTER, autoMarked: [], markTeeth: null, toothPick: null, archLine: true, archCurve: 1, archFollow: true, contacts: { on: false, busy: false, occlusal: 0.1, adapting: false, note: null, opposing: false }, occlusion: { ready: false, busy: false, raise: 0, scheme: "canine", guidance: 30, bennett: 15, result: null }, bite: { raise: 0, busy: false, hinge: null }, gum: { mode: "follow", keep: {} }, erase: {}, margins: {}, marginPick: null, boundaries: {}, boundaryPick: null, /* Build 118: Keep & erase, with the library palatal, is the one way of working - the margin line is no longer offered. */ marginOn: false, smile: {} });
+  const [waxup, setWaxup] = useState<WaxupState>({ slot: "upper", setName: null, teeth: 0, picking: null, lengthen: 0, centralRatio: CENTRAL_RATIO, arcDepth: null, arcUsed: null, proportions: "natural", builtIn: [], builtInCredit: null, setId: null, busy: false, placed: [], alternate: false, error: null, landmarks: null, guessed: false, marks: [], teethShown: true, fit: "teeth", ghost: 1, ideal: 1, red: null, checks: null, adjust: {}, stage: "position", setMove: { width: 0, depth: 0, midline: 0, height: 0 }, setScale: 1, setCurve: 0, chain: true, restrict: "free", moveAll: false, locks: {}, manual: true, toothMarks: {}, anchors: {}, archDots: { upper: [], lower: [] }, lateralShorter: LATERAL_SHORTER, autoMarked: [], markTeeth: null, toothPick: null, archLine: true, archCurve: 1, archFollow: true, contacts: { on: false, busy: false, occlusal: 0.1, adapting: false, note: null, opposing: false }, occlusion: { ready: false, busy: false, raise: 0, scheme: "canine", guidance: 30, bennett: 15, result: null }, bite: { raise: 0, busy: false, hinge: null }, gum: { mode: "follow", keep: {} }, erase: {}, margins: {}, marginPick: null, boundaries: {}, boundaryPick: null, /* Build 118: Keep & erase, with the library palatal, is the one way of working - the margin line is no longer offered. */ marginOn: false, smile: {} });
   // Build 94: the teeth found on each scan (by its part id): each scan triangle's FDI (as the studio
   // reads the scan), the teeth, the landmarks from them, and the teeth chosen for the wax-up.
   type FoundTeeth = { key: string; input: Float32Array; fdi: Uint8Array; teeth: ScanTeeth["teeth"]; landmarks: WaxLandmarks | null; chosen: number[] };
@@ -12226,7 +12225,7 @@ export function LayerlingEditor({
   };
   const waxRestore = (snap: WaxSnap) => {
     waxHistoryTo(snap.index);
-    setWaxup({ ...snap.waxup, busy: false, picking: null, finder: { ...waxupRef.current.finder, busy: false, progress: null }, occlusion: { ...snap.waxup.occlusion, busy: false }, bite: { raise: snap.waxup.bite?.raise ?? 0, hinge: snap.waxup.bite?.hinge ?? null, busy: false } });
+    setWaxup({ ...snap.waxup, busy: false, picking: null, occlusion: { ...snap.waxup.occlusion, busy: false }, bite: { raise: snap.waxup.bite?.raise ?? 0, hinge: snap.waxup.bite?.hinge ?? null, busy: false } });
     setWaxFound(snap.found);
     setWaxHistoryTick((n) => n + 1);
   };
@@ -14622,47 +14621,7 @@ export function LayerlingEditor({
     commitShapes(shapesRef.current.filter((shape) => !old.has(shape.id)), [], t("waxup.removed"));
     setWaxup((current) => ({ ...current, placed: [], adjust: {}, setMove: { width: 0, depth: 0, midline: 0, height: 0 }, stage: "position" }));
   }, [commitShapes, waxArch]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Build 94: the tooth finder. Its weights are the user's (kept in this browser); found once per scan.
-  useEffect(() => {
-    if (!dentalStudio?.waxStudio) return;
-    void loadStoredFinder().then((stored) => { if (stored) setWaxup((current) => ({ ...current, finder: { ...current.finder, name: stored.name } })); });
-  }, [dentalStudio?.waxStudio]); // eslint-disable-line react-hooks/exhaustive-deps
-  const loadToothFinder = useCallback(async (file: File) => {
-    try {
-      const bytes = await file.arrayBuffer();
-      // Read here first, so a wrong file says so at once.
-      const { readWeights, ToothNet } = await import("@/lib/toothNet");
-      new ToothNet(readWeights(bytes));
-      await storeFinder(file.name, bytes);
-      resetToothFinder();
-      setWaxup((current) => ({ ...current, finder: { name: file.name, busy: false, progress: null }, error: null }));
-    } catch {
-      setWaxup((current) => ({ ...current, error: t("waxup.finderFailed") }));
-    }
-  }, []);
-  const findTeethNow = useCallback(async () => {
-    const arch = waxArch();
-    if (!arch || waxupRef.current.finder.busy) return;
-    setWaxup((current) => ({ ...current, slot: arch.slot, finder: { ...current.finder, busy: true, progress: 0 }, error: null }));
-    try {
-      const found = await findTeethInBackground(arch.scan, arch.slot, finderBytes, (share) => setWaxup((current) => ({ ...current, finder: { ...current.finder, progress: share } })));
-      // At first the front teeth (canine to canine) are chosen - the usual anterior wax-up.
-      const chosen = found.teeth.filter((tooth) => tooth.fdi % 10 <= 3).map((tooth) => tooth.fdi);
-      setWaxFound((current) => ({ ...current, [arch.shape.id]: { key: `${arch.scan.length}`, input: arch.scan, fdi: found.fdi, teeth: found.teeth, landmarks: found.landmarks, chosen } }));
-      // Build 105: and the four marks on each tooth to wax up, for the dentist to check.
-      if (dentalStudioRef.current?.waxStudio) window.setTimeout(() => autoToothMarks({ fdi: found.fdi, input: arch.scan }), 0);
-      setWaxup((current) => ({
-        ...current,
-        finder: { ...current.finder, busy: false, progress: null },
-        teethShown: true,
-        // The landmarks from the teeth, unless marked by hand.
-        ...(found.landmarks && (current.guessed || !current.landmarks) ? { landmarks: found.landmarks, guessed: false, marks: [] } : {}),
-      }));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setWaxup((current) => ({ ...current, finder: { ...current.finder, busy: false, progress: null }, error: message === "tooth-finder-missing" ? t("waxup.finderNone") : t("waxup.findFailed", { error: localizedError(message) }) }));
-    }
-  }, [waxArch, autoToothMarks]);
+  // Build 277 (Rakesh): the tooth finder is removed - its network's training data is for non-commercial use only.
   const waxFoundHere = (() => {
     const id = dentalStudio?.slots[waxup.slot];
     return id ? waxFound[id] ?? null : null;
@@ -22355,8 +22314,6 @@ export function LayerlingEditor({
               onStage: (stage) => setWaxup((current) => (current.stage === stage ? current : { ...current, stage })),
               onMirror: setWaxMirror,
               onAlternate: (on) => setWaxup((current) => ({ ...current, alternate: on })),
-              onLoadFinder: (file) => void loadToothFinder(file),
-              onFindTeeth: () => void findTeethNow(),
               onChoose: (fdi) => chooseWaxTeeth((chosen) => (chosen.includes(fdi) ? chosen.filter((n) => n !== fdi) : fdi % 10 <= 5 ? [...chosen, fdi] : chosen)),
               onChooseGroup: (group) => chooseWaxTeeth((_, teeth) => teeth.filter((fdi) => (group === "none" ? false : fdi % 10 <= (group === "front" ? 3 : 5)))),
               onTeethShown: (teethShown) => setWaxup((current) => ({ ...current, teethShown })),

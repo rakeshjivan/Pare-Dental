@@ -1,6 +1,7 @@
 /**
- * Build 94: finding the teeth on a scan - the tooth finder (lib/toothNet) run on a scan, and what it
- * says turned into teeth with their FDI numbers.
+ * Build 94: the teeth on a scan with their FDI numbers - cleaning, numbering and landmarks from labels.
+ * Build 277 (Rakesh): the tooth finder network that made the labels is removed (its training data is for
+ * non-commercial use only); what is left works on labels from any source.
  *
  * 1. The scan, in its arch frame (teeth up, front at -y), reduced to the network's 16,000 triangles;
  *    each triangle its centre and normal, centred and scaled into the unit sphere.
@@ -17,9 +18,6 @@
  */
 import * as THREE from "three";
 import { weld, type Mesh } from "@/lib/dentalMesh";
-import { simplifyTrianglePositions } from "@/lib/meshSimplify";
-import type { Neighbours, ToothNet } from "@/lib/toothNet";
-import { refineGumLine } from "@/lib/gumLine";
 
 /** The network's points: its input is always this many. */
 export const NET_POINTS = 16000;
@@ -32,9 +30,6 @@ export const SPLIT_PIECE_SHARE = 0.4;
 /** A crown this many times a front tooth's is a molar's (6-8); and how much counts against numbering it lower. */
 export const MOLAR_SIZE = 1.7;
 export const SIZE_WEIGHT = 10;
-
-// ---------------------------------------------------------------------------------------------
-// Neighbours
 
 /** Points in a regular grid of cubes, for nearest-neighbour searches. */
 class CubeGrid {
@@ -103,91 +98,6 @@ class CubeGrid {
   }
 }
 
-/** Neighbours as the original network's library finds them: furthest-point sampling from the first point, k nearest. */
-export function liveNeighbours(): Neighbours {
-  const grids = new WeakMap<Float32Array, CubeGrid>();
-  const gridOf = (p: Float32Array) => { let g = grids.get(p); if (!g) grids.set(p, (g = new CubeGrid(p))); return g; };
-  const knn = (points: Float32Array, queries: Float32Array, k: number) => {
-    const g = gridOf(points);
-    const m = queries.length / 3;
-    const idx = new Int32Array(m * k), dist = new Float32Array(m * k);
-    for (let i = 0; i < m; i += 1) g.nearest(queries[i * 3], queries[i * 3 + 1], queries[i * 3 + 2], k, idx, dist, i * k);
-    return { idx, dist };
-  };
-  return {
-    sample(_level, p, count, keep) {
-      const out = new Int32Array(keep);
-      const d = new Float32Array(count).fill(1e10);
-      let cur = 0;
-      for (let i = 0; i < keep; i += 1) {
-        out[i] = cur;
-        const x = p[cur * 3], y = p[cur * 3 + 1], z = p[cur * 3 + 2];
-        let best = 0, bestD = -1;
-        for (let j = 0; j < count; j += 1) {
-          const dx = p[j * 3] - x, dy = p[j * 3 + 1] - y, dz = p[j * 3 + 2] - z;
-          const v = Math.min(d[j], dx * dx + dy * dy + dz * dz);
-          d[j] = v;
-          if (v > bestD) { bestD = v; best = j; }
-        }
-        cur = best;
-      }
-      return out;
-    },
-    nearest: (points, queries, k) => knn(points, queries, k).idx,
-    three(points, queries) {
-      const { idx, dist } = knn(points, queries, 3);
-      const w = new Float32Array(idx.length);
-      for (let i = 0; i < idx.length; i += 3) {
-        let s = 0;
-        for (let t = 0; t < 3; t += 1) { w[i + t] = 1 / (dist[i + t] + 1e-8); s += w[i + t]; }
-        for (let t = 0; t < 3; t += 1) w[i + t] /= s;
-      }
-      return { idx, w };
-    },
-  };
-}
-
-// ---------------------------------------------------------------------------------------------
-// The network's input
-
-/** A scan (soup, arch frame) reduced for the network: its triangles, their centres, and the network's input. */
-export async function netInput(soup: Float32Array) {
-  const reduced = await simplifyTrianglePositions(soup, NET_POINTS);
-  let tri = Float32Array.from(reduced.positions);
-  let count = tri.length / 9;
-  if (count > NET_POINTS) {
-    // The simplifier stopped short: every so many triangles, evenly through the list.
-    const keep = new Float32Array(NET_POINTS * 9);
-    for (let i = 0; i < NET_POINTS; i += 1) { const j = Math.floor((i * count) / NET_POINTS); keep.set(tri.subarray(j * 9, j * 9 + 9), i * 9); }
-    tri = keep; count = NET_POINTS;
-  }
-  const centres = new Float32Array(count * 3), normals = new Float32Array(count * 3), areas = new Float32Array(count);
-  let up = 0;
-  for (let t = 0; t < count; t += 1) {
-    const o = t * 9;
-    const ux = tri[o + 3] - tri[o], uy = tri[o + 4] - tri[o + 1], uz = tri[o + 5] - tri[o + 2];
-    const vx = tri[o + 6] - tri[o], vy = tri[o + 7] - tri[o + 1], vz = tri[o + 8] - tri[o + 2];
-    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-    const len = Math.hypot(nx, ny, nz) || 1;
-    normals[t * 3] = nx / len; normals[t * 3 + 1] = ny / len; normals[t * 3 + 2] = nz / len;
-    areas[t] = len / 2;
-    up += nz / 2;
-    for (let k = 0; k < 3; k += 1) centres[t * 3 + k] = (tri[o + k] + tri[o + 3 + k] + tri[o + 6 + k]) / 3;
-  }
-  // Outward normals: with the teeth up, on the whole up. Some exports wind the other way.
-  if (up < 0) for (let i = 0; i < normals.length; i += 1) normals[i] = -normals[i];
-  const mean = [0, 0, 0];
-  for (let t = 0; t < count; t += 1) for (let k = 0; k < 3; k += 1) mean[k] += centres[t * 3 + k] / count;
-  let radius = 0;
-  for (let t = 0; t < count; t += 1) radius = Math.max(radius, Math.hypot(centres[t * 3] - mean[0], centres[t * 3 + 1] - mean[1], centres[t * 3 + 2] - mean[2]));
-  const input = new Float32Array(NET_POINTS * 6);
-  for (let t = 0; t < count; t += 1) {
-    for (let k = 0; k < 3; k += 1) input[t * 6 + k] = (centres[t * 3 + k] - mean[k]) / (radius || 1);
-    for (let k = 0; k < 3; k += 1) input[t * 6 + 3 + k] = normals[t * 3 + k];
-  }
-  // Short of 16,000: the rest are zeros, as the network was trained (its points at the middle).
-  return { tri, count, centres, areas, input };
-}
 
 // ---------------------------------------------------------------------------------------------
 // Cleaning and numbering
@@ -401,62 +311,6 @@ export function numberTeeth(teeth: Array<{ centre: [number, number, number]; vot
 export type ToothMap = { fdi: Uint8Array; teeth: FoundTooth[]; seconds: number };
 
 /**
- * Finds the teeth on `soup` (a scan's triangles in its arch frame: teeth up, front at -y), with the
- * tooth finder `net`. `arch` says which jaw, for the quadrants.
- */
-export async function findTeeth(soup: Float32Array, arch: "upper" | "lower", net: ToothNet, onProgress?: (share: number) => void): Promise<ToothMap> {
-  const started = Date.now();
-  const { tri, count, centres, areas, input } = await netInput(soup);
-  const prob = net.run(input, NET_POINTS, liveNeighbours(), (share) => onProgress?.(share * 0.9));
-  const classes = net.classes;
-  const nb = triangleNeighbours(tri, count);
-  const { region, regions, number } = cleanRegions(prob, classes, count, areas, nb);
-  // Each region's centre, area, votes and confidence.
-  const info = Array.from({ length: regions }, () => ({ centre: [0, 0, 0] as [number, number, number], area: 0, votes: new Float64Array(9), conf: 0 }));
-  for (let t = 0; t < count; t += 1) {
-    const r = region[t];
-    if (!r) continue;
-    const e = info[r - 1];
-    const a = areas[t];
-    e.area += a;
-    for (let k = 0; k < 3; k += 1) e.centre[k] += centres[t * 3 + k] * a;
-    e.votes[number[t]] += a;
-    let p = 0;
-    for (let c = 1; c <= 16; c += 1) p += prob[t * classes + c];
-    e.conf += p * a;
-  }
-  for (const e of info) { for (let k = 0; k < 3; k += 1) e.centre[k] /= e.area || 1; e.conf /= e.area || 1; }
-  // Pieces still too small to be a tooth (left between others) count as gum.
-  const real = info.map((e) => e.area >= TOOTH_MIN_AREA);
-  const kept = info.map((e, i) => ({ ...e, i })).filter((_, i) => real[i]);
-  const keptNumbers = numberTeeth(kept, arch);
-  const numbers = info.map(() => ({ fdi: 0, agreed: false }));
-  kept.forEach((e, k) => { numbers[e.i] = keptNumbers[k]; });
-  // The full scan: each triangle takes the label of the nearest reduced triangle's centre.
-  const n = soup.length / 9;
-  const full = new Uint8Array(n);
-  const grid = new CubeGrid(centres, 2);
-  const idx = new Int32Array(1), dist = new Float32Array(1);
-  const fdiOfRegion = numbers.map((x) => x.fdi);
-  const top: Array<[number, number, number]> = info.map(() => [0, 0, -Infinity]);
-  for (let t = 0; t < n; t += 1) {
-    const o = t * 9;
-    const x = (soup[o] + soup[o + 3] + soup[o + 6]) / 3, y = (soup[o + 1] + soup[o + 4] + soup[o + 7]) / 3, z = (soup[o + 2] + soup[o + 5] + soup[o + 8]) / 3;
-    grid.nearest(x, y, z, 1, idx, dist);
-    const r = idx[0] >= 0 ? region[idx[0]] : 0;
-    if (!r) continue;
-    full[t] = fdiOfRegion[r - 1];
-    for (let k = 0; k < 3; k += 1) if (soup[o + k * 3 + 2] > top[r - 1][2]) top[r - 1] = [soup[o + k * 3], soup[o + k * 3 + 1], soup[o + k * 3 + 2]];
-  }
-  const clean = refineGumLine(soup, full).labels;
-  onProgress?.(1);
-  const teeth: FoundTooth[] = info.map((e, i) => ({ fdi: numbers[i].fdi, centre: e.centre, top: top[i], area: e.area, confidence: e.conf, agreed: numbers[i].agreed }))
-    .filter((tooth) => tooth.fdi > 0)
-    .sort((a, b) => a.fdi - b.fdi);
-  return { fdi: clean, teeth, seconds: (Date.now() - started) / 1000 };
-}
-
-/**
  * The wax-up's landmarks from the teeth found (arch frame): the midline between the centrals' mesial
  * incisal corners, the canine tips their highest points. Null when a central or canine is missing.
  */
@@ -521,23 +375,6 @@ export const movePoint = (p: [number, number, number], m: THREE.Matrix4) => new 
 
 /** Teeth found on a scan, in the scan's own coordinates. */
 export type ScanTeeth = { fdi: Uint8Array; teeth: FoundTooth[]; landmarks: { midline: [number, number, number]; canines: [[number, number, number], [number, number, number]] } | null; seconds: number };
-
-/** findTeeth on a scan (a soup in its own coordinates): into its arch frame and back. */
-export async function findTeethOnScan(scan: Float32Array, arch: "upper" | "lower", net: ToothNet, onProgress?: (share: number) => void): Promise<ScanTeeth> {
-  const { scanInArchFrame } = await import("@/lib/dentalWaxup");
-  const { transformSoup } = await import("@/lib/dentalMesh");
-  const { frame } = scanInArchFrame(scan);
-  const local = transformSoup(scan, frame);
-  const map = await findTeeth(local, arch, net, onProgress);
-  const marks = landmarksFromTeeth(local, map, arch);
-  const back = frame.clone().invert();
-  return {
-    fdi: map.fdi,
-    teeth: map.teeth.map((tooth) => ({ ...tooth, centre: movePoint(tooth.centre, back), top: movePoint(tooth.top, back) })),
-    landmarks: marks ? { midline: movePoint(marks.midline, back), canines: [movePoint(marks.canines[0], back), movePoint(marks.canines[1], back)] } : null,
-    seconds: map.seconds,
-  };
-}
 
 /** Labels of one soup's triangles carried to another's (the same surface, any triangles): nearest centre. */
 export function transferLabels(from: Float32Array, labels: Uint8Array, to: Float32Array): Uint8Array {
