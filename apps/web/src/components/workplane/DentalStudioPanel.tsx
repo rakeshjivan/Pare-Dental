@@ -155,23 +155,91 @@ const REPLACE_SCAN = "__replace_scan__";
  * biting side - between the central incisors. Build 273 (Rakesh): back to one click, so one point.
  */
 function MidlinePicture({ marked }: { marked: boolean }) {
-  // Build 274 (Rakesh: "present the upper arch facing forwards and level"): the upper seen from the front, level, its
-  // teeth hanging from the gum - the click between the two central incisors.
+  // Build 274 (Rakesh: "present the upper arch facing forwards and level"): the upper seen from the front, level - the
+  // click between the two central incisors. Build 275 (Rakesh: "needs to be more like a real mouth"): a smile framed by
+  // the lips, the gum scalloped with papillae between the teeth, crowns shaped as they are (square centrals, rounder
+  // laterals, pointed canines, premolars set back) along the smile line, and the lower incisors just showing behind.
   return (
-    <svg className="wax-guide-picture" viewBox="0 0 336 214" role="img" aria-label={t("studio.midlinePicture")}>
-      <path d="M28 40 Q168 18 308 40 L308 92 Q168 78 28 92 Z" fill="#f3d9d4" />
-      {MIDLINE_FRONT_TEETH.map(([x, w, h], i) => <rect key={i} x={x - w / 2} y={74} width={w} height={h} rx={w / 3.2} fill="#f2efe6" stroke="#8a8170" strokeWidth={1.1} />)}
-      <line x1={168} y1={30} x2={168} y2={178} stroke="#2f7d6d" strokeWidth={1.6} strokeDasharray="6 5" />
-      <circle cx={168} cy={112} r={marked ? 10 : 14} fill={marked ? "#2563eb" : "#2f7d6d"} />
-      <text x={168} y={204} textAnchor="middle" fontSize={12} fill="#4b5563">{t("studio.midlinePictureNote")}</text>
+    <svg className="wax-guide-picture" viewBox="0 0 336 230" role="img" aria-label={t("studio.midlinePicture")}>
+      <defs>
+        <clipPath id="mlp-mouth"><path d={MOUTH_OPENING} /></clipPath>
+        <linearGradient id="mlp-gum" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#d9837f" /><stop offset="1" stopColor="#efaaa3" /></linearGradient>
+        <linearGradient id="mlp-tooth" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#efe4cc" /><stop offset="0.45" stopColor="#fbf8ef" /><stop offset="0.85" stopColor="#f3f2ec" /><stop offset="1" stopColor="#dfe3e8" /></linearGradient>
+        <linearGradient id="mlp-back" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#ddd1b6" /><stop offset="1" stopColor="#e9e5da" /></linearGradient>
+        <linearGradient id="mlp-lower" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#d6d2c8" /><stop offset="0.6" stopColor="#a49c90" /><stop offset="1" stopColor="#5e3b3c" /></linearGradient>
+        <linearGradient id="mlp-lip" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#c7716f" /><stop offset="1" stopColor="#b25c5c" /></linearGradient>
+      </defs>
+      <path d={MOUTH_OPENING} fill="#4a2026" />
+      <g clipPath="url(#mlp-mouth)">
+        {MIDLINE_LOWER_TEETH.map((x, i) => <rect key={i} x={x - 9} y={104} width={18} height={40} rx={5} fill="url(#mlp-lower)" stroke="#8a8174" strokeWidth={0.7} />)}
+        {MIDLINE_TEETH.map((tooth, i) => (
+          <path key={i} d={toothOutline(tooth)} fill={tooth.kind === "premolar" ? "url(#mlp-back)" : "url(#mlp-tooth)"} stroke="#9c9179" strokeWidth={1} strokeLinejoin="round" />
+        ))}
+        {MIDLINE_TEETH.filter((tooth) => tooth.kind !== "premolar").map((tooth, i) => (
+          <path key={i} d={`M${tooth.x - tooth.side * tooth.w * 0.12} ${tooth.top + 14}Q${tooth.x - tooth.side * tooth.w * 0.16} ${(tooth.top + tooth.bottom) / 2} ${tooth.x - tooth.side * tooth.w * 0.1} ${tooth.bottom - 14}`} fill="none" stroke="#ffffff" strokeWidth={2} strokeLinecap="round" opacity={0.45} />
+        ))}
+        <path d={MIDLINE_GUM} fill="url(#mlp-gum)" stroke="#c46f6b" strokeWidth={1} strokeLinejoin="round" />
+      </g>
+      <path d="M8 102C48 38 116 14 148 18Q160 19 168 27Q176 19 188 18C220 14 288 38 328 102L312 104C272 62 220 44 168 44C116 44 64 62 24 104Z" fill="url(#mlp-lip)" stroke="#9e4d4f" strokeWidth={1} strokeLinejoin="round" />
+      <path d="M24 104C66 132 116 146 168 146C220 146 270 132 312 104L328 102C292 168 232 196 168 196C104 196 44 168 8 102Z" fill="url(#mlp-lip)" stroke="#9e4d4f" strokeWidth={1} strokeLinejoin="round" />
+      <path d="M122 170Q168 179 214 170" fill="none" stroke="#e8a3a0" strokeWidth={3} strokeLinecap="round" opacity={0.6} />
+      <line x1={168} y1={4} x2={168} y2={212} stroke="#2f7d6d" strokeWidth={1.6} strokeDasharray="6 5" />
+      <circle cx={168} cy={98} r={marked ? 8 : 11} fill={marked ? "#2563eb" : "#2f7d6d"} stroke="#ffffff" strokeWidth={2} />
+      <text x={168} y={226} textAnchor="middle" fontSize={12} fill="#4b5563">{t("studio.midlinePictureNote")}</text>
     </svg>
   );
 }
 
-/** The picture's front teeth (centre x, width, length): canine to canine and a premolar each side, centrals in the middle. */
-const MIDLINE_FRONT_TEETH: ReadonlyArray<readonly [number, number, number]> = [
-  [48, 22, 46], [76, 26, 60], [106, 28, 64], [138, 32, 70], [198, 32, 70], [230, 28, 64], [260, 26, 60], [288, 22, 46],
-];
+/** The picture's mouth opening, between the lips: the smile the teeth are seen through. */
+const MOUTH_OPENING = "M24 104C64 62 116 44 168 44C220 44 272 62 312 104C270 132 220 146 168 146C116 146 66 132 24 104Z";
+
+type PictureTooth = { x: number; w: number; top: number; bottom: number; kind: "central" | "lateral" | "canine" | "premolar"; side: 1 | -1 };
+
+/**
+ * The picture's upper teeth, second premolar to second premolar, as seen from the front: x is the crown's middle, w its
+ * width, top the gum's highest point over it (zenith) and bottom its incisal edge or cusp tip - centrals longest, the
+ * laterals a little shorter, canine tips back down to the smile line, premolars narrower and further back.
+ */
+const MIDLINE_TEETH: PictureTooth[] = ([
+  ["central", 17, 34, 62, 116],
+  ["lateral", 46.5, 25, 67, 110],
+  ["canine", 68, 18, 61, 112],
+  ["premolar", 84, 14, 65, 106],
+  ["premolar", 96.5, 11, 68, 102],
+] as const).flatMap(([kind, off, w, top, bottom]) => ([1, -1] as const).map((side) => ({ x: 168 + side * off, w, top, bottom, kind, side })));
+
+/** A crown's outline, its mesial side (towards the midline) square, its distal corner rounder; a cusp for canines and premolars. */
+function toothOutline({ x, w, top, bottom, kind, side }: PictureTooth): string {
+  const h = bottom - top, hw = w / 2;
+  // u: across the tooth, negative towards the midline (mesial), positive away (distal).
+  const at = (u: number, y: number) => `${(x + side * u * hw).toFixed(1)} ${y.toFixed(1)}`;
+  const pointed = kind === "canine" || kind === "premolar";
+  const round = kind === "central" ? 0.1 : 0.22;
+  const edge = pointed
+    ? `C${at(-1, bottom - 0.24 * h)} ${at(-0.6, bottom - 0.03 * h)} ${at(-0.1, bottom)}C${at(0.15, bottom + 0.005 * h)} ${at(0.9, bottom - 0.06 * h)} ${at(1, bottom - 0.26 * h)}`
+    : `C${at(-1, bottom - 0.04 * h)} ${at(-0.96, bottom)} ${at(-0.84, bottom)}L${at(0.5, bottom - 0.02 * h)}C${at(0.86, bottom - 0.03 * h)} ${at(1, bottom - round * 0.5 * h)} ${at(1, bottom - round * 1.5 * h)}`;
+  return `M${at(-0.7, top - 10)}L${at(-0.72, top)}C${at(-0.96, top + 0.15 * h)} ${at(-1, top + 0.35 * h)} ${at(-1, top + 0.5 * h)}${edge}C${at(1.02, top + 0.35 * h)} ${at(0.95, top + 0.12 * h)} ${at(0.72, top)}L${at(0.7, top - 10)}Z`;
+}
+
+/** The gum over the upper teeth: a scallop rising to each tooth's zenith, a papilla pointing down between each pair. */
+const MIDLINE_GUM = (() => {
+  const teeth = [...MIDLINE_TEETH].sort((a, b) => a.x - b.x);
+  const papilla = (a: PictureTooth, b: PictureTooth) => Math.max(a.top, b.top) + 0.3 * Math.min(a.bottom - a.top, b.bottom - b.top);
+  let d = `M0 30L0 ${teeth[0].top + 6}L${(teeth[0].x - teeth[0].w / 2).toFixed(1)} ${(teeth[0].top + 8).toFixed(1)}`;
+  teeth.forEach((tooth, i) => {
+    const left = tooth.x - tooth.w / 2, right = tooth.x + tooth.w / 2;
+    const yl = i === 0 ? tooth.top + 8 : papilla(teeth[i - 1], tooth);
+    const yr = i === teeth.length - 1 ? tooth.top + 8 : papilla(tooth, teeth[i + 1]);
+    const zx = tooth.x + tooth.side * tooth.w * 0.08; // the zenith sits a little distal of the middle
+    d += `C${(left + 0.05 * tooth.w).toFixed(1)} ${(tooth.top + 0.25 * (yl - tooth.top)).toFixed(1)} ${(zx - 0.35 * tooth.w).toFixed(1)} ${tooth.top} ${zx.toFixed(1)} ${tooth.top}`;
+    d += `C${(zx + 0.35 * tooth.w).toFixed(1)} ${tooth.top} ${(right - 0.05 * tooth.w).toFixed(1)} ${(tooth.top + 0.25 * (yr - tooth.top)).toFixed(1)} ${right.toFixed(1)} ${yr.toFixed(1)}`;
+  });
+  const last = teeth[teeth.length - 1];
+  return `${d}L336 ${last.top + 6}L336 30Z`;
+})();
+
+/** The lower incisors and canines' tips, showing just below the upper teeth. */
+const MIDLINE_LOWER_TEETH = [100, 120, 138, 157, 179, 198, 216, 236];
 
 export function DentalStudioPanel({
   parts,
