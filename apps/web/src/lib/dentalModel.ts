@@ -1962,6 +1962,8 @@ async function studio(input: DentalStudioInput, given_options: DentalStudioOptio
     if (pair && rest && arch.role === "upper") {
       toBite.premultiply(new THREE.Matrix4().makeTranslation(0, -rest.axleY, 0)).premultiply(new THREE.Matrix4().makeRotationX((-rest.degrees * Math.PI) / 180)).premultiply(new THREE.Matrix4().makeTranslation(0, rest.axleY, 0));
     }
+    // EXPERIMENT (not committed): simplify before export.
+    if (process.env.SIMPLIFY) { const s = solid.simplify(Number(process.env.SIMPLIFY)); toFree.push(solid); solid = s; }
     out.push({ id: arch.id, role: arch.role, positions: cleanStlSoup(solidPositions(solid)), height: own.max[2] - own.min[2], volume: solid.volume(), ...(pair ? { toBite: toBite.toArray() } : {}) });
     toFree.push(solid);
   });
