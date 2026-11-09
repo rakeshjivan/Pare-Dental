@@ -12376,6 +12376,19 @@ export function LayerlingEditor({
       return;
     }
     const inInput = marks.map((point) => new THREE.Vector3(...point).applyMatrix4(arch.sceneToInput).toArray() as [number, number, number]);
+    // Build 277: with the front teeth laid as one set, the marks are its anchors - the set laid again from them.
+    const record = current.smile?.[arch.slot];
+    if (record) {
+      const base = { midline: marks[0], canines: [marks[1], marks[2]] as [[number, number, number], [number, number, number]], up: record.anchors.up, out: record.anchors.out };
+      const anchored: SmileRecord = { ...record, anchors: { ...base, labial: labialProfile(worldTriangles(arch.shape), base) } };
+      waxupRef.current = { ...current, marks: [], picking: null, guessed: false, landmarks: { midline: inInput[0], canines: [inInput[1], inInput[2]] }, smile: { ...(current.smile ?? {}), [arch.slot]: anchored } };
+      setWaxup(waxupRef.current);
+      setDentalHidden([]);
+      window.layerlingMarkDots?.(null);
+      commitWaxSmile(anchored.controls);
+      window.setTimeout(() => showDentalView(arch.slot, "front"), 50);
+      return;
+    }
     setWaxup({ ...current, marks: [], picking: null, guessed: false, landmarks: { midline: inInput[0], canines: [inInput[1], inInput[2]] } });
     setDentalHidden([]);
   }, [waxArch]);

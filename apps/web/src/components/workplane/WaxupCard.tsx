@@ -797,7 +797,14 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
             ) : null}
             {/* Build 277 (roadmap phase 2): the front teeth as one set on the arch, from whole-set controls. */}
             {view.smileSet && actions.onSmile ? (
-              <SmileSetPanel set={view.smileSet} workspace={workspace} disabled={working} onChange={actions.onSmile} />
+              <>
+                {/* Build 277: the anchors the set is laid from - the midline at the centrals' edges and the canine tips - clicked on the scan. */}
+                <div className="dental-trim-buttons">
+                  <button type="button" className={view.picking !== null ? "active" : "secondary"} disabled={working || view.picking !== null} title={t("waxup.smileAnchorsHint")} onClick={actions.onMark}>{t("waxup.smileAnchors")}</button>
+                </div>
+                {view.picking !== null ? <p className="blend-hint" role="status">{t(WAXUP_LANDMARKS[view.picking])}</p> : null}
+                <SmileSetPanel set={view.smileSet} workspace={workspace} disabled={working} onChange={actions.onSmile} />
+              </>
             ) : (<>
             <EdgeModifierSlider label={t("waxup.dropSize")} title={t("waxup.dropSizeHint")} value={Math.round((view.setScale ?? 1) * 100)} min={80} max={125} step={1} unit="%" workspace={workspace} disabled={working} onChange={(value) => actions.onSetScale?.(Math.max(0.8, Math.min(1.25, Math.round(value) / 100)))} />
             {actions.onSetCurve ? <EdgeModifierSlider label={t("waxup.dropCurve")} title={t("waxup.dropCurveHint")} value={view.setCurve ?? 0} min={-4} max={4} step={0.1} workspace={workspace} length disabled={working} onChange={(value) => actions.onSetCurve?.(Math.max(-4, Math.min(4, Math.round(value * 10) / 10)))} /> : null}

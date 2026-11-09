@@ -5747,6 +5747,8 @@ export const MESSAGES_EN = {
   "waxup.smileCurve": "Arch curve",
   "waxup.smileCurveHint": "The depth of the curve the teeth sit on: 100% runs through the canine tips; more is a narrower, deeper arch.",
   "waxup.smileReset": "Back to the first proposal",
+  "waxup.smileAnchors": "Mark the midline and canine tips",
+  "waxup.smileAnchorsHint": "Click where the centrals meet at their incisal edges, then each canine tip. The set is laid from those three points: the centrals' edge level with the first, fitted between the other two.",
   "waxup.dropSize": "Set size",
   "waxup.dropSizeHint": "The whole set larger or smaller about its middle; 100% is the library's own size.",
   "waxup.dropAgain": "Put the set back where it came in",
