@@ -1155,8 +1155,10 @@ html.studio-right-hidden .studio-shell-on .dental-studio-panel.studio-framed { d
 .studio-pic-choice.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .studio-pic-choice button { min-width: 0; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 4px; font-size: 13px; line-height: 1.2; white-space: nowrap; }
 .studio-pic-choice .studio-body-pic { width: 48px; height: 34px; flex: none; }
-.studio-shell-on .dental-studio-panel.studio-framed .dental-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.studio-shell-on .dental-studio-panel.studio-framed .dental-presets button { min-width: 0; }
+/* Build 274 (Rakesh): the base's shape is the choice - three side by side, each picture above its name. */
+.studio-shell-on .dental-studio-panel.studio-framed .dental-presets { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.studio-shell-on .dental-studio-panel.studio-framed .dental-presets button { min-width: 0; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 4px; text-align: center; }
+.studio-shell-on .dental-studio-panel.studio-framed .dental-presets button .dental-picture { width: 64px; height: 48px; }
 .studio-mm-choice button, .studio-toggle-buttons button { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* The hinge's choices: three across, one word each. */
 .studio-mm-choice.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }

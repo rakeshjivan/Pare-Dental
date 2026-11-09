@@ -12,10 +12,11 @@ import type { DentalStudioOptions } from "@/lib/dentalModel";
 /** What the studio chose, as the models were made. `build`: the app's build number, 0 when not known. */
 export type DentalSettingsInput = Pick<DentalStudioOptions, "baseStyle" | "hinge" | "hingeStyle" | "baseHeight" | "keepPalate" | "midlineMark" | "pinPlace" | "incisalPin" | "inside" | "infill" | "layout" | "smooth" | "margin" | "risers"> & { build: number };
 
+// Build 274: the words are the base choices' own names (the codes in the file stay as they were).
 const STYLE: Record<DentalStudioOptions["baseStyle"], { code: string; word: string }> = {
-  clean: { code: "study", word: "Study base" },
-  ortho: { code: "ortho", word: "Ortho base" },
-  follow: { code: "aligner", word: "Aligner base" },
+  clean: { code: "study", word: "Rounded base" },
+  ortho: { code: "ortho", word: "ABO base" },
+  follow: { code: "aligner", word: "Horseshoe base" },
   plate: { code: "plate", word: "Plate base" },
   articulator: { code: "artic", word: "Articulator base" },
 };

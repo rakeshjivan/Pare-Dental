@@ -7,7 +7,7 @@ describe("Build 273: the settings a pair of models was made with", () => {
   it("names the choices, in words and as a short code", () => {
     const { code, parts } = dentalSettings(ortho);
     expect(code).toBe("b273 ortho snap tall mid comb occ");
-    expect(parts).toEqual(["Build 273", "Ortho base", "Snap hinge", "Tall", "Midline marked", "Honeycomb"]);
+    expect(parts).toEqual(["Build 273", "ABO base", "Snap hinge", "Tall", "Midline marked", "Honeycomb"]);
     expect(dentalSettings({ ...ortho, hinge: false, baseHeight: "standard", midlineMark: undefined, inside: "solid" }).code).toBe("b273 ortho solid occ");
   });
 

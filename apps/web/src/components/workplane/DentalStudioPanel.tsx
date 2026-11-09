@@ -635,13 +635,18 @@ export function DentalStudioPanel({
   const modelDone = asked.type && (pair ? asked.layout && (options.hinge || !askHeight || asked.height) : !askHeight || asked.height);
   const articOrder = ["hinge", "fit", "pins", ...(options.incisalPin !== false ? ["gap", "ovd"] : []), ...(askHeight ? ["aheight"] : [])];
   const articDone = articOrder.every((id) => asked[id]);
+  // Build 106: in the studio frame - the steps along its top, Back and Next along its bottom, the step's
+  // guidance over the 3D view; the panel keeps the step's own tools.
+  const stepsSlot = useStudioSlot("steps");
+  const navSlot = useStudioSlot("nav");
+  const hintSlot = useStudioSlot("hint");
+  const framed = shell && Boolean(stepsSlot);
   // Build 274 (Rakesh: "we shouldn't allow the user to move to trimming without midline marking"): in the Model Builder the
   // midline is marked at the first step, once the scans are in, before anything else.
   const midlineOn = slots.upper ?? slots.lower;
   const midlineMarked = Boolean(options.midlineMark) && options.midlineScan === midlineOn;
-  // (A function: the frame is known further down.)
-  const needMidline = () => Boolean(mbSteps) && framed && Boolean(onMidlinePick) && Boolean(midlineOn);
-  const mbStepDone = (id: ModelStepId) => (id === "scans" ? scansDone && (!needMidline() || midlineMarked) : id === "prepare" && shell && trimmedDone ? (["upper", "lower"] as const).every((slot) => !slots[slot] || trimmedDone.includes(slot)) : shell && id === "model" ? Boolean(modelDone) : shell && id === "articulator" ? articDone : true);
+  const needMidline = Boolean(mbSteps) && framed && Boolean(onMidlinePick) && Boolean(midlineOn);
+  const mbStepDone = (id: ModelStepId) => (id === "scans" ? scansDone && (!needMidline || midlineMarked) : id === "prepare" && shell && trimmedDone ? (["upper", "lower"] as const).every((slot) => !slots[slot] || trimmedDone.includes(slot)) : shell && id === "model" ? Boolean(modelDone) : shell && id === "articulator" ? articDone : true);
   const inMb = (id: ModelStepId) => !mbSteps || mbStep === id;
   // Build 120 (Rakesh): Articulated chosen, on to the Articulator step.
   useEffect(() => {
@@ -678,12 +683,6 @@ export function DentalStudioPanel({
       ) : null}
     </div>
   ) : null;
-  // Build 106: in the studio frame - the steps along its top, Back and Next along its bottom, the step's
-  // guidance over the 3D view; the panel keeps the step's own tools.
-  const stepsSlot = useStudioSlot("steps");
-  const navSlot = useStudioSlot("nav");
-  const hintSlot = useStudioSlot("hint");
-  const framed = shell && Boolean(stepsSlot);
   // Build 108: Trim opens on the arch being waxed straight away (the upper with both), its tools in view - once
   // each time the step is entered, and not over an arch already being trimmed.
   const trimOpened = useRef(false);
@@ -922,7 +921,7 @@ export function DentalStudioPanel({
         </div>
         {/* Build 274 (Rakesh): the dental midline, marked here - first of all, before the scans are trimmed - on the upper seen
             from the front and level. Every model is centred on it (the teeth on the base, and an articulated pair's pins and posts). */}
-        {needMidline() && scansDone ? (<>
+        {needMidline && scansDone ? (<>
           <h4 className="dental-group">{t("studio.midline")}</h4>
           <MidlinePicture marked={!midlinePicking && midlineMarked} />
           <div className="dental-trim-buttons">
