@@ -110,7 +110,7 @@ import { looksLikeDentalScan, type DentalAnalysis, type DentalRole, type DentalS
 import { DentalChrome } from "./workplane/DentalChrome";
 import { STUDIO_SHELL, WAXUP_ENABLED } from "@/lib/pareFeatures";
 import { fitArchLine, layOnArchLine, type ArchTooth } from "@/lib/waxArchLine";
-import { affineBetween, clampControls, layoutSmileSet, restFrames, SCULPTED_MISS, SET_DEFAULTS, type SetControls, type SetTooth, type SmileRecord } from "@/lib/waxSmileSet";
+import { affineBetween, clampControls, labialProfile, layoutSmileSet, restFrames, SCULPTED_MISS, SET_DEFAULTS, type SetControls, type SetTooth, type SmileRecord } from "@/lib/waxSmileSet";
 import { StudioShell } from "./workplane/StudioShell";
 import { useStudioSlot } from "@/lib/studioSlots";
 import { createPortal } from "react-dom";
@@ -13703,7 +13703,11 @@ export function LayerlingEditor({
         const frames = restFrames(front.map((tooth) => ({ fdi: tooth.fdi, soup: tooth.soup })), up, out);
         const record: SmileRecord = {
           controls: { ...SET_DEFAULTS },
-          anchors: { midline: at(plan.landmarks.midline), canines: [at(plan.landmarks.canines[0]), at(plan.landmarks.canines[1])], up, out },
+          anchors: (() => {
+            const anchors = { midline: at(plan.landmarks.midline), canines: [at(plan.landmarks.canines[0]), at(plan.landmarks.canines[1])] as [[number, number, number], [number, number, number]], up, out };
+            // The patient's labial surfaces across the front, so the set starts just clear of them.
+            return { ...anchors, labial: labialProfile(transformSoup(arch.scan, back), anchors) };
+          })(),
           rest: Object.fromEntries(front.flatMap((tooth) => { const f = frames.get(tooth.fdi); return f ? [[tooth.fdi, f]] : []; })),
           laid: Object.fromEntries(front.map((tooth) => [tooth.fdi, identity])),
         };

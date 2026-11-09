@@ -5737,7 +5737,7 @@ export const MESSAGES_EN = {
   "waxup.smileArc": "Smile arc",
   "waxup.smileArcHint": "How far the canine tips stand short of the centrals' edge, mm. More gives a stronger smile curve.",
   "waxup.smileFullness": "Labial fullness",
-  "waxup.smileFullnessHint": "Moves the whole set labially (plus) or palatally (minus), mm.",
+  "waxup.smileFullnessHint": "How far the set stands in front of the patient's teeth, on top of the 0.3 mm it always clears them by: plus moves it labially, minus palatally (minus can cut into the patient's teeth).",
   "waxup.smileMore": "More controls",
   "waxup.smileLess": "Fewer controls",
   "waxup.smileCant": "Cant",

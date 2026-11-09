@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { affineBetween, CANINE_TIP, layoutSmileSet, restFrames, SET_DEFAULTS, type SetAnchors, type SetTooth } from "@/lib/waxSmileSet";
+import { affineBetween, CANINE_TIP, labialProfile, layoutSmileSet, restFrames, SET_CLEAR, SET_DEFAULTS, type SetAnchors, type SetTooth } from "@/lib/waxSmileSet";
 import type { ToothKind } from "@/lib/dentalWaxup";
 
 /** Build 277: the six front teeth set out together from whole-set controls. Synthetic teeth only. */
@@ -155,5 +155,32 @@ describe("restFrames", () => {
     expect(lateral.length).toBeCloseTo(9, 5);
     expect(f.get(11)!.frame.mesial[0]).toBeCloseTo(1, 5);
     expect(f.get(11)!.width).toBeCloseTo(8, 5);
+  });
+});
+
+describe("standing clear of the patient's teeth", () => {
+  it("lays the set at least SET_CLEAR in front of the most labial point, fullness on top", () => {
+    const teeth = (() => {
+      const out: SetTooth[] = [];
+      for (const q of [1, 2]) for (const n of [1, 2, 3]) {
+        const s = q === 2 ? 1 : -1;
+        out.push({ id: `t${q}${n}`, fdi: q * 10 + n, kind: n === 1 ? "central" : n === 2 ? "lateral" : "canine", width: [0, 8.6, 6.8, 7.6][n], length: 10, frame: { origin: [s * n * 7, 0, 0], mesial: [-s, 0, 0], out: [0, 1, 0], up: [0, 0, 1] } });
+      }
+      return out;
+    })();
+    // A patient's arch: crowns along y = 2 - 0.03 x^2 (labial of the canine-tip curve).
+    const pts: number[] = [];
+    for (let x = -20; x <= 20; x += 0.25) for (const h of [-6, -3, 0]) pts.push(x, 2 - 0.03 * x * x, h);
+    const base = { midline: [0, 0, 0] as V, canines: [[-17, -9, -1], [17, -9, -1]] as [V, V], up: [0, 0, 1] as V, out: [0, 1, 0] as V };
+    const labial = labialProfile(pts, base);
+    expect(labial.length).toBeGreaterThan(50);
+    for (const fullness of [0, 0.5]) {
+      const lay = layoutSmileSet(teeth, { ...base, labial }, { ...SET_DEFAULTS, fullness })!;
+      for (const t of teeth) {
+        const o = new THREE.Vector3(...t.frame.origin).applyMatrix4(lay.matrices.get(t.id)!);
+        // The labial face at the incisal middle stands in front of the patient's surface there.
+        expect(o.y - (2 - 0.03 * o.x * o.x)).toBeGreaterThan(SET_CLEAR + fullness - 0.35);
+      }
+    }
   });
 });

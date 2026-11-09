@@ -23,8 +23,15 @@ type Vec3 = [number, number, number];
 /** One front tooth at rest (as dropped): its frame (incisal middle; out, mesial, up), width along the arch and length, mm. */
 export type SetTooth = { id: string; fdi: number; kind: ToothKind; frame: ToothFrame; width: number; length: number };
 
-/** Where the set goes: the midline at the incisal edges, the two canine tips, and the occlusal direction (towards the incisal edges) and labial direction. */
-export type SetAnchors = { midline: Vec3; canines: [Vec3, Vec3]; up: Vec3; out: Vec3 };
+/**
+ * Where the set goes: the midline at the incisal edges, the two canine tips, and the occlusal direction
+ * (towards the incisal edges) and labial direction. `labial`: the patient's most labial points across the
+ * front teeth (labialProfile), so the set is laid clear of them - a wax-up only adds.
+ */
+export type SetAnchors = { midline: Vec3; canines: [Vec3, Vec3]; up: Vec3; out: Vec3; labial?: Vec3[] };
+
+/** The least wax over the patient's labial surface where the set starts (fullness 0), mm. */
+export const SET_CLEAR = 0.3;
 
 export type SetControls = {
   /** The centrals' incisal edge from the anchor, mm (+ longer). */
@@ -172,6 +179,16 @@ export function layoutSmileSet(teeth: SetTooth[], anchors: SetAnchors, controls:
     W = (lo + hi) / 2;
   }
   const { widths, ends } = laySide(k, W, c.red, natural);
+  // Clear of the patient's teeth: the curve moved labially until it stands SET_CLEAR in front of the most
+  // labial point of the patient's crowns everywhere across the six teeth; fullness is added on top of that.
+  let clear = 0;
+  const reach = ends[3] + 1;
+  for (const point of anchors.labial ?? []) {
+    const d = v(point).sub(plane.mid);
+    const x = Math.abs(d.dot(plane.across) - c.midline);
+    if (x > reach) continue;
+    clear = Math.max(clear, d.dot(plane.forward) + SET_CLEAR + k * x * x);
+  }
   const L = W / c.ratio;
   const centralRest = teeth.find((t) => t.kind === "central");
   const lengthScale = centralRest ? L / Math.max(1, centralRest.length) : 1;
@@ -189,7 +206,7 @@ export function layoutSmileSet(teeth: SetTooth[], anchors: SetAnchors, controls:
     // FDI quadrants 2 and 3 are the patient's left: +across.
     const s = isLeft(tooth.fdi) ? 1 : -1;
     const x0 = ends[p - 1], x1 = ends[p];
-    const y = (x: number) => -k * x * x + c.fullness;
+    const y = (x: number) => -k * x * x + clear + c.fullness;
     // Designed frame: incisal middle on the curve; mesial towards the midline along the chord; up the normal.
     const mesial2 = new THREE.Vector2(s * x0 - s * x1, y(x0) - y(x1)).normalize();
     const mesial = plane.across.clone().multiplyScalar(mesial2.x).addScaledVector(plane.forward, mesial2.y).normalize();
@@ -309,4 +326,26 @@ export function restFrames(teeth: Array<{ fdi: number; soup: ArrayLike<number> }
     result.set(tooth.fdi, { frame: { origin: origin.toArray() as Vec3, mesial: mesial.toArray() as Vec3, out: o.toArray() as Vec3, up: u.toArray() as Vec3 }, width: hi - lo, length: top - bottom });
   }
   return result;
+}
+
+/**
+ * The patient's most labial point in each 0.5 mm strip across the front of the arch, from the incisal
+ * edges to 8 mm gingival of them (scene coordinates) - what the set must stand clear of. `points`: the
+ * scan's corners (x, y, z in a row).
+ */
+export function labialProfile(points: ArrayLike<number>, anchors: Omit<SetAnchors, "labial">): Vec3[] {
+  const plane = archPlane(anchors, null);
+  if (!plane) return [];
+  const strips = new Map<number, { y: number; p: Vec3 }>();
+  const p = new THREE.Vector3();
+  for (let i = 0; i + 2 < points.length; i += 3) {
+    p.set(points[i], points[i + 1], points[i + 2]);
+    const d = p.clone().sub(plane.mid);
+    const h = d.dot(plane.normal), x = d.dot(plane.across), y = d.dot(plane.forward);
+    if (h < -8 || h > 1.5 || Math.abs(x) > plane.halfSpan + 8) continue;
+    const key = Math.round(x * 2);
+    const was = strips.get(key);
+    if (!was || y > was.y) strips.set(key, { y, p: p.toArray() as Vec3 });
+  }
+  return [...strips.values()].map((entry) => entry.p);
 }
