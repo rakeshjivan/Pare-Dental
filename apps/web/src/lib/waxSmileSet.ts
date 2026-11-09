@@ -31,7 +31,7 @@ export type SetControls = {
   length: number;
   /** The midline moved towards the patient's left, mm. */
   midline: number;
-  /** The incisal plane turned about the midline (frontal plane), degrees (+ the patient's left side up). */
+  /** The incisal plane turned about the midline (frontal plane), degrees (+ the patient's left side towards the gum). */
   cant: number;
   /** The central's width, mm; null fits the six teeth between the canine tips. */
   centralWidth: number | null;
@@ -85,25 +85,27 @@ export function clampControls(c: SetControls): SetControls {
   };
 }
 
-/** The arch plane from the anchors: origin at the midline, across (to the patient's left), forward (labial), normal (incisal). */
-function archPlane(a: SetAnchors) {
+/**
+ * The arch plane from the anchors: origin at the midline, `across` towards the patient's left (from where
+ * the left-quadrant teeth stand, else the second canine), `forward` labial, `normal` incisal. Not
+ * necessarily right-handed: on an upper arch the incisal direction points down the face.
+ */
+function archPlane(a: SetAnchors, towardsLeft: THREE.Vector3 | null) {
   const normal = v(a.up).normalize();
   const [c0, c1] = a.canines.map(v);
-  // The patient's left is the canine further along `across`; take the line between them as across, either order.
   const across = c1.clone().sub(c0);
   across.addScaledVector(normal, -across.dot(normal));
   if (across.length() < 1e-6) return null;
   across.normalize();
-  let forward = new THREE.Vector3().crossVectors(normal, across).normalize();
-  if (forward.dot(v(a.out)) < 0) {
-    // Keep a right-handed frame with forward labial: flip across (so its side is the other canine).
-    across.negate();
-    forward = new THREE.Vector3().crossVectors(normal, across).normalize();
-  }
+  if (towardsLeft && across.dot(towardsLeft) < 0) across.negate();
+  const forward = v(a.out).addScaledVector(normal, -v(a.out).dot(normal));
+  forward.addScaledVector(across, -forward.dot(across));
+  if (forward.length() < 1e-6) return null;
+  forward.normalize();
   const mid = v(a.midline);
   // Canine tips in the plane: x across, y forward (from the midline). Depth k of y = -k x^2 through them.
-  const planar = [c0, c1].map((c) => { const d = c.clone().sub(mid); return { x: d.dot(across), y: d.dot(forward), h: d.dot(normal) }; });
-  const k = planar.reduce((s, p) => s + Math.max(0, -p.y) / Math.max(1, p.x * p.x), 0) / 2;
+  const planar = [c0, c1].map((c) => { const d = c.clone().sub(mid); return { x: d.dot(across), y: d.dot(forward) }; });
+  const k = planar.reduce((sum, p) => sum + Math.max(0, -p.y) / Math.max(1, p.x * p.x), 0) / 2;
   const halfSpan = (Math.abs(planar[0].x) + Math.abs(planar[1].x)) / 2;
   return { mid, normal, across, forward, k: Math.max(0.004, k), halfSpan };
 }
@@ -147,7 +149,12 @@ function laySide(k: number, W: number, red: number, natural: Record<1 | 2 | 3, n
  */
 export function layoutSmileSet(teeth: SetTooth[], anchors: SetAnchors, controls: SetControls): SetLayout | null {
   const c = clampControls(controls);
-  const plane = archPlane(anchors);
+  // Which way is the patient's left: from the left-quadrant teeth (FDI 2x, 3x) against the right ones, as they stand at rest.
+  const isLeft = (fdi: number) => { const q = Math.floor(fdi / 10); return q === 2 || q === 3; };
+  const mean = (list: SetTooth[]) => list.reduce((sum, t) => sum.add(v(t.frame.origin)), new THREE.Vector3()).divideScalar(Math.max(1, list.length));
+  const lefts = teeth.filter((t) => isLeft(t.fdi)), rights = teeth.filter((t) => !isLeft(t.fdi));
+  const towardsLeft = lefts.length && rights.length ? mean(lefts).sub(mean(rights)) : null;
+  const plane = archPlane(anchors, towardsLeft);
   if (!plane) return null;
   const k = plane.k * c.curve;
   const natural: Record<1 | 2 | 3, number> = { 1: NATURAL_WIDTHS.central, 2: NATURAL_WIDTHS.lateral, 3: NATURAL_WIDTHS.canine };
@@ -169,17 +176,18 @@ export function layoutSmileSet(teeth: SetTooth[], anchors: SetAnchors, controls:
   const centralRest = teeth.find((t) => t.kind === "central");
   const lengthScale = centralRest ? L / Math.max(1, centralRest.length) : 1;
   const heights: Record<1 | 2 | 3, number> = { 1: c.length, 2: c.length - c.lateralStep, 3: c.length - c.arc };
+  // Cant: the patient's left side turned towards the gum (against the incisal direction) for plus, either arch.
+  const cantAxis = new THREE.Vector3().crossVectors(plane.normal, plane.across).normalize();
   const cant = new THREE.Matrix4().makeTranslation(plane.mid.x, plane.mid.y, plane.mid.z)
-    .multiply(new THREE.Matrix4().makeRotationAxis(plane.forward, (c.cant * Math.PI) / 180))
+    .multiply(new THREE.Matrix4().makeRotationAxis(cantAxis, (c.cant * Math.PI) / 180))
     .multiply(new THREE.Matrix4().makeTranslation(-plane.mid.x, -plane.mid.y, -plane.mid.z));
   const matrices = new Map<string, THREE.Matrix4>();
   const apparent = new Map<string, number>();
   for (const tooth of teeth) {
     const p = position(tooth.kind) as 1 | 2 | 3;
     if (p > 3) continue;
-    const q = Math.floor(tooth.fdi / 10);
     // FDI quadrants 2 and 3 are the patient's left: +across.
-    const s = q === 2 || q === 3 ? 1 : -1;
+    const s = isLeft(tooth.fdi) ? 1 : -1;
     const x0 = ends[p - 1], x1 = ends[p];
     const y = (x: number) => -k * x * x + c.fullness;
     // Designed frame: incisal middle on the curve; mesial towards the midline along the chord; up the normal.
@@ -210,3 +218,55 @@ export function layoutSmileSet(teeth: SetTooth[], anchors: SetAnchors, controls:
   if (r11 && r21) contacts.push({ mesial: r11, distal: r21, gap: 0 });
   return { matrices, centralWidth: W, centralLength: L, apparent, contacts };
 }
+
+/**
+ * The affine move (least squares) that takes a soup's corners to where they stand in another soup of the
+ * same triangles, and how far the worst corner misses it (mm). A tooth moved, turned or sized on its own
+ * after the set was laid is such a move; a tooth sculpted is not (its miss is large). Null when the soups
+ * do not match or are degenerate.
+ */
+export function affineBetween(before: ArrayLike<number>, after: ArrayLike<number>): { matrix: THREE.Matrix4; miss: number } | null {
+  if (before.length !== after.length || before.length < 12) return null;
+  const n = before.length / 3;
+  // Normal equations: (X^T X) a_k = X^T y_k, X rows [x y z 1], centred for conditioning.
+  const c = [0, 0, 0];
+  for (let i = 0; i < n; i += 1) for (let k = 0; k < 3; k += 1) c[k] += before[i * 3 + k] / n;
+  const xtx = Array.from({ length: 4 }, () => [0, 0, 0, 0]);
+  const xty = Array.from({ length: 3 }, () => [0, 0, 0, 0]);
+  for (let i = 0; i < n; i += 1) {
+    const row = [before[i * 3] - c[0], before[i * 3 + 1] - c[1], before[i * 3 + 2] - c[2], 1];
+    for (let a = 0; a < 4; a += 1) {
+      for (let b = 0; b < 4; b += 1) xtx[a][b] += row[a] * row[b];
+      for (let k = 0; k < 3; k += 1) xty[k][a] += row[a] * after[i * 3 + k];
+    }
+  }
+  const M = new THREE.Matrix4().fromArray(xtx.flat()); // symmetric, so the column-major read is the same matrix
+  if (Math.abs(M.determinant()) < 1e-9) return null;
+  const inv = M.clone().invert().elements; // column-major
+  const solve = (y: number[]) => [0, 1, 2, 3].map((r) => [0, 1, 2, 3].reduce((s, col) => s + inv[col * 4 + r] * y[col], 0));
+  const rows = [0, 1, 2].map((k) => solve(xty[k]));
+  const centred = new THREE.Matrix4().set(rows[0][0], rows[0][1], rows[0][2], rows[0][3], rows[1][0], rows[1][1], rows[1][2], rows[1][3], rows[2][0], rows[2][1], rows[2][2], rows[2][3], 0, 0, 0, 1);
+  const matrix = centred.multiply(new THREE.Matrix4().makeTranslation(-c[0], -c[1], -c[2]));
+  let miss = 0;
+  const p = new THREE.Vector3();
+  for (let i = 0; i < n; i += 1) {
+    p.set(before[i * 3], before[i * 3 + 1], before[i * 3 + 2]).applyMatrix4(matrix);
+    miss = Math.max(miss, Math.hypot(p.x - after[i * 3], p.y - after[i * 3 + 1], p.z - after[i * 3 + 2]));
+  }
+  return { matrix, miss };
+}
+
+/**
+ * One arch's set as Wax-up Studio keeps it: the controls, the anchors, each front tooth's rest pose
+ * (as dropped, scene coordinates) and the set's last move of it from rest (a matrix, column-major).
+ * Whatever else was done to a tooth since (moved on its own) is read back from the tooth itself.
+ */
+export type SmileRecord = {
+  controls: SetControls;
+  anchors: SetAnchors;
+  rest: Record<number, { frame: ToothFrame; width: number; length: number }>;
+  laid: Record<number, number[]>;
+};
+
+/** How far a tooth may have been reshaped (not just moved, turned or sized) and still follow the set, mm. */
+export const SCULPTED_MISS = 0.02;

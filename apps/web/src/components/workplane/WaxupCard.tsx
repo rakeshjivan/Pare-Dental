@@ -28,6 +28,7 @@ import { EdgeModifierSlider } from "@/components/workplane/EdgeModifierPanel";
 import { CONTACT_STOPS, contactGradient } from "@/lib/biteContacts";
 import { t } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/messages.en";
+import { SET_DEFAULTS, SET_RANGES, type SetControls } from "@/lib/waxSmileSet";
 import { IMT_REDUCE, IMT_UNSUPPORTED, imtFirstInjection, type SmileCheck, type ToothAdjust, type ToothNudge } from "@/lib/dentalWaxup";
 import type { WorkplaneWorkspaceSettings } from "@/types/layerling";
 
@@ -38,6 +39,8 @@ export const WAX_THIN = 0.2;
 
 export type WaxupView = {
   slot: "upper" | "lower";
+  /** Build 277: the front teeth as one set on the arch - its controls and what they make (null: none for this arch). */
+  smileSet?: { controls: SetControls; centralWidth: number; centralLength: number; red: number | null } | null;
   /** Build 107: the dropped set's size, as a share of the library's own (1 = as made). */
   setScale?: number;
   /** Build 107: how much further back (+) or forward (-) the canines stand than as dropped, mm. */
@@ -164,6 +167,8 @@ export type WaxupView = {
 };
 
 export type WaxupActions = {
+  /** Build 277: a whole-set control changed. */
+  onSmile?: (controls: SetControls) => void;
   /** Build 107: the whole dropped set larger or smaller, about its middle (1 = the library's own size). */
   onSetScale?: (scale: number) => void;
   /** Build 107: the set's curve opened (+) or closed (-), mm at the canines. */
@@ -788,9 +793,14 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
                 ))}
               </div>
             ) : null}
+            {/* Build 277 (roadmap phase 2): the front teeth as one set on the arch, from whole-set controls. */}
+            {view.smileSet && actions.onSmile ? (
+              <SmileSetPanel set={view.smileSet} workspace={workspace} disabled={working} onChange={actions.onSmile} />
+            ) : (<>
             <EdgeModifierSlider label={t("waxup.dropSize")} title={t("waxup.dropSizeHint")} value={Math.round((view.setScale ?? 1) * 100)} min={80} max={125} step={1} unit="%" workspace={workspace} disabled={working} onChange={(value) => actions.onSetScale?.(Math.max(0.8, Math.min(1.25, Math.round(value) / 100)))} />
             {actions.onSetCurve ? <EdgeModifierSlider label={t("waxup.dropCurve")} title={t("waxup.dropCurveHint")} value={view.setCurve ?? 0} min={-4} max={4} step={0.1} workspace={workspace} length disabled={working} onChange={(value) => actions.onSetCurve?.(Math.max(-4, Math.min(4, Math.round(value * 10) / 10)))} /> : null}
             <p className="blend-hint">{t("waxup.dropCurveHint")}</p>
+            </>)}
             <label className="edge-modifier-check">
               <input type="checkbox" checked={view.scanSeeThrough} onChange={(event) => actions.onScanSeeThrough?.(event.currentTarget.checked)} />
               <span>{t("waxup.seeThrough")}</span>
@@ -1134,6 +1144,53 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
         </details>
       ) : null}
       {view.error ? <div className="edge-modifier-error" role="alert">{view.error}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * Build 277 (roadmap phase 2): the whole-set controls, in the order a dentist decides them - the centrals'
+ * edge, the midline, the central's width and width/length, the proportion of the laterals and canines
+ * (RED), the smile arc, labial fullness; then, under More, the cant, the laterals' step and the curve.
+ * Every value shown as a number; both sides change together and the teeth stay in contact.
+ */
+function SmileSetPanel({ set, workspace, disabled, onChange }: { set: NonNullable<WaxupView["smileSet"]>; workspace: WorkplaneWorkspaceSettings; disabled: boolean; onChange: (controls: SetControls) => void }) {
+  const [more, setMore] = useState(false);
+  const c = set.controls;
+  const r = SET_RANGES;
+  const tenth = (x: number) => Math.round(x * 10) / 10;
+  const change = (patch: Partial<SetControls>) => onChange({ ...c, ...patch });
+  const mm = (key: "length" | "midline" | "lateralStep" | "arc" | "fullness", label: MessageKey, hint: MessageKey) => (
+    <EdgeModifierSlider label={t(label)} title={t(hint)} value={c[key]} min={r[key][0]} max={r[key][1]} step={0.1} workspace={workspace} length disabled={disabled} onChange={(value) => change({ [key]: tenth(value) })} />
+  );
+  return (
+    <div className="wax-smile-set">
+      <div className="wax-guide">
+        <strong>{t("waxup.smileTitle")}</strong>
+        <span>{t("waxup.smileHint")}</span>
+      </div>
+      {mm("length", "waxup.smileLength", "waxup.smileLengthHint")}
+      {mm("midline", "waxup.smileMidline", "waxup.smileMidlineHint")}
+      <EdgeModifierSlider label={t("waxup.smileWidth")} title={t("waxup.smileWidthHint")} value={tenth(c.centralWidth ?? set.centralWidth)} min={r.centralWidth[0]} max={r.centralWidth[1]} step={0.1} workspace={workspace} length disabled={disabled} onChange={(value) => change({ centralWidth: tenth(value) })} />
+      <label className="edge-modifier-check" title={t("waxup.smileFitHint")}>
+        <input type="checkbox" checked={c.centralWidth === null} disabled={disabled} onChange={(event) => change({ centralWidth: event.currentTarget.checked ? null : tenth(set.centralWidth) })} />
+        <span>{t("waxup.smileFit")}</span>
+      </label>
+      <EdgeModifierSlider label={t("waxup.smileRatio")} title={t("waxup.smileRatioHint")} value={Math.round(c.ratio * 100)} min={r.ratio[0] * 100} max={r.ratio[1] * 100} step={1} unit="%" workspace={workspace} disabled={disabled} onChange={(value) => change({ ratio: Math.round(value) / 100 })} />
+      <p className="blend-hint">{t("waxup.smileCentralIs", { width: set.centralWidth.toFixed(1), length: set.centralLength.toFixed(1) })}</p>
+      <EdgeModifierSlider label={t("waxup.smileRed")} title={t("waxup.smileRedHint")} value={Math.round(c.red * 100)} min={r.red[0] * 100} max={r.red[1] * 100} step={1} unit="%" workspace={workspace} disabled={disabled} onChange={(value) => change({ red: Math.round(value) / 100 })} />
+      {set.red !== null ? <p className="blend-hint">{t("waxup.smileRedIs", { red: Math.round(set.red * 100) })}</p> : null}
+      {mm("arc", "waxup.smileArc", "waxup.smileArcHint")}
+      {mm("fullness", "waxup.smileFullness", "waxup.smileFullnessHint")}
+      <button type="button" className="secondary" aria-expanded={more} onClick={() => setMore((open) => !open)}>{t(more ? "waxup.smileLess" : "waxup.smileMore")}</button>
+      {more ? (<>
+        <EdgeModifierSlider label={t("waxup.smileCant")} title={t("waxup.smileCantHint")} value={c.cant} min={r.cant[0]} max={r.cant[1]} step={0.1} unit="°" workspace={workspace} disabled={disabled} onChange={(value) => change({ cant: tenth(value) })} />
+        {mm("lateralStep", "waxup.smileStep", "waxup.smileStepHint")}
+        <EdgeModifierSlider label={t("waxup.smileCurve")} title={t("waxup.smileCurveHint")} value={Math.round(c.curve * 100)} min={r.curve[0] * 100} max={r.curve[1] * 100} step={1} unit="%" workspace={workspace} disabled={disabled} onChange={(value) => change({ curve: Math.round(value) / 100 })} />
+      </>) : null}
+      <div className="dental-trim-buttons">
+        <button type="button" className="secondary" disabled={disabled} onClick={() => onChange({ ...SET_DEFAULTS })}>{t("waxup.smileReset")}</button>
+      </div>
     </div>
   );
 }

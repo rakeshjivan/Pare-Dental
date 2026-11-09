@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { CANINE_TIP, layoutSmileSet, SET_DEFAULTS, type SetAnchors, type SetTooth } from "@/lib/waxSmileSet";
+import { affineBetween, CANINE_TIP, layoutSmileSet, SET_DEFAULTS, type SetAnchors, type SetTooth } from "@/lib/waxSmileSet";
 import type { ToothKind } from "@/lib/dentalWaxup";
 
 /** Build 277: the six front teeth set out together from whole-set controls. Synthetic teeth only. */
@@ -99,7 +99,41 @@ describe("layoutSmileSet", () => {
     for (const m of full.matrices.values()) expect(m.determinant()).toBeGreaterThan(0);
   });
 
+  it("keeps each tooth on its own side and unmirrored on an upper arch (incisal pointing down the face)", () => {
+    // Flip the scene upside down about the y axis: x -> -x, z -> -z (the patient's left now at -x, incisal down).
+    const flip = (p: V): V => [-p[0], p[1], -p[2]];
+    const upper = teeth.map((t) => ({ ...t, frame: { origin: flip(t.frame.origin), mesial: flip(t.frame.mesial), out: flip(t.frame.out), up: flip(t.frame.up) } }));
+    const a: SetAnchors = { midline: [0, 0, 0], canines: [flip(anchors.canines[0]), flip(anchors.canines[1])], up: [0, 0, -1], out: [0, 1, 0] };
+    const lay = layoutSmileSet(upper, a, SET_DEFAULTS)!;
+    for (const t of upper) {
+      const m = lay.matrices.get(t.id)!;
+      expect(m.determinant()).toBeGreaterThan(0);
+      const edge = new THREE.Vector3(...t.frame.origin).applyMatrix4(m);
+      // Left-quadrant teeth stay at -x (the patient's left in this flipped scene).
+      expect(Math.sign(edge.x)).toBe(Math.floor(t.fdi / 10) === 2 ? -1 : 1);
+    }
+  });
+
   it("gives no layout when the canines coincide", () => {
     expect(layoutSmileSet(teeth, { ...anchors, canines: [[0, -9, 0], [0, -9, 0]] }, SET_DEFAULTS)).toBeNull();
+  });
+});
+
+describe("affineBetween", () => {
+  // Spread in 3D (each axis its own frequency, so the corners are not all on one plane).
+  const soup = new Float32Array(Array.from({ length: 300 }, (_, i) => Math.sin(Math.floor(i / 3) * [1.3, 2.9, 0.7][i % 3] + i % 3) * 5));
+  it("finds a move, turn and size exactly", () => {
+    const m = new THREE.Matrix4().makeTranslation(1, -2, 0.5).multiply(new THREE.Matrix4().makeRotationZ(0.3)).multiply(new THREE.Matrix4().makeScale(1.1, 1, 0.9));
+    const after = soup.slice();
+    const p = new THREE.Vector3();
+    for (let i = 0; i < after.length; i += 3) { p.set(after[i], after[i + 1], after[i + 2]).applyMatrix4(m); after[i] = p.x; after[i + 1] = p.y; after[i + 2] = p.z; }
+    const fit = affineBetween(soup, after)!;
+    expect(fit.miss).toBeLessThan(1e-4);
+    for (let i = 0; i < 16; i += 1) expect(fit.matrix.elements[i]).toBeCloseTo(m.elements[i], 4);
+  });
+  it("misses by the sculpted amount when a corner is moved on its own", () => {
+    const after = soup.slice();
+    after[30] += 0.5;
+    expect(affineBetween(soup, after)!.miss).toBeGreaterThan(0.3);
   });
 });
