@@ -44,6 +44,11 @@ export type WaxupView = {
   smileSet?: { controls: SetControls; centralWidth: number; centralLength: number; red: number | null } | null;
   /** Build 277 (phase 3): the one front tooth chosen in the set, with its own changes. */
   toothEdit?: { fdi: number; edit: ToothEdit; mirror: boolean; width: number; length: number } | null;
+  /** Build 278 (step 1, Mark): this arch's nine marks (null: not placed), each front tooth's width from them (mm, by FDI), and the arches fully marked. */
+  archMarkList?: Array<[number, number, number] | null>;
+  archMarkWidths?: Record<number, number>;
+  archMarksDone?: Array<"upper" | "lower">;
+  archMarkPick?: number | null;
   /** Build 107: the dropped set's size, as a share of the library's own (1 = as made). */
   setScale?: number;
   /** Build 107: how much further back (+) or forward (-) the canines stand than as dropped, mm. */
@@ -173,6 +178,10 @@ export type WaxupActions = {
   /** Build 277: one tooth's own changes; and whether its partner across the midline follows. */
   onToothEdit?: (fdi: number, edit: ToothEdit) => void;
   onToothMirror?: (on: boolean) => void;
+  /** Build 278: start clicking the marks (at `index`, else the first missing); take back the last; clear them all. */
+  onArchMarks?: (index?: number) => void;
+  onArchMarkUndo?: () => void;
+  onArchMarksClear?: () => void;
   /** Build 107: the whole dropped set larger or smaller, about its middle (1 = the library's own size). */
   onSetScale?: (scale: number) => void;
   /** Build 107: the set's curve opened (+) or closed (-), mm at the canines. */

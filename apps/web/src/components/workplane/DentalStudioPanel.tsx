@@ -1,6 +1,7 @@
 "use client";
 
 import type { BiteContactStats } from "@/lib/biteContacts";
+import { archMarkLabel, frontTeeth } from "@/lib/waxArchMarks";
 import { SNAP_GRIPS, snapGrip } from "@/lib/dentalSnapHinge";
 import { PIN_CLEAR, PIN_GAP_MAX, PIN_MAX, PIN_STEP, PIN_WARN, articulatorPinPatch } from "@/lib/dentalArticulator";
 import { biteOpenings } from "@/lib/waxOcclusion";
@@ -76,7 +77,7 @@ export type DentalAreaTool = "paint" | "erase" | "lassoAdd" | "lassoRemove";
 
 /** Fork (build 47): Dental Studio - raw intraoral scans to printable models, one arch or a pair with its bite. */
 type ModelStepId = "scans" | "prepare" | "model" | "base" | "articulator" | "fill" | "label";
-type WaxStepId = "scans" | "trim" | "bite" | "margin" | "keep" | "gum" | "select" | "teeth" | "find" | "choose" | "set" | "place" | "adjust" | "occlusion" | "sculpt" | "make";
+type WaxStepId = "scans" | "mark" | "trim" | "bite" | "margin" | "keep" | "gum" | "select" | "teeth" | "find" | "choose" | "set" | "place" | "adjust" | "occlusion" | "sculpt" | "make";
 
 /** Build 106: a step's explanation, kept behind a small (?) - shown on hover or focus. */
 /**
@@ -424,7 +425,7 @@ export function DentalStudioPanel({
    */
   // Build 103: as Meshmixer (manual) - the teeth positioned, then sculpted, then the model made; nothing fitted for you.
   // Build 118: no Keep & erase step - the whole library tooth is kept and its palatal pressed on (Gum line); boundary lines are in Sculpt.
-  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), ...(waxup.view.marginOn ? ["margin" as const] : []), "set", "place", "sculpt", "gum", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
+  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "mark", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), ...(waxup.view.marginOn ? ["margin" as const] : []), "set", "place", "sculpt", "gum", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
   const [waxStepId, setWaxStepId] = useState<WaxStepId>(editing ? "make" : "scans");
   const waxStepName = (id: WaxStepId) => t(`waxStudio.step.${id}` as "waxStudio.step.scans");
   const waxStep = waxSteps ? (waxSteps.includes(waxStepId) ? waxStepId : "make") : null;
@@ -445,6 +446,8 @@ export function DentalStudioPanel({
       // Build 107: Import is the scans brought in; Trim (its own step now) waits for each waxed arch accepted.
       // Build 108: the arches chosen, and the scans of each of them in.
       case "scans": return scansDone && archesChosen && (!waxStudio || (waxStudio.arches === "both" ? Boolean(slots.upper && slots.lower) : Boolean(slots[waxStudio.arches])));
+      // Build 278 (step 1, Mark): the nine marks on every arch being waxed, and none being clicked.
+      case "mark": { const need: Array<"upper" | "lower"> = bothArches ? ["upper", "lower"] : [wv.slot]; return wv.archMarkPick == null && need.every((slot) => wv.archMarksDone?.includes(slot)); }
       case "trim": return scansDone && (!shell || !trimmedDone || (["upper", "lower"] as const).every((slot) => !slots[slot] || (waxStudio && waxStudio.arches !== "both" && waxStudio.arches !== slot) || trimmedDone.includes(slot)));
       // Build 105: the teeth to wax up chosen, each with its four marks.
       case "teeth": return wv.markedTeeth.length > 0 && !wv.markPick;
@@ -929,6 +932,50 @@ export function DentalStudioPanel({
       {/* Build 106: Wax-up Studio's Import step holds the trim too. */}
       {/* Build 108: Open the bite - Model Builder's Increase OVD (its side view opening on the condyles, its slider), the
           lower scan turning open in the view as it moves; the teeth are then placed and made at this opening. */}
+      {/* Build 278 (Rakesh, step 1 "Mark"): the contacts of the six front teeth, the midline and the canine tips, clicked on the scan. */}
+      {waxSteps && waxStep === "mark" && wv && waxup ? card(2, waxStepName("mark"), true, t("waxStudio.stepHint.mark"), null, (() => {
+        const marks = wv.archMarkList ?? [];
+        const widths = wv.archMarkWidths ?? {};
+        const teeth = frontTeeth(wv.slot);
+        const picking = wv.archMarkPick ?? null;
+        const placed = marks.filter(Boolean).length;
+        const w = (fdi: number) => widths[fdi];
+        const central = teeth[2], other = teeth[3];
+        return (<>
+          <div className="wax-guide">
+            <strong>{t("waxup.markTitle")}</strong>
+            <span>{t("waxup.markGuide")}</span>
+          </div>
+          <ol className="wax-mark-list">
+            {Array.from({ length: 9 }, (_, i) => {
+              const { kind, teeth: pair } = archMarkLabel(wv.slot, i);
+              const state = picking === i ? "next" : marks[i] ? "done" : "";
+              return (
+                <li key={i} className={`wax-mark-row ${state}${i === 3 ? " midline" : i >= 7 ? " tip" : ""}`}>
+                  <span className="wax-mark-number">{i + 1}</span>
+                  <span className="wax-mark-name">{t(`waxup.markName.${kind}`, { a: pair[0], b: pair[1] ?? "" })}</span>
+                  {state === "next" ? <span className="wax-mark-state">{t("waxup.markNow")}</span> : marks[i] ? (
+                    <button type="button" className="secondary" disabled={busy || picking !== null} onClick={() => waxup.actions.onArchMarks?.(i)}>{t("waxup.archMarkAgain")}</button>
+                  ) : <span className="wax-mark-state">—</span>}
+                </li>
+              );
+            })}
+          </ol>
+          {Object.keys(widths).length ? (
+            <div className="wax-mark-widths" role="status">
+              <strong>{t("waxup.markWidths")}</strong>
+              <div>{teeth.map((fdi) => <span key={fdi}><b>{fdi}</b> {w(fdi) !== undefined ? `${w(fdi)!.toFixed(1)} mm` : "—"}</span>)}</div>
+              {w(central) !== undefined && w(other) !== undefined ? <p className="blend-hint" role="status">{t("waxup.markCentrals", { a: central, b: other, diff: Math.abs(w(central)! - w(other)!).toFixed(1) })}</p> : null}
+            </div>
+          ) : null}
+          <div className="dental-trim-buttons">
+            {picking === null && placed < 9 ? <button type="button" className="primary" disabled={busy} onClick={() => waxup.actions.onArchMarks?.()}>{t(placed ? "waxup.markContinue" : "waxup.markStart")}</button> : null}
+            <button type="button" className="secondary" disabled={busy || placed === 0} onClick={() => waxup.actions.onArchMarkUndo?.()}>{t("waxup.archMarkUndo")}</button>
+            <button type="button" className="secondary" disabled={busy || placed === 0} onClick={() => waxup.actions.onArchMarksClear?.()}>{t("waxup.markClear")}</button>
+          </div>
+          <p className="blend-hint" role="status">{t(picking !== null ? (picking < 7 ? "waxup.markHintOcclusal" : "waxup.markHintFront") : placed === 9 ? "waxup.archMarkDone" : "waxup.markPaused")}</p>
+        </>);
+      })()) : null}
       {waxSteps && waxStep === "bite" && wv && waxup ? card(3, t("waxup.biteTitle"), true, t("waxStudio.stepHint.bite"), null, (<>
         <div className="studio-artic-picture"><ArticulatorPicture pinRaise={wv.bite?.raise ?? 0} pin pinGap={PIN_CLEAR} /></div>
         {/* Build 108: with wax teeth already placed, the opening is changed only once the dentist says so. */}
