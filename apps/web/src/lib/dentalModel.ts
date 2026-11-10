@@ -65,6 +65,11 @@ export type DentalArchInput = {
    */
   wax?: ArrayLike<number> | null;
   /**
+   * Build 283: the scan as scanned, when `positions` already carries the wax-up (each front crown moved out onto its
+   * ideal tooth, lib/waxShell) - so the pre-op model is still the patient as they are.
+   */
+  scanned?: ArrayLike<number>;
+  /**
    * Build 102: the patient's crowns the wax-up replaces, each a closed solid (a soup, in the same
    * coordinates), cut out of the model before the wax is joined - on the facial side of `through`
    * (towards `facing`) only, as a technician reduces a model for a mock-up: where the patient's tooth

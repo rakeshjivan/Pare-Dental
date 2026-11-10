@@ -175,6 +175,7 @@ import { NearestSurface, DeviationProbe, rayMeetsSoup, soupBoxOf, soupWithin } f
 import { ERASE_BRUSH, eraseKey, eraseTooth, keptCorners, surfaceSign, toFrame, type ToothAxes } from "@/lib/waxErase";
 import { pressPalatal, type PalatalForm } from "@/lib/waxPalatal";
 import { palatalInBackground } from "@/lib/waxPalatalJob";
+import { runShellJob, shellInBackground, type ShellJob, type ShellResult } from "@/lib/waxShellJob";
 import { closeEraseWorkers, eraseInBackground, type EraseJob } from "@/lib/waxEraseJobs";
 import { ScanPatch, closedMarginAt, marginFromLabels, pastMargin, patchBox, prepareMargin, resample, type ClosedMargin, type MarginLine } from "@/lib/waxMargin";
 import { gumPaint, gumPair, gumSides, idealLevels, moveGumCut, visibleLength, zenithShift, type GumCut, type GumMode } from "@/lib/waxGum";
@@ -1924,6 +1925,9 @@ const DENTAL_GIMBAL_LABELS = { x: "L – R", y: "Occlusal", z: "Front – Back" 
 
 /** Build 272: the midline marks' radius on the scan, mm. */
 const MIDLINE_DOT = 1.2;
+
+/** Build 283: a part drawn as nothing (its own objects hidden) - an ideal tooth under the wax-up surface. */
+const SHELL_HIDE = new Float32Array(9);
 
 /** Build 282: how long a live control may rest before its change is made anyway (it is made at once when let go). */
 const WAX_LIVE_PAUSE = 900;
@@ -11124,7 +11128,19 @@ export function LayerlingEditor({
       return pressPalatal(positions, teeth).positions;
     };
     return {
-      arches: arches.map(({ shape }) => { const positions = palatalOf(shape!, scan(shape!)); const gum = gumOf(shape!); return { id: shape!.id, positions, area: dentalAreaFor(shape!) ?? undefined, wax: waxOf(shape!), cuts: cutsOf(shape!, positions), ...(gum ? { gum } : {}) }; }),
+      arches: arches.map(({ shape }) => {
+        const gum = gumOf(shape!);
+        // Build 283: with a set laid from the marks, the wax-up is the scan itself with its front crowns moved out
+        // onto the ideal teeth (lib/waxShell) - no wax joined, no palatal pressed, nothing cut.
+        const shell = dentalStudioRef.current?.waxStudio ? waxShellWorldRef.current(shape!, waxTeeth) : null;
+        const toInput = dentalLocalToInput.current.get(shape!.id), world = localToWorld(shape!);
+        if (shell && toInput && world) {
+          const scanned = scan(shape!);
+          return { id: shape!.id, positions: transformSoup(shell, toInput.clone().multiply(world.clone().invert())), scanned, area: undefined, wax: undefined, cuts: undefined, ...(gum ? { gum } : {}) };
+        }
+        const positions = palatalOf(shape!, scan(shape!));
+        return { id: shape!.id, positions, area: dentalAreaFor(shape!) ?? undefined, wax: waxOf(shape!), cuts: cutsOf(shape!, positions), ...(gum ? { gum } : {}) };
+      }),
       bite: bite ? scan(bite) : null,
       ...(bite2 ? { bite2: scan(bite2) } : {}),
       roles: state.rolesChosen ? roles : undefined,
@@ -12037,7 +12053,7 @@ export function LayerlingEditor({
         // Build 94: with IMT (Wax-up Studio), for each arch waxed: the alternate-tooth model (series 1
         // index) and the pre-op model, beside the full wax-up (series 2 index).
         const imt = state.waxStudio?.flow === "imt";
-        const waxedInput = input.arches.filter((arch) => arch.wax?.length);
+        const waxedInput = input.arches.filter((arch) => arch.wax?.length || arch.scanned);
         const alternateInput = waxedInput.length && (imt || waxupRef.current.alternate) ? dentalInput(state, imtFirstInjection) : null;
         let right = -Infinity;
         for (const model of models) {
@@ -12046,10 +12062,10 @@ export function LayerlingEditor({
         }
         const extra: Array<{ arch: DentalStudioInput["arches"][number]; kind: "alternate" | "preop" }> = [];
         for (const waxed of waxedInput) {
-          const alternateOnly = alternateInput?.arches.find((arch) => arch.id === waxed.id && arch.wax?.length);
+          const alternateOnly = alternateInput?.arches.find((arch) => arch.id === waxed.id && (arch.wax?.length || arch.scanned));
           if (alternateOnly) extra.push({ arch: alternateOnly, kind: "alternate" });
           // The pre-op model: the patient's teeth as scanned - nothing added, nothing cut back.
-          if (imt) extra.push({ arch: { ...waxed, wax: [], cuts: null }, kind: "preop" });
+          if (imt) extra.push({ arch: { ...waxed, ...(waxed.scanned ? { positions: waxed.scanned, scanned: undefined } : {}), wax: [], cuts: null }, kind: "preop" });
         }
         for (const { arch, kind } of extra) {
           const second = await makeDentalStudioInBackground({ arches: [arch], bite: null, ...(input.roles ? { roles: input.roles } : {}) }, { ...makeOptions, hinge: false });
@@ -13410,8 +13426,11 @@ export function LayerlingEditor({
     if (!palatalLive || !dentalStudio) {
       for (const id of palatalShown.current) window.layerlingPreviewPart?.(id, null);
       palatalShown.current.clear();
+      waxShellUnhide();
       return;
     }
+    // The ideal teeth stay hidden under the surface shown (their objects may have been drawn again).
+    for (const id of waxShellHidden.current) window.layerlingPreviewPart?.(id, SHELL_HIDE);
     // A scan hidden (its eye) shows nothing at once.
     for (const id of [...palatalShown.current]) { const scan = shapesRef.current.find((shape) => shape.id === id); if (!scan || scan.hidden) palatalShow(id, null); }
     const run = ++palatalRun.current;
@@ -13420,6 +13439,17 @@ export function LayerlingEditor({
         const scan = id ? shapesRef.current.find((shape) => shape.id === id) : undefined;
         if (!scan) continue;
         const key = palatalKeyOf(scan), scanKey = projectShapesFingerprint([scan]);
+        const shell = waxShellSetup(scan);
+        if (shell) {
+          const have = waxShellResults.current.get(scan.id);
+          if (have?.key === shell.key) { waxShellShow(scan, shell.teeth, have.result); continue; }
+          let result: ShellResult = null;
+          try { result = await shellInBackground(shell.job()); } catch { result = null; }
+          if (run !== palatalRun.current) return;
+          waxShellResults.current.set(scan.id, { key: shell.key, result });
+          waxShellShow(scan, shell.teeth, result);
+          continue;
+        }
         const cached = palatalCache.current.get(scan.id);
         if (cached?.key === key) { palatalShow(scan.id, cached.soup); continue; }
         const teeth = palatalTeethOf(scan).flatMap((tooth) => {
@@ -13446,6 +13476,9 @@ export function LayerlingEditor({
   /** The scan's world triangles with the library palatal, for what the opposing wax bites on; null to use the scan. */
   const palatalWorld = (scan: WorkplaneShape): Float32Array | null => {
     if (!palatalLiveRef.current) return null;
+    // Build 283: an arch made as one surface bites as that surface.
+    const shell = waxShellWorldRef.current(scan);
+    if (shell) return shell;
     const key = palatalKeyOf(scan);
     const entry = palatalCache.current.get(scan.id);
     if (entry && entry.key === key) return entry.soup;
@@ -13458,6 +13491,72 @@ export function LayerlingEditor({
     const soup = pressed?.moved ? pressed.positions : null;
     palatalCache.current.set(scan.id, { key, scanKey: projectShapesFingerprint([scan]), soup });
     return soup;
+  };
+  /**
+   * Build 283 (Rakesh, from a lab's wax-up of his own case): with the set laid from the marks, each front tooth's crown
+   * on the scan is moved out onto its ideal tooth from nothing at the gingival margin (lib/waxShell) - the wax-up as
+   * a lab makes it, shown and made as one surface. The ideal teeth themselves are hidden while it shows.
+   */
+  const waxShellResults = useRef(new Map<string, { key: string; result: ShellResult }>());
+  const waxShellHidden = useRef(new Set<string>());
+  const waxShellSetup = (scan: WorkplaneShape, only?: (fdi: number) => boolean) => {
+    const studio = dentalStudioRef.current;
+    if (!studio?.waxStudio || (waxupRef.current.palatal ?? "library") !== "library") return null;
+    const slot = studio.slots.upper === scan.id ? "upper" as const : studio.slots.lower === scan.id ? "lower" as const : null;
+    if (!slot) return null;
+    const record = waxupRef.current.smile?.[slot];
+    const contacts = record?.anchors.contacts;
+    if (!record || !contacts || contacts.length !== 7) return null;
+    const teeth = palatalTeethOf(scan).filter((tooth) => !only || only(tooth.waxTooth!.fdi));
+    if (!teeth.length) return null;
+    const reduce = waxupRef.current.reduce?.[slot] ?? [];
+    const segKey = `${projectShapesFingerprint([scan])}|${JSON.stringify(contacts)}`;
+    const key = `${projectShapesFingerprint([scan, ...teeth])}|${JSON.stringify(reduce)}|${segKey}`;
+    const job = (): ShellJob => {
+      const up = new THREE.Vector3(...record.anchors.up).normalize();
+      const flat = (v: THREE.Vector3) => v.clone().addScaledVector(up, -v.dot(up)).normalize();
+      const c = contacts.map((p) => new THREE.Vector3(...p));
+      const chord = (k: number) => flat(c[k + 1].clone().sub(c[k]));
+      const normalAt = (j: number) => (j === 0 ? chord(0) : j === 6 ? chord(5) : chord(j - 1).add(chord(j)).normalize());
+      const v3 = (v: THREE.Vector3): [number, number, number] => [v.x, v.y, v.z];
+      const specs = frontTeeth(slot).map((fdi, k) => ({
+        fdi,
+        seed: v3(c[k].clone().add(c[k + 1]).multiplyScalar(0.5)),
+        walls: [{ point: v3(c[k]), normal: v3(normalAt(k)) }, { point: v3(c[k + 1]), normal: v3(normalAt(k + 1).negate()) }],
+      }));
+      return {
+        segKey,
+        scan: Float32Array.from(worldTriangles(scan)),
+        specs,
+        up: v3(up),
+        edgeLevel: new THREE.Vector3(...record.anchors.midline).dot(up),
+        library: teeth.map((tooth) => ({ fdi: tooth.waxTooth!.fdi, soup: Float32Array.from(erasedSoup(tooth, false) ?? worldTriangles(tooth)), reduce: reduce.includes(tooth.waxTooth!.fdi) })),
+      };
+    };
+    return { key, job, teeth };
+  };
+  /** The wax-up's arch as one surface (world soup), or null where it is not made this way. */
+  const waxShellWorld = (scan: WorkplaneShape, only?: (fdi: number) => boolean): Float32Array | null => {
+    const setup = waxShellSetup(scan, only);
+    if (!setup) return null;
+    const have = only ? undefined : waxShellResults.current.get(scan.id);
+    if (have && have.key === setup.key) return have.result?.soup ?? null;
+    const result = runShellJob(setup.job());
+    if (!only) waxShellResults.current.set(scan.id, { key: setup.key, result });
+    return result?.soup ?? null;
+  };
+  const waxShellWorldRef = useRef(waxShellWorld);
+  waxShellWorldRef.current = waxShellWorld;
+  /** The surface shown (the scan's own objects and its ideal teeth hidden), or put back. */
+  const waxShellShow = (scan: WorkplaneShape, teeth: WorkplaneShape[], result: ShellResult) => {
+    if (result) {
+      palatalShow(scan.id, result.soup);
+      for (const tooth of teeth) { window.layerlingPreviewPart?.(tooth.id, SHELL_HIDE); waxShellHidden.current.add(tooth.id); }
+    } else waxShellUnhide();
+  };
+  const waxShellUnhide = () => {
+    for (const id of waxShellHidden.current) window.layerlingPreviewPart?.(id, null);
+    waxShellHidden.current.clear();
   };
   /** Whether the opposing arch's pressed palatal is still being worked out for the teeth as they stand (the contacts wait for it). */
   const palatalPending = (scan: WorkplaneShape) => palatalLiveRef.current && palatalTeethOf(scan).length > 0 && palatalCache.current.get(scan.id)?.key !== palatalKeyOf(scan);
@@ -14725,7 +14824,7 @@ export function LayerlingEditor({
   };
   /** Build 282: the working copies taken away once the made change is drawn (two frames on), so nothing jumps back. */
   const waxLiveDrop = (ids: string[]) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => { for (const id of ids) window.layerlingPreviewPart?.(id, null); }));
+    requestAnimationFrame(() => requestAnimationFrame(() => { for (const id of ids) window.layerlingPreviewPart?.(id, waxShellHidden.current.has(id) ? SHELL_HIDE : null); }));
   };
   // Build 282: a live change is made as soon as the control is let go.
   useEffect(() => {
