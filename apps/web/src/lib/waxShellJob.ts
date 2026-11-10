@@ -21,7 +21,11 @@ let cached: { key: string; seg: FrontSegmentation | null } | null = null;
 
 /** The job done here (in the worker, or on the page where a worker cannot start). */
 export function runShellJob(job: ShellJob): ShellResult {
-  if (!cached || cached.key !== job.segKey) cached = { key: job.segKey, seg: segmentFront(job.scan, job.specs, job.up, job.edgeLevel, 13) };
+  if (!cached || cached.key !== job.segKey) {
+    // The crowns are looked for near the ideal teeth as first laid (the key holds while the marks and scan do).
+    const ideal = new Map(job.library.map((tooth) => [tooth.fdi, tooth.soup]));
+    cached = { key: job.segKey, seg: segmentFront(job.scan, job.specs.map((spec) => ({ ...spec, ideal: ideal.get(spec.fdi) })), job.up, job.edgeLevel, 13) };
+  }
   const seg = cached.seg;
   if (!seg || !seg.teeth.size) return null;
   const library = new Map(job.library.map((tooth) => [tooth.fdi, { soup: tooth.soup, reduce: tooth.reduce }]));

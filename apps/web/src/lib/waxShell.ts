@@ -16,12 +16,23 @@
  *    closed as the scan was, with no union, no press and no seams.
  */
 
+import { NearestSurface } from "@/lib/nearestSurface";
+
 export type Vec3 = [number, number, number];
 
 /** A plane a tooth's crown stays on the inner side of (`normal` points into the tooth). */
 export type Wall = { point: Vec3; normal: Vec3 };
 
-export type ShellToothSpec = { fdi: number; seed: Vec3; walls: Wall[] };
+export type ShellToothSpec = {
+  fdi: number; seed: Vec3; walls: Wall[];
+  /** The ideal tooth laid over it (a soup): the crown is looked for only near it, and the scan well away from every ideal tooth is gum. */
+  ideal?: ArrayLike<number>;
+};
+
+/** How near its ideal tooth a crown's surface must be, mm. */
+export const SHELL_NEAR = 2;
+/** How far from every ideal tooth the scan is certainly not a front crown, mm. */
+export const SHELL_FAR = 4;
 
 /** How much dearer an edge in a sharp valley (the gingival margin) is to cross: (1 + this x (1 - cos)) times its length. */
 export const SHELL_VALLEY = 60;
@@ -32,7 +43,7 @@ export const SHELL_EDGE = 0.4;
 /** Cube-map cells a side for a library tooth's surface seen from the crown's middle. */
 const MAP = 160;
 /** How softly the wax gives way where the library tooth dips inside the patient's (no crease where they cross), mm. */
-const SOFT = 0.5;
+const SOFT = 0.1;
 
 const sub = (a: ArrayLike<number>, b: ArrayLike<number>): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -84,6 +95,8 @@ export type FrontSegmentation = {
   margin: Float64Array;
   /** Each tooth's crown middle and walls. */
   teeth: Map<number, { centre: Vec3; walls: Wall[]; corners: number }>;
+  /** For checks: how far each seed was from the scan, mm. */
+  seeds: Record<number, number>;
 };
 
 /**
@@ -162,14 +175,48 @@ export function segmentFront(scan: ArrayLike<number>, specs: ShellToothSpec[], u
   const label = new Int16Array(n).fill(-1);
   const heap = new Heap();
   const level = (v: number) => xyz[v * 3] * u[0] + xyz[v * 3 + 1] * u[1] + xyz[v * 3 + 2] * u[2] - edgeLevel;
-  for (let v = 0; v < n; v += 1) if (level(v) < -gumBelow) { dist[v] = 0; label[v] = 0; heap.push(v, 0); }
+  // Each ideal tooth's surface, and each corner's distance from it (worked out when first asked).
+  const ideals = new Map<number, { surface: NearestSurface; box: number[]; dist: Float32Array; centre: Vec3; radial: RadialMap }>();
+  for (const s of specs) {
+    if (!s.ideal || s.ideal.length < 9) continue;
+    const soup = Float32Array.from(s.ideal);
+    const box = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+    for (let i = 0; i + 2 < soup.length; i += 3) for (let k = 0; k < 3; k += 1) { box[k] = Math.min(box[k], soup[i + k] - SHELL_FAR - 0.5); box[k + 3] = Math.max(box[k + 3], soup[i + k] + SHELL_FAR + 0.5); }
+    let cx = 0, cy = 0, cz = 0;
+    for (let i = 0; i + 2 < soup.length; i += 3) { cx += soup[i]; cy += soup[i + 1]; cz += soup[i + 2]; }
+    const centre: Vec3 = [cx / (soup.length / 3), cy / (soup.length / 3), cz / (soup.length / 3)];
+    ideals.set(s.fdi, { surface: new NearestSurface(soup, SHELL_FAR + 0.5), box, dist: new Float32Array(n).fill(-1), centre, radial: new RadialMap(centre, soup) });
+  }
+  const q = [0, 0, 0];
+  const idealDistance = (fdi: number, v: number) => {
+    const ideal = ideals.get(fdi);
+    if (!ideal) return 0;
+    if (ideal.dist[v] >= 0) return ideal.dist[v];
+    const x = xyz[v * 3], y = xyz[v * 3 + 1], z = xyz[v * 3 + 2], b = ideal.box;
+    let d = x < b[0] || y < b[1] || z < b[2] || x > b[3] || y > b[4] || z > b[5] ? Infinity : ideal.surface.nearest(x, y, z, q);
+    // Inside the ideal tooth (the patient's tooth often is, under the wax) counts as on it.
+    if (d < Infinity) {
+      const off = sub([x, y, z], ideal.centre);
+      if (len(off) < ideal.radial.at(off)) d = 0;
+    }
+    ideal.dist[v] = Math.min(1e6, d);
+    return ideal.dist[v];
+  };
+  for (let v = 0; v < n; v += 1) {
+    const deep = level(v) < -gumBelow;
+    // Away from every ideal tooth and below the edges: gum, palate or a tooth not waxed.
+    const away = ideals.size > 0 && level(v) < -3 && [...ideals.keys()].every((fdi) => idealDistance(fdi, v) > SHELL_FAR);
+    if (deep || away) { dist[v] = 0; label[v] = 0; heap.push(v, 0); }
+  }
   const spec = new Map(specs.map((s) => [s.fdi, s]));
   const insideWalls = (fdi: number, p: Vec3, slack = 0.3) => (spec.get(fdi)?.walls ?? []).every((w) => dot(sub(p, w.point), w.normal) >= -slack);
+  const seeds: Record<number, number> = {};
   for (const s of specs) {
     // The seed: the nearest few corners.
     let best = -1, bestD = Infinity;
     for (let v = 0; v < n; v += 1) { const d = len(sub(P(v), s.seed)); if (d < bestD) { bestD = d; best = v; } }
-    if (best < 0 || bestD > 3) continue;
+    seeds[s.fdi] = bestD;
+    if (best < 0 || bestD > 5) continue;
     dist[best] = 0; label[best] = s.fdi; heap.push(best, 0);
   }
   const done = new Uint8Array(n);
@@ -183,7 +230,7 @@ export function segmentFront(scan: ArrayLike<number>, specs: ShellToothSpec[], u
       if (done[w]) continue;
       const nd = d + nbCost[e];
       if (nd >= dist[w]) continue;
-      if (lab > 0 && !insideWalls(lab, P(w))) continue;
+      if (lab > 0 && (!insideWalls(lab, P(w)) || idealDistance(lab, w) > SHELL_NEAR)) continue;
       dist[w] = nd; label[w] = lab; heap.push(w, nd);
     }
   }
@@ -222,7 +269,7 @@ export function segmentFront(scan: ArrayLike<number>, specs: ShellToothSpec[], u
     for (let v = 0; v < n; v += 1) if (owner[v] === s.fdi) { x += xyz[v * 3]; y += xyz[v * 3 + 1]; z += xyz[v * 3 + 2]; count += 1; }
     if (count >= 30) teeth.set(s.fdi, { centre: [x / count, y / count, z / count], walls: s.walls, corners: count });
   }
-  return { tris, labels, xyz, corner, owner, margin, teeth };
+  return { tris, labels, xyz, corner, owner, margin, teeth, seeds };
 }
 
 /** A library tooth's surface as seen from a point: the outermost distance in each direction (a cube map). */
