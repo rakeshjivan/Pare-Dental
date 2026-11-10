@@ -26,11 +26,13 @@ export type ShellToothSpec = { fdi: number; seed: Vec3; walls: Wall[] };
 /** How much dearer an edge in a sharp valley (the gingival margin) is to cross: (1 + this x (1 - cos)) times its length. */
 export const SHELL_VALLEY = 60;
 /** Over how far from the gingival margin the wax rises from nothing to the library tooth, mm. */
-export const SHELL_BAND = 1.5;
+export const SHELL_BAND = 2.5;
 /** Edges longer than this after moving are split, mm. */
 export const SHELL_EDGE = 0.4;
 /** Cube-map cells a side for a library tooth's surface seen from the crown's middle. */
-const MAP = 96;
+const MAP = 160;
+/** How softly the wax gives way where the library tooth dips inside the patient's (no crease where they cross), mm. */
+const SOFT = 0.5;
 
 const sub = (a: ArrayLike<number>, b: ArrayLike<number>): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -262,9 +264,42 @@ export class RadialMap {
         if (count >= 2) this.r[i] = sum / count;
       }
     }
+    // One pass of averaging over each cell and its neighbours, so the samples' steps do not show on the wax.
+    const raw = this.r.slice();
+    for (let f = 0; f < 6; f += 1) for (let y = 0; y < MAP; y += 1) for (let x = 0; x < MAP; x += 1) {
+      const i = (f * MAP + y) * MAP + x;
+      if (!(raw[i] > 0)) continue;
+      let sum = 0, count = 0;
+      for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) {
+        const xx = x + dx, yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= MAP || yy >= MAP) continue;
+        const v = raw[(f * MAP + yy) * MAP + xx];
+        if (v > 0) { sum += v; count += 1; }
+      }
+      this.r[i] = sum / count;
+    }
   }
-  /** The library surface's distance from the centre along `dir` (any length), 0 where it has none. */
-  at(dir: ArrayLike<number>): number { return this.r[cellOf(dir)]; }
+  /** The library surface's distance from the centre along `dir` (any length), 0 where it has none - read between cells. */
+  at(dir: ArrayLike<number>): number {
+    const [f, s, t] = faceOf(dir);
+    const fx = ((s + 1) / 2) * MAP - 0.5, fy = ((t + 1) / 2) * MAP - 0.5;
+    const x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0;
+    let sum = 0, weight = 0;
+    for (const [x, y, w] of [[x0, y0, (1 - tx) * (1 - ty)], [x0 + 1, y0, tx * (1 - ty)], [x0, y0 + 1, (1 - tx) * ty], [x0 + 1, y0 + 1, tx * ty]] as const) {
+      const xx = Math.min(MAP - 1, Math.max(0, x)), yy = Math.min(MAP - 1, Math.max(0, y));
+      const v = this.r[(f * MAP + yy) * MAP + xx];
+      if (v > 0 && w > 0) { sum += v * w; weight += w; }
+    }
+    return weight > 0.3 ? sum / weight : 0;
+  }
+}
+
+/** A direction's cube face and its place on it (-1 to 1 each way). */
+function faceOf(p: ArrayLike<number>): [number, number, number] {
+  const ax = Math.abs(p[0]), ay = Math.abs(p[1]), az = Math.abs(p[2]);
+  if (ax >= ay && ax >= az) return [p[0] > 0 ? 0 : 1, p[1] / ax, p[2] / ax];
+  if (ay >= az) return [p[1] > 0 ? 2 : 3, p[0] / ay, p[2] / ay];
+  return [p[2] > 0 ? 4 : 5, p[0] / az, p[1] / az];
 }
 
 function cellOf(p: ArrayLike<number>): number {
@@ -303,9 +338,11 @@ export function shellScan(scan: ArrayLike<number>, seg: FrontSegmentation, libra
     const rl = t.map.at(d);
     if (!rl) return p;
     const w = smooth01(m / SHELL_BAND);
-    let target = r + (rl - r) * w;
-    if (target < r - 0.05) proud[fdi] = Math.max(proud[fdi] ?? 0, r - target);
-    if (!t.reduce) target = Math.max(r, target);
+    const add = (rl - r) * w;
+    if (add < -0.05) proud[fdi] = Math.max(proud[fdi] ?? 0, -add);
+    // Only adding (unless the tooth is to be reduced) - eased in, so where the library tooth passes inside the
+    // patient's there is no crease: 0 at 0, the full amount less SOFT/2 beyond SOFT.
+    const target = t.reduce ? r + add : r + (add <= 0 ? 0 : add >= SOFT ? add - SOFT / 2 : (add * add) / (2 * SOFT));
     let out: Vec3 = [t.centre[0] + (d[0] / r) * target, t.centre[1] + (d[1] / r) * target, t.centre[2] + (d[2] / r) * target];
     // Not past the planes through its contacts (the tooth beside it is there).
     for (const wall of t.walls) {

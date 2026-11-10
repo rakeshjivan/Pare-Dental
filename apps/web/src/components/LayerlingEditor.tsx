@@ -13545,6 +13545,14 @@ export function LayerlingEditor({
     if (!only) waxShellResults.current.set(scan.id, { key: setup.key, result });
     return result?.soup ?? null;
   };
+  // For checks: the wax-up surface's inputs for an arch (the scan, the marks' teeth and the ideal teeth), as given to lib/waxShell.
+  useEffect(() => {
+    (window as unknown as { layerlingShellJob?: (slot: "upper" | "lower") => ShellJob | null }).layerlingShellJob = (slot) => {
+      const id = dentalStudioRef.current?.slots[slot];
+      const scan = id ? shapesRef.current.find((shape) => shape.id === id) : undefined;
+      return scan ? waxShellSetup(scan)?.job() ?? null : null;
+    };
+  });
   const waxShellWorldRef = useRef(waxShellWorld);
   waxShellWorldRef.current = waxShellWorld;
   /** The surface shown (the scan's own objects and its ideal teeth hidden), or put back. */
