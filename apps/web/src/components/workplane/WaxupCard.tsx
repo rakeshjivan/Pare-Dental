@@ -41,7 +41,7 @@ export const WAX_THIN = 0.2;
 export type WaxupView = {
   slot: "upper" | "lower";
   /** Build 277: the front teeth as one set on the arch - its controls and what they make (null: none for this arch). */
-  smileSet?: { controls: SetControls; centralWidth: number; centralLength: number; red: number | null } | null;
+  smileSet?: { marked?: boolean; controls: SetControls; centralWidth: number; centralLength: number; red: number | null } | null;
   /** Build 277 (phase 3): the one front tooth chosen in the set, with its own changes. */
   toothEdit?: { fdi: number; edit: ToothEdit; mirror: boolean; width: number; length: number } | null;
   /** Build 278 (step 1, Mark): this arch's nine marks (null: not placed), each front tooth's width from them (mm, by FDI), and the arches fully marked. */
@@ -1145,6 +1145,16 @@ function SmileSetPanel({ set, workspace, disabled, onChange }: { set: NonNullabl
         <strong>{t("waxup.smileTitle")}</strong>
         <span>{t("waxup.smileHint")}</span>
       </div>
+      {set.marked ? (<>
+        {/* Build 278 (step 2): the widths, midline and canine tips are the dentist's marks - only the levels and fullness here. */}
+        <p className="blend-hint" role="status">{t("waxup.smileMarked")}</p>
+        {mm("length", "waxup.smileLength", "waxup.smileLengthHint")}
+        {mm("lateralStep", "waxup.smileStep", "waxup.smileStepHint")}
+        {mm("fullness", "waxup.smileFullness", "waxup.smileFullnessHint")}
+        <div className="dental-trim-buttons">
+          <button type="button" className="secondary" disabled={disabled} onClick={() => onChange({ ...SET_DEFAULTS })}>{t("waxup.smileReset")}</button>
+        </div>
+      </>) : (<>
       {mm("length", "waxup.smileLength", "waxup.smileLengthHint")}
       {mm("midline", "waxup.smileMidline", "waxup.smileMidlineHint")}
       <EdgeModifierSlider label={t("waxup.smileWidth")} title={t("waxup.smileWidthHint")} value={tenth(c.centralWidth ?? set.centralWidth)} min={r.centralWidth[0]} max={r.centralWidth[1]} step={0.1} workspace={workspace} length disabled={disabled} onChange={(value) => change({ centralWidth: tenth(value) })} />
@@ -1167,6 +1177,7 @@ function SmileSetPanel({ set, workspace, disabled, onChange }: { set: NonNullabl
       <div className="dental-trim-buttons">
         <button type="button" className="secondary" disabled={disabled} onClick={() => onChange({ ...SET_DEFAULTS })}>{t("waxup.smileReset")}</button>
       </div>
+      </>)}
     </div>
   );
 }

@@ -199,3 +199,44 @@ describe("a tooth widened on its own", () => {
     expect(x(wide, "t11", 11)).toBeCloseTo(x(base, "t11", 11), 6);
   });
 });
+
+describe("snapped to the marks (build 278, step 2)", () => {
+  const teeth = restTeeth();
+  // Marks from the patient's right (-x): 13 distal ... 23 distal, on an arch y = -0.03 x^2, edges at z 0; canine tips at z 0.8.
+  const xs = [-19, -13, -7.5, 0, 8, 13.5, 19.5];
+  const contacts = xs.map((x) => [x, -0.03 * x * x, 0] as V);
+  const marked: SetAnchors = { midline: [0, 0, 0], canines: [[-16, -7.7, 0.8], [16.5, -8.2, 0.8]], up: [0, 0, 1], out: [0, 1, 0], contacts };
+  const lay = layoutSmileSet(teeth, marked, SET_DEFAULTS)!;
+  const byFdi = new Map(teeth.map((t) => [t.fdi, t]));
+
+  it("puts each tooth's mesial and distal ends on its two marked contacts (occlusal view), width only", () => {
+    const pairs: Record<number, [number, number]> = { 13: [1, 0], 12: [2, 1], 11: [3, 2], 21: [3, 4], 22: [4, 5], 23: [5, 6] };
+    for (const [fdi, [m, d]] of Object.entries(pairs)) {
+      const t = byFdi.get(Number(fdi))!, e = ends(t, lay.matrices.get(t.id)!);
+      expect(Math.hypot(e.mesial.x - contacts[m][0], e.mesial.y - contacts[m][1])).toBeLessThan(0.05 + 0); // on the contact (labial offset 0: no patient surface given)
+      expect(Math.hypot(e.distal.x - contacts[d][0], e.distal.y - contacts[d][1])).toBeLessThan(0.05);
+      // Length kept: the incisal middle to the cervical, as the library tooth.
+      const m4 = lay.matrices.get(t.id)!;
+      const cervical = new THREE.Vector3(t.frame.origin[0], t.frame.origin[1], t.frame.origin[2] - t.length).applyMatrix4(m4);
+      expect(e.edge.distanceTo(cervical)).toBeCloseTo(t.length, 4);
+      expect(m4.determinant()).toBeGreaterThan(0);
+    }
+    expect(lay.matrices.size).toBe(6);
+  });
+
+  it("sets the centrals at the midline mark's level, the laterals a step short, the canines at their tip marks", () => {
+    const z = (fdi: number) => ends(byFdi.get(fdi)!, lay.matrices.get(byFdi.get(fdi)!.id)!).edge.z;
+    expect(z(11)).toBeCloseTo(0, 5);
+    expect(z(21)).toBeCloseTo(0, 5);
+    expect(z(12)).toBeCloseTo(-SET_DEFAULTS.lateralStep, 5);
+    expect(z(13)).toBeCloseTo(0.8, 5);
+    expect(z(23)).toBeCloseTo(0.8, 5);
+  });
+
+  it("keeps the teeth labial of the patient's surface", () => {
+    const labial = contacts.map((p) => [p[0], p[1] + 1.2, -2] as V);
+    const clear = layoutSmileSet(teeth, { ...marked, labial }, SET_DEFAULTS)!;
+    const t = byFdi.get(11)!;
+    expect(ends(t, clear.matrices.get(t.id)!).edge.y - ends(t, lay.matrices.get(t.id)!).edge.y).toBeGreaterThan(1.2);
+  });
+});

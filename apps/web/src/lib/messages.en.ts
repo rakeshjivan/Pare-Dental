@@ -5750,6 +5750,7 @@ export const MESSAGES_EN = {
   "waxup.smileCurve": "Arch curve",
   "waxup.smileCurveHint": "The depth of the curve the teeth sit on: 100% runs through the canine tips; more is a narrower, deeper arch.",
   "waxup.smileReset": "Back to the first proposal",
+  "waxup.smileMarked": "Each tooth sits between the contacts you marked, at its library length; the centrals level with your midline mark, the canine tips at yours. Change the marks at the Mark step.",
   "waxup.toothTitle": "Tooth {fdi}",
   "waxup.toothHint": "Each change goes one way only: longer stays the same width, wider stays the same length. The neck and the palatal side are held. Choose Whole set to go back to the set.",
   "waxup.toothSize": "{width} mm wide, {length} mm long ({ratio}%).",

@@ -12457,6 +12457,23 @@ export function LayerlingEditor({
     window.layerlingMarkDots?.(points.length ? points : null, 0.4, { colors, sizes });
     return () => { window.layerlingMarkDots?.(null); };
   }, [archMarkStep, archMarksNow, waxup.archMarkPick]);
+  // Build 278 (step 2): back at Position after the marks were changed - the set laid again from the new marks.
+  useEffect(() => {
+    if (!dentalStudio?.waxStudio || studioWaxStep !== "place") return;
+    const current = waxupRef.current;
+    const record = current.smile?.[current.slot];
+    const marks = current.archMarks?.[current.slot];
+    if (!record || nextArchMark(marks) !== null) return;
+    const all = marks as Array<[number, number, number]>;
+    const contacts = all.slice(0, 7);
+    if (JSON.stringify(record.anchors.contacts) === JSON.stringify(contacts) && JSON.stringify(record.anchors.canines) === JSON.stringify([all[7], all[8]])) return;
+    const archId = dentalStudioRef.current?.slots[current.slot];
+    const scanShape = archId ? shapesRef.current.find((shape) => shape.id === archId) : undefined;
+    const base = { midline: all[3], canines: [all[7], all[8]] as [[number, number, number], [number, number, number]], up: record.anchors.up, out: record.anchors.out, contacts };
+    const anchored: SmileRecord = { ...record, anchors: { ...base, labial: scanShape ? labialProfile(worldTriangles(scanShape), base) : record.anchors.labial } };
+    waxupRef.current = { ...current, smile: { ...(current.smile ?? {}), [current.slot]: anchored } };
+    window.setTimeout(() => commitWaxSmile(anchored.controls), 30);
+  }, [studioWaxStep, waxup.slot]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 278: entering Mark with marks still to place starts the clicking (once per arch).
   const archMarkStarted = useRef(new Set<string>());
   useEffect(() => {
@@ -13836,7 +13853,7 @@ export function LayerlingEditor({
           controls: { ...SET_DEFAULTS },
           anchors: (() => {
             const anchors = markedAll
-              ? { midline: markedAll[3], canines: [markedAll[7], markedAll[8]] as [[number, number, number], [number, number, number]], up, out }
+              ? { midline: markedAll[3], canines: [markedAll[7], markedAll[8]] as [[number, number, number], [number, number, number]], up, out, contacts: markedAll.slice(0, 7) }
               : { midline: at(plan.landmarks!.midline), canines: [at(plan.landmarks!.canines[0]), at(plan.landmarks!.canines[1])] as [[number, number, number], [number, number, number]], up, out };
             // The patient's labial surfaces across the front, so the set starts just clear of them.
             return { ...anchors, labial: labialProfile(transformSoup(arch.scan, back), anchors) };
@@ -15133,7 +15150,7 @@ export function LayerlingEditor({
     archMarkList: waxup.archMarks?.[waxup.slot] ?? [],
     archMarkWidths: Object.fromEntries(markedWidths(waxup.slot, waxup.archMarks?.[waxup.slot])),
     archMarksDone: (["upper", "lower"] as const).filter((slot) => nextArchMark(waxup.archMarks?.[slot]) === null),
-    smileSet: smileNow && smileLaid ? { controls: smileNow.controls, centralWidth: smileLaid.centralWidth, centralLength: smileLaid.centralLength, red: smileLaid.apparent.get(String(smileFdi(2))) && smileLaid.apparent.get(String(smileFdi(1))) ? smileLaid.apparent.get(String(smileFdi(2)))! / smileLaid.apparent.get(String(smileFdi(1)))! : null } : null,
+    smileSet: smileNow && smileLaid ? { marked: Boolean(smileNow.anchors.contacts?.length), controls: smileNow.controls, centralWidth: smileLaid.centralWidth, centralLength: smileLaid.centralLength, red: smileLaid.apparent.get(String(smileFdi(2))) && smileLaid.apparent.get(String(smileFdi(1))) ? smileLaid.apparent.get(String(smileFdi(2)))! / smileLaid.apparent.get(String(smileFdi(1)))! : null } : null,
     hiddenIds: studioHidden,
     anyWax: shapes.some((shape) => shape.dental === "wax" && !shape.hidden && Boolean(shape.waxFor) && Object.values(dentalStudio?.slots ?? {}).includes(shape.waxFor!)),
     placed: waxPlacedNow,
