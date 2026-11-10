@@ -49,6 +49,8 @@ export type WaxupView = {
   archMarkWidths?: Record<number, number>;
   archMarksDone?: Array<"upper" | "lower">;
   archMarkPick?: number | null;
+  /** Build 279: each wax tooth's patient tooth standing proud of it (mm), and whether it is cut back flush on the wax-up model. */
+  proudTeeth?: Array<{ fdi: number; depth: number; reduce: boolean }>;
   /** Build 107: the dropped set's size, as a share of the library's own (1 = as made). */
   setScale?: number;
   /** Build 107: how much further back (+) or forward (-) the canines stand than as dropped, mm. */
@@ -182,6 +184,8 @@ export type WaxupActions = {
   onArchMarks?: (index?: number) => void;
   onArchMarkUndo?: () => void;
   onArchMarksClear?: () => void;
+  /** Build 279: cut this tooth's scan back flush with the wax on the wax-up model (or not). */
+  onReduce?: (fdi: number, on: boolean) => void;
   /** Build 107: the whole dropped set larger or smaller, about its middle (1 = the library's own size). */
   onSetScale?: (scale: number) => void;
   /** Build 107: the set's curve opened (+) or closed (-), mm at the canines. */
@@ -766,6 +770,19 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
                   <button type="button" className={view.picking !== null ? "active" : "secondary"} disabled={working || view.picking !== null} title={t("waxup.smileAnchorsHint")} onClick={actions.onMark}>{t("waxup.smileAnchors")}</button>
                 </div>
                 {view.picking !== null ? <p className="blend-hint" role="status">{t(WAXUP_LANDMARKS[view.picking])}</p> : null}
+                {/* Build 279 (Rakesh): where the patient's tooth stands proud of the wax - not always additive. */}
+                {view.proudTeeth?.some((tooth) => tooth.depth > 0) && actions.onReduce ? (
+                  <div className="wax-proud">
+                    <strong>{t("waxup.proudTitle")}</strong>
+                    <span className="blend-hint" role="status">{t("waxup.proudHint")}</span>
+                    {view.proudTeeth.filter((tooth) => tooth.depth > 0).map((tooth) => (
+                      <label key={tooth.fdi} className="edge-modifier-check">
+                        <input type="checkbox" checked={tooth.reduce} disabled={working} onChange={(event) => actions.onReduce?.(tooth.fdi, event.currentTarget.checked)} />
+                        <span>{t(tooth.reduce ? "waxup.proudReduced" : "waxup.proudTooth", { fdi: tooth.fdi, mm: tooth.depth.toFixed(1) })}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
                 {view.toothEdit && actions.onToothEdit ? (
                   <ToothEditPanel tooth={view.toothEdit} workspace={workspace} disabled={working} onChange={actions.onToothEdit} onMirror={actions.onToothMirror} />
                 ) : (
