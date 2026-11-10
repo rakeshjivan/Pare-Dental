@@ -14,6 +14,8 @@ import type { WaxRestrict } from "@/components/workplane/WaxToothDrag";
 /** Build 105: each library tooth in its own colour while it is being positioned (light; a confirmed tooth takes the stronger colour below). */
 /** Build 106: the wax teeth in one colour (the studio's default; each tooth in its own colour is a switch). */
 export const WAX_BLUE = "#a8c3ea";
+/** Build 287: a wax tooth that is not the one being worked on (one tooth picked): plain, a shade warmer than the scan. */
+export const WAX_PLAIN = "#ded6c6";
 /** Build 107: Meshmixer's colours for a six-tooth part, tooth by tooth (sampled from its screen): salmon, purple, blue | green, tan; the 23 in yellow, not white, to stand out from the scan. */
 export const WAX_TOOTH_COLOURS: Record<number, string> = {
   13: "#e09a88", 12: "#c486d0", 11: "#8fb8d5", 21: "#7ec479", 22: "#c39c70", 23: "#f2d04b",

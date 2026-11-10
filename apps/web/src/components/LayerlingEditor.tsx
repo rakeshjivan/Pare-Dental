@@ -89,7 +89,7 @@ import { ANCHOR_ORDER, ARCH_DOT_ORDER, ARCH_STEP, LATERAL_SHORTER, archCurvePoin
 import { WaxMarkDrag, type DragMark } from "./workplane/WaxMarkDrag";
 import { WaxPaintBrush } from "./workplane/WaxPaintBrush";
 import { WaxToolWheel } from "./workplane/WaxToolWheel";
-import { WAXUP_LANDMARKS, WAX_BLUE, WAX_CONFIRMED_COLOURS, WAX_TOOTH_COLOURS, defaultMarkTeeth, archOrder, type WaxupView } from "./workplane/WaxupCard";
+import { WAXUP_LANDMARKS, WAX_BLUE, WAX_CONFIRMED_COLOURS, WAX_PLAIN, WAX_TOOTH_COLOURS, defaultMarkTeeth, archOrder, type WaxupView } from "./workplane/WaxupCard";
 import { brushArea, lassoArea, screenTriangles } from "@/lib/dentalArea";
 import { applyToSelection, brushChoice, lassoChoice, type LassoMode, cornerPositions, growChoice, soupFloat32, invertChoice, loosePieces, sculptMeshOf, soupOf, withoutTriangles, type SculptMesh, type SelectReach } from "@/lib/meshSculpt";
 import { remeshRegion, LiveMesh, averageEdgeOf, stampBrush, type LiveBrush, type LivePatch } from "@/lib/liveSculpt";
@@ -3411,13 +3411,16 @@ export function LayerlingEditor({
       result = result.map((shape) => (studioBiteShown.includes(shape.id) ? { ...shape, hidden: false, color: BITE_OVERLAY_COLOUR, drawOnTop: true, locked: true } : shape));
     }
     if (waxTint || waxSeeThrough) {
-      const key = `${waxTint ? (waxColourful ? "colour" : "blue") : "own"}${waxSeeThrough ? ":see" : ""}`;
+      // Build 287 (Rakesh: the tooth clicked should be the one in colour): with one wax tooth picked, it alone keeps
+      // its colour and the others go plain, so the tooth being worked on is clear at a glance.
+      const focus = waxTint && selectedIds.length === 1 && result.some((shape) => shape.id === selectedIds[0] && shape.dental === "wax" && shape.waxTooth) ? selectedIds[0] : null;
+      const key = `${waxTint ? (waxColourful ? "colour" : "blue") : "own"}${waxSeeThrough ? ":see" : ""}:${focus ?? ""}`;
       if (waxTintCache.current.key !== key) waxTintCache.current = { key, map: new WeakMap() };
       const cache = waxTintCache.current.map;
       result = result.map((shape) => {
         if (shape.dental !== "wax" || !shape.waxTooth) return shape;
         let tinted = cache.get(shape);
-        if (!tinted) { tinted = { ...shape, ...(waxTint ? { color: waxColourful ? WAX_TOOTH_COLOURS[shape.waxTooth.fdi] ?? WAX_BLUE : WAX_BLUE } : {}), ...(waxSeeThrough ? { transparent: true } : {}) }; cache.set(shape, tinted); }
+        if (!tinted) { tinted = { ...shape, ...(waxTint ? { color: focus && shape.id !== focus ? WAX_PLAIN : waxColourful ? WAX_TOOTH_COLOURS[shape.waxTooth.fdi] ?? WAX_BLUE : WAX_BLUE } : {}), ...(waxSeeThrough ? { transparent: true } : {}) }; cache.set(shape, tinted); }
         return tinted;
       });
     }
@@ -3441,7 +3444,7 @@ export function LayerlingEditor({
       result = [...result.map((shape) => (overlapping.has(shape.id) ? { ...shape, transparent: true } : shape)), ...fitOverlay];
     }
     return result;
-  }, [baseViewportShapes, dentalHidden, studioHidden, studioBiteLive, studioBiteShown, studioOccView, waxTint, waxColourful, waxSeeThrough, dragTextGhost, fitCheck, fitOverlay, fitReport, intersectPreviewIds, intersectPreviewShape, surfaceTextTool?.editingId, surfaceTextTool?.preview]);
+  }, [baseViewportShapes, dentalHidden, studioHidden, studioBiteLive, studioBiteShown, studioOccView, waxTint, waxColourful, waxSeeThrough, selectedIds, dragTextGhost, fitCheck, fitOverlay, fitReport, intersectPreviewIds, intersectPreviewShape, surfaceTextTool?.editingId, surfaceTextTool?.preview]);
   // A revolve sketch on the base plate is a side view: the bodies are shown from the front, as the profile is drawn (#525).
   // Opened again to edit a body that stands upright, it is the same side view: that body stands at its height, not on the plate's workplane.
   const editedRevolveShape = sketchActive && sketchOperation === "revolve" && editingSketchShapeId ? shapes.find((shape) => shape.id === editingSketchShapeId) : undefined;
@@ -22607,7 +22610,7 @@ export function LayerlingEditor({
         <WaxToothDrag teeth={waxDragTeeth} restrict={waxup.restrict} onLibrary={cycleWaxSet} onSelect={(id) => selectShape(id, "replace")} onPreview={previewWaxTooth} onCommit={adjustWaxToothBy} onDouble={(id) => confirmWaxTooth(id, false)} />
       ) : null}
       {dentalStudio?.waxStudio && waxDirectTeeth.length && !marksEditing && ((waxup.stage === "position" && waxup.picking === null) || (studioWaxSculpt && !waxSculptBrush)) ? (
-        <WaxToothDirect teeth={waxDirectTeeth} onSelect={(id) => selectShape(id, "replace")} onBegin={beginWaxDirect} onDrag={(_id, change) => dragWaxDirect(change)} onEnd={() => { waxDirectBase.current = null; const held = waxLive.current; if (held) { window.clearTimeout(held.timer); held.finish(); } }} />
+        <WaxToothDirect teeth={waxDirectTeeth} selected={selectedIds.length === 1 ? selectedIds[0] : null} onSelect={(id) => selectShape(id, "replace")} onBegin={beginWaxDirect} onDrag={(_id, change) => dragWaxDirect(change)} onEnd={() => { waxDirectBase.current = null; const held = waxLive.current; if (held) { window.clearTimeout(held.timer); held.finish(); } }} />
       ) : null}
       {studioWaxSculpt && waxup.placed.length && !waxSculptBrush ? (
         // Build 112: Sculpt, positioning - a tooth clicked is picked (its gimbal shows), dragged it moves.

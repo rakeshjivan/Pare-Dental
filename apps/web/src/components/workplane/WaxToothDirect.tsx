@@ -8,8 +8,12 @@
  * - its mesial or distal side (the outer quarters): that contact moves - the tooth beside it gives way, no other moves;
  * - its middle: the whole tooth moves, in the plane of the screen;
  * - Shift + a side: the tooth wider or narrower with the teeth behind it moving along the arch to make room;
- * - Ctrl (or ⌘) + drag: turned about its cervical third, as a trackball (rotation, tip and torque from any view);
- * - Alt with any of them: a fifth as far.
+ * - the mouse wheel over the tooth picked: turned about its long axis, a degree a notch (Shift: tipped; Alt: torqued).
+ *   Elsewhere - and with Ctrl or ⌘, or a pinch - the wheel zooms as ever;
+ * - Alt (Option) + drag: turned as a trackball (rotation, tip and torque from any view).
+ *
+ * Build 287 (Rakesh: turning the model had become harder): Ctrl or ⌘ with the left button is the view's (it turns the
+ * model, as everywhere else in the app) - a tooth is never taken hold of with them held.
  *
  * The cursor and a small label say what a press would do before it is made, and how far it has gone while held.
  * What a change means for the set (the neighbour giving way, the partner across the midline) is the editor's:
@@ -29,7 +33,11 @@ export type DirectChange =
   | { kind: "turn"; rotate: number; tip: number; torque: number };
 type Zone = "length" | "mesial" | "distal" | "move";
 
-const FINE = 0.2;
+/** The wheel: degrees for each notch (about 100 of a wheel's own units), and how long after the last notch the turn is kept. */
+const WHEEL_DEG = 1;
+const WHEEL_REST = 350;
+/** A press that just misses a tooth still takes it: this far round the pointer is tried, px. */
+const NEAR_PX = 7;
 const DEG_PER_PX = 0.2;
 
 const dot = (a: readonly number[], b: readonly number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -80,16 +88,18 @@ export function alongAxis(delta: readonly number[], axis: readonly number[], n: 
   return l2 < 0.09 ? null : dot(delta, flat) / l2;
 }
 
-export function WaxToothDirect({ teeth, onSelect, onBegin, onDrag, onEnd }: {
+export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onEnd }: {
   teeth: DirectTooth[];
+  /** The tooth picked (its shape id): the one the mouse wheel turns. */
+  selected?: string | null;
   onSelect: (id: string) => void;
   /** A press took hold of a tooth: changes that follow are from how the set stands now. */
   onBegin: (id: string) => void;
   onDrag: (id: string, change: DirectChange) => void;
   onEnd: (id: string) => void;
 }) {
-  const live = useRef({ teeth, onSelect, onBegin, onDrag, onEnd });
-  live.current = { teeth, onSelect, onBegin, onDrag, onEnd };
+  const live = useRef({ teeth, selected, onSelect, onBegin, onDrag, onEnd });
+  live.current = { teeth, selected, onSelect, onBegin, onDrag, onEnd };
   useEffect(() => {
     const ray = (x: number, y: number) => window.layerlingScreenRay?.(x, y) ?? null;
     const canvasOf = (event: Event) => {
@@ -132,8 +142,8 @@ export function WaxToothDirect({ teeth, onSelect, onBegin, onDrag, onEnd }: {
     };
     const mm = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)} mm`;
     type Kind = DirectChange["kind"];
-    const kindOf = (zone: Zone, event: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }): Kind =>
-      event.ctrlKey || event.metaKey ? "turn" : event.shiftKey && zone !== "length" ? "spread" : zone === "length" ? "length" : zone === "move" ? "move" : "contact";
+    const kindOf = (zone: Zone, event: { altKey: boolean; shiftKey: boolean }): Kind =>
+      event.altKey ? "turn" : event.shiftKey && zone !== "length" ? "spread" : zone === "length" ? "length" : zone === "move" ? "move" : "contact";
     const cursorOf = (kind: Kind, zone: Zone) => (kind === "turn" ? "grab" : kind === "length" ? "ns-resize" : kind === "move" ? "move" : zone === "move" ? "ew-resize" : "ew-resize");
     const nameOf = (kind: Kind, zone: Zone, fdi: number) =>
       kind === "contact" ? t(zone === "mesial" ? "waxup.direct.mesial" : "waxup.direct.distal", { fdi }) : t(`waxup.direct.${kind}`, { fdi });
@@ -142,8 +152,12 @@ export function WaxToothDirect({ teeth, onSelect, onBegin, onDrag, onEnd }: {
     let hoverCanvas: HTMLElement | null = null;
     const onDown = (event: PointerEvent) => {
       const canvas = canvasOf(event);
-      if (event.button !== 0 || !canvas) return;
-      const hit = pick(event.clientX, event.clientY);
+      // Ctrl or ⌘ with the left button turns the view: never a tooth's.
+      if (event.button !== 0 || !canvas || event.ctrlKey || event.metaKey) return;
+      wheelDone();
+      let hit = pick(event.clientX, event.clientY);
+      // Just off a tooth: the nearest of a ring round the pointer, so a press at a tooth's very edge still takes it.
+      for (let k = 0; k < 8 && !hit; k += 1) hit = pick(event.clientX + NEAR_PX * Math.cos((k * Math.PI) / 4), event.clientY + NEAR_PX * Math.sin((k * Math.PI) / 4));
       if (!hit) return;
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -162,7 +176,7 @@ export function WaxToothDirect({ teeth, onSelect, onBegin, onDrag, onEnd }: {
       if (!drag) {
         // Hovering: the cursor and the label say what a press here would do.
         const canvas = canvasOf(event);
-        if (!canvas || event.buttons) { if (hoverCanvas) { hoverCanvas.style.cursor = ""; hoverCanvas = null; } say(0, 0, null); return; }
+        if (!canvas || event.buttons || event.ctrlKey || event.metaKey) { if (hoverCanvas) { hoverCanvas.style.cursor = ""; hoverCanvas = null; } say(0, 0, null); return; }
         const hit = pick(event.clientX, event.clientY);
         if (!hit) { if (hoverCanvas) { hoverCanvas.style.cursor = ""; hoverCanvas = null; } say(0, 0, null); return; }
         const zone = directZone(hit.tooth, hit.point), kind = kindOf(zone, event);
@@ -175,7 +189,7 @@ export function WaxToothDirect({ teeth, onSelect, onBegin, onDrag, onEnd }: {
       event.preventDefault();
       event.stopImmediatePropagation();
       const f = drag.tooth.frame;
-      const k = event.altKey ? FINE : 1;
+      const k = 1;
       const p = planePoint(event.clientX, event.clientY, drag.point, drag.normal);
       if (!p) return;
       const delta = sub(p, drag.point).map((x) => x * k) as V;
@@ -237,13 +251,45 @@ export function WaxToothDirect({ teeth, onSelect, onBegin, onDrag, onEnd }: {
       say(0, 0, null);
       live.current.onEnd(tooth.id);
     };
+    // The wheel over the tooth picked turns it: from how it stood at the first notch, kept a moment after the last.
+    let wheel: { tooth: DirectTooth; rotate: number; tip: number; torque: number; timer: number } | null = null;
+    function wheelDone() {
+      if (!wheel) return;
+      window.clearTimeout(wheel.timer);
+      const id = wheel.tooth.id;
+      wheel = null;
+      say(0, 0, null);
+      live.current.onEnd(id);
+    }
+    const onWheel = (event: WheelEvent) => {
+      // A pinch (and Ctrl or ⌘ with the wheel) zooms, as does the wheel anywhere but on the tooth picked.
+      if (drag || !canvasOf(event) || event.ctrlKey || event.metaKey) return;
+      const hit = pick(event.clientX, event.clientY);
+      if (!hit || hit.tooth.id !== live.current.selected) { wheelDone(); return; }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (wheel && wheel.tooth.id !== hit.tooth.id) wheelDone();
+      if (!wheel) { wheel = { tooth: hit.tooth, rotate: 0, tip: 0, torque: 0, timer: 0 }; live.current.onBegin(hit.tooth.id); }
+      // A notch of a wheel is about 100 units (in pixels), 3 in lines; a trackpad sends many small ones.
+      const units = event.deltaMode === 1 ? event.deltaY * 33 : event.deltaMode === 2 ? event.deltaY * 300 : (event.deltaY || event.deltaX);
+      const by = -(units / 100) * WHEEL_DEG;
+      const key = event.shiftKey ? "tip" : event.altKey ? "torque" : "rotate";
+      wheel[key] += by;
+      window.clearTimeout(wheel.timer);
+      wheel.timer = window.setTimeout(wheelDone, WHEEL_REST);
+      live.current.onDrag(hit.tooth.id, { kind: "turn", rotate: wheel.rotate, tip: wheel.tip, torque: wheel.torque });
+      say(event.clientX, event.clientY, `${t("waxup.direct.turn", { fdi: hit.tooth.fdi })}  ${wheel[key] >= 0 ? "+" : ""}${wheel[key].toFixed(1)}°`);
+    };
     const onMenu = (event: MouseEvent) => { if (canvasOf(event) && (drag || pick(event.clientX, event.clientY))) event.preventDefault(); };
     window.addEventListener("pointerdown", onDown, { capture: true });
     window.addEventListener("pointermove", onMove, { capture: true });
     window.addEventListener("pointerup", onUp, { capture: true });
     window.addEventListener("pointercancel", onUp, { capture: true });
     window.addEventListener("contextmenu", onMenu, { capture: true });
+    window.addEventListener("wheel", onWheel, { capture: true, passive: false });
     return () => {
+      wheelDone();
+      window.removeEventListener("wheel", onWheel, { capture: true });
       window.removeEventListener("pointerdown", onDown, { capture: true });
       window.removeEventListener("pointermove", onMove, { capture: true });
       window.removeEventListener("pointerup", onUp, { capture: true });

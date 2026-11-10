@@ -5767,7 +5767,7 @@ export const MESSAGES_EN = {
   "waxup.direct.spread": "{fdi} wider, neighbours move",
   "waxup.direct.move": "{fdi} move",
   "waxup.direct.turn": "{fdi} turn",
-  "waxup.toothHint": "Or take hold of the tooth itself: its edge for length, a side for that contact, its middle to move it; Shift + a side widens it with the teeth behind moving along; Ctrl (⌘) turns it. Each change goes one way only, and the neck stays on the gum line.",
+  "waxup.toothHint": "Or take hold of the tooth itself: its edge for length, a side for that contact, its middle to move it; Shift + a side widens it with the teeth behind moving along. To turn it, roll the mouse wheel over it (Shift tips it, Alt torques it), or Alt + drag. The tooth you are working on is the one in colour. Right-drag, or Ctrl (⌘) + drag, turns the model.",
   "waxup.toothSize": "{width} mm wide, {length} mm long ({ratio}%).",
   "waxup.toothShape": "Shape",
   "waxup.toothPlace": "Position",
