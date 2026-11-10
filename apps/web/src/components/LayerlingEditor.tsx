@@ -12410,10 +12410,11 @@ export function LayerlingEditor({
   const archMarkView = useRef<DentalView | null>(null);
   /**
    * Build 278 (Rakesh): which side the view looks from for each mark - the patient's right side for 13's
-   * contacts (so the right side is marked first, not the wrong one), the occlusal for the contacts at the
+   * contacts (so the right side is marked first, not the wrong one), the front for the contacts at the
    * midline, the left side for 23's, then the front for the canine tips.
    */
-  const archMarkViewFor = (index: number): DentalView => (index <= 1 ? "right" : index <= 4 ? "occlusal" : index <= 6 ? "left" : "front");
+  // Build 279 (Rakesh): the midline and the contacts either side of it from the front, so the midline mark sits on the incisal edge.
+  const archMarkViewFor = (index: number): DentalView => (index <= 1 ? "right" : index <= 4 ? "front" : index <= 6 ? "left" : "front");
   const startArchMarks = useCallback((index?: number) => {
     const arch = waxArch();
     const state = dentalStudioRef.current;
