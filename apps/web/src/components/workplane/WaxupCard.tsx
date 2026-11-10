@@ -1255,9 +1255,9 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror
   const row = (key: keyof ToothEdit, label: MessageKey, hint: MessageKey, degrees = false) => (
     <div className="wax-tooth-row">
       {live ? (
-        <EdgeModifierSlider label={t(label)} title={t(hint)} value={e[key]} min={r[key][0]} max={r[key][1]} step={degrees ? 0.5 : 0.1} unit={degrees ? "°" : undefined} length={!degrees} workspace={workspace} disabled={disabled} onChange={(value) => set({ [key]: degrees ? Math.round(value * 2) / 2 : tenth(value) })} />
+        <EdgeModifierSlider label={t(label)} title={t(hint)} value={e[key] ?? 0} min={r[key][0]} max={r[key][1]} step={degrees ? 0.5 : 0.1} unit={degrees ? "°" : undefined} length={!degrees} workspace={workspace} disabled={disabled} onChange={(value) => ((key === "mesial" || key === "distal") && onStep ? onStep(key, tenth(value) - (e[key] ?? 0)) : set({ [key]: degrees ? Math.round(value * 2) / 2 : tenth(value) }))} />
       ) : (
-        <span className="wax-tooth-readout" title={t(hint)}>{t(label)} <b>{e[key] >= 0 ? "+" : ""}{degrees ? e[key].toFixed(1) + "°" : e[key].toFixed(1) + " mm"}</b></span>
+        <span className="wax-tooth-readout" title={t(hint)}>{t(label)} <b>{(e[key] ?? 0) >= 0 ? "+" : ""}{degrees ? (e[key] ?? 0).toFixed(1) + "°" : (e[key] ?? 0).toFixed(1) + " mm"}</b></span>
       )}
       <div className="wax-tooth-nudge" role="group" aria-label={t(label)}>
         <StepButton label={`${t(label)}: ${t("waxup.toothLess")}`} disabled={disabled} onStep={() => step(key, degrees, -1)}>−</StepButton>
@@ -1283,6 +1283,7 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror
       {row("length", "waxup.toothLength", "waxup.toothLengthHint")}
       {row("mesial", "waxup.toothMesial", "waxup.toothMesialHint")}
       {row("distal", "waxup.toothDistal", "waxup.toothDistalHint")}
+      {live ? row("spread", "waxup.toothSpread", "waxup.toothSpreadHint") : null}
       {row("thickness", "waxup.toothThickness", "waxup.toothThicknessHint")}
       {onMirror && live ? (
         <label className="edge-modifier-check" title={t("waxup.toothMirrorHint")}>

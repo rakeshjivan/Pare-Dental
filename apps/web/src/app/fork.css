@@ -2278,3 +2278,6 @@ html[data-theme="dark"] .dental-studio-panel .dental-picture-tiles button { back
 .wax-mark-widths { margin: 8px 0; font-size: 13px; }
 .wax-mark-widths > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 10px; margin-top: 4px; }
 .arch-mark-labels { pointer-events: none; }
+
+/* Build 284: the label by the pointer over a wax tooth - what a press would do, how far it has gone. */
+.wax-direct-label { position: fixed; z-index: 60; pointer-events: none; padding: 3px 8px; border-radius: 8px; background: rgba(17, 24, 39, 0.86); color: #ffffff; font: 600 12px/1.4 system-ui, sans-serif; white-space: nowrap; }

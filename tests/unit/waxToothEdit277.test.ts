@@ -69,7 +69,7 @@ describe("editTooth", () => {
   });
 
   it("keeps edits in range", () => {
-    expect(clampEdit({ length: 9, rotate: -90 }).length).toBe(3);
+    expect(clampEdit({ length: 9, rotate: -90 }).length).toBe(4);
     expect(clampEdit({ length: 9, rotate: -90 }).rotate).toBe(-25);
   });
 
@@ -82,5 +82,14 @@ describe("editTooth", () => {
       const after = Math.hypot(e[i + 3] - e[i], e[i + 4] - e[i + 1], e[i + 5] - e[i + 2]);
       expect(after).toBeLessThan(before * 1.6);
     }
+  });
+});
+
+describe("editTooth spread (build 284)", () => {
+  it("moves the distal side out like width does, the mesial side held", () => {
+    const e = editTooth(box, frame, W, L, { ...NO_EDIT, spread: 1 });
+    const edge = at(e, box, 0);
+    expect(Math.min(...edge.map((p) => p[0]))).toBeCloseTo(-W / 2 - 1, 6);
+    expect(Math.max(...edge.map((p) => p[0]))).toBeCloseTo(W / 2, 6);
   });
 });

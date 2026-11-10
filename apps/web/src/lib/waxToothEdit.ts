@@ -6,6 +6,9 @@
  *   stretched from the neck, so a longer tooth is longer only, not wider or thicker).
  * - Width, mesial and distal separately: that side of the crown moves out, the other side held; the change
  *   fades out towards the cervical, so the neck (emergence) is kept.
+ * - Spread (build 284): the distal side moves out as for width, and the teeth behind it in the set move along the
+ *   arch by as much (lib/waxSmileSet) - the tooth made wider with its neighbours making room, where mesial and
+ *   distal alone move one contact and leave every other tooth where it is.
  * - Thickness: the labial face moves out, the palatal surface held; fading towards the cervical too.
  * - Rotation (mesial edge labially +), tip (incisal edge mesially +), torque (incisal edge labially +):
  *   turned about a point in the cervical third, on the tooth's own axes, so the same values on the left
@@ -22,6 +25,7 @@ export type ToothEdit = {
   length: number;
   mesial: number;
   distal: number;
+  spread: number;
   thickness: number;
   moveMesial: number;
   moveOut: number;
@@ -31,11 +35,11 @@ export type ToothEdit = {
   torque: number;
 };
 
-export const NO_EDIT: ToothEdit = { length: 0, mesial: 0, distal: 0, thickness: 0, moveMesial: 0, moveOut: 0, moveUp: 0, rotate: 0, tip: 0, torque: 0 };
+export const NO_EDIT: ToothEdit = { length: 0, mesial: 0, distal: 0, spread: 0, thickness: 0, moveMesial: 0, moveOut: 0, moveUp: 0, rotate: 0, tip: 0, torque: 0 };
 
 /** The ranges offered, mm and degrees. */
 export const EDIT_RANGES: Record<keyof ToothEdit, readonly [number, number]> = {
-  length: [-3, 3], mesial: [-1.5, 1.5], distal: [-1.5, 1.5], thickness: [-1, 1.5],
+  length: [-3, 4], mesial: [-2.5, 2.5], distal: [-2.5, 2.5], spread: [-2, 3], thickness: [-1, 1.5],
   moveMesial: [-3, 3], moveOut: [-2, 2], moveUp: [-3, 3], rotate: [-25, 25], tip: [-15, 15], torque: [-15, 15],
 };
 
@@ -48,7 +52,7 @@ export function clampEdit(edit: Partial<ToothEdit>): ToothEdit {
   return out;
 }
 
-export const isNoEdit = (edit: ToothEdit | undefined) => !edit || (Object.keys(NO_EDIT) as Array<keyof ToothEdit>).every((key) => Math.abs(edit[key]) < 1e-6);
+export const isNoEdit = (edit: ToothEdit | undefined) => !edit || (Object.keys(NO_EDIT) as Array<keyof ToothEdit>).every((key) => Math.abs(edit[key] ?? 0) < 1e-6);
 
 /** How much of the crown, from the cervical, the width and thickness changes fade in over. */
 const FADE = 0.45;
@@ -91,7 +95,7 @@ export function editTooth(rest: ArrayLike<number>, frame: ToothFrame, width: num
     const share = Math.min(1, Math.max(0, (h + L) / L));
     const keepNeck = smooth(share / FADE);
     if (a >= 0) a += edit.mesial * Math.min(1, a / half) * keepNeck;
-    else a -= edit.distal * Math.min(1, -a / half) * keepNeck;
+    else a -= (edit.distal + (edit.spread ?? 0)) * Math.min(1, -a / half) * keepNeck;
     b += edit.thickness * Math.min(1, Math.max(0, (b - depth) / -depth)) * keepNeck;
     h += edit.length * share;
     p.copy(o).addScaledVector(m, a).addScaledVector(f, b).addScaledVector(u, h).applyMatrix4(pose);
