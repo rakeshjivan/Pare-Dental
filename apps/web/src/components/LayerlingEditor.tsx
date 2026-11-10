@@ -1925,6 +1925,9 @@ const DENTAL_GIMBAL_LABELS = { x: "L – R", y: "Occlusal", z: "Front – Back" 
 /** Build 272: the midline marks' radius on the scan, mm. */
 const MIDLINE_DOT = 1.2;
 
+/** Build 282: how long a live control may rest before its change is made anyway (it is made at once when let go). */
+const WAX_LIVE_PAUSE = 900;
+
 export function LayerlingEditor({
   initialAssets = [],
   initialShapes = [],
@@ -3525,7 +3528,9 @@ export function LayerlingEditor({
     if (!projectThumbnailSceneChanged(lastProjectSnapshotRef.current, sceneKey)) {
       return;
     }
-    if (projectInteractionActive) {
+    // Build 282 (Rakesh: lag): no project picture while Wax-up Studio is open - taking one redraws the whole scene
+    // and encodes it, a pause in the middle of the work; the next change after leaving takes it.
+    if (projectInteractionActive || dentalStudioRef.current?.waxStudio) {
       return;
     }
 
@@ -13968,6 +13973,7 @@ export function LayerlingEditor({
   /** Build 277: each front tooth's rest soup (as dropped, scene coordinates), and its palatal depth, by its part's id. */
   const waxSmileRest = useRef(new Map<string, Float32Array>());
   const waxSmilePalatal = useRef(new Map<string, number>());
+  const waxSmileDragged = useRef(new Map<string, { shape: WorkplaneShape; laidKey: string; rest: Float32Array; dragged: ReturnType<typeof affineBetween> }>());
   /**
    * Build 277 (roadmap phases 2 and 3): where the set and each tooth's own changes put each front tooth -
    * its soup, from its rest soup: the tooth's own changes (lib/waxToothEdit: length, mesial and distal
@@ -13996,6 +14002,20 @@ export function LayerlingEditor({
       const fdi = shape.waxTooth!.fdi, restPose = record.rest[fdi];
       const was = new THREE.Matrix4().fromArray(record.laid[fdi] ?? new THREE.Matrix4().toArray());
       const oldEdit = record.own?.[fdi] ?? NO_EDIT, newEdit = own[fdi] ?? NO_EDIT;
+      // Build 282: how the tooth was moved since the set laid it, read once per tooth as it stands (not on every
+      // frame of a slider - it only changes when the tooth does).
+      const seen = waxSmileDragged.current.get(shape.id);
+      const laidKey = (record.laid[fdi] ?? []).join(",") + "|" + JSON.stringify(oldEdit);
+      if (seen && seen.shape === shape && seen.laidKey === laidKey && waxSmileRest.current.get(shape.id) === seen.rest) {
+        const next = layout.matrices.get(shape.id);
+        if (!seen.dragged || seen.dragged.miss > SCULPTED_MISS || !next) continue;
+        const palatalSeen = waxSmilePalatal.current.get(shape.id) ?? palatalDepth(seen.rest, restPose.frame);
+        const totalSeen = seen.dragged.matrix.clone().multiply(next);
+        soups.set(shape.id, transformSoup(isNoEdit(newEdit) ? seen.rest : editTooth(seen.rest, restPose.frame, restPose.width, restPose.length, newEdit, palatalSeen), totalSeen));
+        totals.set(shape.id, totalSeen.clone().multiply(editPose(restPose.frame, restPose.length, palatalSeen, newEdit)));
+        laid[fdi] = next.toArray();
+        continue;
+      }
       const now = Float32Array.from(worldTriangles(shape));
       let rest = waxSmileRest.current.get(shape.id);
       if (!rest || rest.length !== now.length) {
@@ -14008,6 +14028,7 @@ export function LayerlingEditor({
       if (palatal === undefined) { palatal = palatalDepth(rest, restPose.frame); waxSmilePalatal.current.set(shape.id, palatal); }
       const expected = transformSoup(isNoEdit(oldEdit) ? rest : editTooth(rest, restPose.frame, restPose.width, restPose.length, oldEdit, palatal), was);
       const dragged = affineBetween(expected, now);
+      waxSmileDragged.current.set(shape.id, { shape, laidKey, rest, dragged });
       const next = layout.matrices.get(shape.id);
       if (!dragged || dragged.miss > SCULPTED_MISS || !next) continue;
       const total = dragged.matrix.clone().multiply(next);
@@ -14048,21 +14069,40 @@ export function LayerlingEditor({
       placed: latest.placed.map((entry) => { const shape = changed.get(entry.id); return shape?.waxTooth ? { ...entry, width: shape.waxTooth.width, length: shape.waxTooth.length, clearance: null } : entry; }),
     }));
   };
-  /** Build 277: shown live as a control is dragged (the soups previewed), kept a moment after the last change. */
+  /** Build 282: a control's shown value updated at most once a frame (the editor redrawn once, not on every event). */
+  const waxStateNext = useRef(new Map<string, () => void>());
+  const waxStateFrameId = useRef(0);
+  const waxStateFrame = (key: string, update: () => void) => {
+    waxStateNext.current.set(key, update);
+    if (!waxStateFrameId.current) waxStateFrameId.current = requestAnimationFrame(() => {
+      waxStateFrameId.current = 0;
+      const updates = [...waxStateNext.current.values()];
+      waxStateNext.current.clear();
+      for (const run of updates) run();
+    });
+  };
+  /**
+   * Build 277: shown live as a control is dragged (the soups previewed), kept a moment after the last change.
+   * Build 282 (Rakesh: lag, and 13 moving before the others): every tooth is drawn moved at once (one working copy
+   * each), at most once a frame however fast the control moves, and the change is made when the control is let go
+   * (or after a longer pause) - so dragging is never interrupted by the model being rebuilt.
+   */
   const waxLiveSoups = (key: string, soups: () => Map<string, Float32Array>, commit: () => void) => {
     let live = waxLive.current;
     if (live && live.key !== key) { window.clearTimeout(live.timer); live.finish(); live = null; }
     if (!live) { waxRecord(); waxLiveBase.current = new Map(); live = { key, start: null, timer: 0, finish: () => {} }; }
-    for (const [id, soup] of soups()) { waxLiveBase.current.set(id, soup); window.layerlingSculptPreview?.(id, soup); }
     const running = live;
+    waxLiveFrame(() => { for (const [id, soup] of soups()) { waxLiveBase.current.set(id, soup); window.layerlingPreviewPart?.(id, soup); } });
     running.finish = () => {
-      for (const id of waxLiveBase.current.keys()) window.layerlingSculptPreview?.(id, null);
+      waxLiveFrame(null);
+      const shown = [...waxLiveBase.current.keys()];
       waxLiveBase.current = new Map();
       if (waxLive.current === running) waxLive.current = null;
       commit();
+      waxLiveDrop(shown);
     };
     window.clearTimeout(running.timer);
-    running.timer = window.setTimeout(() => running.finish(), 280);
+    running.timer = window.setTimeout(() => running.finish(), WAX_LIVE_PAUSE);
     waxLive.current = running;
   };
   /** Build 277: a whole-set control changed. */
@@ -14071,7 +14111,7 @@ export function LayerlingEditor({
     const slot = waxupRef.current.slot;
     const record = waxupRef.current.smile?.[slot];
     if (!record) return;
-    setWaxup((latest) => ({ ...latest, smile: { ...(latest.smile ?? {}), [slot]: { ...(latest.smile?.[slot] ?? record), controls: next } } }));
+    waxStateFrame("smile", () => setWaxup((latest) => ({ ...latest, smile: { ...(latest.smile ?? {}), [slot]: { ...(latest.smile?.[slot] ?? record), controls: next } } })));
     waxLiveSoups("smile", () => waxSmileWork(next, record.own ?? {})?.soups ?? new Map(), () => commitWaxSmile(next, false));
   };
   /**
@@ -14087,7 +14127,7 @@ export function LayerlingEditor({
     const own = { ...(record.own ?? {}), [fdi]: next, ...(record.mirror !== false && record.rest[partner] ? { [partner]: next } : {}) };
     const controls = record.controls;
     waxupRef.current = { ...waxupRef.current, smile: { ...(waxupRef.current.smile ?? {}), [slot]: { ...record, pending: own } } };
-    setWaxup((latest) => ({ ...latest, smile: { ...(latest.smile ?? {}), [slot]: { ...(latest.smile?.[slot] ?? record), pending: own } } }));
+    waxStateFrame("tooth", () => setWaxup((latest) => ({ ...latest, smile: { ...(latest.smile ?? {}), [slot]: { ...(latest.smile?.[slot] ?? record), pending: own } } })));
     waxLiveSoups("tooth", () => waxSmileWork(controls, own)?.soups ?? new Map(), () => commitWaxSmile(controls, false, own));
   };
   /**
@@ -14136,37 +14176,42 @@ export function LayerlingEditor({
       return;
     }
     if (sculptToolRef.current) { flushSculpt(); setSculptTool(null); }
-    const toWorld = localToWorld(shape);
-    if (!toWorld) return;
-    const frame = moveFrame(shape.waxTooth.frame, toWorld);
-    const soup = Float32Array.from(worldTriangles(shape));
-    const width = shape.waxTooth.width, length = shape.waxTooth.length;
+    // Build 282 (Rakesh: lag): held steps build on a working copy, drawn each frame, the tooth made once let go.
+    let work = waxStepWork.current;
+    if (!work || work.id !== shape.id || work.shape !== shape) {
+      const toWorld = localToWorld(shape);
+      if (!toWorld) return;
+      work = { id: shape.id, shape, soup: Float32Array.from(worldTriangles(shape)), frame: moveFrame(shape.waxTooth.frame, toWorld), width: shape.waxTooth.width, length: shape.waxTooth.length };
+      waxStepWork.current = work;
+    }
     const change = { ...NO_EDIT, [key]: delta };
-    const palatal = palatalDepth(soup, frame);
-    const next = editTooth(soup, frame, width, length, change, palatal);
-    const pose = editPose(frame, length, palatal, change);
-    const rebuilt = shapeWithWorldPositions(shape, Array.from(next));
-    const back = localToWorld(rebuilt);
-    if (!back) return;
-    const moved = moveFrame(frame, pose);
+    const palatal = palatalDepth(work.soup, work.frame);
+    work.soup = editTooth(work.soup, work.frame, work.width, work.length, change, palatal);
+    const moved = moveFrame(work.frame, editPose(work.frame, work.length, palatal, change));
     // The frame's origin (the incisal middle on the labial face) goes with the change: up with the edge, out with
     // the labial face, half way with a side widened.
-    const shifted = (f: typeof moved): [number, number, number] => {
-      const along = key === "length" ? f.up : key === "thickness" ? f.out : key === "mesial" ? f.mesial : key === "distal" ? f.mesial : null;
-      const k = key === "mesial" ? delta / 2 : key === "distal" ? -delta / 2 : delta;
-      return along ? [f.origin[0] + along[0] * k, f.origin[1] + along[1] * k, f.origin[2] + along[2] * k] : f.origin as [number, number, number];
-    };
-    const sized = {
-      ...shape.waxTooth,
-      width: Math.max(1, width + (key === "mesial" || key === "distal" ? delta : 0)),
-      length: Math.max(1, length + (key === "length" ? delta : 0)),
-      frame: moveFrame({ ...moved, origin: shifted(moved) }, back.clone().invert()),
-    };
+    const along = key === "length" ? moved.up : key === "thickness" ? moved.out : key === "mesial" || key === "distal" ? moved.mesial : null;
+    const k = key === "mesial" ? delta / 2 : key === "distal" ? -delta / 2 : delta;
+    work.frame = along ? { ...moved, origin: [moved.origin[0] + along[0] * k, moved.origin[1] + along[1] * k, moved.origin[2] + along[2] * k] } : moved;
+    work.width = Math.max(1, work.width + (key === "mesial" || key === "distal" ? delta : 0));
+    work.length = Math.max(1, work.length + (key === "length" ? delta : 0));
     const total = waxStepTotals.current.get(shape.id) ?? NO_EDIT;
     waxStepTotals.current.set(shape.id, { ...total, [key]: Math.round((total[key] + delta) * 100) / 100 });
-    waxRecordRef.current();
-    commitShapes(shapesRef.current.map((candidate) => (candidate.id === shape.id ? canonicalizeShape({ ...rebuilt, waxTooth: sized }) : candidate)), [shape.id], t("waxup.toothStepped", { fdi }));
+    const held = work;
+    waxStateFrame("step", () => setWaxStepTick((n) => n + 1));
+    waxLiveSoups(`step:${shape.id}`, () => new Map([[held.id, held.soup]]), () => {
+      if (waxStepWork.current === held) waxStepWork.current = null;
+      const latest = shapesRef.current.find((candidate) => candidate.id === held.id);
+      if (!latest?.waxTooth) return;
+      const rebuilt = shapeWithWorldPositions(latest, Array.from(held.soup));
+      const back = localToWorld(rebuilt);
+      if (!back) return;
+      const sized = { ...latest.waxTooth, width: held.width, length: held.length, frame: moveFrame(held.frame, back.clone().invert()) };
+      commitShapes(shapesRef.current.map((candidate) => (candidate.id === held.id ? canonicalizeShape({ ...rebuilt, waxTooth: sized }) : candidate)), [held.id], t("waxup.toothStepped", { fdi }));
+    });
   };
+  const waxStepWork = useRef<{ id: string; shape: WorkplaneShape; soup: Float32Array; frame: ReturnType<typeof moveFrame>; width: number; length: number } | null>(null);
+  const [, setWaxStepTick] = useState(0);
   /**
    * Build 107: the dropped set's curve opened or closed - each tooth moved back (or forward) by c*s^2
    * at s mm from the midline and turned to follow the curve, so the canines go `curve` mm further back
@@ -14652,36 +14697,59 @@ export function LayerlingEditor({
    */
   const waxLive = useRef<{ key: string; start: unknown; timer: number; finish: () => void } | null>(null);
   const waxLiveBase = useRef(new Map<string, Float32Array>());
+  /** Build 282: the latest live drawing waiting for the next frame (only the newest is drawn). */
+  const waxLiveNext = useRef<{ draw: (() => void) | null; frame: number }>({ draw: null, frame: 0 });
+  const waxLiveFrame = (draw: (() => void) | null) => {
+    const next = waxLiveNext.current;
+    if (!draw) { if (next.frame) cancelAnimationFrame(next.frame); next.frame = 0; next.draw = null; return; }
+    next.draw = draw;
+    if (!next.frame) next.frame = requestAnimationFrame(() => { const run = next.draw; next.frame = 0; next.draw = null; run?.(); });
+  };
+  /** Build 282: the working copies taken away once the made change is drawn (two frames on), so nothing jumps back. */
+  const waxLiveDrop = (ids: string[]) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => { for (const id of ids) window.layerlingPreviewPart?.(id, null); }));
+  };
+  // Build 282: a live change is made as soon as the control is let go.
+  useEffect(() => {
+    const up = () => { const live = waxLive.current; if (live) { window.clearTimeout(live.timer); live.timer = window.setTimeout(() => live.finish(), 30); } };
+    window.addEventListener("pointerup", up);
+    window.addEventListener("keyup", up);
+    return () => { window.removeEventListener("pointerup", up); window.removeEventListener("keyup", up); };
+  }, []);
   const waxLiveShow = <S,>(key: string, start: () => S, moves: (start: S) => Map<string, THREE.Matrix4>, commit: (start: S) => void) => {
     let live = waxLive.current;
     if (live && live.key !== key) { window.clearTimeout(live.timer); live.finish(); live = null; }
     if (!live) { waxRecord(); waxLiveBase.current = new Map(); live = { key, start: start(), timer: 0, finish: () => {} }; }
     const begun = live.start as S;
     const v = new THREE.Vector3();
-    for (const [id, matrix] of moves(begun)) {
-      let base = waxLiveBase.current.get(id);
-      if (!base) {
-        const shape = shapesRef.current.find((candidate) => candidate.id === id);
-        if (!shape) continue;
-        base = Float32Array.from(worldTriangles(shape));
-        waxLiveBase.current.set(id, base);
+    waxLiveFrame(() => {
+      for (const [id, matrix] of moves(begun)) {
+        let base = waxLiveBase.current.get(id);
+        if (!base) {
+          const shape = shapesRef.current.find((candidate) => candidate.id === id);
+          if (!shape) continue;
+          base = Float32Array.from(worldTriangles(shape));
+          waxLiveBase.current.set(id, base);
+        }
+        const moved = new Float32Array(base.length);
+        for (let i = 0; i + 2 < base.length; i += 3) {
+          v.set(base[i], base[i + 1], base[i + 2]).applyMatrix4(matrix);
+          moved[i] = v.x; moved[i + 1] = v.y; moved[i + 2] = v.z;
+        }
+        window.layerlingPreviewPart?.(id, moved);
       }
-      const moved = new Float32Array(base.length);
-      for (let i = 0; i + 2 < base.length; i += 3) {
-        v.set(base[i], base[i + 1], base[i + 2]).applyMatrix4(matrix);
-        moved[i] = v.x; moved[i + 1] = v.y; moved[i + 2] = v.z;
-      }
-      window.layerlingSculptPreview?.(id, moved);
-    }
+    });
     const current = live;
     current.finish = () => {
-      for (const id of waxLiveBase.current.keys()) window.layerlingSculptPreview?.(id, null);
+      waxLiveFrame(null);
+      const shown = [...waxLiveBase.current.keys()];
       waxLiveBase.current = new Map();
       if (waxLive.current === current) waxLive.current = null;
       commit(begun);
+      waxLiveDrop(shown);
     };
     window.clearTimeout(current.timer);
-    current.timer = window.setTimeout(() => current.finish(), 280);
+    current.timer = window.setTimeout(() => current.finish(), WAX_LIVE_PAUSE);
     waxLive.current = current;
   };
   /** Build 106: each unheld tooth's move for an adjustment of it (as moveWaxTeethDirect would make it). */

@@ -721,6 +721,11 @@ declare global {
     layerlingMarkDots?: (points: Array<[number, number, number]> | null, radius?: number, look?: { colors?: number[]; sizes?: number[]; /** Build 272: each dot joined to the next by a line, drawn over the scan. */ joined?: boolean }) => void;
     /** Build 69: Sculpt's working copy of a part (world soup) drawn in its place while it is worked on; null puts the part back. */
     layerlingSculptPreview?: (shapeId: string, triangles: Float32Array | null, color?: string) => void;
+    /**
+     * Build 282 (Rakesh: a slider moved 13 before the other teeth): several parts drawn moved at once while a control
+     * is dragged - each part's own working copy (its objects hidden), updated in place; null puts that part back.
+     */
+    layerlingPreviewPart?: (shapeId: string, triangles: Float32Array | null) => void;
     /** Build 73: live Sculpt - the engine's own geometry drawn in the part's place (it updates the buffers itself); null puts the part back. */
     layerlingSculptLive?: (shapeId: string, geometry: THREE.BufferGeometry | null, color?: string) => void;
     /** Build 84: parts drawn with per-corner colours in place of their own (the bite contacts map); null clears. */
@@ -9660,6 +9665,60 @@ export function WorkplaneViewport({
     };
     return () => { delete window.layerlingShowParts; };
   }, [focusSelection]);
+  // Build 282: many parts' working copies at once (a whole set moved by one slider), each updated in place.
+  useEffect(() => {
+    const previewLooks = new Map<string, THREE.MeshStandardMaterial>();
+    const copies = new Map<string, { mesh: THREE.Mesh; hidden: THREE.Object3D[] }>();
+    const drop = (shapeId: string) => {
+      const copy = copies.get(shapeId);
+      if (!copy) return;
+      const state = threeRef.current;
+      if (state) state.scene.remove(copy.mesh);
+      copy.mesh.geometry.dispose();
+      copy.hidden.forEach((object) => { object.visible = true; });
+      copies.delete(shapeId);
+      if (state) state.needsRender = true;
+    };
+    window.layerlingPreviewPart = (shapeId, triangles) => {
+      const state = threeRef.current;
+      if (!state || !triangles || !triangles.length) { drop(shapeId); return; }
+      let copy = copies.get(shapeId);
+      const attribute = copy?.mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+      if (copy && attribute && attribute.count * 3 === triangles.length) {
+        (attribute.array as Float32Array).set(triangles);
+        attribute.needsUpdate = true;
+        copy.mesh.geometry.computeVertexNormals();
+        copy.mesh.geometry.computeBoundingSphere();
+      } else {
+        drop(shapeId);
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(Float32Array.from(triangles), 3));
+        geometry.computeVertexNormals();
+        // One shared material per colour, kept for good: a material made and thrown away for each copy made the GPU
+        // build its shader again and again (seconds each time on some machines).
+        let colour = "#c9ced6";
+        const hidden: THREE.Object3D[] = [];
+        state.scene.traverse((object) => {
+          if (object.userData.shapeId !== shapeId || colour !== "#c9ced6" || !(object as THREE.Mesh).isMesh) return;
+          const material = (object as THREE.Mesh).material;
+          const first = (Array.isArray(material) ? material[0] : material) as THREE.MeshStandardMaterial | undefined;
+          if (first?.isMaterial && !first.transparent && first.color) colour = `#${first.color.getHexString()}`;
+        });
+        let look = previewLooks.get(colour);
+        if (!look) { look = new THREE.MeshStandardMaterial({ color: colour, roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide }); previewLooks.set(colour, look); }
+        const mesh = new THREE.Mesh(geometry, look);
+        mesh.userData.sculptOf = shapeId;
+        state.scene.add(mesh);
+        state.scene.traverse((object) => {
+          if (object !== mesh && object.visible && object.userData.shapeId === shapeId) { object.visible = false; hidden.push(object); }
+        });
+        copy = { mesh, hidden };
+        copies.set(shapeId, copy);
+      }
+      state.needsRender = true;
+    };
+    return () => { for (const id of [...copies.keys()]) drop(id); for (const look of previewLooks.values()) look.dispose(); delete window.layerlingPreviewPart; };
+  }, []);
   // Build 69: Sculpt draws its working copy instead of rebuilding the part after every stroke.
   useEffect(() => {
     let mesh: THREE.Mesh | null = null;
