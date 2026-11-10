@@ -115,6 +115,7 @@ import { fitArchLine, layOnArchLine, type ArchTooth } from "@/lib/waxArchLine";
 import { clampEdit, editPose, editTooth, isNoEdit, NO_EDIT, palatalDepth, type ToothEdit } from "@/lib/waxToothEdit";
 import { cutterBox, proudOfWax, sweptSurface } from "@/lib/waxReduce";
 import { ARCH_MARK_CONTACTS, archMarkLabel, frontTeeth, markedWidths, nextArchMark } from "@/lib/waxArchMarks";
+import { autoArchMarks } from "@/lib/waxAutoMarks";
 import { affineBetween, clampControls, labialProfile, layoutSmileSet, restFrames, SCULPTED_MISS, SET_DEFAULTS, type SetControls, type SetTooth, type SmileRecord } from "@/lib/waxSmileSet";
 import { StudioShell } from "./workplane/StudioShell";
 import { useStudioSlot } from "@/lib/studioSlots";
@@ -12174,6 +12175,8 @@ export function LayerlingEditor({
     smile: Partial<Record<"upper" | "lower", SmileRecord>>;
     /** Build 278 (step 1, Mark): each arch's nine marks (lib/waxArchMarks), scene coordinates; and the mark being clicked. */
     archMarks: Partial<Record<"upper" | "lower", Array<[number, number, number] | null>>>; archMarkPick: number | null;
+    /** Build 285: whether an arch's marks were found on the scan for the dentist to check ("failed": looked for and not made out). */
+    archMarksAuto?: Partial<Record<"upper" | "lower", "found" | "failed">>;
     /** Build 279: the teeth (FDI) whose scan is cut back flush with the wax on the wax-up model, by arch; and how far each scan tooth stands proud of its wax tooth (mm). */
     reduce: Partial<Record<"upper" | "lower", number[]>>; proud: Record<number, number> };
   const [waxup, setWaxup] = useState<WaxupState>({ slot: "upper", setName: null, teeth: 0, picking: null, lengthen: 0, centralRatio: CENTRAL_RATIO, arcDepth: null, arcUsed: null, proportions: "natural", builtIn: [], builtInCredit: null, setId: null, busy: false, placed: [], alternate: false, error: null, landmarks: null, guessed: false, marks: [], teethShown: true, fit: "teeth", ghost: 1, ideal: 1, red: null, checks: null, adjust: {}, stage: "position", setMove: { width: 0, depth: 0, midline: 0, height: 0 }, setScale: 1, setCurve: 0, chain: true, restrict: "free", moveAll: false, locks: {}, manual: true, toothMarks: {}, anchors: {}, archDots: { upper: [], lower: [] }, lateralShorter: LATERAL_SHORTER, autoMarked: [], markTeeth: null, toothPick: null, archLine: true, archCurve: 1, archFollow: true, contacts: { on: false, busy: false, occlusal: 0.1, adapting: false, note: null, opposing: false }, occlusion: { ready: false, busy: false, raise: 0, scheme: "canine", guidance: 30, bennett: 15, result: null }, bite: { raise: 0, busy: false, hinge: null }, gum: { mode: "follow", keep: {} }, erase: {}, margins: {}, marginPick: null, boundaries: {}, boundaryPick: null, /* Build 118: Keep & erase, with the library palatal, is the one way of working - the margin line is no longer offered. */ marginOn: false, smile: {}, archMarks: {}, archMarkPick: null, reduce: {}, proud: {} });
@@ -12463,6 +12466,35 @@ export function LayerlingEditor({
     const view = archMarkViewFor(at);
     if (archMarkView.current !== view) { archMarkView.current = view; showDentalView(arch.slot, view, undefined, 0.6); }
   }, [waxArch]); // eslint-disable-line react-hooks/exhaustive-deps
+  /**
+   * Build 285 (Rakesh: the app should find the landmarks itself): the nine marks looked for on the scan
+   * (lib/waxAutoMarks) and put down for the dentist to check and drag. Where the teeth cannot be made out,
+   * the marks are clicked as before (`thenClick`).
+   */
+  const findArchMarks = useCallback((thenClick: boolean) => {
+    const arch = waxArch();
+    if (!arch) return;
+    let found: ReturnType<typeof autoArchMarks> = null;
+    try { found = autoArchMarks(arch.scan, arch.slot); } catch { found = null; }
+    const current = waxupRef.current;
+    if (!found) {
+      const next = { ...current, archMarksAuto: { ...current.archMarksAuto, [arch.slot]: "failed" as const } };
+      waxupRef.current = next;
+      setWaxup(next);
+      if (thenClick) startArchMarks(nextArchMark(current.archMarks?.[arch.slot]) ?? 0);
+      return;
+    }
+    const toScene = arch.sceneToInput.clone().invert();
+    const marks = found.marks.map((point) => new THREE.Vector3(...point).applyMatrix4(toScene).toArray() as [number, number, number]);
+    waxRecord();
+    const next = { ...current, slot: arch.slot, archMarks: { ...(current.archMarks ?? {}), [arch.slot]: marks }, archMarkPick: null, picking: null, error: null, archMarksAuto: { ...current.archMarksAuto, [arch.slot]: "found" as const } };
+    waxupRef.current = next;
+    setWaxup(next);
+    archMarkView.current = null;
+    setDentalHidden([]);
+    setSelectedIds([]);
+    window.setTimeout(() => showDentalView(arch.slot, "front"), 50);
+  }, [waxArch, startArchMarks]); // eslint-disable-line react-hooks/exhaustive-deps
   const stopArchMarks = useCallback(() => {
     archMarkView.current = null;
     setWaxup((current) => { const next = { ...current, archMarkPick: null }; waxupRef.current = next; return next; });
@@ -12581,7 +12613,9 @@ export function LayerlingEditor({
     const arch = waxArch();
     if (!arch || archMarkStarted.current.has(arch.slot) || nextArchMark(waxupRef.current.archMarks?.[arch.slot]) === null) return;
     archMarkStarted.current.add(arch.slot);
-    window.setTimeout(() => startArchMarks(), 150);
+    // Build 285: with nothing marked yet, the marks are looked for on the scan first.
+    const none = !(waxupRef.current.archMarks?.[arch.slot] ?? []).some(Boolean);
+    window.setTimeout(() => (none ? findArchMarks(true) : startArchMarks()), 150);
   }, [archMarkStep, waxup.slot]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!archMarkStep && waxupRef.current.archMarkPick !== null) stopArchMarks(); }, [archMarkStep]); // eslint-disable-line react-hooks/exhaustive-deps
   const startWaxPicking = useCallback(() => {
@@ -15558,6 +15592,7 @@ export function LayerlingEditor({
     ...waxup,
     toothEdit: stepTooth,
     archMarkList: waxup.archMarks?.[waxup.slot] ?? [],
+    archMarksFound: waxup.archMarksAuto?.[waxup.slot],
     proudTeeth: Object.entries(waxup.proud ?? {}).map(([fdi, depth]) => ({ fdi: Number(fdi), depth, reduce: (waxup.reduce?.[waxup.slot] ?? []).includes(Number(fdi)) })).sort((a, b) => frontTeeth(waxup.slot).indexOf(a.fdi) - frontTeeth(waxup.slot).indexOf(b.fdi)),
     archMarkWidths: Object.fromEntries(markedWidths(waxup.slot, waxup.archMarks?.[waxup.slot])),
     archMarksDone: (["upper", "lower"] as const).filter((slot) => nextArchMark(waxup.archMarks?.[slot]) === null),
@@ -22899,7 +22934,8 @@ export function LayerlingEditor({
               onArchMarks: (index?: number) => startArchMarks(index),
               onReduce: (fdi: number, on: boolean) => { waxRecord(); setWaxup((current) => { const list = (current.reduce?.[current.slot] ?? []).filter((n) => n !== fdi); const next = { ...current, reduce: { ...(current.reduce ?? {}), [current.slot]: on ? [...list, fdi] : list } }; waxupRef.current = next; return next; }); },
               onArchMarkUndo: () => undoArchMark(),
-              onArchMarksClear: () => { waxRecord(); setWaxup((current) => { const next = { ...current, archMarks: { ...(current.archMarks ?? {}), [current.slot]: Array(9).fill(null) } }; waxupRef.current = next; return next; }); window.setTimeout(() => startArchMarks(0), 30); },
+              onArchMarksFind: () => findArchMarks(false),
+              onArchMarksClear: () => { waxRecord(); setWaxup((current) => { const next = { ...current, archMarksAuto: { ...current.archMarksAuto, [current.slot]: undefined }, archMarks: { ...(current.archMarks ?? {}), [current.slot]: Array(9).fill(null) } }; waxupRef.current = next; return next; }); window.setTimeout(() => startArchMarks(0), 30); },
               onToothMirror: (on: boolean) => setWaxup((latest) => { const record = latest.smile?.[latest.slot]; if (!record) return latest; const next = { ...latest, smile: { ...latest.smile, [latest.slot]: { ...record, mirror: on } } }; waxupRef.current = next; return next; }),
               onBite: (raise: number) => void openWaxBite(raise),
               onGumMode: (mode: GumMode) => setWaxGumMode(mode),

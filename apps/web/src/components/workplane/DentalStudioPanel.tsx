@@ -723,7 +723,7 @@ export function DentalStudioPanel({
   const mbHintKey: Record<ModelStepId, string> = { scans: "dental.step1Hint", prepare: "dental.trimHint", model: "dental.step3Hint", base: "dental.stepBaseHint", articulator: "dental.step4Hint", fill: "studio.bodyHint", label: shell ? "studio.finishHint" : pair ? "dental.step4Hint" : "dental.stepNameHint" };
   const longHint = !framed ? null : stage === "made" ? t("dental.madeHint") : waxStep ? t(`waxStudio.stepHint.${waxStep}` as "waxStudio.stepHint.scans") : mbStep ? t(mbHintKey[mbStep] as "dental.step1Hint") : null;
   // The line over the 3D view: what to do now, in a few words; the rest is behind the (?).
-  const frameHint = !framed ? null : stage === "made" ? t(finishedCase ? "studio.hint.finished" : "studio.hint.made") : waxStep ? t(`studio.hint.${waxStep}` as "studio.hint.scans") : mbStep ? t(mbStep === "scans" && scansDone ? "studio.hint.mb.scansLoaded" : `studio.hint.mb.${mbStep}` as "studio.hint.mb.scans") : null;
+  const frameHint = !framed ? null : stage === "made" ? t(finishedCase ? "studio.hint.finished" : "studio.hint.made") : waxStep ? t(waxStep === "mark" && wv?.archMarkPick == null && (wv?.archMarkList ?? []).filter(Boolean).length === 9 ? "studio.hint.markCheck" : (`studio.hint.${waxStep}` as "studio.hint.scans")) : mbStep ? t(mbStep === "scans" && scansDone ? "studio.hint.mb.scansLoaded" : `studio.hint.mb.${mbStep}` as "studio.hint.mb.scans") : null;
   // Build 116: while the models are being made (and, in Wax-up Studio, while the wax is fitted to the bite first) the
   // button stays, fills slowly and says what is happening - the work can hold the screen for a minute.
   const fitting = Boolean(waxup?.view.occlusion.busy);
@@ -944,7 +944,7 @@ export function DentalStudioPanel({
         return (<>
           <div className="wax-guide">
             <strong>{t("waxup.markTitle")}</strong>
-            <span>{t("waxup.markGuide")}</span>
+            <span>{t(wv.archMarksFound === "found" && placed === 9 ? "waxup.markGuideFound" : "waxup.markGuide")}</span>
           </div>
           <ol className="wax-mark-list">
             {Array.from({ length: 9 }, (_, i) => {
@@ -972,8 +972,10 @@ export function DentalStudioPanel({
             {picking === null && placed < 9 ? <button type="button" className="primary" disabled={busy} onClick={() => waxup.actions.onArchMarks?.()}>{t(placed ? "waxup.markContinue" : "waxup.markStart")}</button> : null}
             <button type="button" className="secondary" disabled={busy || placed === 0} onClick={() => waxup.actions.onArchMarkUndo?.()}>{t("waxup.archMarkUndo")}</button>
             <button type="button" className="secondary" disabled={busy || placed === 0} onClick={() => waxup.actions.onArchMarksClear?.()}>{t("waxup.markClear")}</button>
+            {/* Build 285: the marks looked for on the scan (again, or after clicking some by hand). */}
+            {picking === null && waxup.actions.onArchMarksFind ? <button type="button" className="secondary" disabled={busy} title={t("waxup.markFindHint")} onClick={() => waxup.actions.onArchMarksFind?.()}>{t("waxup.markFind")}</button> : null}
           </div>
-          <p className="blend-hint" role="status">{t(picking !== null ? (picking <= 1 ? "waxup.markHintRight" : picking <= 4 ? "waxup.markHintOcclusal" : picking <= 6 ? "waxup.markHintLeft" : "waxup.markHintFront") : placed === 9 ? "waxup.archMarkDone" : "waxup.markPaused")}</p>
+          <p className="blend-hint" role="status">{t(picking !== null ? (picking <= 1 ? "waxup.markHintRight" : picking <= 4 ? "waxup.markHintOcclusal" : picking <= 6 ? "waxup.markHintLeft" : "waxup.markHintFront") : placed === 9 ? (wv.archMarksFound === "found" ? "waxup.archMarkFound" : "waxup.archMarkDone") : wv.archMarksFound === "failed" ? "waxup.markFindFailed" : "waxup.markPaused")}</p>
         </>);
       })()) : null}
       {waxSteps && waxStep === "bite" && wv && waxup ? card(3, t("waxup.biteTitle"), true, t("waxStudio.stepHint.bite"), null, (<>

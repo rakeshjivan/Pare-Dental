@@ -46,6 +46,8 @@ export type WaxupView = {
   toothEdit?: { fdi: number; edit: ToothEdit; mirror: boolean; width: number; length: number; live?: boolean } | null;
   /** Build 278 (step 1, Mark): this arch's nine marks (null: not placed), each front tooth's width from them (mm, by FDI), and the arches fully marked. */
   archMarkList?: Array<[number, number, number] | null>;
+  /** Build 285: the marks were found on the scan for the dentist to check ("failed": looked for, not made out). */
+  archMarksFound?: "found" | "failed";
   archMarkWidths?: Record<number, number>;
   archMarksDone?: Array<"upper" | "lower">;
   archMarkPick?: number | null;
@@ -186,6 +188,8 @@ export type WaxupActions = {
   onArchMarks?: (index?: number) => void;
   onArchMarkUndo?: () => void;
   onArchMarksClear?: () => void;
+  /** Build 285: the nine marks looked for on the scan. */
+  onArchMarksFind?: () => void;
   /** Build 279: cut this tooth's scan back flush with the wax on the wax-up model (or not). */
   onReduce?: (fdi: number, on: boolean) => void;
   /** Build 107: the whole dropped set larger or smaller, about its middle (1 = the library's own size). */
