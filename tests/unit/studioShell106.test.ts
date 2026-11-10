@@ -25,13 +25,14 @@ describe("build 106: the studio frame", () => {
   });
 
   // Build 107: as Meshmixer - the set dropped whole at Position, no Landmarks step.
-  it("runs Wax-up Studio in six steps: Import, Trim, Library, Position, Sculpt, Export (and Open bite with a bite scan, build 108)", () => {
+  it("runs Wax-up Studio in seven steps: Import, Mark, Trim, Library, Position, Sculpt, Export (and Open bite with a bite scan, build 108)", () => {
     const panel = src("components/workplane/DentalStudioPanel.tsx");
     // Build 116: Margins (with the margin line on) and Keep & erase came in between; build 118 takes Keep & erase out again.
-    expect(panel).toContain('["scans", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), ...(waxup.view.marginOn ? ["margin" as const] : []), "set", "place", "sculpt", "gum", "make"]');
+    // Build 278: Mark (the nine marks on the scan) straight after Import.
+    expect(panel).toContain('["scans", "mark", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), ...(waxup.view.marginOn ? ["margin" as const] : []), "set", "place", "sculpt", "gum", "make"]');
     expect(messages["waxStudio.step.bite" as keyof typeof messages]).toBe("Open bite");
-    const names = ["scans", "trim", "set", "place", "sculpt", "make"].map((id) => messages[`waxStudio.step.${id}` as keyof typeof messages]);
-    expect(names).toEqual(["Import", "Trim", "Library", "Position", "Sculpt", "Export"]);
+    const names = ["scans", "mark", "trim", "set", "place", "sculpt", "make"].map((id) => messages[`waxStudio.step.${id}` as keyof typeof messages]);
+    expect(names).toEqual(["Import", "Mark", "Trim", "Library", "Position", "Sculpt", "Export"]);
   });
 
   it("frames Dental Studio's workflows (live since 1 Nov 2026) and leaves CAD Studio as it was", () => {
