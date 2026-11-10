@@ -381,12 +381,13 @@ export function labialProfile(points: ArrayLike<number>, anchors: Omit<SetAnchor
 }
 
 /**
- * Build 278 (Rakesh, step 2): the teeth snapped to the dentist's marks - each library tooth laid between its
- * two marked contacts (its mesial and distal ends on them, seen from the occlusal), sized in width only (the
- * library length kept), facing labially square to the line between its contacts, standing SET_CLEAR in
- * front of the patient's labial surface (plus fullness). The centrals' edges level with the midline mark
- * (plus `length`), the laterals `lateralStep` short of them, the canine tips at the tips marked (plus `length`).
- * A tooth widened on its own pushes the teeth distal to it along by as much.
+ * Build 278 (Rakesh, step 2, revised): the library set fitted to the dentist's marks while keeping its own
+ * design - each tooth keeps the set's tip, torque and rotation against its neighbours, and is only turned
+ * about the vertical so its mesial and distal ends meet its two marked contacts (seen from the occlusal),
+ * sized in width to them (its length the library's). The incisal steps are the set's own: the centrals level
+ * with the midline mark (plus `length`), the canines brought to the tips marked, the laterals half as far,
+ * so the smile line stays the set's. Each tooth stands SET_CLEAR in front of the patient's labial surface
+ * (plus fullness). A tooth widened on its own pushes the teeth distal to it along by as much.
  */
 function layoutFromMarks(teeth: SetTooth[], anchors: SetAnchors, c: SetControls, extra?: Map<string, { mesial: number; distal: number }>): SetLayout | null {
   const contacts = anchors.contacts!.map(v);
@@ -394,57 +395,77 @@ function layoutFromMarks(teeth: SetTooth[], anchors: SetAnchors, c: SetControls,
   const flat = (p: THREE.Vector3) => p.clone().addScaledVector(up, -p.dot(up));
   const mid = v(anchors.midline);
   const level = (p: THREE.Vector3) => p.clone().sub(mid).dot(up);
-  // Labial: away from the middle of the marked contacts' polygon (the arch's inside), in the occlusal plane.
-  const centre = flat(contacts.reduce((sum, p) => sum.add(p), new THREE.Vector3()).divideScalar(contacts.length)).addScaledVector(v(anchors.out).addScaledVector(up, -v(anchors.out).dot(up)).normalize(), -15);
-  // FDI order from the patient's right: the tooth between contacts i and i+1.
-  const order = (fdi: number) => { const q = Math.floor(fdi / 10), n = fdi % 10; const right = q === 1 || q === 4; return right ? 3 - n : 2 + n; };
-  const matrices = new Map<string, THREE.Matrix4>();
-  const apparent = new Map<string, number>();
-  let centralWidth = 0, centralLength = 0;
-  // Each side's widening pushed out from the midline: the shift so far, mm, by position from the midline.
+  const outHint = v(anchors.out).addScaledVector(up, -v(anchors.out).dot(up)).normalize();
+  const centre = flat(contacts.reduce((sum, p) => sum.add(p), new THREE.Vector3()).divideScalar(contacts.length)).addScaledVector(outHint, -15);
+  const order = (fdi: number) => { const q = Math.floor(fdi / 10), n = fdi % 10; return q === 1 || q === 4 ? 3 - n : 2 + n; };
+  const isLeft = (fdi: number) => { const q = Math.floor(fdi / 10); return q === 2 || q === 3; };
+  // The set's own incisal levels: each tooth's edge against the centrals' (mean), mm along up.
+  const centrals = teeth.filter((t) => position(t.kind) === 1);
+  if (!centrals.length) return null;
+  const centralLevel = centrals.reduce((sum, t) => sum + v(t.frame.origin).dot(up), 0) / centrals.length;
+  // How far each canine must move to stand at its tip mark: carried by the canine fully, the lateral half.
+  const canineCorrection = new Map<boolean, number>();
+  for (const left of [false, true]) {
+    const canine = teeth.find((t) => isLeft(t.fdi) === left && position(t.kind) === 3);
+    if (!canine) continue;
+    const own = v(canine.frame.origin).dot(up) - centralLevel;
+    canineCorrection.set(left, level(v(anchors.canines[left ? 1 : 0])) - own);
+  }
   const shiftOf = new Map<string, number>();
   for (const left of [false, true]) {
     let shift = 0;
     for (const p of [1, 2, 3] as const) {
-      const tooth = teeth.find((t) => (Math.floor(t.fdi / 10) === 2 || Math.floor(t.fdi / 10) === 3) === left && position(t.kind) === p);
+      const tooth = teeth.find((t) => isLeft(t.fdi) === left && position(t.kind) === p);
       if (!tooth) continue;
       const more = extra?.get(tooth.id);
       shiftOf.set(tooth.id, shift + (more?.mesial ?? 0));
       shift += (more?.mesial ?? 0) + (more?.distal ?? 0);
     }
   }
+  const matrices = new Map<string, THREE.Matrix4>();
+  const apparent = new Map<string, number>();
+  let centralWidth = 0, centralLength = 0;
   for (const tooth of teeth) {
     const i = order(tooth.fdi);
     if (i < 0 || i > 5) continue;
-    const isLeftTooth = i >= 3;
-    // Mesial contact and distal contact of this tooth.
-    const mesialAt = contacts[isLeftTooth ? i : i + 1], distalAt = contacts[isLeftTooth ? i + 1 : i];
+    const left = i >= 3;
+    const mesialAt = contacts[left ? i : i + 1], distalAt = contacts[left ? i + 1 : i];
     const chord = flat(mesialAt).sub(flat(distalAt));
     const width = chord.length();
     if (width < 1) continue;
-    const mesial = chord.clone().normalize();
-    let out = new THREE.Vector3().crossVectors(up, mesial).normalize();
+    const want = chord.clone().normalize();
+    const r = tooth.frame;
+    const origin = v(r.origin);
+    const libMesial = flat(v(r.mesial)).normalize();
+    // Turned about the vertical only, so the set's tip and torque stay.
+    const yaw = Math.atan2(new THREE.Vector3().crossVectors(libMesial, want).dot(up), libMesial.dot(want));
+    const turn = new THREE.Matrix4().makeRotationAxis(up, yaw);
+    // Width along the tooth's own mesial direction, about its incisal middle.
+    const k = width / Math.max(1, tooth.width);
+    const m = libMesial;
+    const widen = new THREE.Matrix4().set(
+      1 + (k - 1) * m.x * m.x, (k - 1) * m.x * m.y, (k - 1) * m.x * m.z, 0,
+      (k - 1) * m.y * m.x, 1 + (k - 1) * m.y * m.y, (k - 1) * m.y * m.z, 0,
+      (k - 1) * m.z * m.x, (k - 1) * m.z * m.y, 1 + (k - 1) * m.z * m.z, 0,
+      0, 0, 0, 1,
+    );
+    let out = new THREE.Vector3().crossVectors(up, want).normalize();
     const middle = flat(mesialAt).add(flat(distalAt)).multiplyScalar(0.5);
     if (out.dot(middle.clone().sub(centre)) < 0) out.negate();
-    // Standing clear of the patient's teeth across this tooth's span.
     let forward = 0;
     for (const point of anchors.labial ?? []) {
       const d = flat(v(point)).sub(middle);
-      if (Math.abs(d.dot(mesial)) > width / 2 + 0.5) continue;
+      if (Math.abs(d.dot(want)) > width / 2 + 0.5) continue;
       forward = Math.max(forward, d.dot(out) + SET_CLEAR);
     }
     const p = position(tooth.kind) as 1 | 2 | 3;
-    const canineTip = p === 3 ? v(anchors.canines[isLeftTooth ? 1 : 0]) : null;
-    const height = p === 1 ? c.length : p === 2 ? c.length - c.lateralStep : level(canineTip!) + c.length;
-    const target = middle.clone().addScaledVector(up, mid.dot(up) + height).addScaledVector(out, forward + c.fullness).addScaledVector(mesial, -(shiftOf.get(tooth.id) ?? 0));
-    const r = tooth.frame;
-    const rest = new THREE.Matrix4().makeBasis(v(r.mesial).normalize(), v(r.out).normalize(), v(r.up).normalize()).setPosition(v(r.origin));
-    const designed = new THREE.Matrix4().makeBasis(mesial, out, up).setPosition(target);
-    const scale = new THREE.Matrix4().makeScale(width / Math.max(1, tooth.width), 1, 1);
-    // A mirror basis (the rest frame's handedness differs from this one's): turned round so the tooth is never mirrored.
-    const m = designed.multiply(scale).multiply(rest.clone().invert());
-    if (m.determinant() < 0) continue;
-    matrices.set(tooth.id, m);
+    const share = p === 1 ? 0 : p === 2 ? 0.5 : 1;
+    const height = origin.dot(up) - centralLevel + c.length + share * (canineCorrection.get(left) ?? 0);
+    const target = middle.clone().addScaledVector(up, mid.dot(up) + height).addScaledVector(out, forward + c.fullness).addScaledVector(want, -(shiftOf.get(tooth.id) ?? 0));
+    const matrix = new THREE.Matrix4().makeTranslation(target.x, target.y, target.z)
+      .multiply(turn).multiply(widen)
+      .multiply(new THREE.Matrix4().makeTranslation(-origin.x, -origin.y, -origin.z));
+    matrices.set(tooth.id, matrix);
     apparent.set(tooth.id, width);
     if (p === 1 && !centralWidth) { centralWidth = width; centralLength = tooth.length; }
   }

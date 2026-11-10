@@ -224,13 +224,24 @@ describe("snapped to the marks (build 278, step 2)", () => {
     expect(lay.matrices.size).toBe(6);
   });
 
-  it("sets the centrals at the midline mark's level, the laterals a step short, the canines at their tip marks", () => {
+  it("sets the centrals at the midline mark's level, the canines at their tip marks, the laterals half way on the set's own steps", () => {
     const z = (fdi: number) => ends(byFdi.get(fdi)!, lay.matrices.get(byFdi.get(fdi)!.id)!).edge.z;
     expect(z(11)).toBeCloseTo(0, 5);
     expect(z(21)).toBeCloseTo(0, 5);
-    expect(z(12)).toBeCloseTo(-SET_DEFAULTS.lateralStep, 5);
     expect(z(13)).toBeCloseTo(0.8, 5);
     expect(z(23)).toBeCloseTo(0.8, 5);
+    // The set's own lateral step (0.8 - 0.4 above the centrals at rest) plus half the canine's correction (0.8 - 0.8).
+    expect(z(12)).toBeCloseTo(0.4, 5);
+  });
+
+  it("keeps the set's own design: each tooth only turned about the vertical (its tip and torque as the library's)", () => {
+    // A library lateral tipped and torqued: its up not straight up.
+    const tipped = teeth.map((t) => (t.fdi === 12 ? { ...t, frame: { ...t.frame, up: [0.15, 0.1, 0.983] as V } } : t));
+    const fit = layoutSmileSet(tipped, marked, SET_DEFAULTS)!;
+    const t = tipped.find((x) => x.fdi === 12)!;
+    const upAfter = new THREE.Vector3(...t.frame.up).transformDirection(fit.matrices.get(t.id)!);
+    // The angle from the vertical is kept (turning about the vertical cannot change it).
+    expect(upAfter.z).toBeCloseTo(new THREE.Vector3(...t.frame.up).normalize().z, 2);
   });
 
   it("keeps the teeth labial of the patient's surface", () => {

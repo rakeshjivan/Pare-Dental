@@ -1149,7 +1149,6 @@ function SmileSetPanel({ set, workspace, disabled, onChange }: { set: NonNullabl
         {/* Build 278 (step 2): the widths, midline and canine tips are the dentist's marks - only the levels and fullness here. */}
         <p className="blend-hint" role="status">{t("waxup.smileMarked")}</p>
         {mm("length", "waxup.smileLength", "waxup.smileLengthHint")}
-        {mm("lateralStep", "waxup.smileStep", "waxup.smileStepHint")}
         {mm("fullness", "waxup.smileFullness", "waxup.smileFullnessHint")}
         <div className="dental-trim-buttons">
           <button type="button" className="secondary" disabled={disabled} onClick={() => onChange({ ...SET_DEFAULTS })}>{t("waxup.smileReset")}</button>
