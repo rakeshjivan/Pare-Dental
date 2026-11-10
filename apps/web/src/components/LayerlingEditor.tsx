@@ -116,7 +116,7 @@ import { clampEdit, editPose, editTooth, isNoEdit, NO_EDIT, palatalDepth, type T
 import { cutterBox, proudOfWax, sweptSurface } from "@/lib/waxReduce";
 import { ARCH_MARK_CONTACTS, archMarkLabel, frontTeeth, markedWidths, nextArchMark } from "@/lib/waxArchMarks";
 import { autoArchMarks } from "@/lib/waxAutoMarks";
-import { affineBetween, clampControls, labialProfile, layoutSmileSet, restFrames, SCULPTED_MISS, SET_DEFAULTS, type SetControls, type SetTooth, type SmileRecord } from "@/lib/waxSmileSet";
+import { affineBetween, clampControls, crownMargins, labialProfile, layoutSmileSet, restFrames, SCULPTED_MISS, SET_DEFAULTS, type SetControls, type SetTooth, type SmileRecord } from "@/lib/waxSmileSet";
 import { StudioShell } from "./workplane/StudioShell";
 import { useStudioSlot } from "@/lib/studioSlots";
 import { createPortal } from "react-dom";
@@ -176,7 +176,7 @@ import { worldTriangles } from "@/lib/blend";
 import { eggshellTooth } from "@/lib/dentalEggshell";
 import { NearestSurface, DeviationProbe, rayMeetsSoup, soupBoxOf, soupWithin } from "@/lib/nearestSurface";
 import { ERASE_BRUSH, eraseKey, eraseTooth, keptCorners, surfaceSign, toFrame, type ToothAxes } from "@/lib/waxErase";
-import { pressPalatal, type PalatalForm } from "@/lib/waxPalatal";
+import { PALATAL_DEFAULT, pressPalatal, type PalatalForm } from "@/lib/waxPalatal";
 import { palatalInBackground } from "@/lib/waxPalatalJob";
 import { runShellJob, shellInBackground, type ShellJob, type ShellResult } from "@/lib/waxShellJob";
 import { closeEraseWorkers, eraseInBackground, type EraseJob } from "@/lib/waxEraseJobs";
@@ -11115,7 +11115,7 @@ export function LayerlingEditor({
     };
     // Build 118: the library tooth's palatal form - the patient's surface standing palatal of each wax tooth pressed onto it.
     const palatalOf = (shape: WorkplaneShape, positions: Float32Array) => {
-      if (!dentalStudioRef.current?.waxStudio || (waxupRef.current.palatal ?? "library") !== "library") return positions;
+      if (!dentalStudioRef.current?.waxStudio || (waxupRef.current.palatal ?? PALATAL_DEFAULT) !== "library") return positions;
       const toInput = dentalLocalToInput.current.get(shape.id), world = localToWorld(shape);
       if (!toInput || !world) return positions;
       const move = toInput.clone().multiply(world.clone().invert());
@@ -12576,7 +12576,9 @@ export function LayerlingEditor({
     const archId = dentalStudioRef.current?.slots[current.slot];
     const scanShape = archId ? shapesRef.current.find((shape) => shape.id === archId) : undefined;
     const base = { midline: all[3], canines: [all[7], all[8]] as [[number, number, number], [number, number, number]], up: record.anchors.up, out: record.anchors.out, contacts };
-    const anchored: SmileRecord = { ...record, anchors: { ...base, labial: scanShape ? labialProfile(worldTriangles(scanShape), base) : record.anchors.labial } };
+    const scanSoup = scanShape ? worldTriangles(scanShape) : null;
+    const gum = scanSoup ? crownMargins(scanSoup, base) : null;
+    const anchored: SmileRecord = { ...record, anchors: { ...base, labial: scanSoup ? labialProfile(scanSoup, base) : record.anchors.labial, crown: gum ? gum.crown ?? undefined : record.anchors.crown, margins: gum ? gum.margins : record.anchors.margins } };
     waxupRef.current = { ...current, smile: { ...(current.smile ?? {}), [current.slot]: anchored } };
     window.setTimeout(() => commitWaxSmile(anchored.controls), 30);
   }, [studioWaxStep, waxup.slot]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -12596,7 +12598,11 @@ export function LayerlingEditor({
         const world = localToWorld(tooth);
         if (!tooth.waxTooth || !world) continue;
         const frame = moveFrame(tooth.waxTooth.frame, world);
-        const found = proudOfWax(scan, worldTriangles(tooth), frame, tooth.waxTooth.width, tooth.waxTooth.length, 300);
+        // Build 286: the scan gumwards of the tooth's gingival margin (read when the set was laid from the marks) is gum.
+        const anchors = current.smile?.[current.slot]?.anchors;
+        const level = anchors?.margins?.[frontTeeth(current.slot).indexOf(tooth.waxTooth.fdi)];
+        const upNow = anchors ? new THREE.Vector3(...anchors.up).normalize() : null;
+        const found = proudOfWax(scan, worldTriangles(tooth), frame, tooth.waxTooth.width, tooth.waxTooth.length, 300, upNow && level !== null && level !== undefined ? { up: [upNow.x, upNow.y, upNow.z], level } : undefined);
         proud[tooth.waxTooth.fdi] = Math.round(found.depth * 10) / 10;
         if (!(current.reduce?.[current.slot] ?? []).includes(tooth.waxTooth.fdi)) dots.push(...found.points);
       }
@@ -13447,7 +13453,7 @@ export function LayerlingEditor({
   // over the scan (components/workplane/palatalLayer) and the scan is never changed. What the opposing wax teeth bite on
   // (contacts, Fit to the bite) is each arch as Make will make it - its palatal pressed onto its wax teeth - worked out in
   // the background a moment after the teeth last moved while the contacts are shown, else when it is asked for.
-  const palatalLive = Boolean(dentalStudio?.waxStudio) && (waxup.palatal ?? "library") === "library" && dentalStudio?.stage !== "made" && ["place", "adjust", "occlusion", "keep", "sculpt", "gum", "make"].includes(studioWaxStep ?? "");
+  const palatalLive = Boolean(dentalStudio?.waxStudio) && (waxup.palatal ?? PALATAL_DEFAULT) === "library" && dentalStudio?.stage !== "made" && ["place", "adjust", "occlusion", "keep", "sculpt", "gum", "make"].includes(studioWaxStep ?? "");
   const palatalLiveRef = useRef(false);
   palatalLiveRef.current = palatalLive;
   const palatalCache = useRef(new Map<string, { key: string; scanKey: string; soup: Float32Array | null }>());
@@ -13537,7 +13543,7 @@ export function LayerlingEditor({
   const waxShellHidden = useRef(new Set<string>());
   const waxShellSetup = (scan: WorkplaneShape, only?: (fdi: number) => boolean) => {
     const studio = dentalStudioRef.current;
-    if (!studio?.waxStudio || (waxupRef.current.palatal ?? "library") !== "library") return null;
+    if (!studio?.waxStudio || (waxupRef.current.palatal ?? PALATAL_DEFAULT) !== "library") return null;
     const slot = studio.slots.upper === scan.id ? "upper" as const : studio.slots.lower === scan.id ? "lower" as const : null;
     if (!slot) return null;
     const record = waxupRef.current.smile?.[slot];
@@ -14100,7 +14106,9 @@ export function LayerlingEditor({
               ? { midline: markedAll[3], canines: [markedAll[7], markedAll[8]] as [[number, number, number], [number, number, number]], up, out, contacts: markedAll.slice(0, 7) }
               : { midline: at(plan.landmarks!.midline), canines: [at(plan.landmarks!.canines[0]), at(plan.landmarks!.canines[1])] as [[number, number, number], [number, number, number]], up, out };
             // The patient's labial surfaces across the front, so the set starts just clear of them.
-            return { ...anchors, labial: labialProfile(transformSoup(arch.scan, back), anchors) };
+            const scanSoup = transformSoup(arch.scan, back);
+            const gum = markedAll ? crownMargins(scanSoup, anchors) : null;
+            return { ...anchors, labial: labialProfile(scanSoup, anchors), crown: gum?.crown ?? undefined, margins: gum?.margins };
           })(),
           rest: Object.fromEntries(front.flatMap((tooth) => { const f = frames.get(tooth.fdi); return f ? [[tooth.fdi, f]] : []; })),
           laid: Object.fromEntries(front.map((tooth) => [tooth.fdi, identity])),
@@ -14151,7 +14159,7 @@ export function LayerlingEditor({
     const teeth = waxTeethOf(archId).filter((shape) => shape.waxTooth && record.rest[shape.waxTooth.fdi] && !current.locks[shape.waxTooth.fdi]);
     const setTeeth: SetTooth[] = teeth.map((shape) => {
       const fdi = shape.waxTooth!.fdi, rest = record.rest[fdi];
-      return { id: shape.id, fdi, kind: fdiKind(fdi, slot).kind, frame: rest.frame, width: rest.width, length: rest.length };
+      return { id: shape.id, fdi, kind: fdiKind(fdi, slot).kind, frame: rest.frame, width: rest.width, length: rest.length, face: rest.face };
     });
     const extra = new Map(teeth.map((shape) => { const e = own[shape.waxTooth!.fdi]; return [shape.id, { mesial: 0, distal: e?.spread ?? 0 }] as const; }));
     const layout = layoutSmileSet(setTeeth, record.anchors, controls, extra);
@@ -15569,7 +15577,7 @@ export function LayerlingEditor({
   }, [studioShellOn, dentalStudio?.waxStudio, studioWaxStep, waxup.gum, viewportShapes]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 277: the current arch's set, and what its controls make (no mesh: just the layout).
   const smileNow = waxup.smile?.[waxup.slot];
-  const smileLaid = smileNow ? layoutSmileSet(Object.entries(smileNow.rest).map(([fdi, rest]) => ({ id: fdi, fdi: Number(fdi), kind: fdiKind(Number(fdi), waxup.slot).kind, frame: rest.frame, width: rest.width, length: rest.length })), smileNow.anchors, smileNow.controls) : null;
+  const smileLaid = smileNow ? layoutSmileSet(Object.entries(smileNow.rest).map(([fdi, rest]) => ({ id: fdi, fdi: Number(fdi), kind: fdiKind(Number(fdi), waxup.slot).kind, frame: rest.frame, width: rest.width, length: rest.length, face: rest.face })), smileNow.anchors, smileNow.controls) : null;
   const smileFdi = (n: number) => (waxup.slot === "upper" ? 10 : 40) + n;
   // Build 277 (phase 3): the one front tooth chosen, with its own changes.
   const smileTooth = (() => {

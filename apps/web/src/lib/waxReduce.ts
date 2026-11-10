@@ -16,8 +16,15 @@ const CELL = 0.4;
 
 export type Proud = { depth: number; points: Vec3[] };
 
-/** Where the scan stands proud of one wax tooth, and its deepest point (mm). `scan` and `wax`: soups, scene coordinates. */
-export function proudOfWax(scan: ArrayLike<number>, wax: ArrayLike<number>, frame: ToothFrame, width: number, length: number, keep = 600): Proud {
+/** How far incisal of the gingival margin the scan is still taken as gum (the margin is read to about this), mm. */
+const GUM_BAND = 0.5;
+
+/**
+ * Where the scan stands proud of one wax tooth, and its deepest point (mm). `scan` and `wax`: soups, scene coordinates.
+ * `gum` (build 286): the tooth's gingival margin as a level along the arch's `up` (towards the incisal edges) - the
+ * scan gumwards of it is gum, not tooth, and is never proud (a wax tooth's neck stands in the gum).
+ */
+export function proudOfWax(scan: ArrayLike<number>, wax: ArrayLike<number>, frame: ToothFrame, width: number, length: number, keep = 600, gum?: { up: [number, number, number]; level: number }): Proud {
   const o = new THREE.Vector3(...frame.origin), m = new THREE.Vector3(...frame.mesial).normalize(), f = new THREE.Vector3(...frame.out).normalize(), u = new THREE.Vector3(...frame.up).normalize();
   const local = (x: number, y: number, z: number) => { const d = new THREE.Vector3(x - o.x, y - o.y, z - o.z); return [d.dot(m), d.dot(f), d.dot(u)] as const; };
   // The wax's labial face and incisal edge as maps over the tooth: the most labial (b) per (a, h) cell, the highest (h) per a column.
@@ -48,6 +55,7 @@ export function proudOfWax(scan: ArrayLike<number>, wax: ArrayLike<number>, fram
   for (let i = 0; i + 2 < scan.length; i += 3) {
     const x = scan[i], y = scan[i + 1], z = scan[i + 2];
     if (x < box[0] - 4 || x > box[3] + 4 || y < box[1] - 4 || y > box[4] + 4 || z < box[2] - 4 || z > box[5] + 4) continue;
+    if (gum && x * gum.up[0] + y * gum.up[1] + z * gum.up[2] < gum.level + GUM_BAND) continue;
     const [a, b, h] = local(x, y, z);
     // Within the tooth's span, from its cervical end to just beyond its edge, and not far behind it.
     if (Math.abs(a - (lo + hi) / 2) > span * 0.9 || h < Math.max(bottom, -length) || h > 3 || b < -6) continue;

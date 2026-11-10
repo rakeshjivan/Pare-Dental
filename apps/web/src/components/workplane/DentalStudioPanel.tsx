@@ -2,6 +2,7 @@
 
 import type { BiteContactStats } from "@/lib/biteContacts";
 import { archMarkLabel, frontTeeth } from "@/lib/waxArchMarks";
+import { PALATAL_DEFAULT } from "@/lib/waxPalatal";
 import { SNAP_GRIPS, snapGrip } from "@/lib/dentalSnapHinge";
 import { PIN_CLEAR, PIN_GAP_MAX, PIN_MAX, PIN_STEP, PIN_WARN, articulatorPinPatch } from "@/lib/dentalArticulator";
 import { biteOpenings } from "@/lib/waxOcclusion";
@@ -1080,11 +1081,11 @@ export function DentalStudioPanel({
         {/* Build 118: the palatal surface - the library tooth's (the patient's palatal pressed onto it) or the patient's. */}
         <h4 className="dental-substep-title">{t("waxup.palatalTitle")}</h4>
         <div className="studio-mm-choice two" role="radiogroup" aria-label={t("waxup.palatalTitle")}>
-          {(["library", "patient"] as const).map((form) => (
-            <button key={form} type="button" role="radio" aria-checked={(wv.palatal ?? "library") === form} className={(wv.palatal ?? "library") === form ? "active" : ""} disabled={busy} onClick={() => waxup.actions.onPalatal?.(form)}>{t(`waxup.palatal.${form}`)}</button>
+          {(["patient", "library"] as const).map((form) => (
+            <button key={form} type="button" role="radio" aria-checked={(wv.palatal ?? PALATAL_DEFAULT) === form} className={(wv.palatal ?? PALATAL_DEFAULT) === form ? "active" : ""} disabled={busy} onClick={() => waxup.actions.onPalatal?.(form)}>{t(`waxup.palatal.${form}`)}</button>
           ))}
         </div>
-        <p className="blend-hint" role="status">{t(`waxup.palatal.${wv.palatal ?? "library"}Hint`)}</p>
+        <p className="blend-hint" role="status">{t(`waxup.palatal.${wv.palatal ?? PALATAL_DEFAULT}Hint`)}</p>
         <ul className="waxup-gum-key">
           <li><span style={{ background: "#d6403a" }} /> {t("waxup.gum.keyMargin")}</li>
           <li><span style={{ background: "#9eb3c7" }} /> {t("waxup.gum.keyCovered")}</li>

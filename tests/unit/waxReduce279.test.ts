@@ -22,6 +22,15 @@ describe("proudOfWax", () => {
   it("measures how far it reaches beyond the wax's incisal edge", () => {
     expect(proudOfWax(scan(-1, 1.5), wax, frame, 8, 10).depth).toBeCloseTo(1.5, 5);
   });
+  it("takes the scan gumwards of the gingival margin as gum, never proud (build 286)", () => {
+    // The gum swelling out over the wax tooth's neck, from 7 mm gumwards of the edge; the crown below it behind the wax.
+    const gum: number[] = [];
+    for (let x = -3.5; x <= 3.5; x += 0.5) for (let z = -9; z <= -1; z += 0.5) gum.push(x, z < -7 ? 1.2 : -0.8, z);
+    expect(proudOfWax(gum, wax, frame, 8, 10).depth).toBeCloseTo(1.2, 5);
+    expect(proudOfWax(gum, wax, frame, 8, 10, 600, { up: [0, 0, 1], level: -7 }).depth).toBe(0);
+    // The crown itself standing proud is still found.
+    expect(proudOfWax(scan(0.7), wax, frame, 8, 10, 600, { up: [0, 0, 1], level: -7 }).depth).toBeCloseTo(0.7, 5);
+  });
 });
 
 describe("cutterBox", () => {

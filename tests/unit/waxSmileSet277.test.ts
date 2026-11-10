@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { affineBetween, CANINE_TIP, labialProfile, layoutSmileSet, restFrames, SET_CLEAR, SET_DEFAULTS, type SetAnchors, type SetTooth } from "@/lib/waxSmileSet";
+import { affineBetween, CANINE_TIP, crownMargins, labialProfile, layoutSmileSet, restFrames, SET_BURY, SET_CLEAR, SET_DEFAULTS, SET_LENGTHEN_MAX, SET_TORQUE_MAX, FACE_STEP, type SetAnchors, type SetTooth } from "@/lib/waxSmileSet";
 import type { ToothKind } from "@/lib/dentalWaxup";
 
 /** Build 277: the six front teeth set out together from whole-set controls. Synthetic teeth only. */
@@ -156,6 +156,17 @@ describe("restFrames", () => {
     expect(f.get(11)!.frame.mesial[0]).toBeCloseTo(1, 5);
     expect(f.get(11)!.width).toBeCloseTo(8, 5);
   });
+  it("reads the labial face down the tooth: how far behind its most labial point, at each step from the edge (build 286)", () => {
+    // A tooth (labial towards -y) whose face falls back 0.2 mm for each mm from the edge towards the neck.
+    const pts: number[] = [];
+    for (let x = -4; x <= 4; x += 0.5) for (let d = 0; d <= 10; d += 0.25) pts.push(x, 0.2 * d, -d, x, 5, -d);
+    const face = restFrames([{ fdi: 11, soup: pts }, { fdi: 21, soup: pts.map((value, i) => (i % 3 === 0 ? value + 9 : value)) }], [0, 0, 1], [0, -1, 0]).get(11)!.face;
+    expect(face.length).toBe(Math.ceil(10 / FACE_STEP) + 1);
+    expect(face[0]).toBeCloseTo(0, 5);
+    // (The most labial corner within each step: up to half a step nearer the edge.)
+    expect(Math.abs(face[Math.round(5 / FACE_STEP)] + 1)).toBeLessThan(0.1);
+    expect(Math.abs(face[face.length - 1] + 2)).toBeLessThan(0.1);
+  });
 });
 
 describe("standing clear of the patient's teeth", () => {
@@ -261,5 +272,130 @@ describe("snapped to the marks (build 278, step 2)", () => {
     const clear = layoutSmileSet(teeth, { ...marked, labial }, SET_DEFAULTS)!;
     const t = byFdi.get(11)!;
     expect(ends(t, clear.matrices.get(t.id)!).edge.y - ends(t, lay.matrices.get(t.id)!).edge.y).toBeGreaterThan(1.2);
+  });
+});
+
+describe("from the gum line to the edge (build 286)", () => {
+  const teeth = restTeeth();
+  const xs = [-19, -13, -7.5, 0, 8, 13.5, 19.5];
+  const contacts = xs.map((x) => [x, -0.03 * x * x, 0] as V);
+  const marked: SetAnchors = { midline: [0, 0, 0], canines: [[-16, -7.7, 0.8], [16.5, -8.2, 0.8]], up: [0, 0, 1], out: [0, 1, 0], contacts };
+  const byFdi = new Map(teeth.map((t) => [t.fdi, t]));
+  const cervicalZ = (lay: NonNullable<ReturnType<typeof layoutSmileSet>>, fdi: number) => { const t = byFdi.get(fdi)!; return new THREE.Vector3(t.frame.origin[0], t.frame.origin[1], t.frame.origin[2] - t.length).applyMatrix4(lay.matrices.get(t.id)!).z; };
+  const edgeZ = (lay: NonNullable<ReturnType<typeof layoutSmileSet>>, fdi: number) => ends(byFdi.get(fdi)!, lay.matrices.get(byFdi.get(fdi)!.id)!).edge.z;
+
+  it("makes each tooth as long as from its gingival margin to its edge, and keeps the neck there when the edge is taken longer", () => {
+    // Margins 12 mm gumwards of the centrals' edges (11 a little higher); none read for 23.
+    const margins = [-11, -10, -12, -12.5, -10, null];
+    const lay = layoutSmileSet(teeth, { ...marked, margins }, SET_DEFAULTS)!;
+    expect(cervicalZ(lay, 11)).toBeCloseTo(-12 - SET_BURY, 4);
+    expect(cervicalZ(lay, 21)).toBeCloseTo(-12.5 - SET_BURY, 4);
+    expect(cervicalZ(lay, 12)).toBeCloseTo(-10 - SET_BURY, 4);
+    // No margin read: the library's length.
+    expect(edgeZ(lay, 23) - cervicalZ(lay, 23)).toBeCloseTo(byFdi.get(23)!.length, 4);
+    // The edges are where they were without the margins.
+    const plain = layoutSmileSet(teeth, marked, SET_DEFAULTS)!;
+    for (const fdi of [13, 12, 11, 21, 22, 23]) expect(edgeZ(lay, fdi)).toBeCloseTo(edgeZ(plain, fdi), 5);
+    // Longer by 2.5: the edge moves, the neck stays.
+    const longer = layoutSmileSet(teeth, { ...marked, margins }, { ...SET_DEFAULTS, length: 2.5 })!;
+    expect(edgeZ(longer, 11)).toBeCloseTo(edgeZ(lay, 11) + 2.5, 5);
+    expect(cervicalZ(longer, 11)).toBeCloseTo(cervicalZ(lay, 11), 4);
+    expect(lay.centralLength).toBeCloseTo(12 + SET_BURY, 4);
+  });
+
+  it("starts at a central of the usual proportion where the patient's are short for their width", () => {
+    // The centrals as marked (contact to contact, seen from the occlusal), standing only 7 mm: their width over 78% wanted.
+    const wide = (Math.hypot(contacts[3][0] - contacts[2][0], contacts[3][1] - contacts[2][1]) + Math.hypot(contacts[4][0] - contacts[3][0], contacts[4][1] - contacts[3][1])) / 2;
+    const worn = layoutSmileSet(teeth, { ...marked, crown: 7 }, SET_DEFAULTS)!;
+    expect(wide / 0.78 - 7).toBeGreaterThan(2);
+    expect(edgeZ(worn, 11)).toBeCloseTo(wide / 0.78 - 7, 4);
+    // The canines and laterals go with them (the set's smile line kept).
+    expect(edgeZ(worn, 13) - edgeZ(worn, 11)).toBeCloseTo(0.8, 4);
+    // Never by more than SET_LENGTHEN_MAX, and not at all for centrals long enough already.
+    expect(edgeZ(layoutSmileSet(teeth, { ...marked, crown: 3 }, SET_DEFAULTS)!, 11)).toBeCloseTo(SET_LENGTHEN_MAX, 5);
+    expect(edgeZ(layoutSmileSet(teeth, { ...marked, crown: 11 }, SET_DEFAULTS)!, 11)).toBeCloseTo(0, 5);
+  });
+});
+
+describe("crownMargins (build 286)", () => {
+  // A row of crowns along x, labial +y, incisal +z (edges at z 0): each rounded out from its edge to its margin, where
+  // the gum takes over and swells on. Centrals' margins 9 mm from the edge, the laterals' 7.5, the canines' 10.
+  const xs = [-24, -16, -9, 0, 9, 16, 24];
+  const crown = [10, 7.5, 9, 9, 7.5, 10];
+  const scan: number[] = [];
+  for (let tooth = 0; tooth < 6; tooth += 1) {
+    for (let x = xs[tooth] + 0.2; x < xs[tooth + 1]; x += 0.3) for (let d = 0; d <= 16; d += 0.15) {
+      const L = crown[tooth];
+      const y = d <= L ? 0.9 * Math.sin((Math.PI * d) / L) : 0.35 * (d - L);
+      scan.push(x, y, -d);
+    }
+  }
+  const contacts = xs.map((x) => [x, 0, -1] as V);
+  const found = crownMargins(scan, { contacts, up: [0, 0, 1], out: [0, 1, 0] });
+
+  it("finds each tooth's margin at the crease where its crown meets the gum", () => {
+    found.margins.forEach((level, tooth) => {
+      expect(level).not.toBeNull();
+      expect(Math.abs(level! + crown[tooth])).toBeLessThan(0.6);
+    });
+  });
+
+  it("reads how long the centrals stand, and nothing without the contacts", () => {
+    expect(Math.abs(found.crown! - 9)).toBeLessThan(0.6);
+    expect(crownMargins(scan, { up: [0, 0, 1], out: [0, 1, 0] })).toEqual({ margins: [null, null, null, null, null, null], crown: null });
+  });
+});
+
+describe("the face laid against the patient's crown (build 286)", () => {
+  // Each tooth's labial face falls away from its most labial point towards the neck: 0.18 mm for each mm of height.
+  const face = (length: number) => Array.from({ length: Math.ceil(length / FACE_STEP) + 1 }, (_, k) => -0.18 * k * FACE_STEP);
+  const teeth = restTeeth().map((tooth) => ({ ...tooth, face: face(tooth.length) }));
+  const xs = [-19, -13, -7.5, 0, 8, 13.5, 19.5];
+  const contacts = xs.map((x) => [x, -0.03 * x * x, 0] as V);
+  const margins = [-9, -8, -9, -9, -8, -9];
+  // The patient's crowns: flat labial faces 1 mm in front of the contacts' arch from the edge to the gum line, the
+  // gum above standing 3 mm further out still (which no tooth has to cover).
+  const labial: V[] = [];
+  for (let x = -18; x <= 18; x += 0.5) for (let h = 0; h >= -12; h -= 1) labial.push([x, -0.03 * x * x + (h < -9.4 ? 4 : 1), h]);
+  const marked: SetAnchors = { midline: [0, 0, 0], canines: [[-16, -7.7, 0.8], [16.5, -8.2, 0.8]], up: [0, 0, 1], out: [0, 1, 0], contacts, margins, labial };
+  const lay = layoutSmileSet(teeth, marked, SET_DEFAULTS)!;
+  const central = teeth.find((tooth) => tooth.fdi === 11)!;
+  const m = lay.matrices.get(central.id)!;
+  // Where the central's face stands (labially, y) at a level, after the layout: its rest face point at that depth, moved.
+  const faceAt = (depth: number) => {
+    const o = central.frame.origin, scale = (9 + SET_BURY) / central.length;
+    return new THREE.Vector3(o[0], o[1] - 0.18 * (depth / scale), o[2] - depth / scale).applyMatrix4(m);
+  };
+
+  it("covers the crown by SET_CLEAR from the edge to the gum line, by turning the neck out rather than the whole tooth", () => {
+    const edge = faceAt(0);
+    for (const depth of [1, 3, 5, 7, 8]) {
+      const at = faceAt(depth);
+      // The patient's face there: 1 mm in front of the arch at the tooth's middle (x about -3.7, the arch at y -0.4).
+      expect(at.y).toBeGreaterThan(-0.03 * at.x * at.x + 1 + SET_CLEAR - 0.25);
+    }
+    // Turned: the neck stands further out against the edge than the library face alone would have it.
+    expect(faceAt(8).y - edge.y).toBeGreaterThan(-0.18 * 8 * (central.length / (9 + SET_BURY)) + 0.3);
+    // And the edge is not pushed far in front of the patient's: within a millimetre of SET_CLEAR.
+    expect(edge.y).toBeLessThan(-0.03 * edge.x * edge.x + 1 + SET_CLEAR + 1);
+    expect(m.determinant()).toBeGreaterThan(0);
+  });
+
+  it("never turns a tooth further than SET_TORQUE_MAX, and not at all when its face already covers", () => {
+    // A face that does not fall away: nothing to turn for.
+    const flatFaced = restTeeth().map((tooth) => ({ ...tooth, face: face(tooth.length).map(() => 0) }));
+    const plain = layoutSmileSet(flatFaced, marked, SET_DEFAULTS)!;
+    const t11 = flatFaced.find((tooth) => tooth.fdi === 11)!;
+    const o = t11.frame.origin;
+    const top = new THREE.Vector3(...o).applyMatrix4(plain.matrices.get(t11.id)!), low = new THREE.Vector3(o[0], o[1], o[2] - 5).applyMatrix4(plain.matrices.get(t11.id)!);
+    expect(Math.abs(low.y - top.y)).toBeLessThan(0.02);
+    // A face falling away steeply: turned to the limit and no further.
+    const steep = restTeeth().map((tooth) => ({ ...tooth, face: face(tooth.length).map((x) => x * 4) }));
+    const turned = layoutSmileSet(steep, marked, SET_DEFAULTS)!;
+    const s11 = steep.find((tooth) => tooth.fdi === 11)!;
+    const a = new THREE.Vector3(...s11.frame.origin).applyMatrix4(turned.matrices.get(s11.id)!), b = new THREE.Vector3(s11.frame.origin[0], s11.frame.origin[1], s11.frame.origin[2] - 5).applyMatrix4(turned.matrices.get(s11.id)!);
+    const angle = (Math.atan2(Math.hypot(b.x - a.x, b.y - a.y), Math.abs(b.z - a.z)) * 180) / Math.PI;
+    expect(angle).toBeLessThan(SET_TORQUE_MAX + 0.5);
+    expect(angle).toBeGreaterThan(SET_TORQUE_MAX - 1.5);
   });
 });
