@@ -154,7 +154,7 @@ function laySide(k: number, W: number, red: number, natural: Record<1 | 2 | 3, n
  * Lay the front teeth (13 to 23, any of them) out from the anchors and controls. Returns null when the
  * anchors give no arch (the canines on top of each other).
  */
-export function layoutSmileSet(teeth: SetTooth[], anchors: SetAnchors, controls: SetControls): SetLayout | null {
+export function layoutSmileSet(teeth: SetTooth[], anchors: SetAnchors, controls: SetControls, extra?: Map<string, { mesial: number; distal: number }>): SetLayout | null {
   const c = clampControls(controls);
   // Which way is the patient's left: from the left-quadrant teeth (FDI 2x, 3x) against the right ones, as they stand at rest.
   const isLeft = (fdi: number) => { const q = Math.floor(fdi / 10); return q === 2 || q === 3; };
@@ -200,12 +200,27 @@ export function layoutSmileSet(teeth: SetTooth[], anchors: SetAnchors, controls:
     .multiply(new THREE.Matrix4().makeTranslation(-plane.mid.x, -plane.mid.y, -plane.mid.z));
   const matrices = new Map<string, THREE.Matrix4>();
   const apparent = new Map<string, number>();
+  // Build 277 (phase 3): a tooth widened on its own (mesial, distal, mm) pushes its neighbours along the
+  // curve, each side on its own, so the contacts stay closed. Where each tooth's own chord starts and ends.
+  const step = (x: number, w: number) => (w >= 0 ? chordStep(k, x, w) : x + w);
+  const chords = new Map<string, [number, number]>();
+  for (const left of [false, true]) {
+    let at = 0;
+    for (const p of [1, 2, 3] as const) {
+      const tooth = teeth.find((t) => isLeft(t.fdi) === left && position(t.kind) === p);
+      const more = tooth ? extra?.get(tooth.id) : undefined;
+      const start = step(at, more?.mesial ?? 0);
+      const end = chordStep(k, start, widths[p]);
+      if (tooth) chords.set(tooth.id, [start, end]);
+      at = step(end, more?.distal ?? 0);
+    }
+  }
   for (const tooth of teeth) {
     const p = position(tooth.kind) as 1 | 2 | 3;
     if (p > 3) continue;
     // FDI quadrants 2 and 3 are the patient's left: +across.
     const s = isLeft(tooth.fdi) ? 1 : -1;
-    const x0 = ends[p - 1], x1 = ends[p];
+    const [x0, x1] = chords.get(tooth.id) ?? [ends[p - 1], ends[p]];
     const y = (x: number) => -k * x * x + clear + c.fullness;
     // Designed frame: incisal middle on the curve; mesial towards the midline along the chord; up the normal.
     const mesial2 = new THREE.Vector2(s * x0 - s * x1, y(x0) - y(x1)).normalize();
@@ -283,6 +298,12 @@ export type SmileRecord = {
   anchors: SetAnchors;
   rest: Record<number, { frame: ToothFrame; width: number; length: number }>;
   laid: Record<number, number[]>;
+  /** Build 277 (phase 3): each front tooth's own changes (lib/waxToothEdit), by FDI, as last laid. */
+  own?: Record<number, import("@/lib/waxToothEdit").ToothEdit>;
+  /** Being changed and not yet laid (shown in the panel at once). */
+  pending?: Record<number, import("@/lib/waxToothEdit").ToothEdit>;
+  /** One tooth's change made on its partner across the midline too (default on). */
+  mirror?: boolean;
 };
 
 /** How far a tooth may have been reshaped (not just moved, turned or sized) and still follow the set, mm. */

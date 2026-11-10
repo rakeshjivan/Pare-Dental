@@ -184,3 +184,18 @@ describe("standing clear of the patient's teeth", () => {
     }
   });
 });
+
+describe("a tooth widened on its own", () => {
+  it("pushes its distal neighbours along the arch on that side only", () => {
+    const teeth = restTeeth();
+    const base = layoutSmileSet(teeth, anchors, { ...SET_DEFAULTS, centralWidth: 8.5 })!;
+    const wide = layoutSmileSet(teeth, anchors, { ...SET_DEFAULTS, centralWidth: 8.5 }, new Map([["t12", { mesial: 0.5, distal: 0.5 }]]))!;
+    const x = (lay: typeof base, id: string, fdi: number) => new THREE.Vector3(...teeth.find((t) => t.fdi === fdi)!.frame.origin).applyMatrix4(lay.matrices.get(id)!).x;
+    // 12 (patient's right, -x) moves distally by about the mesial share, 13 by about the whole 1 mm.
+    expect(x(base, "t12", 12) - x(wide, "t12", 12)).toBeGreaterThan(0.3);
+    expect(x(base, "t13", 13) - x(wide, "t13", 13)).toBeGreaterThan(0.7);
+    // The other side is untouched.
+    expect(x(wide, "t23", 23)).toBeCloseTo(x(base, "t23", 23), 6);
+    expect(x(wide, "t11", 11)).toBeCloseTo(x(base, "t11", 11), 6);
+  });
+});
