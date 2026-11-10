@@ -74,7 +74,6 @@ import { solidPositions, toManifold, transformSoup, weld, type ManifoldSolid, cl
 import { WAX_SET_FORMS } from "@/lib/waxSetForms";
 import { BUILT_IN_LIBRARIES, loadToothLibrary, loadToothSet, type ToothLibraryManifest } from "@/lib/toothLibrary";
 import { exocadSets } from "@/lib/exocadLibrary";
-import { ToothHandles } from "@/components/workplane/ToothHandles";
 import { ArchMarkLabels } from "@/components/workplane/ArchMarkLabels";
 import { composeAdjust, ToothGimbal } from "@/components/workplane/ToothGimbal";
 import { WaxToothDrag, type DragTooth, type WaxRestrict } from "@/components/workplane/WaxToothDrag";
@@ -112,7 +111,7 @@ import { DentalChrome } from "./workplane/DentalChrome";
 import { STUDIO_SHELL, WAXUP_ENABLED } from "@/lib/pareFeatures";
 import { fitArchLine, layOnArchLine, type ArchTooth } from "@/lib/waxArchLine";
 import { clampEdit, editPose, editTooth, isNoEdit, NO_EDIT, palatalDepth, type ToothEdit } from "@/lib/waxToothEdit";
-import { cutterBox, proudOfWax } from "@/lib/waxReduce";
+import { cutterBox, proudOfWax, sweptSurface } from "@/lib/waxReduce";
 import { ARCH_MARK_CONTACTS, archMarkLabel, frontTeeth, markedWidths, nextArchMark } from "@/lib/waxArchMarks";
 import { affineBetween, clampControls, labialProfile, layoutSmileSet, restFrames, SCULPTED_MISS, SET_DEFAULTS, type SetControls, type SetTooth, type SmileRecord } from "@/lib/waxSmileSet";
 import { StudioShell } from "./workplane/StudioShell";
@@ -11061,7 +11060,18 @@ export function LayerlingEditor({
           let x = 0, y = 0, z = 0;
           const n = cover.length / 3;
           for (let i = 0; i < cover.length; i += 3) { x += cover[i] / n; y += cover[i + 1] / n; z += cover[i + 2] / n; }
-          cuts.push({ positions: cutterBox(cover), facing: [facing.x, facing.y, facing.z], through: [x, y, z], cover, up: [up.x, up.y, up.z] });
+          // Build 281 (Rakesh: the old cut left a flat slice on the tooth beside it): the wax tooth's own labial and
+          // incisal surface swept out - straight out, straight beyond the edge, and out-and-beyond for the corner -
+          // so only what stands in front of it or past its edge, within its outline, goes. Flush, nothing beside it.
+          const diagonal = facing.clone().add(up).normalize();
+          let swept = 0;
+          for (const dir of [facing, up, diagonal]) {
+            const prism = sweptSurface(cover, [dir.x, dir.y, dir.z], 6);
+            if (!prism) continue;
+            cuts.push({ positions: prism, facing: [dir.x, dir.y, dir.z], through: [x, y, z], exact: true });
+            swept += 1;
+          }
+          if (!swept) cuts.push({ positions: cutterBox(cover), facing: [facing.x, facing.y, facing.z], through: [x, y, z], cover, up: [up.x, up.y, up.z] });
         }
         return cuts.length ? cuts : undefined;
       }
@@ -14081,6 +14091,83 @@ export function LayerlingEditor({
     waxLiveSoups("tooth", () => waxSmileWork(controls, own)?.soups ?? new Map(), () => commitWaxSmile(controls, false, own));
   };
   /**
+   * Build 281 (Rakesh: the gimbal was his biggest problem): one step of one change on the selected wax tooth. A tooth
+   * of the set laid from the marks takes it into its own changes (so the set stays in contact and mirrored); any
+   * other tooth - or one reshaped with the brushes - is changed directly, the same one-direction change made on it
+   * as it now stands (lib/waxToothEdit), its frame and size following.
+   */
+  const waxStepTotals = useRef(new Map<string, ToothEdit>());
+  const waxStepLiveSeen = useRef(new Map<string, { shape: WorkplaneShape; record: SmileRecord; live: boolean }>());
+  const waxStepLive = (id: string) => {
+    const current = waxupRef.current, record = current.smile?.[current.slot];
+    const shape = shapesRef.current.find((candidate) => candidate.id === id);
+    const fdi = shape?.waxTooth?.fdi;
+    if (!record || !fdi || !record.rest[fdi] || current.locks[fdi]) return false;
+    // Read once per shape and set record (this is asked on every draw).
+    const seen = waxStepLiveSeen.current.get(id);
+    if (seen && seen.shape === shape && seen.record === record) return seen.live;
+    const live = waxStepLiveNow(shape!, record, fdi);
+    waxStepLiveSeen.current.set(id, { shape: shape!, record, live });
+    return live;
+  };
+  const waxStepLiveNow = (shape: WorkplaneShape, record: SmileRecord, fdi: number) => {
+    // In the set while the set can still lay it (not reshaped by sculpting since).
+    const restPose = record.rest[fdi];
+    const now = Float32Array.from(worldTriangles(shape));
+    const rest = waxSmileRest.current.get(shape.id);
+    if (!rest || rest.length !== now.length) return true;
+    const was = new THREE.Matrix4().fromArray(record.laid[fdi] ?? new THREE.Matrix4().toArray());
+    const oldEdit = record.own?.[fdi] ?? NO_EDIT;
+    const palatal = waxSmilePalatal.current.get(shape.id) ?? palatalDepth(rest, restPose.frame);
+    const expected = transformSoup(isNoEdit(oldEdit) ? rest : editTooth(rest, restPose.frame, restPose.width, restPose.length, oldEdit, palatal), was);
+    const fit = affineBetween(expected, now);
+    return Boolean(fit && fit.miss <= SCULPTED_MISS);
+  };
+  const stepWaxTooth = (key: keyof ToothEdit, delta: number) => {
+    const id = selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null;
+    const shape = id ? shapesRef.current.find((candidate) => candidate.id === id && candidate.dental === "wax" && candidate.waxTooth) : undefined;
+    if (!shape?.waxTooth || waxupRef.current.busy || waxupRef.current.locks[shape.waxTooth.fdi]) return;
+    const fdi = shape.waxTooth.fdi;
+    const record = waxupRef.current.smile?.[waxupRef.current.slot];
+    if (record?.rest[fdi] && waxStepLive(shape.id)) {
+      const own = record.pending ?? record.own ?? {};
+      const cur = own[fdi] ?? NO_EDIT;
+      editWaxTooth(fdi, { ...cur, [key]: Math.round((cur[key] + delta) * 100) / 100 });
+      return;
+    }
+    if (sculptToolRef.current) { flushSculpt(); setSculptTool(null); }
+    const toWorld = localToWorld(shape);
+    if (!toWorld) return;
+    const frame = moveFrame(shape.waxTooth.frame, toWorld);
+    const soup = Float32Array.from(worldTriangles(shape));
+    const width = shape.waxTooth.width, length = shape.waxTooth.length;
+    const change = { ...NO_EDIT, [key]: delta };
+    const palatal = palatalDepth(soup, frame);
+    const next = editTooth(soup, frame, width, length, change, palatal);
+    const pose = editPose(frame, length, palatal, change);
+    const rebuilt = shapeWithWorldPositions(shape, Array.from(next));
+    const back = localToWorld(rebuilt);
+    if (!back) return;
+    const moved = moveFrame(frame, pose);
+    // The frame's origin (the incisal middle on the labial face) goes with the change: up with the edge, out with
+    // the labial face, half way with a side widened.
+    const shifted = (f: typeof moved): [number, number, number] => {
+      const along = key === "length" ? f.up : key === "thickness" ? f.out : key === "mesial" ? f.mesial : key === "distal" ? f.mesial : null;
+      const k = key === "mesial" ? delta / 2 : key === "distal" ? -delta / 2 : delta;
+      return along ? [f.origin[0] + along[0] * k, f.origin[1] + along[1] * k, f.origin[2] + along[2] * k] : f.origin as [number, number, number];
+    };
+    const sized = {
+      ...shape.waxTooth,
+      width: Math.max(1, width + (key === "mesial" || key === "distal" ? delta : 0)),
+      length: Math.max(1, length + (key === "length" ? delta : 0)),
+      frame: moveFrame({ ...moved, origin: shifted(moved) }, back.clone().invert()),
+    };
+    const total = waxStepTotals.current.get(shape.id) ?? NO_EDIT;
+    waxStepTotals.current.set(shape.id, { ...total, [key]: Math.round((total[key] + delta) * 100) / 100 });
+    waxRecordRef.current();
+    commitShapes(shapesRef.current.map((candidate) => (candidate.id === shape.id ? canonicalizeShape({ ...rebuilt, waxTooth: sized }) : candidate)), [shape.id], t("waxup.toothStepped", { fdi }));
+  };
+  /**
    * Build 107: the dropped set's curve opened or closed - each tooth moved back (or forward) by c*s^2
    * at s mm from the midline and turned to follow the curve, so the canines go `curve` mm further back
    * than now against the centrals. As bending a Meshmixer part along the patient's arch form.
@@ -15210,11 +15297,20 @@ export function LayerlingEditor({
     const shape = shapes.find((candidate) => candidate.id === selectedIds[0]);
     const fdi = shape?.waxTooth?.fdi;
     if (!fdi || !smileNow.rest[fdi]) return null;
-    return { fdi, edit: smileNow.pending?.[fdi] ?? smileNow.own?.[fdi] ?? NO_EDIT, mirror: smileNow.mirror !== false, width: shape!.waxTooth!.width, length: shape!.waxTooth!.length };
+    return { fdi, edit: smileNow.pending?.[fdi] ?? smileNow.own?.[fdi] ?? NO_EDIT, mirror: smileNow.mirror !== false, width: shape!.waxTooth!.width, length: shape!.waxTooth!.length, live: true };
+  })();
+  // Build 281 (Rakesh: the gimbal was his biggest problem): any other wax tooth chosen (not in a set laid from the
+  // marks, or reshaped with the brushes) is stepped directly - the totals shown are what was stepped since it was chosen.
+  const stepTooth = (() => {
+    if (smileTooth && waxStepLive(selectedIds[0] ?? "")) return smileTooth;
+    if (!dentalStudio?.waxStudio || selectedIds.length !== 1) return null;
+    const shape = shapes.find((candidate) => candidate.id === selectedIds[0] && candidate.dental === "wax" && !candidate.hidden);
+    if (!shape?.waxTooth) return null;
+    return { fdi: shape.waxTooth.fdi, edit: waxStepTotals.current.get(shape.id) ?? NO_EDIT, mirror: false, width: shape.waxTooth.width, length: shape.waxTooth.length, live: false };
   })();
   const waxupView: WaxupView = {
     ...waxup,
-    toothEdit: smileTooth,
+    toothEdit: stepTooth,
     archMarkList: waxup.archMarks?.[waxup.slot] ?? [],
     proudTeeth: Object.entries(waxup.proud ?? {}).map(([fdi, depth]) => ({ fdi: Number(fdi), depth, reduce: (waxup.reduce?.[waxup.slot] ?? []).includes(Number(fdi)) })).sort((a, b) => frontTeeth(waxup.slot).indexOf(a.fdi) - frontTeeth(waxup.slot).indexOf(b.fdi)),
     archMarkWidths: Object.fromEntries(markedWidths(waxup.slot, waxup.archMarks?.[waxup.slot])),
@@ -22197,16 +22293,9 @@ export function LayerlingEditor({
       ) : null}
       {/* Build 104: the gimbal over the selected wax tooth again (arrows, rings and size squares, typed values),
           with the arrow keys sizing it - the tooth itself can still be dragged as before. */}
-      {/* Build 277 (phase 3): a tooth in the set has grab handles - length, mesial and distal width, labial thickness - in place of the gimbal. */}
-      {waxGimbal && smileTooth && smileTooth.fdi === waxGimbal.fdi && waxup.stage === "position" && !marksEditing ? (
-        <ToothHandles
-          key={`handles-${waxGimbal.id}`}
-          tooth={waxGimbal.tooth}
-          edit={smileTooth.edit}
-          disabled={waxup.busy || Boolean(waxup.locks[waxGimbal.fdi])}
-          onChange={(edit) => editWaxTooth(waxGimbal.fdi, edit)}
-        />
-      ) : waxGimbal && (waxup.stage === "position" || (studioWaxSculpt && !waxSculptBrush && !waxup.boundaryPick)) && !marksEditing ? (
+      {/* Build 281 (Rakesh: the gimbal was his biggest problem): no gimbal over a wax tooth in Wax-up Studio - it is
+          moved, turned and reshaped with the panel's step buttons (and can still be dragged). */}
+      {waxGimbal && !dentalStudio?.waxStudio && (waxup.stage === "position" || (studioWaxSculpt && !waxSculptBrush && !waxup.boundaryPick)) && !marksEditing ? (
         <ToothGimbal
           key={waxGimbal.id}
           tooth={waxGimbal.tooth}
@@ -22556,6 +22645,7 @@ export function LayerlingEditor({
               onSetCurve: (curve: number) => bendWaxSet(curve),
               onSmile: (controls: SetControls) => layWaxSmile(controls),
               onToothEdit: (fdi: number, edit: ToothEdit) => editWaxTooth(fdi, edit),
+              onToothStep: (key: keyof ToothEdit, delta: number) => stepWaxTooth(key, delta),
               onArchMarks: (index?: number) => startArchMarks(index),
               onReduce: (fdi: number, on: boolean) => { waxRecord(); setWaxup((current) => { const list = (current.reduce?.[current.slot] ?? []).filter((n) => n !== fdi); const next = { ...current, reduce: { ...(current.reduce ?? {}), [current.slot]: on ? [...list, fdi] : list } }; waxupRef.current = next; return next; }); },
               onArchMarkUndo: () => undoArchMark(),

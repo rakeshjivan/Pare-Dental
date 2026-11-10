@@ -9,7 +9,8 @@ import { useEffect, useRef } from "react";
 import { t } from "@/lib/i18n";
 
 export type WheelTool = "position" | "scale" | "add" | "remove" | "smooth" | "move";
-const ITEMS: Array<WheelTool | "mirror"> = ["position", "scale", "add", "remove", "smooth", "move", "mirror"];
+// Build 281: no Scale - sizing is in Shape & place's step buttons (the gimbal is gone).
+const ITEMS: Array<WheelTool | "mirror"> = ["position", "add", "remove", "smooth", "move", "mirror"];
 const RADIUS = 86;
 
 export function WaxToolWheel({ x, y, current, onPick, onClose }: { x: number; y: number; current: WheelTool; onPick: (tool: WheelTool | "mirror") => void; onClose: () => void }) {
@@ -31,7 +32,7 @@ export function WaxToolWheel({ x, y, current, onPick, onClose }: { x: number; y:
         const a = (i / ITEMS.length) * Math.PI * 2;
         return (
           <button key={item} type="button" role="menuitem" className={item === current ? "active" : ""} style={{ left: Math.sin(a) * RADIUS, top: -Math.cos(a) * RADIUS }} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onPick(item); }}>
-            {t(item === "mirror" ? "waxup.wheel.mirror" : `waxup.brush.${item}`)}
+            {t(item === "mirror" ? "waxup.wheel.mirror" : item === "position" ? "waxup.brush.shape" : `waxup.brush.${item}`)}
           </button>
         );
       })}

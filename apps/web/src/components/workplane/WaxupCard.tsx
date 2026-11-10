@@ -7,7 +7,7 @@
  */
 import { AlertTriangle, Check, LoaderCircle, Upload } from "lucide-react";
 import { WAX_SET_FORM_ORDER, type WaxSetForm } from "@/lib/waxSetForms";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { EGGSHELL_MAX_WALL, EGGSHELL_MIN_WALL, EGGSHELL_WALL } from "@/lib/dentalEggshell";
 import type { WaxRestrict } from "@/components/workplane/WaxToothDrag";
 /** Build 103: a confirmed tooth's colour, by FDI (each tooth its own, as Meshmixer shows them). */
@@ -43,7 +43,7 @@ export type WaxupView = {
   /** Build 277: the front teeth as one set on the arch - its controls and what they make (null: none for this arch). */
   smileSet?: { marked?: boolean; controls: SetControls; centralWidth: number; centralLength: number; red: number | null } | null;
   /** Build 277 (phase 3): the one front tooth chosen in the set, with its own changes. */
-  toothEdit?: { fdi: number; edit: ToothEdit; mirror: boolean; width: number; length: number } | null;
+  toothEdit?: { fdi: number; edit: ToothEdit; mirror: boolean; width: number; length: number; live?: boolean } | null;
   /** Build 278 (step 1, Mark): this arch's nine marks (null: not placed), each front tooth's width from them (mm, by FDI), and the arches fully marked. */
   archMarkList?: Array<[number, number, number] | null>;
   archMarkWidths?: Record<number, number>;
@@ -180,6 +180,8 @@ export type WaxupActions = {
   /** Build 277: one tooth's own changes; and whether its partner across the midline follows. */
   onToothEdit?: (fdi: number, edit: ToothEdit) => void;
   onToothMirror?: (on: boolean) => void;
+  /** Build 281: one step of one change on the selected tooth (mm or degrees), on any wax tooth. */
+  onToothStep?: (key: keyof ToothEdit, delta: number) => void;
   /** Build 278: start clicking the marks (at `index`, else the first missing); take back the last; clear them all. */
   onArchMarks?: (index?: number) => void;
   onArchMarkUndo?: () => void;
@@ -784,12 +786,15 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
                   </div>
                 ) : null}
                 {view.toothEdit && actions.onToothEdit ? (
-                  <ToothEditPanel tooth={view.toothEdit} workspace={workspace} disabled={working} onChange={actions.onToothEdit} onMirror={actions.onToothMirror} />
+                  <ToothEditPanel tooth={view.toothEdit} workspace={workspace} disabled={working} onChange={actions.onToothEdit} onStep={actions.onToothStep} onMirror={actions.onToothMirror} />
                 ) : (
                   <SmileSetPanel set={view.smileSet} workspace={workspace} disabled={working} onChange={actions.onSmile} />
                 )}
               </>
             ) : (<>
+            {view.selected && !view.selectedAll && view.toothEdit && actions.onToothStep ? (
+              <ToothEditPanel tooth={view.toothEdit} workspace={workspace} disabled={working} onStep={actions.onToothStep} />
+            ) : null}
             <EdgeModifierSlider label={t("waxup.dropSize")} title={t("waxup.dropSizeHint")} value={Math.round((view.setScale ?? 1) * 100)} min={80} max={125} step={1} unit="%" workspace={workspace} disabled={working} onChange={(value) => actions.onSetScale?.(Math.max(0.8, Math.min(1.25, Math.round(value) / 100)))} />
             {actions.onSetCurve ? <EdgeModifierSlider label={t("waxup.dropCurve")} title={t("waxup.dropCurveHint")} value={view.setCurve ?? 0} min={-4} max={4} step={0.1} workspace={workspace} length disabled={working} onChange={(value) => actions.onSetCurve?.(Math.max(-4, Math.min(4, Math.round(value * 10) / 10)))} /> : null}
             <p className="blend-hint">{t("waxup.dropCurveHint")}</p>
@@ -1031,12 +1036,17 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
           {toolSlot ? (
             // Build 112: positioning by default (the tooth's gimbal); a brush when one is picked - here, or in the tooth's right-click menu.
             <>
+              {/* Build 281 (Rakesh: the gimbal was hard to get right): a tooth of the set laid from the marks is shaped and
+                  placed with one-direction steps (the same as Position's One tooth) - no gimbal, no handles, the view left alone. */}
               <div className="studio-mm-choice wax-sculpt-modes" role="radiogroup" aria-label={t("waxup.brush.title")}>
-                {(["position", "scale", "add", "remove", "smooth", "move"] as const).map((tool) => (
-                  <button key={tool} type="button" role="radio" aria-checked={(view.sculptTool ?? "position") === tool} className={(view.sculptTool ?? "position") === tool ? "active" : ""} disabled={working || !view.selected} title={t(`waxup.brush.${tool}Hint`)} onClick={() => actions.onSculptTool?.(tool)}>{t(`waxup.brush.${tool}`)}</button>
+                {(["position", "add", "remove", "smooth", "move"] as const).map((tool) => (
+                  <button key={tool} type="button" role="radio" aria-checked={(view.sculptTool ?? "position") === tool} className={(view.sculptTool ?? "position") === tool ? "active" : ""} disabled={working || !view.selected} title={t(tool === "position" ? "waxup.brush.shapeHint" : `waxup.brush.${tool}Hint`)} onClick={() => actions.onSculptTool?.(tool)}>{t(tool === "position" ? "waxup.brush.shape" : `waxup.brush.${tool}`)}</button>
                 ))}
               </div>
-              <p className="blend-hint" role="status">{!view.selected ? t("waxup.sculptPick") : t(`waxup.brush.${view.sculptTool ?? "position"}Hint`)}</p>
+              <p className="blend-hint" role="status">{!view.selected ? t("waxup.sculptPick") : (view.sculptTool ?? "position") === "position" || view.sculptTool === "scale" ? t("waxup.brush.shapeHint") : t(`waxup.brush.${view.sculptTool ?? "position"}Hint`)}</p>
+              {view.toothEdit && ((view.sculptTool ?? "position") === "position" || view.sculptTool === "scale") ? (
+                <ToothEditPanel tooth={view.toothEdit} workspace={workspace} disabled={working} onChange={actions.onToothEdit} onStep={actions.onToothStep} onMirror={actions.onToothMirror} />
+              ) : null}
               <div className="studio-tool-slot waxup-sculpt-slot" ref={toolSlot} />
             </>
           ) : (<>
@@ -1204,17 +1214,54 @@ function SmileSetPanel({ set, workspace, disabled, onChange }: { set: NonNullabl
  * neck held), labial thickness (the palatal held) - then its position and angles on its own axes. With
  * mirroring on, its partner across the midline gets the same; widening pushes the neighbours along.
  */
-function ToothEditPanel({ tooth, workspace, disabled, onChange, onMirror }: { tooth: NonNullable<WaxupView["toothEdit"]>; workspace: WorkplaneWorkspaceSettings; disabled: boolean; onChange: (fdi: number, edit: ToothEdit) => void; onMirror?: (on: boolean) => void }) {
+/**
+ * Build 281 (Rakesh: the gimbal was his biggest problem): a button that steps once when pressed and, held, keeps
+ * stepping (slowly at first, then faster) until let go - the tooth moves, the view stays where it was.
+ */
+function StepButton({ label, disabled, onStep, children }: { label: string; disabled: boolean; onStep: () => void; children: ReactNode }) {
+  const timer = useRef(0);
+  const step = useRef(onStep);
+  step.current = onStep;
+  const stop = () => { window.clearTimeout(timer.current); timer.current = 0; };
+  useEffect(() => stop, []);
+  return (
+    <button type="button" className="secondary" disabled={disabled} aria-label={label} title={label}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        stop();
+        step.current();
+        let wait = 380, count = 0;
+        const again = () => { step.current(); count += 1; wait = count > 8 ? 60 : 130; timer.current = window.setTimeout(again, wait); };
+        timer.current = window.setTimeout(again, wait);
+      }}
+      onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop}
+      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); step.current(); } }}
+    >{children}</button>
+  );
+}
+
+function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror }: { tooth: NonNullable<WaxupView["toothEdit"]>; workspace: WorkplaneWorkspaceSettings; disabled: boolean; onChange?: (fdi: number, edit: ToothEdit) => void; onStep?: (key: keyof ToothEdit, delta: number) => void; onMirror?: (on: boolean) => void }) {
   const e = tooth.edit;
   const r = EDIT_RANGES;
   const tenth = (x: number) => Math.round(x * 10) / 10;
-  const set = (patch: Partial<ToothEdit>) => onChange(tooth.fdi, { ...e, ...patch });
+  const live = tooth.live !== false && Boolean(onChange);
+  const set = (patch: Partial<ToothEdit>) => onChange?.(tooth.fdi, { ...e, ...patch });
+  const step = (key: keyof ToothEdit, degrees: boolean, sign: 1 | -1) => {
+    const delta = (degrees ? 0.5 : 0.1) * sign;
+    if (onStep) onStep(key, delta);
+    else set({ [key]: degrees ? Math.round((e[key] + delta) * 2) / 2 : tenth(e[key] + delta) });
+  };
   const row = (key: keyof ToothEdit, label: MessageKey, hint: MessageKey, degrees = false) => (
     <div className="wax-tooth-row">
-      <EdgeModifierSlider label={t(label)} title={t(hint)} value={e[key]} min={r[key][0]} max={r[key][1]} step={degrees ? 0.5 : 0.1} unit={degrees ? "°" : undefined} length={!degrees} workspace={workspace} disabled={disabled} onChange={(value) => set({ [key]: degrees ? Math.round(value * 2) / 2 : tenth(value) })} />
+      {live ? (
+        <EdgeModifierSlider label={t(label)} title={t(hint)} value={e[key]} min={r[key][0]} max={r[key][1]} step={degrees ? 0.5 : 0.1} unit={degrees ? "°" : undefined} length={!degrees} workspace={workspace} disabled={disabled} onChange={(value) => set({ [key]: degrees ? Math.round(value * 2) / 2 : tenth(value) })} />
+      ) : (
+        <span className="wax-tooth-readout" title={t(hint)}>{t(label)} <b>{e[key] >= 0 ? "+" : ""}{degrees ? e[key].toFixed(1) + "°" : e[key].toFixed(1) + " mm"}</b></span>
+      )}
       <div className="wax-tooth-nudge" role="group" aria-label={t(label)}>
-        <button type="button" className="secondary" disabled={disabled} aria-label={t("waxup.toothLess")} onClick={() => set({ [key]: (degrees ? Math.round((e[key] - 0.5) * 2) / 2 : tenth(e[key] - 0.1)) })}>−</button>
-        <button type="button" className="secondary" disabled={disabled} aria-label={t("waxup.toothMore")} onClick={() => set({ [key]: (degrees ? Math.round((e[key] + 0.5) * 2) / 2 : tenth(e[key] + 0.1)) })}>+</button>
+        <StepButton label={`${t(label)}: ${t("waxup.toothLess")}`} disabled={disabled} onStep={() => step(key, degrees, -1)}>−</StepButton>
+        <StepButton label={`${t(label)}: ${t("waxup.toothMore")}`} disabled={disabled} onStep={() => step(key, degrees, 1)}>+</StepButton>
       </div>
     </div>
   );
@@ -1222,14 +1269,9 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onMirror }: { to
     <div className="wax-tooth-edit">
       <div className="wax-guide">
         <strong>{t("waxup.toothTitle", { fdi: tooth.fdi })}</strong>
-        <span>{t("waxup.toothHint")}</span>
+        <span>{t(live ? "waxup.toothHint" : "waxup.toothStepHint")}</span>
       </div>
       <p className="blend-hint" role="status">{t("waxup.toothSize", { width: tooth.width.toFixed(1), length: tooth.length.toFixed(1), ratio: Math.round((tooth.width / Math.max(0.1, tooth.length)) * 100) })}</p>
-      <h4>{t("waxup.toothShape")}</h4>
-      {row("length", "waxup.toothLength", "waxup.toothLengthHint")}
-      {row("mesial", "waxup.toothMesial", "waxup.toothMesialHint")}
-      {row("distal", "waxup.toothDistal", "waxup.toothDistalHint")}
-      {row("thickness", "waxup.toothThickness", "waxup.toothThicknessHint")}
       <h4>{t("waxup.toothPlace")}</h4>
       {row("moveMesial", "waxup.toothMoveMesial", "waxup.toothMoveMesialHint")}
       {row("moveOut", "waxup.toothMoveOut", "waxup.toothMoveOutHint")}
@@ -1237,15 +1279,22 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onMirror }: { to
       {row("rotate", "waxup.toothRotate", "waxup.toothRotateHint", true)}
       {row("tip", "waxup.toothTip", "waxup.toothTipHint", true)}
       {row("torque", "waxup.toothTorque", "waxup.toothTorqueHint", true)}
-      {onMirror ? (
+      <h4>{t("waxup.toothShape")}</h4>
+      {row("length", "waxup.toothLength", "waxup.toothLengthHint")}
+      {row("mesial", "waxup.toothMesial", "waxup.toothMesialHint")}
+      {row("distal", "waxup.toothDistal", "waxup.toothDistalHint")}
+      {row("thickness", "waxup.toothThickness", "waxup.toothThicknessHint")}
+      {onMirror && live ? (
         <label className="edge-modifier-check" title={t("waxup.toothMirrorHint")}>
           <input type="checkbox" checked={tooth.mirror} disabled={disabled} onChange={(event) => onMirror(event.currentTarget.checked)} />
           <span>{t("waxup.toothMirror")}</span>
         </label>
       ) : null}
-      <div className="dental-trim-buttons">
-        <button type="button" className="secondary" disabled={disabled} onClick={() => onChange(tooth.fdi, { ...NO_EDIT })}>{t("waxup.toothReset")}</button>
-      </div>
+      {live ? (
+        <div className="dental-trim-buttons">
+          <button type="button" className="secondary" disabled={disabled} onClick={() => onChange?.(tooth.fdi, { ...NO_EDIT })}>{t("waxup.toothReset")}</button>
+        </div>
+      ) : null}
     </div>
   );
 }

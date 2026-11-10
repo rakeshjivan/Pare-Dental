@@ -71,7 +71,7 @@ export type DentalArchInput = {
    * stands out beyond the ideal tooth facially or incisally it goes, and the palatal (lingual)
    * surfaces, where the opposing teeth meet them, are kept. The gum and every other tooth are kept.
    */
-  cuts?: Array<{ positions: ArrayLike<number>; facing: [number, number, number]; through: [number, number, number]; /** The wax tooth that replaces it (a soup) and its long axis towards the edge: only what stands in front of or beyond it is cut, so no hole is left where it does not reach. */ cover?: ArrayLike<number>; up?: [number, number, number];
+  cuts?: Array<{ positions: ArrayLike<number>; facing: [number, number, number]; through: [number, number, number]; /** Build 281: the cutter is exactly what goes (a wax tooth's surface swept out) - no plane, no hull. */ exact?: boolean; /** The wax tooth that replaces it (a soup) and its long axis towards the edge: only what stands in front of or beyond it is cut, so no hole is left where it does not reach. */ cover?: ArrayLike<number>; up?: [number, number, number];
     /** Build 103: towards each waxed neighbour (unit directions along the arch): the cut reaches CUT_SIDE that way too, so a patient's tooth wider than the ideal one leaves no wall in the embrasure. */ beside?: Array<[number, number, number]> }> | null;
   /** Build 108: Wax-up Studio's even gum line - the gum over each wax tooth trimmed back to a scalloped margin (lib/waxGum). */
   gum?: GumCut[];
@@ -1357,6 +1357,11 @@ function buildArch(
       const n = new THREE.Vector3(...entry.facing).applyMatrix3(rotation).normalize();
       const through = new THREE.Vector3(...entry.through).applyMatrix4(arch.frame);
       const cutter = keepSolid(toManifold(runtime, weld(shell, 1e-6)));
+      if (entry.exact) {
+        solid = keepSolid(runtime.Manifold.difference(solid, cutter));
+        cutShells.push(solidPositions(cutter));
+        continue;
+      }
       let facial = keepSolid(cutter.trimByPlane([n.x, n.y, n.z], n.dot(through)));
       // What the ideal tooth replaces: the space it fills and what lies in front of it and beyond its
       // edge (the hull of the wax tooth swept out and up) - the patient's tooth below the wax's cervical

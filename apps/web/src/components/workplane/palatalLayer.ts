@@ -87,7 +87,9 @@ export function addPalatalLayer(group: THREE.Group, shape: WorkplaneShape) {
     material.side = THREE.FrontSide;
     material.transparent = false;
     material.opacity = 1;
-    material.depthWrite = false;
+    // Rakesh (build 281): written to the depth buffer, so the tooth's own palatal faces hide one another in the
+    // right order - without it the last drawn won, and from the palate the tooth looked like an open shell.
+    material.depthWrite = true;
     material.onBeforeCompile = (shader) => {
       shader.uniforms.uPalOn = { get value() { return palatalLayerOn.value; } } as unknown as THREE.IUniform;
       shader.uniforms.uPalReach = { value: PALATAL_REACH };

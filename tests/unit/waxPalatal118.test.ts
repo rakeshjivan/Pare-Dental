@@ -60,3 +60,20 @@ describe("pressPalatal on a mirrored frame (the other side of the arch)", () => 
     for (let i = 0; i + 2 < scan.length; i += 3) { expect(positions[i]).toBeCloseTo(scan[i], 5); }
   });
 });
+
+describe("pressPalatal never drags the patient's tooth into streaks (Rakesh, build 281)", () => {
+  it("moves each corner only labio-palatally, and leaves the patient's tooth beyond the wax's edge as scanned", () => {
+    const scan = sheet(-6.4);
+    const { positions } = pressPalatal(scan, [tooth]);
+    for (let i = 0; i + 2 < scan.length; i += 3) {
+      expect(positions[i]).toBeCloseTo(scan[i], 5);
+      expect(positions[i + 1]).toBeCloseTo(scan[i + 1], 5);
+    }
+    // Past the wax's incisal edge (y > 0): as scanned.
+    expect(at(positions, 0, 1)).toBeCloseTo(-6.4, 5);
+    // Fading in towards the edge: no step, the press eases from 0 at the edge to full 1.5 mm inside it.
+    const near = at(positions, 0, -0.5), mid = at(positions, 0, -1), full = at(positions, 0, -2);
+    expect(near).toBeLessThan(mid);
+    expect(mid).toBeLessThan(full + 1e-6);
+  });
+});

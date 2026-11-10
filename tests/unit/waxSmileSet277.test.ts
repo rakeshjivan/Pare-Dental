@@ -234,6 +234,18 @@ describe("snapped to the marks (build 278, step 2)", () => {
     expect(z(12)).toBeCloseTo(0.4, 5);
   });
 
+  it("starts the whole set longer when the canine tips marked say the patient's centrals are worn short (build 281)", () => {
+    const worn: SetAnchors = { ...marked, canines: [[-16, -7.7, 2.8], [16.5, -8.2, 2.8]] };
+    const fit = layoutSmileSet(teeth, worn, SET_DEFAULTS)!;
+    const z = (fdi: number) => ends(byFdi.get(fdi)!, fit.matrices.get(byFdi.get(fdi)!.id)!).edge.z;
+    expect(z(11)).toBeCloseTo(2, 5);
+    expect(z(13)).toBeCloseTo(2.8, 5);
+    expect(z(12)).toBeCloseTo(2.4, 5);
+    // Canines marked short of the set's: never shorter than the patient's centrals.
+    const short = layoutSmileSet(teeth, { ...marked, canines: [[-16, -7.7, -1], [16.5, -8.2, -1]] }, SET_DEFAULTS)!;
+    expect(ends(byFdi.get(11)!, short.matrices.get(byFdi.get(11)!.id)!).edge.z).toBeCloseTo(0, 5);
+  });
+
   it("keeps the set's own design: each tooth only turned about the vertical (its tip and torque as the library's)", () => {
     // A library lateral tipped and torqued: its up not straight up.
     const tipped = teeth.map((t) => (t.fdi === 12 ? { ...t, frame: { ...t.frame, up: [0.15, 0.1, 0.983] as V } } : t));

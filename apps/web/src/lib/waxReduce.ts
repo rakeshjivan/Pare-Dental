@@ -78,3 +78,52 @@ export function cutterBox(cover: ArrayLike<number>, margin = 4): Float32Array {
   const faces = [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [2, 3, 7], [2, 7, 6], [1, 2, 6], [1, 6, 5], [3, 0, 4], [3, 4, 7]];
   return Float32Array.from(faces.flatMap((tri) => tri.flatMap((k) => c[k])));
 }
+
+/**
+ * Build 281 (Rakesh: the flush cut left a flat slice on the tooth beside it): the wax tooth's surface that faces
+ * `dir` (its triangles turned at least `minFacing` towards it) swept `depth` mm along `dir` - a closed solid (a soup,
+ * wound outward) whose back face is the wax tooth's own surface. Cut from the scan, it takes away exactly what
+ * stands in front of that surface and within its outline, so the patient's tooth ends flush with the wax and
+ * nothing beside the tooth is touched. Null when the surface has too little to sweep.
+ */
+export function sweptSurface(wax: ArrayLike<number>, dir: [number, number, number], depth: number, minFacing = 0.15): Float32Array | null {
+  const d = new THREE.Vector3(...dir).normalize();
+  const tris: number[][] = [];
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
+  for (let i = 0; i + 8 < wax.length; i += 9) {
+    a.set(wax[i], wax[i + 1], wax[i + 2]); b.set(wax[i + 3], wax[i + 4], wax[i + 5]); c.set(wax[i + 6], wax[i + 7], wax[i + 8]);
+    n.crossVectors(b.clone().sub(a), c.clone().sub(a));
+    const area = n.length();
+    if (area < 1e-10) continue;
+    if (n.dot(d) / area < minFacing) continue;
+    tris.push([a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z]);
+  }
+  if (!tris.length) return null;
+  // The patch's outline: its edges used once (corners matched by position).
+  const key = (x: number, y: number, z: number) => `${Math.round(x * 1e4)},${Math.round(y * 1e4)},${Math.round(z * 1e4)}`;
+  const edges = new Map<string, { count: number; from: number[]; to: number[] }>();
+  for (const t of tris) {
+    for (let k = 0; k < 3; k += 1) {
+      const p = t.slice(k * 3, k * 3 + 3), q = t.slice(((k + 1) % 3) * 3, ((k + 1) % 3) * 3 + 3);
+      const kp = key(p[0], p[1], p[2]), kq = key(q[0], q[1], q[2]);
+      const id = kp < kq ? `${kp}|${kq}` : `${kq}|${kp}`;
+      const was = edges.get(id);
+      if (was) was.count += 1; else edges.set(id, { count: 1, from: p, to: q });
+    }
+  }
+  const out: number[] = [];
+  const s = (p: number[]) => [p[0] + d.x * depth, p[1] + d.y * depth, p[2] + d.z * depth];
+  for (const t of tris) {
+    const p = t.slice(0, 3), q = t.slice(3, 6), r = t.slice(6, 9);
+    // The back (the wax's own surface), turned to face into the wax; the front, swept, facing out.
+    out.push(...p, ...r, ...q);
+    out.push(...s(p), ...s(q), ...s(r));
+  }
+  for (const e of edges.values()) {
+    if (e.count !== 1) continue;
+    // A side wall along each outline edge, wound to face outward (from -> to runs as the patch's triangle had it).
+    const p = e.from, q = e.to, ps = s(p), qs = s(q);
+    out.push(...p, ...q, ...qs, ...p, ...qs, ...ps);
+  }
+  return Float32Array.from(out);
+}

@@ -68,7 +68,7 @@ export const SET_DEFAULTS: SetControls = { length: 0, midline: 0, cant: 0, centr
 
 /** The ranges the controls offer (and clamp to). */
 export const SET_RANGES = {
-  length: [-3, 4], midline: [-3, 3], cant: [-5, 5], centralWidth: [6.5, 10.5], ratio: [0.7, 0.9], red: [0.6, 0.85],
+  length: [-3, 6], midline: [-3, 3], cant: [-5, 5], centralWidth: [6.5, 10.5], ratio: [0.7, 0.9], red: [0.6, 0.85],
   lateralStep: [0, 1.5], arc: [0, 2.5], fullness: [-1, 2], curve: [0.6, 1.5],
 } as const satisfies Record<keyof SetControls, readonly [number, number]>;
 
@@ -411,6 +411,12 @@ function layoutFromMarks(teeth: SetTooth[], anchors: SetAnchors, c: SetControls,
     const own = v(canine.frame.origin).dot(up) - centralLevel;
     canineCorrection.set(left, level(v(anchors.canines[left ? 1 : 0])) - own);
   }
+  // Build 281 (Rakesh had to take the centrals' edge to its 4 mm limit): where the canine tips marked say the whole
+  // set belongs further incisally than the patient's (worn) central edge, the set starts there - its own design
+  // kept, the centrals lengthened with it. Never shorter than the patient's centrals: the wax only adds there.
+  const corrections = [...canineCorrection.values()];
+  const lift = corrections.length ? Math.max(0, corrections.reduce((sum, x) => sum + x, 0) / corrections.length) : 0;
+  for (const [left, x] of canineCorrection) canineCorrection.set(left, x - lift);
   const shiftOf = new Map<string, number>();
   for (const left of [false, true]) {
     let shift = 0;
@@ -460,7 +466,7 @@ function layoutFromMarks(teeth: SetTooth[], anchors: SetAnchors, c: SetControls,
     }
     const p = position(tooth.kind) as 1 | 2 | 3;
     const share = p === 1 ? 0 : p === 2 ? 0.5 : 1;
-    const height = origin.dot(up) - centralLevel + c.length + share * (canineCorrection.get(left) ?? 0);
+    const height = origin.dot(up) - centralLevel + lift + c.length + share * (canineCorrection.get(left) ?? 0);
     const target = middle.clone().addScaledVector(up, mid.dot(up) + height).addScaledVector(out, forward + c.fullness).addScaledVector(want, -(shiftOf.get(tooth.id) ?? 0));
     const matrix = new THREE.Matrix4().makeTranslation(target.x, target.y, target.z)
       .multiply(turn).multiply(widen)
