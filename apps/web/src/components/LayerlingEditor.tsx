@@ -13832,7 +13832,8 @@ export function LayerlingEditor({
       if (!old.size && onMarks) window.setTimeout(() => showDentalView(arch.slot, "front"), 50);
       // Build 107: dropped, the whole set is selected - one gimbal moves and turns it as one, as a Meshmixer part.
       if (drop) {
-        selectedIdsRef.current = teeth.map((tooth) => tooth.shape.id);
+        // Build 278: laid from the marks - nothing selected (the panel changes the set).
+        selectedIdsRef.current = nextArchMark(waxupRef.current.archMarks?.[arch.slot]) === null ? [] : teeth.map((tooth) => tooth.shape.id);
         setSelectedIds(selectedIdsRef.current);
         if (!old.size) window.setTimeout(() => showDentalView(arch.slot, "front"), 50);
       }
@@ -22498,6 +22499,8 @@ export function LayerlingEditor({
               onGumIdeal: () => waxGumIdeal(),
               onSelectSet: () => {
                 const arch = dentalStudioRef.current?.slots[waxupRef.current.slot];
+                // Build 278: with the set laid from the marks, the whole set is changed by the panel only - nothing selected, so no box or arrows over it.
+                if (waxupRef.current.smile?.[waxupRef.current.slot]?.anchors.contacts?.length) { selectedIdsRef.current = []; setSelectedIds([]); return; }
                 const ids = arch ? waxTeethOf(arch).map((shape) => shape.id) : [];
                 if (ids.length) { selectedIdsRef.current = ids; setSelectedIds(ids); }
               },
