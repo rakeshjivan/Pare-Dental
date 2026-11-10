@@ -12367,7 +12367,13 @@ export function LayerlingEditor({
     const { kind, teeth } = archMarkLabel(slot, index);
     return t(`waxup.mark.${kind}`, { a: teeth[0], b: teeth[1] ?? "", n: index + 1 });
   };
-  const archMarkView = useRef<"occlusal" | "front" | null>(null);
+  const archMarkView = useRef<DentalView | null>(null);
+  /**
+   * Build 278 (Rakesh): which side the view looks from for each mark - the patient's right side for 13's
+   * contacts (so the right side is marked first, not the wrong one), the occlusal for the contacts at the
+   * midline, the left side for 23's, then the front for the canine tips.
+   */
+  const archMarkViewFor = (index: number): DentalView => (index <= 1 ? "right" : index <= 4 ? "occlusal" : index <= 6 ? "left" : "front");
   const startArchMarks = useCallback((index?: number) => {
     const arch = waxArch();
     const state = dentalStudioRef.current;
@@ -12380,7 +12386,7 @@ export function LayerlingEditor({
     setWaxup(next);
     setDentalHidden([...(Object.values(state.slots).filter((id) => id && id !== arch.shape.id) as string[]), ...waxTeethOf(arch.shape.id).map((shape) => shape.id)]);
     setSelectedIds([]);
-    const view = at < ARCH_MARK_CONTACTS ? "occlusal" : "front";
+    const view = archMarkViewFor(at);
     if (archMarkView.current !== view) { archMarkView.current = view; showDentalView(arch.slot, view, undefined, 0.6); }
   }, [waxArch]); // eslint-disable-line react-hooks/exhaustive-deps
   const stopArchMarks = useCallback(() => {
@@ -12404,7 +12410,7 @@ export function LayerlingEditor({
     waxupRef.current = next;
     setWaxup(next);
     if (after === null) { archMarkView.current = null; setDentalHidden([]); window.setTimeout(() => showDentalView(arch.slot, "front"), 50); return; }
-    const view = after < ARCH_MARK_CONTACTS ? "occlusal" : "front";
+    const view = archMarkViewFor(after);
     if (archMarkView.current !== view) { archMarkView.current = view; window.setTimeout(() => showDentalView(arch.slot, view, undefined, 0.6), 50); }
   }, [waxArch]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Backspace: the last mark placed before this one taken back, to be clicked again. */
@@ -12421,7 +12427,7 @@ export function LayerlingEditor({
     const next = { ...current, archMarks: { ...(current.archMarks ?? {}), [slot]: marks }, archMarkPick: i };
     waxupRef.current = next;
     setWaxup(next);
-    const view = i < ARCH_MARK_CONTACTS ? "occlusal" : "front";
+    const view = archMarkViewFor(i);
     if (archMarkView.current !== view) { archMarkView.current = view; showDentalView(slot, view, undefined, 0.6); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   /** A placed mark dragged over the scan (kept when let go). */

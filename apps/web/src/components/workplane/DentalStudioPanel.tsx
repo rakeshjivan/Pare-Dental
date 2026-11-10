@@ -973,7 +973,7 @@ export function DentalStudioPanel({
             <button type="button" className="secondary" disabled={busy || placed === 0} onClick={() => waxup.actions.onArchMarkUndo?.()}>{t("waxup.archMarkUndo")}</button>
             <button type="button" className="secondary" disabled={busy || placed === 0} onClick={() => waxup.actions.onArchMarksClear?.()}>{t("waxup.markClear")}</button>
           </div>
-          <p className="blend-hint" role="status">{t(picking !== null ? (picking < 7 ? "waxup.markHintOcclusal" : "waxup.markHintFront") : placed === 9 ? "waxup.archMarkDone" : "waxup.markPaused")}</p>
+          <p className="blend-hint" role="status">{t(picking !== null ? (picking <= 1 ? "waxup.markHintRight" : picking <= 4 ? "waxup.markHintOcclusal" : picking <= 6 ? "waxup.markHintLeft" : "waxup.markHintFront") : placed === 9 ? "waxup.archMarkDone" : "waxup.markPaused")}</p>
         </>);
       })()) : null}
       {waxSteps && waxStep === "bite" && wv && waxup ? card(3, t("waxup.biteTitle"), true, t("waxStudio.stepHint.bite"), null, (<>
