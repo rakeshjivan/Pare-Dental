@@ -2257,3 +2257,10 @@ html[data-theme="dark"] .dental-studio-panel .dental-picture-tiles button { back
 
 /* Build 112: the ring arrowheads take presses (each turns the tooth its own way). */
 .tooth-gimbal-turnhead { cursor: pointer; }
+
+/* Build 277 (Wax-up Studio phase 3): one tooth's own changes - each slider with its − / + nudges beside it. */
+.wax-tooth-edit h4 { margin: 14px 0 4px; font-size: 13px; font-weight: 600; color: #374151; }
+.wax-tooth-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+.wax-tooth-nudge { display: flex; gap: 4px; padding-bottom: 2px; }
+.wax-tooth-nudge button { width: 32px; height: 32px; min-width: 32px; padding: 0; border-radius: 8px; font-size: 18px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+.tooth-handles .tooth-gimbal-handle:hover path:last-of-type, .tooth-handles .tooth-gimbal-handle.active path:last-of-type { stroke: #0e9f8f; }
