@@ -336,7 +336,7 @@ export function shellScan(scan: ArrayLike<number>, seg: FrontSegmentation, libra
     }
     return id;
   };
-  const faces: number[] = [];
+  let faces: number[] = [];
   for (const i of crownTri) faces.push(vert(corner[i * 3]), vert(corner[i * 3 + 1]), vert(corner[i * 3 + 2]));
   // Edges a gum triangle shares are never split (they do not move, and the gum is kept as scanned).
   const nV = () => own.length;
@@ -391,7 +391,8 @@ export function shellScan(scan: ArrayLike<number>, seg: FrontSegmentation, libra
       const mbc = midpoint(b, c), mca = midpoint(c, a);
       next.push(a, b, mbc, a, mbc, mca, mca, mbc, c);
     }
-    faces.length = 0; faces.push(...next);
+    // (Not spread into the old array: a crown has tens of thousands of corners.)
+    faces = next;
     edgeUse.clear();
     for (let f = 0; f < faces.length; f += 3) for (let k = 0; k < 3; k += 1) { const key = keyOf(faces[f + k], faces[f + ((k + 1) % 3)]); edgeUse.set(key, (edgeUse.get(key) ?? 0) + 1); }
   }
