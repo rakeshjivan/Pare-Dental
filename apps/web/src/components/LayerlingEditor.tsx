@@ -12381,7 +12381,7 @@ export function LayerlingEditor({
     setDentalHidden([...(Object.values(state.slots).filter((id) => id && id !== arch.shape.id) as string[]), ...waxTeethOf(arch.shape.id).map((shape) => shape.id)]);
     setSelectedIds([]);
     const view = at < ARCH_MARK_CONTACTS ? "occlusal" : "front";
-    if (archMarkView.current !== view) { archMarkView.current = view; showDentalView(arch.slot, view); }
+    if (archMarkView.current !== view) { archMarkView.current = view; showDentalView(arch.slot, view, undefined, 0.6); }
   }, [waxArch]); // eslint-disable-line react-hooks/exhaustive-deps
   const stopArchMarks = useCallback(() => {
     archMarkView.current = null;
@@ -12405,7 +12405,7 @@ export function LayerlingEditor({
     setWaxup(next);
     if (after === null) { archMarkView.current = null; setDentalHidden([]); window.setTimeout(() => showDentalView(arch.slot, "front"), 50); return; }
     const view = after < ARCH_MARK_CONTACTS ? "occlusal" : "front";
-    if (archMarkView.current !== view) { archMarkView.current = view; window.setTimeout(() => showDentalView(arch.slot, view), 50); }
+    if (archMarkView.current !== view) { archMarkView.current = view; window.setTimeout(() => showDentalView(arch.slot, view, undefined, 0.6), 50); }
   }, [waxArch]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Backspace: the last mark placed before this one taken back, to be clicked again. */
   const undoArchMark = useCallback(() => {
@@ -12422,7 +12422,7 @@ export function LayerlingEditor({
     waxupRef.current = next;
     setWaxup(next);
     const view = i < ARCH_MARK_CONTACTS ? "occlusal" : "front";
-    if (archMarkView.current !== view) { archMarkView.current = view; showDentalView(slot, view); }
+    if (archMarkView.current !== view) { archMarkView.current = view; showDentalView(slot, view, undefined, 0.6); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   /** A placed mark dragged over the scan (kept when let go). */
   const moveArchMark = (id: string, point: [number, number, number], keep: boolean) => {
