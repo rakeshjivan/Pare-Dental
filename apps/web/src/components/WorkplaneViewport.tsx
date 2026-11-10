@@ -9679,35 +9679,60 @@ export function WorkplaneViewport({
       copies.delete(shapeId);
       if (state) state.needsRender = true;
     };
+    /** The look a part's copy takes: its colour and opacity as drawn now, one shared material for each. */
+    const lookFor = (state: NonNullable<typeof threeRef.current>, shapeId: string, among?: THREE.Object3D[]) => {
+      let colour = "#c9ced6", opacity = 1, found = false;
+      const visit = (object: THREE.Object3D) => {
+        if (found || object.userData.shapeId !== shapeId || !(object as THREE.Mesh).isMesh) return;
+        const material = (object as THREE.Mesh).material;
+        const first = (Array.isArray(material) ? material[0] : material) as THREE.MeshStandardMaterial | undefined;
+        if (first?.isMaterial && first.color && first.depthWrite !== false) {
+          colour = `#${first.color.getHexString()}`;
+          opacity = first.transparent ? first.opacity : 1;
+          found = true;
+        }
+      };
+      if (among) among.forEach(visit); else state.scene.traverse((object) => { if (object.visible) visit(object); });
+      const key = `${colour}|${opacity.toFixed(2)}`;
+      let look = previewLooks.get(key);
+      if (!look) {
+        look = new THREE.MeshStandardMaterial({ color: colour, roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide, transparent: opacity < 1, opacity, depthWrite: opacity >= 1 });
+        previewLooks.set(key, look);
+      }
+      return look;
+    };
     window.layerlingPreviewPart = (shapeId, triangles) => {
       const state = threeRef.current;
       if (!state || !triangles || !triangles.length) { drop(shapeId); return; }
       let copy = copies.get(shapeId);
+      if (copy) {
+        // The part's objects drawn again since (rebuilt, or a new opacity) are hidden too, and the copy takes their look.
+        const mesh = copy.mesh, hidden = copy.hidden;
+        const fresh: THREE.Object3D[] = [];
+        state.scene.traverse((object) => {
+          if (object !== mesh && object.visible && object.userData.shapeId === shapeId) { object.visible = false; hidden.push(object); fresh.push(object); }
+        });
+        if (fresh.length) mesh.material = lookFor(state, shapeId, fresh);
+      }
       const attribute = copy?.mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
-      if (copy && attribute && attribute.count * 3 === triangles.length) {
+      if (copy && copy.mesh.userData.drawn === triangles) {
+        // The same triangles again: nothing to redo.
+      } else if (copy && attribute && attribute.count * 3 === triangles.length) {
         (attribute.array as Float32Array).set(triangles);
         attribute.needsUpdate = true;
         copy.mesh.geometry.computeVertexNormals();
         copy.mesh.geometry.computeBoundingSphere();
+        copy.mesh.userData.drawn = triangles;
       } else {
         drop(shapeId);
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute("position", new THREE.BufferAttribute(Float32Array.from(triangles), 3));
         geometry.computeVertexNormals();
-        // One shared material per colour, kept for good: a material made and thrown away for each copy made the GPU
-        // build its shader again and again (seconds each time on some machines).
-        let colour = "#c9ced6";
+        const look = lookFor(state, shapeId);
         const hidden: THREE.Object3D[] = [];
-        state.scene.traverse((object) => {
-          if (object.userData.shapeId !== shapeId || colour !== "#c9ced6" || !(object as THREE.Mesh).isMesh) return;
-          const material = (object as THREE.Mesh).material;
-          const first = (Array.isArray(material) ? material[0] : material) as THREE.MeshStandardMaterial | undefined;
-          if (first?.isMaterial && !first.transparent && first.color) colour = `#${first.color.getHexString()}`;
-        });
-        let look = previewLooks.get(colour);
-        if (!look) { look = new THREE.MeshStandardMaterial({ color: colour, roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide }); previewLooks.set(colour, look); }
         const mesh = new THREE.Mesh(geometry, look);
         mesh.userData.sculptOf = shapeId;
+        mesh.userData.drawn = triangles;
         state.scene.add(mesh);
         state.scene.traverse((object) => {
           if (object !== mesh && object.visible && object.userData.shapeId === shapeId) { object.visible = false; hidden.push(object); }

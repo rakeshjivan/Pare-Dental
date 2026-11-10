@@ -13404,14 +13404,24 @@ export function LayerlingEditor({
   const palatalTeethOf = (scan: WorkplaneShape) => shapesRef.current.filter((tooth) => tooth.dental === "wax" && tooth.waxFor === scan.id && !tooth.hidden && tooth.waxTooth);
   const palatalKeyOf = (scan: WorkplaneShape) => projectShapesFingerprint([scan, ...palatalTeethOf(scan)]);
   useEffect(() => {
-    if (!palatalLive || !dentalStudio || !waxup.contacts.on) return;
+    // Build 283 (Rakesh: from the palate the wax looked hollow, see-through or dark, depending on the angle): the
+    // screen shows the scan as Make will make it - its palatal really pressed onto the wax teeth, worked out in the
+    // background a moment after the teeth last moved - in place of drawing the wax's palatal over the scan.
+    if (!palatalLive || !dentalStudio) {
+      for (const id of palatalShown.current) window.layerlingPreviewPart?.(id, null);
+      palatalShown.current.clear();
+      return;
+    }
+    // A scan hidden (its eye) shows nothing at once.
+    for (const id of [...palatalShown.current]) { const scan = shapesRef.current.find((shape) => shape.id === id); if (!scan || scan.hidden) palatalShow(id, null); }
     const run = ++palatalRun.current;
     const timer = window.setTimeout(async () => {
       for (const id of [dentalStudio.slots.upper, dentalStudio.slots.lower]) {
         const scan = id ? shapesRef.current.find((shape) => shape.id === id) : undefined;
         if (!scan) continue;
         const key = palatalKeyOf(scan), scanKey = projectShapesFingerprint([scan]);
-        if (palatalCache.current.get(scan.id)?.key === key) continue;
+        const cached = palatalCache.current.get(scan.id);
+        if (cached?.key === key) { palatalShow(scan.id, cached.soup); continue; }
         const teeth = palatalTeethOf(scan).flatMap((tooth) => {
           const axes = toothAxesOf(tooth);
           return axes ? [{ soup: Float32Array.from(erasedSoup(tooth, false) ?? worldTriangles(tooth)), origin: axes.origin, up: axes.up, out: axes.out, mesial: axes.mesial }] : [];
@@ -13420,11 +13430,19 @@ export function LayerlingEditor({
         try { soup = teeth.length ? await palatalInBackground(Float32Array.from(worldTriangles(scan)), teeth) : null; } catch { soup = null; }
         if (run !== palatalRun.current) return;
         palatalCache.current.set(scan.id, { key, scanKey, soup });
+        palatalShow(scan.id, soup);
         setPalatalTick((tick) => tick + 1);
       }
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [palatalLive, waxup.contacts.on, shapes, dentalStudio?.slots.upper, dentalStudio?.slots.lower]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [palatalLive, shapes, dentalStudio?.slots.upper, dentalStudio?.slots.lower]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Build 283: the scans drawn pressed (their own objects hidden), by id; a scan with nothing pressed is drawn as it is. */
+  const palatalShown = useRef(new Set<string>());
+  const palatalShow = (scanId: string, soup: Float32Array | null) => {
+    const scan = shapesRef.current.find((shape) => shape.id === scanId);
+    if (soup && scan && !scan.hidden) { window.layerlingPreviewPart?.(scanId, soup); palatalShown.current.add(scanId); }
+    else if (palatalShown.current.has(scanId)) { window.layerlingPreviewPart?.(scanId, null); palatalShown.current.delete(scanId); }
+  };
   /** The scan's world triangles with the library palatal, for what the opposing wax bites on; null to use the scan. */
   const palatalWorld = (scan: WorkplaneShape): Float32Array | null => {
     if (!palatalLiveRef.current) return null;
@@ -20953,7 +20971,8 @@ export function LayerlingEditor({
   const erasedViewportShapes = useMemo(() => (dentalStudio?.waxStudio && eraseShownStep && ((waxup.erase && Object.keys(waxup.erase).length) || (waxup.marginOn && (waxup.margins?.upper || waxup.margins?.lower)) || waxup.boundaries?.upper || waxup.boundaries?.lower) ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? erasedShown(shape) : shape)) : viewportShapes), [viewportShapes, waxup.erase, waxup.margins, waxup.boundaries, waxup.marginOn, dentalStudio, eraseTick, eraseShownStep]); // eslint-disable-line react-hooks/exhaustive-deps
   const heldViewportShapes = historyView.shapes ?? erasedViewportShapes;
   // Build 118: with the library palatal, each wax tooth's palatal drawn whole over the scan - the scan itself never changed.
-  useEffect(() => { window.layerlingPalatalXray?.(palatalLive); }, [palatalLive]);
+  // Build 283: the drawn-over palatal is no longer used (the pressed scan is shown instead, as it will be made).
+  useEffect(() => { window.layerlingPalatalXray?.(false); }, [palatalLive]);
   // Build 110: in Keep & erase, the paint shown over the teeth (again whenever they or it change); taken away on leaving.
   useEffect(() => {
     if (keepStep) { showKeepPaint(); return; }
