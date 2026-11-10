@@ -5755,7 +5755,7 @@ export const MESSAGES_EN = {
   "waxup.proudHint": "Shown in red: where the patient's tooth stands in front of the wax or beyond its edge - to be reduced in the mouth. Tick a tooth to cut the scan back flush with the wax on the wax-up model; the pre-op model keeps it as scanned.",
   "waxup.proudTooth": "{fdi}: {mm} mm proud - cut back flush on the wax-up model",
   "waxup.proudReduced": "{fdi}: {mm} mm cut back flush on the wax-up model",
-  "waxup.smileMarked": "The tooth set keeps its own design (each tooth's tip, torque and steps), fitted to your marks: each tooth between its two contacts at its library length, the canine tips at yours and the centrals on the set's own step from them - never shorter than the patient's centrals at your midline mark. Change the marks at the Mark step.",
+  "waxup.smileMarked": "The tooth set keeps its own design, fitted to the marks: each tooth between its two contacts, as long as from the patient's gum line to its edge, and turned just enough to cover the patient's tooth. The canines follow your tip marks and the centrals keep the set's own step from them. Where the patient's centrals are short for their width the set starts longer - never shorter than the patient's own. Change the marks at the Mark step.",
   "waxup.toothTitle": "Tooth {fdi}",
   "waxup.toothStepHint": "Press a button to move, turn or reshape the tooth one step at a time; hold it to keep going. Each changes one thing only, and the view stays where you put it.",
   "waxup.toothStepped": "{fdi} changed",
