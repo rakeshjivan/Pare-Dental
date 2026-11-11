@@ -11813,10 +11813,11 @@ function createThreeScene(host: HTMLDivElement): ThreeState {
       const speed = (Math.PI * 1.3) / height;
       const up = camera.up.clone().normalize();
       const right = new THREE.Vector3().crossVectors(camera.position.clone().sub(controls.target), up).normalize();
-      // Dragging right brings the far side round to the right; dragging down tips the top towards you.
+      // The model follows the hand, as the usual orbit does: dragging right brings its near side round to the right,
+      // dragging up tips its near side up (build 288, Rakesh: up and down were the other way round here).
       turn = new THREE.Quaternion()
         .setFromAxisAngle(up, -dx * speed)
-        .multiply(new THREE.Quaternion().setFromAxisAngle(right, -dy * speed));
+        .multiply(new THREE.Quaternion().setFromAxisAngle(right, dy * speed));
       camera.up.applyQuaternion(turn).normalize();
     } else {
       // The usual orbit (up kept, at the orbit's own speed), only about the models' middle.
