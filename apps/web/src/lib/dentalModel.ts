@@ -21,6 +21,7 @@ import { polygonDistance } from "@/lib/dentalSnapHinge";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
+import { waxBlend } from "@/lib/waxBlend";
 import { GUM_REACH, marginRegion, moveGumCut, type GumCut } from "@/lib/waxGum";
 import { smoothBase as makeSmoothBase, SMOOTH } from "@/lib/dentalSmoothBase";
 import { dentalStage } from "@/lib/dentalStages";
@@ -1410,6 +1411,10 @@ function buildArch(
   // Build 79: the wax-up, tooth by tooth (library teeth may overlap their neighbours).
   const waxShells = wax && wax.length ? splitShells(transformSoup(wax, arch.frame), 4) : [];
   let waxJoined = 0;
+  // Build 306: wax is run into each tooth's join with the model as the patient's is (the model before any wax tooth
+  // is on it: the embrasures between the wax teeth are not filled) - lib/waxBlend.
+  const beforeWax = solid;
+  const blends: ManifoldSolid[] = [];
   for (const shell of waxShells) {
     // Build 116: a wax tooth that will not close as it is is made watertight (corners joined, openings capped)
     // and tried again - never silently left out of the model.
@@ -1425,9 +1430,15 @@ function buildArch(
       // goes: the crowns, the gum and the wall a wall thick are as they were.
       solid = keepSolid(runtime.Manifold.union(solid, hollowTaken && !hollowTaken.isEmpty() ? keepSolid(runtime.Manifold.difference(tooth, hollowTaken)) : tooth));
       waxJoined += 1;
+      const blend = waxBlend(runtime, beforeWax, tooth);
+      if (blend) blends.push(keepSolid(hollowTaken && !hollowTaken.isEmpty() ? keepSolid(runtime.Manifold.difference(keepSolid(blend), hollowTaken)) : blend));
     } catch {
       warnings.push("wax");
     }
+  }
+  for (const blend of blends) {
+    // Never at the cost of the model: a blend that will not join is left off.
+    try { const joined = runtime.Manifold.union(solid, blend); if (joined.status() === "NoError" && !joined.isEmpty()) solid = keepSolid(joined); else joined.delete(); } catch { /* left off */ }
   }
   dentalStage("details", stageArch);
   const text = labelText(labelLine);
