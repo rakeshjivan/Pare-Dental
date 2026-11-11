@@ -47,16 +47,18 @@ export const FEATHER = 0.8;
 /** Build 304: how far round each corner a trim is evened out, mm, and how many times over. */
 export const EASE_REACH = 0.6;
 export const EASE_ROUNDS = 6;
+/** The most the evening adds to any corner's own trim, mm. */
+export const EASE_MOST = 0.4;
 
 /**
  * Build 304 (Rakesh: "after the palatal has been adjusted to the bite, it needs to be smoothed"): a trim evened out.
  * `depth` is how far each corner is taken back along z (times `dir`: +1 up, -1 down) - what the bite needs, already
  * feathered. Left like that the trimmed face keeps every pit and ridge of the opposing teeth and a crease round its
- * rim. Here each trimmed corner (and those the feather reached) is taken back a little further wherever it stands
- * proud of the corners round it, towards the opposing arch: ridges between pits go and the rim rounds over, and no
- * corner is ever put back - the bite's clearance is kept everywhere. Returns the depths, never less than given.
+ * rim. Here each trimmed corner (and those round it) is taken back a little further wherever it is taken back less
+ * than the corners round it: ridges between pits go and the rim rounds over, and no corner is ever put back - the
+ * bite's clearance is kept everywhere. Returns the depths, never less than given (nor more than EASE_MOST over).
  */
-export function easeTrim(pts: ArrayLike<number>, depth: Float32Array, dir: 1 | -1, reach = EASE_REACH, rounds = EASE_ROUNDS): Float32Array {
+export function easeTrim(pts: ArrayLike<number>, depth: Float32Array, reach = EASE_REACH, rounds = EASE_ROUNDS): Float32Array {
   const count = depth.length;
   const out = Float32Array.from(depth);
   const active: number[] = [];
@@ -85,12 +87,13 @@ export function easeTrim(pts: ArrayLike<number>, depth: Float32Array, dir: 1 | -
   const next = new Float32Array(active.length);
   for (let round = 0; round < rounds; round += 1) {
     active.forEach((i, a) => {
-      // Where the corners round it stand, on average, after their own trims (heights along the trim's line).
-      let sum = 0, deepest = 0;
-      for (const j of near[a]) { sum += pts[j * 3 + 2] + dir * out[j]; if (out[j] > deepest) deepest = out[j]; }
-      const mean = sum / near[a].length;
-      // Further back than it stands now only (never forward), and never by more than the deepest trim nearby.
-      next[a] = Math.max(out[i], Math.min(deepest, dir * (mean - pts[i * 3 + 2])));
+      // How far the corners round it are taken back, on average: a corner taken back less than that (a ridge left
+      // between pits, the rim) follows them - further back only, never forward, and by EASE_MOST at most over what
+      // the bite itself asked of it. (The trims are evened, not the heights: on a tooth's upright wall the heights
+      // differ by the wall itself, and evening those would walk the trim up the whole tooth.)
+      let sum = 0;
+      for (const j of near[a]) sum += out[j];
+      next[a] = Math.max(out[i], Math.min(depth[i] + EASE_MOST, sum / near[a].length));
     });
     active.forEach((i, a) => { out[i] = next[a]; });
   }
@@ -547,7 +550,7 @@ export function occlusionWork(input: OcclusionInput): OcclusionResult {
         for (let i = 0; i < count; i += 1) { const x0 = pts[i * 3], y0 = pts[i * 3 + 1], z0 = pts[i * 3 + 2]; z[i * 3] = te[0] * x0 + te[4] * y0 + te[8] * z0 + te[12]; z[i * 3 + 1] = te[1] * x0 + te[5] * y0 + te[9] * z0 + te[13]; z[i * 3 + 2] = te[2] * x0 + te[6] * y0 + te[10] * z0 + te[14]; }
         const depths = new Float32Array(count);
         for (let j = 0; j < count; j += 1) depths[j] = dir * moved[j * 3 + 2];
-        const eased = easeTrim(z, depths, dir as 1 | -1);
+        const eased = easeTrim(z, depths);
         for (let j = 0; j < count; j += 1) if (eased[j] > depths[j]) { moved[j * 3] = 0; moved[j * 3 + 1] = 0; moved[j * 3 + 2] = dir * eased[j]; }
       }
       // Pushes are in the opposing frame: rotate them back (directions only).
@@ -648,7 +651,7 @@ export function occlusionWork(input: OcclusionInput): OcclusionResult {
     const feathered = new Float32Array(s.length);
     for (let i = 0; i < s.length; i += 1) feathered[i] = Math.max(s[i], smooth[i]);
     // Build 304: then evened out, as the closing trim is.
-    const eased = easeTrim(pts, feathered, sign as 1 | -1);
+    const eased = easeTrim(pts, feathered);
     for (let i = 0; i < s.length; i += 1) { const v = eased[i]; out[i * 3 + 2] += sign * v; most = Math.max(most, v); }
     return { tooth: { fdi: tooth.fdi, positions: out }, mm: most };
   });
