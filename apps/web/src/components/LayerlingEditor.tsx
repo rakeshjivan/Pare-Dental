@@ -113,7 +113,7 @@ import { looksLikeDentalScan, type DentalAnalysis, type DentalRole, type DentalS
 import { DentalChrome } from "./workplane/DentalChrome";
 import { STUDIO_SHELL, WAXUP_ENABLED } from "@/lib/pareFeatures";
 import { fitArchLine, layOnArchLine, type ArchTooth } from "@/lib/waxArchLine";
-import { clampEdit, editPose, editTooth, isNoEdit, NO_EDIT, palatalDepth, type ToothEdit, EDIT_RANGES } from "@/lib/waxToothEdit";
+import { clampEdit, editPose, editTooth, isNoEdit, NO_EDIT, palatalDepth, uneditTooth, type ToothEdit, EDIT_RANGES } from "@/lib/waxToothEdit";
 import { cutterBox, proudOfWax, sweptSurface } from "@/lib/waxReduce";
 import { ARCH_MARK_CONTACTS, archMarkLabel, frontTeeth, markedWidths, nextArchMark } from "@/lib/waxArchMarks";
 import { autoArchMarks } from "@/lib/waxAutoMarks";
@@ -14318,6 +14318,44 @@ export function LayerlingEditor({
    * pushing its neighbours along the arch. A tooth moved by dragging since keeps that move on top; a
    * confirmed tooth, or one reshaped by sculpting, is left where it is. Null with no set record.
    */
+  /**
+   * Build 301 (Rakesh: a tooth shaped with the brushes lost its dots, or the dots "just distort the tooth"): how a set
+   * tooth stands to the set - its rest soup, and how it was moved since the set laid it. A tooth that is no longer what
+   * the set made of it (reshaped by the brushes, or read back from a saved design) has its rest soup read back from
+   * what it is now (lib/waxToothEdit uneditTooth), its own changes kept: it stays in the set, and every control goes
+   * on working on it from where it is.
+   */
+  const waxSmileFit = (shape: WorkplaneShape, record: SmileRecord, fdi: number) => {
+    const restPose = record.rest[fdi];
+    const was = new THREE.Matrix4().fromArray(record.laid[fdi] ?? new THREE.Matrix4().toArray());
+    const oldEdit = record.own?.[fdi] ?? NO_EDIT;
+    const now = Float32Array.from(worldTriangles(shape));
+    const readBack = () => {
+      const inSet = transformSoup(now, was.clone().invert());
+      let depth = waxSmilePalatal.current.get(shape.id);
+      if (depth === undefined) {
+        // The rest tooth's palatal depth, from the tooth with its turns and moves undone (a first reading does for the pivot).
+        const turned = isNoEdit(oldEdit) ? inSet : transformSoup(inSet, editPose(restPose.frame, restPose.length, palatalDepth(inSet, restPose.frame), oldEdit).invert());
+        depth = palatalDepth(turned, restPose.frame);
+        waxSmilePalatal.current.set(shape.id, depth);
+      }
+      const read = isNoEdit(oldEdit) ? inSet : uneditTooth(inSet, restPose.frame, restPose.width, restPose.length, oldEdit, depth, 2e-3);
+      waxSmileRest.current.set(shape.id, read);
+      waxLiveShape.current.delete(shape.id);
+      return read;
+    };
+    let rest: Float32Array = waxSmileRest.current.get(shape.id) ?? readBack();
+    if (rest.length !== now.length) rest = readBack();
+    let palatal = waxSmilePalatal.current.get(shape.id);
+    if (palatal === undefined) { palatal = palatalDepth(rest, restPose.frame); waxSmilePalatal.current.set(shape.id, palatal); }
+    const expect = (from: Float32Array, depth: number) => transformSoup(isNoEdit(oldEdit) ? from : editTooth(from, restPose.frame, restPose.width, restPose.length, oldEdit, depth), was);
+    let dragged = affineBetween(expect(rest, palatal), now);
+    if (!dragged || dragged.miss > SCULPTED_MISS) {
+      rest = readBack();
+      dragged = affineBetween(expect(rest, palatal), now);
+    }
+    return { rest, palatal, dragged };
+  };
   /** Build 294: while a change is live, how each tooth was last drawn - a tooth that has not changed is not made again. */
   const waxLiveDrawn = useRef(new Map<string, string>());
   /** Build 297: while a change is live, each tooth's shape (its own changes without the moves and turns), kept until the shape changes. */
@@ -14380,18 +14418,7 @@ export function LayerlingEditor({
         laid[fdi] = next.toArray();
         continue;
       }
-      const now = Float32Array.from(worldTriangles(shape));
-      let rest = waxSmileRest.current.get(shape.id);
-      if (!rest || rest.length !== now.length) {
-        // Reopened (or the tooth rebuilt): its rest read back from where the set last put it (its own changes then lost).
-        rest = transformSoup(now, was.clone().invert());
-        waxSmileRest.current.set(shape.id, rest);
-        waxSmilePalatal.current.delete(shape.id);
-      }
-      let palatal = waxSmilePalatal.current.get(shape.id);
-      if (palatal === undefined) { palatal = palatalDepth(rest, restPose.frame); waxSmilePalatal.current.set(shape.id, palatal); }
-      const expected = transformSoup(isNoEdit(oldEdit) ? rest : editTooth(rest, restPose.frame, restPose.width, restPose.length, oldEdit, palatal), was);
-      const dragged = affineBetween(expected, now);
+      const { rest, palatal, dragged } = waxSmileFit(shape, record, fdi);
       waxSmileDragged.current.set(shape.id, { shape, laidKey, rest, dragged });
       const next = layout.matrices.get(shape.id);
       if (!dragged || dragged.miss > SCULPTED_MISS || !next) continue;
@@ -14530,6 +14557,8 @@ export function LayerlingEditor({
     const fdi = shapesRef.current.find((shape) => shape.id === id)?.waxTooth?.fdi;
     // Build 294 (Rakesh: "not all teeth retain the dots"): a tooth reshaped with the brushes has left the set laid from
     // the marks - it is changed by steps on its own shape instead (`stepped`: what has been stepped so far this drag).
+    // Build 301: a brush still open on a tooth is finished first (its strokes made), so the change builds on them.
+    if (sculptToolRef.current) { flushSculpt(); setSculptTool(null); }
     waxDirectBase.current = record && fdi ? { fdi, own: { ...(record.pending ?? record.own ?? {}) }, id, live: waxStepLive(id), stepped: {} } : null;
   };
   /** Build 290 (Rakesh: a button to mirror a tooth, once it is right, to the other side): the tooth picked's own changes given to its partner across the midline. */
@@ -14639,15 +14668,7 @@ export function LayerlingEditor({
   };
   const waxStepLiveNow = (shape: WorkplaneShape, record: SmileRecord, fdi: number) => {
     // In the set while the set can still lay it (not reshaped by sculpting since).
-    const restPose = record.rest[fdi];
-    const now = Float32Array.from(worldTriangles(shape));
-    const rest = waxSmileRest.current.get(shape.id);
-    if (!rest || rest.length !== now.length) return true;
-    const was = new THREE.Matrix4().fromArray(record.laid[fdi] ?? new THREE.Matrix4().toArray());
-    const oldEdit = record.own?.[fdi] ?? NO_EDIT;
-    const palatal = waxSmilePalatal.current.get(shape.id) ?? palatalDepth(rest, restPose.frame);
-    const expected = transformSoup(isNoEdit(oldEdit) ? rest : editTooth(rest, restPose.frame, restPose.width, restPose.length, oldEdit, palatal), was);
-    const fit = affineBetween(expected, now);
+    const fit = waxSmileFit(shape, record, fdi).dragged;
     return Boolean(fit && fit.miss <= SCULPTED_MISS);
   };
   const stepWaxTooth = (key: keyof ToothEdit, delta: number, toothId?: string) => {

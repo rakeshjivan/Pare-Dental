@@ -110,3 +110,38 @@ export function editTooth(rest: ArrayLike<number>, frame: ToothFrame, width: num
   }
   return out;
 }
+
+/**
+ * Build 301 (Rakesh: a tooth shaped with the brushes lost its dots, or the dots "just distort the tooth"): the tooth
+ * that `edit` would turn into `made` - editTooth undone. With it a tooth reshaped by the brushes stays in the set:
+ * its rest shape is read back from what it has become, so its own changes go on from there exactly as before.
+ * The turns and moves are undone exactly; the changes of shape (each corner moved by an amount that depends on
+ * where it is) by going back from where each corner ended until editTooth lands on it (to within `within`, mm).
+ * `palatal`: the rest tooth's palatal depth, as editTooth was given it.
+ */
+export function uneditTooth(made: ArrayLike<number>, frame: ToothFrame, width: number, length: number, edit: ToothEdit, palatal: number, within = 1e-4): Float32Array {
+  const back = editPose(frame, length, palatal, edit).invert();
+  const target = new Float32Array(made.length);
+  const p = new THREE.Vector3();
+  for (let i = 0; i + 2 < made.length; i += 3) {
+    p.set(made[i], made[i + 1], made[i + 2]).applyMatrix4(back);
+    target[i] = p.x; target[i + 1] = p.y; target[i + 2] = p.z;
+  }
+  const shape: ToothEdit = { ...edit, moveMesial: 0, moveOut: 0, moveUp: 0, rotate: 0, tip: 0, torque: 0 };
+  if (isNoEdit(shape)) return target;
+  let rest = Float32Array.from(target);
+  for (let round = 0; round < 200; round += 1) {
+    const now = editTooth(rest, frame, width, length, shape, palatal);
+    let worst = 0;
+    const next = new Float32Array(rest.length);
+    for (let i = 0; i < rest.length; i += 1) {
+      const miss = now[i] - target[i];
+      worst = Math.max(worst, Math.abs(miss));
+      // A little short of the whole miss each round, so a corner on a steep part of the change settles instead of swinging.
+      next[i] = rest[i] - 0.8 * miss;
+    }
+    rest = next;
+    if (worst < within) break;
+  }
+  return rest;
+}

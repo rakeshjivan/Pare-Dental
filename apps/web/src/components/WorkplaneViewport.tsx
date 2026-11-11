@@ -9686,7 +9686,10 @@ export function WorkplaneViewport({
         if (found || object.userData.shapeId !== shapeId || !(object as THREE.Mesh).isMesh) return;
         const material = (object as THREE.Mesh).material;
         const first = (Array.isArray(material) ? material[0] : material) as THREE.MeshStandardMaterial | undefined;
-        if (first?.isMaterial && first.color && first.depthWrite !== false) {
+        // Build 301 (Rakesh works with the wax at about half opacity; the teeth went solid while a dot was dragged): a
+        // part made see-through in Case objects is drawn with its own see-through copy of its look (no depth written
+        // below 90%) - that is still the part, and the working copy takes its opacity.
+        if (first?.isMaterial && first.color && (first.depthWrite !== false || object.userData.ghostMaterial === first)) {
           colour = `#${first.color.getHexString()}`;
           opacity = first.transparent ? first.opacity : 1;
           found = true;
@@ -9696,7 +9699,7 @@ export function WorkplaneViewport({
       const key = `${colour}|${opacity.toFixed(2)}`;
       let look = previewLooks.get(key);
       if (!look) {
-        look = new THREE.MeshStandardMaterial({ color: colour, roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide, transparent: opacity < 1, opacity, depthWrite: opacity >= 1 });
+        look = new THREE.MeshStandardMaterial({ color: colour, roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide, transparent: opacity < 1, opacity, depthWrite: opacity > 0.9 });
         previewLooks.set(key, look);
       }
       return look;
@@ -9743,6 +9746,8 @@ export function WorkplaneViewport({
       // Build 297 (Rakesh: "virtually lag free"): a part only moved or turned is the same triangles under a new pose -
       // nothing is made or sent again, the graphics card moves it.
       const drawnMesh = copy.mesh;
+      // A see-through copy is drawn after the solid parts, as the see-through part it stands for is.
+      drawnMesh.renderOrder = (drawnMesh.material as THREE.Material).transparent ? 2 : 0;
       if (pose) { drawnMesh.matrixAutoUpdate = false; drawnMesh.matrix.fromArray(pose); drawnMesh.matrixWorldNeedsUpdate = true; }
       else if (!drawnMesh.matrixAutoUpdate) { drawnMesh.matrixAutoUpdate = true; drawnMesh.matrix.identity(); drawnMesh.matrixWorldNeedsUpdate = true; }
       state.needsRender = true;

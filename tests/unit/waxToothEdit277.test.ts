@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { clampEdit, editTooth, NO_EDIT } from "@/lib/waxToothEdit";
+import { clampEdit, editTooth, NO_EDIT, uneditTooth } from "@/lib/waxToothEdit";
 import type { ToothFrame } from "@/lib/dentalWaxup";
 
 /** Build 277: a tooth's own changes, one direction each. A synthetic box crown: 8 wide, 10 long, 6 thick. */
@@ -105,5 +105,36 @@ describe("editTooth spread (build 284)", () => {
     expect(out[10]).toBeCloseTo(-8, 6);
     expect(out[13]).toBeCloseTo(0, 6);
     for (const k of [0, 2, 3, 5, 6, 8]) expect(out[k]).toBeCloseTo(rest[k], 6);
+  });
+});
+
+/** Build 301: a tooth reshaped by the brushes stays in the set - its rest shape read back from what it has become. */
+describe("uneditTooth", () => {
+  const worst = (a: ArrayLike<number>, b: ArrayLike<number>) => { let w = 0; for (let i = 0; i < a.length; i += 1) w = Math.max(w, Math.abs(a[i] - b[i])); return w; };
+  const cases: Array<[string, Partial<typeof NO_EDIT>]> = [
+    ["moves and turns alone", { moveMesial: 1.5, moveOut: -1, moveUp: 2, rotate: 20, tip: -15, torque: 12 }],
+    ["a tooth lengthened, widened and thickened", { length: 3, mesial: 1.5, distal: -1, thickness: 1, palatal: 2 }],
+    ["every change at once, some at the end of their range", { length: 4, mesial: 2.5, distal: 2.5, spread: 3, thickness: 1.5, palatal: 3, moveMesial: -3, moveOut: 2, moveUp: -3, rotate: -25, tip: 15, torque: -15 }],
+    ["a tooth shortened and narrowed as far as offered", { length: -3, mesial: -2.5, distal: -2.5, thickness: -1, palatal: -1 }],
+  ];
+  for (const [name, change] of cases) {
+    it(`gives back the rest tooth: ${name}`, () => {
+      const edit = { ...NO_EDIT, ...change };
+      const made = editTooth(box, frame, W, L, edit, -T);
+      const rest = uneditTooth(made, frame, W, L, edit, -T);
+      // Edited again it is the made tooth (what the set needs of it), and it is the rest tooth to well within a hundredth.
+      expect(worst(editTooth(rest, frame, W, L, edit, -T), made)).toBeLessThan(2e-3);
+      expect(worst(rest, box)).toBeLessThan(1e-2);
+    });
+  }
+
+  it("keeps a brush's change: the made tooth dented, the rest tooth is dented the same and edits to the dented tooth", () => {
+    const edit = { ...NO_EDIT, length: 2, mesial: 1, torque: 8, moveOut: 0.5 };
+    const made = editTooth(box, frame, W, L, edit, -T);
+    const dented = Float32Array.from(made);
+    for (let i = 0; i < dented.length; i += 3) if (Math.abs(box[i]) < 1.1 && Math.abs(box[i + 2] + 5) < 1.1 && box[i + 1] === 0) dented[i + 1] -= 0.4;
+    const rest = uneditTooth(dented, frame, W, L, edit, -T);
+    expect(worst(editTooth(rest, frame, W, L, edit, -T), dented)).toBeLessThan(2e-3);
+    expect(worst(rest, box)).toBeGreaterThan(0.2);
   });
 });
