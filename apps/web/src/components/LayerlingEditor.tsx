@@ -1939,6 +1939,8 @@ const WAX_STATE_EVERY = 250;
 /** Build 297: the parts of a tooth's own change that reshape it (the rest only move or turn it). */
 const WAX_SHAPE_KEYS: Array<keyof ToothEdit> = ["length", "mesial", "distal", "spread", "thickness", "palatal"];
 const WAX_LIVE_PAUSE = 900;
+/** Build 297: how long after the last change Wax-up Studio writes the design, ms. */
+const WAX_SAVE_AFTER = 2500;
 
 export function LayerlingEditor({
   initialAssets = [],
@@ -3826,7 +3828,10 @@ export function LayerlingEditor({
       projectSyncTimerRef.current = window.setTimeout(() => {
         projectSyncTimerRef.current = null;
         emitProjectShapes(canonicalNext, serialized);
-      }, 120);
+        // Build 297: in Wax-up Studio the design is written a moment after the last change, not straight after each
+        // one - writing it (half a second with a scan in it) no longer lands on the next tooth being moved. Leaving
+        // the window still writes at once.
+      }, dentalStudioRef.current?.waxStudio ? WAX_SAVE_AFTER : 120);
     },
     [emitProjectShapes, flushHeldProjectShapes, onProjectShapesChange, projectId],
   );
@@ -14324,7 +14329,7 @@ export function LayerlingEditor({
       waxLiveDrop(shown);
     };
     window.clearTimeout(running.timer);
-    running.timer = window.setTimeout(() => running.finish(), WAX_LIVE_PAUSE);
+    running.timer = waxLiveLater(() => running.finish());
     waxLive.current = running;
   };
   /** Build 277: a whole-set control changed. */
@@ -15044,6 +15049,28 @@ export function LayerlingEditor({
   const waxLiveDrop = (ids: string[]) => {
     requestAnimationFrame(() => requestAnimationFrame(() => { for (const id of ids) window.layerlingPreviewPart?.(id, waxShellHidden.current.has(id) ? SHELL_HIDE : null); }));
   };
+  // Build 297: a change is never made while the mouse is still held (a pause mid-drag used to rebuild the model under
+  // the hand - most of a second's stall, then the drag went on) - only once it is let go, or after a pause without it.
+  const waxPointerHeld = useRef(false);
+  const waxLiveLater = (finish: () => void): number => {
+    const holder = { timer: 0 };
+    const fire = () => {
+      const live = waxLive.current;
+      if (waxPointerHeld.current && live) { live.timer = window.setTimeout(fire, 200); return; }
+      finish();
+    };
+    holder.timer = window.setTimeout(fire, WAX_LIVE_PAUSE);
+    return holder.timer;
+  };
+  useEffect(() => {
+    const down = () => { waxPointerHeld.current = true; };
+    const lift = () => { waxPointerHeld.current = false; };
+    window.addEventListener("pointerdown", down, { capture: true });
+    window.addEventListener("pointerup", lift, { capture: true });
+    window.addEventListener("pointercancel", lift, { capture: true });
+    window.addEventListener("blur", lift);
+    return () => { window.removeEventListener("pointerdown", down, { capture: true }); window.removeEventListener("pointerup", lift, { capture: true }); window.removeEventListener("pointercancel", lift, { capture: true }); window.removeEventListener("blur", lift); };
+  }, []);
   // Build 282: a live change is made as soon as the control is let go.
   useEffect(() => {
     const up = () => { const live = waxLive.current; if (live) { window.clearTimeout(live.timer); live.timer = window.setTimeout(() => live.finish(), 30); } };
@@ -15084,7 +15111,7 @@ export function LayerlingEditor({
       waxLiveDrop(shown);
     };
     window.clearTimeout(current.timer);
-    current.timer = window.setTimeout(() => current.finish(), WAX_LIVE_PAUSE);
+    current.timer = waxLiveLater(() => current.finish());
     waxLive.current = current;
   };
   /** Build 106: each unheld tooth's move for an adjustment of it (as moveWaxTeethDirect would make it). */
