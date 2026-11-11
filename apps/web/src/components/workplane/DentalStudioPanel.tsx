@@ -21,7 +21,7 @@ import { GuideHelpLink } from "@/components/GuideHelpLink";
 import { MovableToolPanel } from "@/components/workplane/MovableToolPanel";
 import { EdgeModifierSlider, SmoothSliders } from "@/components/workplane/EdgeModifierPanel";
 import { ArticulatorPicture, ArticulatorSidesPicture, BaseStylePicture, FitPicture, HeightPicture, ModelHeightPicture, PairPicture } from "@/components/workplane/DentalPictures";
-import { WaxupCard, archOrder, defaultMarkTeeth, waxupSummary, type WaxupActions, type WaxupPart, type WaxupView } from "@/components/workplane/WaxupCard";
+import { WaxupCard, archOrder, defaultMarkTeeth, type WaxupActions, type WaxupPart, type WaxupView } from "@/components/workplane/WaxupCard";
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/lib/useLanguage";
 import {
@@ -1136,9 +1136,6 @@ export function DentalStudioPanel({
           <WaxupCard part={waxPart} toolSlot={framed && waxPart === "place" ? toolSlot : undefined} view={waxup.view} actions={{ ...waxup.actions, onConfirm: () => { setWaxAuto(false); goWax("gum"); }, ...(waxStudio && waxPart === "place" ? { onChangeSet: () => { setWaxAuto(false); goWax("set"); } } : {}) }} slots={{ upper: Boolean(slots.upper) && waxStudio?.arches !== "lower", lower: Boolean(slots.lower) && waxStudio?.arches !== "upper" }} imt={waxStudio?.flow === "imt"} busy={busy || !analysis} workspace={workspace} />
         </section>
       ) : null}
-      {waxup && !waxSteps && !mbSteps ? card(3, t(waxStudio ? "waxup.stepStudio" : "waxup.step"), waxup.view.placed.length > 0, t(waxStudio ? "waxup.stepStudioHint" : "waxup.stepHint"), waxupSummary(waxup.view), (
-        <WaxupCard view={waxup.view} actions={waxup.actions} slots={{ upper: Boolean(slots.upper) && waxStudio?.arches !== "lower", lower: Boolean(slots.lower) && waxStudio?.arches !== "upper" }} imt={waxStudio?.flow === "imt"} busy={busy || !analysis} workspace={workspace} />
-      )) : null}
 
       {inWaxStep("make") ? (<>
       {inMb("model") ? card(n(4), t("dental.step3"), scansDone, t("dental.step3Hint"), modelSummary, (<>
