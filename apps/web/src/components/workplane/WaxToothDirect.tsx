@@ -32,7 +32,7 @@ export type DirectChange =
   | { kind: "move"; mesial: number; out: number; up: number }
   | { kind: "turn"; rotate: number; tip: number; torque: number }
   /** Build 290: a dot on the tooth dragged - whatever of these it stands for, all at once. */
-  | { kind: "dot"; length: number; torque: number; rotate: number; contact: number; side: "mesial" | "distal" | null; palatal?: number; up?: number }
+  | { kind: "dot"; length: number; torque: number; rotate: number; contact: number; side: "mesial" | "distal" | null; palatal?: number; up?: number; tip?: number }
   /** Build 290: the whole set moved (no one tooth picked), mm in the scene. */
   | { kind: "moveAll"; by: [number, number, number] };
 type Zone = "length" | "mesial" | "distal" | "move";
@@ -116,6 +116,11 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
       let best: { tooth: DirectTooth; dist: number } | null = null;
       for (const tooth of live.current.teeth) {
         if (tooth.locked) continue;
+        // Build 294 (lag): only a tooth the ray passes near is tested triangle by triangle.
+        const f = tooth.frame, reach = Math.max(tooth.width, tooth.length) * 0.75 + 2;
+        const cx = f.origin[0] - f.up[0] * tooth.length * 0.5 - r.origin[0], cy = f.origin[1] - f.up[1] * tooth.length * 0.5 - r.origin[1], cz = f.origin[2] - f.up[2] * tooth.length * 0.5 - r.origin[2];
+        const along = cx * r.direction[0] + cy * r.direction[1] + cz * r.direction[2];
+        if (cx * cx + cy * cy + cz * cz - along * along > reach * reach) continue;
         const dist = hitDistance(r.origin, r.direction, tooth.triangles());
         if (dist !== null && (!best || dist < best.dist)) best = { tooth, dist };
       }
@@ -180,11 +185,16 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
       live.current.onBegin(hit.tooth.id);
       say(event.clientX, event.clientY, nameOf(kind, zone, hit.tooth.fdi));
     };
+    let hoverAt = 0;
     const onMove = (event: PointerEvent) => {
       if (!drag) {
         // Hovering: the cursor and the label say what a press here would do.
         const canvas = canvasOf(event);
         if (!canvas || event.buttons || event.ctrlKey || event.metaKey) { if (hoverCanvas) { hoverCanvas.style.cursor = ""; hoverCanvas = null; } say(0, 0, null); return; }
+        // Looked up a few times a second, not on every movement of the pointer (build 294: lag).
+        const now = performance.now();
+        if (now - hoverAt < 60) return;
+        hoverAt = now;
         const hit = pick(event.clientX, event.clientY);
         if (!hit) { if (hoverCanvas) { hoverCanvas.style.cursor = ""; hoverCanvas = null; } say(0, 0, null); return; }
         const zone = directZone(hit.tooth, hit.point), kind = kindOf(zone, event);
@@ -202,7 +212,8 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
       if (!p) return;
       const delta = sub(p, drag.point).map((x) => x * k) as V;
       const dx = (event.clientX - drag.start[0]) * k, dy = (drag.start[1] - event.clientY) * k;
-      if (!drag.moved && Math.hypot(event.clientX - drag.start[0], event.clientY - drag.start[1]) < 3) return;
+      // (A click that wanders a few pixels is still a click: it picks the tooth.)
+      if (!drag.moved && Math.hypot(event.clientX - drag.start[0], event.clientY - drag.start[1]) < (drag.kind === "moveAll" ? 6 : 3)) return;
       drag.moved = true;
       let change: DirectChange | null = null;
       let text = "";
@@ -348,10 +359,15 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
         else if (key === "palatal") { change = { kind: "dot", length: 0, torque: 0, rotate: 0, contact: 0, side: null, palatal: -o }; text = mm(-o); }
         else if (key === "neck") { change = { kind: "dot", length: -u, torque: 0, rotate: 0, contact: 0, side: null, up: u }; text = mm(-u); }
         else if (key === "edge") {
-          // Along the tooth: longer or shorter. Labially or palatally: the edge goes there, the neck staying (torque).
-          const torque = degrees(o, 0.8 * tooth.length);
-          change = { kind: "dot", length: u, torque, rotate: 0, contact: 0, side: null };
-          text = `${mm(u)}${Math.abs(torque) >= 0.5 ? `  ${torque >= 0 ? "+" : ""}${torque.toFixed(0)}°` : ""}`;
+          // The edge goes where it is dragged, the neck staying: along the tooth it is longer or shorter; towards the
+          // lip or palate it is torqued; mesially or distally it is tipped (build 294, Rakesh: an easy way to tip and
+          // torque). The way it is mostly dragged is the one taken - a slight wander the other ways changes nothing.
+          const most = Math.max(Math.abs(u), Math.abs(o), Math.abs(m));
+          const only = (x: number) => (Math.abs(x) < most * 0.4 ? 0 : x);
+          const torque = degrees(only(o), 0.66 * tooth.length), tip = degrees(only(m), 0.66 * tooth.length), longer = only(u);
+          change = { kind: "dot", length: longer, torque, rotate: 0, contact: 0, side: null, tip };
+          const angle = (name: string, x: number) => (Math.abs(x) >= 0.5 ? `  ${name} ${x >= 0 ? "+" : ""}${x.toFixed(0)}°` : "");
+          text = `${Math.abs(longer) >= 0.05 ? mm(longer) : ""}${angle(t("waxup.direct.torque"), torque)}${angle(t("waxup.direct.tip"), tip)}`;
         } else {
           // Along the arch: that contact. Labially or palatally: that side goes there, the other staying (rotation).
           const outward = key === "mesial" ? 1 : -1;

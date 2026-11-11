@@ -1288,7 +1288,7 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror
     <div className="wax-tooth-edit">
       <div className="wax-guide">
         <strong>{t("waxup.toothTitle", { fdi: tooth.fdi })}</strong>
-        <span>{t(live ? "waxup.toothHint" : "waxup.toothStepHint")}</span>
+        <span>{t("waxup.toothHint")}</span>
       </div>
       <p className="blend-hint wax-tooth-size" role="status">{t("waxup.toothSize", { width: tooth.width.toFixed(1), length: tooth.length.toFixed(1), ratio: Math.round((tooth.width / Math.max(0.1, tooth.length)) * 100) })}</p>
       {/* Build 290 (Rakesh): one tooth changes alone unless asked; a tooth that is right can be copied across once. */}
@@ -1307,15 +1307,17 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror
           <span>{t("waxup.toothGive")}</span>
         </label>
       ) : null}
+      {/* Build 294 (Rakesh: an easy way to tip and torque, from any view): the three turns always to hand. */}
+      <h4>{t("waxup.toothTurns")}</h4>
+      {row("rotate", "waxup.toothRotate", "waxup.toothRotateHint", true)}
+      {row("tip", "waxup.toothTip", "waxup.toothTipHint", true)}
+      {row("torque", "waxup.toothTorque", "waxup.toothTorqueHint", true)}
       {(() => {
         const numbers = (<>
       <h4>{t("waxup.toothPlace")}</h4>
       {row("moveMesial", "waxup.toothMoveMesial", "waxup.toothMoveMesialHint")}
       {row("moveOut", "waxup.toothMoveOut", "waxup.toothMoveOutHint")}
       {row("moveUp", "waxup.toothMoveUp", "waxup.toothMoveUpHint")}
-      {row("rotate", "waxup.toothRotate", "waxup.toothRotateHint", true)}
-      {row("tip", "waxup.toothTip", "waxup.toothTipHint", true)}
-      {row("torque", "waxup.toothTorque", "waxup.toothTorqueHint", true)}
       <h4>{t("waxup.toothShape")}</h4>
       {row("length", "waxup.toothLength", "waxup.toothLengthHint")}
       {row("mesial", "waxup.toothMesial", "waxup.toothMesialHint")}
@@ -1325,7 +1327,7 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror
       {live ? row("palatal", "waxup.toothPalatal", "waxup.toothPalatalHint") : null}
         </>);
         // Build 291: with the tooth itself to take hold of, the numbers are there for when an exact value is wanted.
-        return live ? <details className="wax-fold"><summary>{t("waxup.numbersFold")}</summary>{numbers}</details> : numbers;
+        return <details className="wax-fold"><summary>{t("waxup.numbersFold")}</summary>{numbers}</details>;
       })()}
       {live ? (
         <div className="dental-trim-buttons">
