@@ -9924,6 +9924,7 @@ export function WorkplaneViewport({
   // Build 107: Wax-up's landmark dots - one instanced ball, its instances moved in place.
   useEffect(() => {
     let dots: THREE.InstancedMesh | null = null;
+    let dotsLook: THREE.MeshBasicMaterial | null = null;
     let joins: THREE.Mesh[] = [];
     const dummy = new THREE.Object3D();
     const clearJoins = () => {
@@ -9935,7 +9936,8 @@ export function WorkplaneViewport({
       const state = threeRef.current;
       if (dots && state) state.scene.remove(dots);
       dots?.geometry.dispose();
-      (dots?.material as THREE.Material | undefined)?.dispose();
+      // Build 298: the dots' look is kept from one set of dots to the next - thrown away with them, the graphics card
+      // had to build its program again each time the number of dots changed (most of a second's stall after a change).
       dots = null;
       clearJoins();
       if (state) state.needsRender = true;
@@ -9945,8 +9947,8 @@ export function WorkplaneViewport({
       if (!state || !points || !points.length) { clear(); return; }
       if (!dots || dots.count !== points.length || dots.userData.radius !== radius) {
         clear();
-        const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
-        dots = new THREE.InstancedMesh(new THREE.SphereGeometry(radius, 16, 12), material, points.length);
+        dotsLook ??= new THREE.MeshBasicMaterial({ color: 0xffffff });
+        dots = new THREE.InstancedMesh(new THREE.SphereGeometry(radius, 16, 12), dotsLook, points.length);
         dots.userData.radius = radius;
         dots.renderOrder = 12;
         dots.frustumCulled = false;
@@ -9978,7 +9980,7 @@ export function WorkplaneViewport({
       }
       state.needsRender = true;
     };
-    return () => { clear(); delete window.layerlingMarkDots; };
+    return () => { clear(); dotsLook?.dispose(); dotsLook = null; delete window.layerlingMarkDots; };
   }, []);
   // Fork (build 53): Dental Studio's tooth area, tinted over the scan while it is being designated.
   useEffect(() => {
