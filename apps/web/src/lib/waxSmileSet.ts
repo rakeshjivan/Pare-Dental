@@ -436,6 +436,8 @@ const MARGIN_CREASE = 0.1;
 /** A crease this deep is taken as the margin at once, mm; and the nearest to the incisal edge it is looked for, mm. */
 const MARGIN_CLEAR = 0.15;
 const MARGIN_FROM = 4.5;
+/** How far a tooth's crown length (as a central's would be) may stand from the middle of the six before it is taken as misread, mm. */
+const MARGIN_AGREE = 1.75;
 
 /**
  * Build 286: where each front tooth's gingival margin is on the labial face (`margins`: its level along `up`, from
@@ -453,6 +455,7 @@ export function crownMargins(points: ArrayLike<number>, anchors: Pick<SetAnchors
   const STEP = 0.25, REACH = Math.round(2 / STEP), DEEP = Math.round(15 / STEP);
   const centre = flat(contacts.reduce((sum, p) => sum.add(v(p)), new THREE.Vector3()).divideScalar(contacts.length)).addScaledVector(flat(v(anchors.out)).normalize(), -15);
   const central: number[] = [];
+  const edges: Array<number | null> = [null, null, null, null, null, null], crowns: Array<number | null> = [null, null, null, null, null, null];
   for (let tooth = 0; tooth < 6; tooth += 1) {
     const chord = flat(v(contacts[tooth + 1])).sub(flat(v(contacts[tooth])));
     if (chord.length() < 3) continue;
@@ -499,8 +502,25 @@ export function crownMargins(points: ArrayLike<number>, anchors: Pick<SetAnchors
     if (best > end) best = -1;
     if (best < 0) for (let k = from; k <= end; k += 1) if (crease[k] > depth) { depth = crease[k]; best = k; }
     if (best < 0) continue;
-    margins[tooth] = edge - best * STEP;
-    if (tooth === 2 || tooth === 3) central.push(best * STEP);
+    edges[tooth] = edge;
+    crowns[tooth] = best * STEP;
+  }
+  // Build 293 (a hard scan: one central read 11.5 mm from edge to gum beside its twin's 4.5, and the set was laid with
+  // one tooth towering over a squat one): the six readings checked against each other. Each crown's length as a
+  // central's would be (a lateral stands about 0.86 of a central, a canine 0.95); the middle of those is what this
+  // mouth's teeth stand; a reading more than MARGIN_AGREE from it is a misreading (a fold in the gum, a scan
+  // artefact) and takes the middle one instead.
+  const share = [0.95, 0.86, 1, 1, 0.86, 0.95];
+  const asCentral = crowns.map((length, tooth) => (length === null ? null : length / share[tooth]));
+  const read = asCentral.filter((x): x is number => x !== null).sort((a, b) => a - b);
+  if (!read.length) return { margins, crown: null };
+  const middle = read.length % 2 ? read[(read.length - 1) / 2] : (read[read.length / 2 - 1] + read[read.length / 2]) / 2;
+  for (let tooth = 0; tooth < 6; tooth += 1) {
+    const edge = edges[tooth], length = asCentral[tooth];
+    if (edge === null || length === null) continue;
+    const kept = Math.abs(length - middle) > MARGIN_AGREE ? middle : length;
+    margins[tooth] = edge - kept * share[tooth];
+    if (tooth === 2 || tooth === 3) central.push(kept);
   }
   return { margins, crown: central.length ? central.reduce((sum, x) => sum + x, 0) / central.length : null };
 }

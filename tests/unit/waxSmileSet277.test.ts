@@ -340,6 +340,19 @@ describe("crownMargins (build 286)", () => {
     });
   });
 
+  it("takes a reading far from the others as a misreading: that tooth stands as the middle of the six does (build 293)", () => {
+    // A fold across 21's crown reads as its gum line at 5.5 mm - where the other central's is at 9.
+    const odd: number[] = [];
+    for (let tooth = 0; tooth < 6; tooth += 1) {
+      const L = tooth === 3 ? 5.5 : crown[tooth];
+      for (let x = xs[tooth] + 0.2; x < xs[tooth + 1]; x += 0.3) for (let d = 0; d <= 16; d += 0.15) odd.push(x, d <= L ? 0.9 * Math.sin((Math.PI * d) / L) : 0.35 * (d - L), -d);
+    }
+    const got = crownMargins(odd, { contacts, up: [0, 0, 1], out: [0, 1, 0] });
+    // The six as centrals: 10.5, 8.7, 9, 5.5 (the odd one), 8.7, 10.5 - the middle about 8.9; 21 takes it.
+    expect(Math.abs(got.margins[3]! + 8.9)).toBeLessThan(0.7);
+    expect(Math.abs(got.margins[2]! + 9)).toBeLessThan(0.6);
+  });
+
   it("reads how long the centrals stand, and nothing without the contacts", () => {
     expect(Math.abs(found.crown! - 9)).toBeLessThan(0.6);
     expect(crownMargins(scan, { up: [0, 0, 1], out: [0, 1, 0] })).toEqual({ margins: [null, null, null, null, null, null], crown: null });
