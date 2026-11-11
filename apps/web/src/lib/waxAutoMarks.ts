@@ -187,6 +187,11 @@ export function autoMarksInArchFrame(v: ArrayLike<number>, rightAtPlus: boolean,
   const contactAt = (k: number): Vec3 | null => {
     let best = -1;
     for (let b = Math.max(0, bin[k] - 1); b <= Math.min(bins - 1, bin[k] + 1); b += 1) if (radiusAt[b] >= 0 && (best < 0 || radius[b] < radius[best])) best = b;
+    // Build 304: on a coarser scan no corner may fall in the dip's own strips (the outline there was bridged from its
+    // neighbours) - the nearest strip that has one stands for it, up to 2 mm off, instead of the marks being given up.
+    for (let off = 2; best < 0 && off <= Math.round(2 / STEP); off += 1) {
+      for (const b of [bin[k] - off, bin[k] + off]) if (b >= 0 && b < bins && radiusAt[b] >= 0 && (best < 0 || radius[b] < radius[best])) best = b;
+    }
     return best < 0 || radiusAt[best] < 0 ? null : corner(radiusAt[best]);
   };
   const contacts = found.at.map(contactAt);
