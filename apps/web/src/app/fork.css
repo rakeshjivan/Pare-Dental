@@ -2291,7 +2291,8 @@ html[data-theme="dark"] .dental-studio-panel .dental-picture-tiles button { back
 .wax-dot-edge { background: #2563eb; }
 .wax-dot-edge:hover, .wax-dot-edge.held { background: #3b82f6; }
 .wax-tooth-across { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0 4px; }
-.wax-tooth-across button { white-space: nowrap; }
+.wax-tooth-across button { white-space: nowrap; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; background: #ffffff; font: 600 12.5px/1.2 system-ui, sans-serif; color: #0f172a; cursor: pointer; }
+.wax-tooth-across button:hover:not(:disabled) { border-color: #0a786c; color: #0a786c; }
 
 /* Build 291: parts of the wax-up panel folded away until wanted. */
 .wax-fold { margin: 8px 0 0; border-top: 1px solid rgba(15, 23, 42, 0.08); padding-top: 6px; }
