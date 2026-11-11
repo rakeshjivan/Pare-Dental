@@ -58,7 +58,7 @@ export const EASE_MOST = 0.4;
  * than the corners round it: ridges between pits go and the rim rounds over, and no corner is ever put back - the
  * bite's clearance is kept everywhere. Returns the depths, never less than given (nor more than EASE_MOST over).
  */
-export function easeTrim(pts: ArrayLike<number>, depth: Float32Array, reach = EASE_REACH, rounds = EASE_ROUNDS): Float32Array {
+export function easeTrim(pts: ArrayLike<number>, depth: Float32Array, reach = EASE_REACH, rounds = EASE_ROUNDS, face?: { dir: 1 | -1; trimmed: ArrayLike<number> }): Float32Array {
   const count = depth.length;
   const out = Float32Array.from(depth);
   const active: number[] = [];
@@ -96,6 +96,26 @@ export function easeTrim(pts: ArrayLike<number>, depth: Float32Array, reach = EA
       next[a] = Math.max(out[i], Math.min(depth[i] + EASE_MOST, sum / near[a].length));
     });
     active.forEach((i, a) => { out[i] = next[a]; });
+  }
+  // Build 304: then the trimmed face itself is evened (`face`: the corners the bite itself trimmed - they now lie on
+  // the opposing teeth's surface, pits, scan noise and all): each is taken back to where the trimmed corners round
+  // it stand, on average, when it stands proud of them - towards the opposing arch. Only among the trimmed corners
+  // (so an upright wall beside them plays no part), further back only, and within EASE_MOST of what the bite asked.
+  if (face) {
+    const mine = new Uint8Array(count);
+    for (let k = 0; k < face.trimmed.length; k += 1) mine[face.trimmed[k]] = 1;
+    const rows: Array<[number, number[]]> = [];
+    active.forEach((i, a) => { if (mine[i]) rows.push([i, near[a].filter((j) => mine[j])]); });
+    const held = new Float32Array(rows.length);
+    for (let round = 0; round < rounds; round += 1) {
+      rows.forEach(([i, list], r) => {
+        if (list.length < 3) { held[r] = out[i]; return; }
+        let sum = 0;
+        for (const j of list) sum += pts[j * 3 + 2] + face.dir * out[j];
+        held[r] = Math.max(out[i], Math.min(depth[i] + EASE_MOST, face.dir * (sum / list.length - pts[i * 3 + 2])));
+      });
+      rows.forEach(([i], r) => { out[i] = held[r]; });
+    }
   }
   return out;
 }
@@ -550,7 +570,7 @@ export function occlusionWork(input: OcclusionInput): OcclusionResult {
         for (let i = 0; i < count; i += 1) { const x0 = pts[i * 3], y0 = pts[i * 3 + 1], z0 = pts[i * 3 + 2]; z[i * 3] = te[0] * x0 + te[4] * y0 + te[8] * z0 + te[12]; z[i * 3 + 1] = te[1] * x0 + te[5] * y0 + te[9] * z0 + te[13]; z[i * 3 + 2] = te[2] * x0 + te[6] * y0 + te[10] * z0 + te[14]; }
         const depths = new Float32Array(count);
         for (let j = 0; j < count; j += 1) depths[j] = dir * moved[j * 3 + 2];
-        const eased = easeTrim(z, depths);
+        const eased = easeTrim(z, depths, EASE_REACH, EASE_ROUNDS, { dir: dir as 1 | -1, trimmed: inside });
         for (let j = 0; j < count; j += 1) if (eased[j] > depths[j]) { moved[j * 3] = 0; moved[j * 3 + 1] = 0; moved[j * 3 + 2] = dir * eased[j]; }
       }
       // Pushes are in the opposing frame: rotate them back (directions only).
@@ -651,7 +671,7 @@ export function occlusionWork(input: OcclusionInput): OcclusionResult {
     const feathered = new Float32Array(s.length);
     for (let i = 0; i < s.length; i += 1) feathered[i] = Math.max(s[i], smooth[i]);
     // Build 304: then evened out, as the closing trim is.
-    const eased = easeTrim(pts, feathered);
+    const eased = easeTrim(pts, feathered, EASE_REACH, EASE_ROUNDS, { dir: sign as 1 | -1, trimmed: carved });
     for (let i = 0; i < s.length; i += 1) { const v = eased[i]; out[i * 3 + 2] += sign * v; most = Math.max(most, v); }
     return { tooth: { fdi: tooth.fdi, positions: out }, mm: most };
   });

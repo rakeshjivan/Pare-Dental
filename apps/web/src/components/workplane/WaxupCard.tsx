@@ -591,7 +591,11 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
                     <div className="dental-trim-buttons">
                       <button type="button" className={`secondary${view.occlusion.busy ? " studio-filling" : ""}`} disabled={working || view.occlusion.busy || !view.placed.length} aria-busy={view.occlusion.busy} title={t("waxup.fitBite.hint")} onClick={() => actions.onFitBite?.()}>{t(view.occlusion.busy ? "waxup.fitBite.working" : "waxup.fitBite.button")}</button>
                     </div>
-                    <p className="blend-hint" role="status">{view.occlusion.result && view.biteFitFresh ? (view.occlusion.result.carved.length ? t("waxup.carved", { list: view.occlusion.result.carved.map((c) => `${c.fdi} ${c.mm.toFixed(2)}`).join(", ") }) : t("waxup.fitBite.clear")) : t("waxup.fitBite.at", { mm: (view.bite?.raise ?? 0).toFixed(1) })}</p>
+                    {/* Both kinds of trim are told: back to the opposing teeth at the bite itself, and for the movements. */}
+                    <p className="blend-hint" role="status">{view.occlusion.result && view.biteFitFresh ? ([
+                      view.occlusion.result.fitted?.length ? t("waxup.fitted", { list: view.occlusion.result.fitted.map((c) => `${c.fdi} ${c.mm.toFixed(2)}`).join(", ") }) : "",
+                      view.occlusion.result.carved.length ? t("waxup.carved", { list: view.occlusion.result.carved.map((c) => `${c.fdi} ${c.mm.toFixed(2)}`).join(", ") }) : "",
+                    ].filter(Boolean).join(" ") || t("waxup.fitBite.clear")) : t("waxup.fitBite.at", { mm: (view.bite?.raise ?? 0).toFixed(1) })}</p>
                   </div>
                 ) : null}
                 {view.proudTeeth?.some((tooth) => tooth.depth > 0) && actions.onReduce ? (

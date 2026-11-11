@@ -42,6 +42,18 @@ describe("easeTrim", () => {
     for (let k = 0; k < deep.length; k += 1) expect(out[k]).toBeLessThanOrEqual(deep[k] + 0.4 + 1e-6);
     for (let i = 0; i < N; i += 1) expect(out[at(i, 20)]).toBe(0);
   });
+  it("evens the trimmed face itself: corners left proud on a rough opposing surface are taken back to their neighbours", () => {
+    // The plate's middle trimmed onto a rough surface: 0.3 mm on average, every other corner 0.1 mm proud (less trimmed).
+    const rough = new Float32Array(N * N);
+    const trimmed: number[] = [];
+    for (let i = 10; i <= 30; i += 1) for (let j = 10; j <= 30; j += 1) { rough[at(i, j)] = (i + j) % 2 ? 0.35 : 0.25; trimmed.push(at(i, j)); }
+    const plain = easeTrim(pts, rough);
+    const faced = easeTrim(pts, rough, undefined, undefined, { dir: 1, trimmed });
+    const spread = (d: Float32Array) => { let lo = Infinity, hi = -Infinity; for (let i = 14; i <= 26; i += 1) for (let j = 14; j <= 26; j += 1) { lo = Math.min(lo, d[at(i, j)]); hi = Math.max(hi, d[at(i, j)]); } return hi - lo; };
+    expect(spread(faced)).toBeLessThan(0.03);
+    expect(spread(faced)).toBeLessThan(spread(plain) + 1e-6);
+    for (let k = 0; k < rough.length; k += 1) { expect(faced[k]).toBeGreaterThanOrEqual(rough[k] - 1e-6); expect(faced[k]).toBeLessThanOrEqual(rough[k] + 0.4 + 1e-6); }
+  });
   it("leaves a tooth with no trim as it is", () => {
     expect(Array.from(easeTrim(pts, new Float32Array(N * N))).every((v) => v === 0)).toBe(true);
   });
