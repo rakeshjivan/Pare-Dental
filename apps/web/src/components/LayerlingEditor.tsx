@@ -116,6 +116,7 @@ import { clampEdit, editPose, editTooth, isNoEdit, NO_EDIT, palatalDepth, type T
 import { cutterBox, proudOfWax, sweptSurface } from "@/lib/waxReduce";
 import { ARCH_MARK_CONTACTS, archMarkLabel, frontTeeth, markedWidths, nextArchMark } from "@/lib/waxArchMarks";
 import { autoArchMarks } from "@/lib/waxAutoMarks";
+import { extendNeck } from "@/lib/waxNeck";
 import { affineBetween, clampControls, crownMargins, labialProfile, layoutSmileSet, restFrames, SCULPTED_MISS, SET_DEFAULTS, type SetControls, type SetTooth, type SmileRecord } from "@/lib/waxSmileSet";
 import { StudioShell } from "./workplane/StudioShell";
 import { useStudioSlot } from "@/lib/studioSlots";
@@ -11009,7 +11010,13 @@ export function LayerlingEditor({
       const toInput = dentalLocalToInput.current.get(shape.id), world = localToWorld(shape);
       if (!teeth.length || !toInput || !world) return undefined;
       const move = toInput.clone().multiply(world.clone().invert());
-      const soups = teeth.map((tooth) => waxTrianglesOf(tooth));
+      // Build 289: in Wax-up Studio each tooth's neck is drawn out into a short root for the model (lib/waxNeck), so its
+      // end is hidden in the gum and the tooth meets the patient's gum line all round - the palatal too.
+      const soups = teeth.map((tooth) => {
+        const soup = waxTrianglesOf(tooth);
+        const toothWorld = dentalStudioRef.current?.waxStudio && tooth.waxTooth ? localToWorld(tooth) : null;
+        return toothWorld ? extendNeck(soup, moveFrame(tooth.waxTooth!.frame, toothWorld)) : soup;
+      });
       const out = new Float32Array(soups.reduce((count, soup) => count + soup.length, 0));
       const v = new THREE.Vector3();
       let at = 0;
