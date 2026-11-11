@@ -14448,7 +14448,14 @@ export function LayerlingEditor({
       const o = new THREE.Vector3(...rest.frame.origin), m = new THREE.Vector3(...rest.frame.mesial).normalize(), u = new THREE.Vector3(...rest.frame.up).normalize();
       const width = o.clone().addScaledVector(m, rest.width / 2).applyMatrix4(total).distanceTo(o.clone().addScaledVector(m, -rest.width / 2).applyMatrix4(total)) + edit.mesial + edit.distal + (edit.spread ?? 0);
       const length = o.clone().applyMatrix4(total).distanceTo(o.clone().addScaledVector(u, -rest.length).applyMatrix4(total)) + edit.length;
-      changed.set(shape.id, canonicalizeShape(back ? { ...rebuilt, waxTooth: { ...tooth, width, length, frame: moveFrame(moveFrame(rest.frame, total), back.clone().invert()) } } : rebuilt));
+      // Build 301 (the dots stood off a tooth that had been lengthened or widened - its frame was left where the edge
+      // used to be): the frame's origin (the middle of the incisal edge on the labial face) goes with the tooth's own
+      // changes - up with the edge, out with the labial face, half way with a side widened.
+      const stood = moveFrame(rest.frame, total);
+      const sideways = (edit.mesial - edit.distal - (edit.spread ?? 0)) / 2;
+      const f = new THREE.Vector3(...rest.frame.out).normalize();
+      const at = o.clone().addScaledVector(u, edit.length).addScaledVector(f, edit.thickness).addScaledVector(m, sideways).applyMatrix4(total).toArray() as [number, number, number];
+      changed.set(shape.id, canonicalizeShape(back ? { ...rebuilt, waxTooth: { ...tooth, width, length, frame: moveFrame({ ...stood, origin: at }, back.clone().invert()) } } : rebuilt));
     }
     const slot = current.slot;
     const kept: SmileRecord = { ...work.record, controls, laid: work.laid, own: edits, pending: undefined };
