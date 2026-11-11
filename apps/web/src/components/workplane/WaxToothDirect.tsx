@@ -48,6 +48,7 @@ const DOT_AT: Record<DotKey, [number, number, number]> = {
 };
 /** The dots locked on each tooth (by its id) - kept while the app is open. */
 const LOCKED = new Map<string, Set<DotKey>>();
+const placeLocked = (id: string) => LOCKED.get(id)?.has("middle") === true;
 
 /** The wheel: degrees for each notch (about 100 of a wheel's own units), and how long after the last notch the turn is kept. */
 const WHEEL_DEG = 1;
@@ -187,6 +188,9 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
       event.stopImmediatePropagation();
       const zone = directZone(hit.tooth, hit.point);
       const kind = kindOf(zone, event);
+      // Build 305 (Rakesh: "lock and unlock the tooth position but the dimensions still change"): a tooth whose white
+      // dot is locked is not moved or turned by its body - it is picked, no more.
+      if ((kind === "move" || kind === "turn") && placeLocked(hit.tooth.id)) { live.current.onSelect(hit.tooth.id); say(event.clientX, event.clientY, t("waxup.direct.placeLocked", { fdi: hit.tooth.fdi })); return; }
       const a = planePoint(event.clientX, event.clientY, hit.point, hit.normal);
       const r = planePoint(event.clientX + 20, event.clientY, hit.point, hit.normal), u = planePoint(event.clientX, event.clientY - 20, hit.point, hit.normal);
       const unit = (p: V | null): V => { if (!a || !p) return [0, 0, 0]; const d = sub(p, a), l = Math.hypot(...d) || 1; return [d[0] / l, d[1] / l, d[2] / l]; };
@@ -300,7 +304,7 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
       // A pinch (and Ctrl or ⌘ with the wheel) zooms, as does the wheel anywhere but on the tooth picked.
       if (drag || !canvasOf(event) || event.ctrlKey || event.metaKey) return;
       const hit = pick(event.clientX, event.clientY);
-      if (!hit || hit.tooth.id !== live.current.selected) { wheelDone(); return; }
+      if (!hit || hit.tooth.id !== live.current.selected || placeLocked(hit.tooth.id)) { wheelDone(); return; }
       event.preventDefault();
       event.stopImmediatePropagation();
       if (wheel && wheel.tooth.id !== hit.tooth.id) wheelDone();
@@ -330,7 +334,9 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
     // turns about it, or grows away from it). Double-clicked again it is free.
     const DOTS: DotKey[] = ["edge", "mesial", "distal", "middle", "palatal", "neck", "palatalM", "palatalD", "labialM", "labialD"];
     const lockedOf = (id: string) => LOCKED.get(id) ?? new Set<DotKey>();
-    const holdOf = (tooth: DirectTooth, but: DotKey) => [...lockedOf(tooth.id)].filter((key) => key !== but).map((key) => DOT_AT[key]);
+    // The white dot locked: the tooth's place is locked - it is not moved, turned, tipped or torqued by the mouse (its
+    // length, width and fullness still change). The other locked dots then hold nothing: nothing moves the tooth.
+    const holdOf = (tooth: DirectTooth, but: DotKey) => (placeLocked(tooth.id) ? [] : [...lockedOf(tooth.id)].filter((key) => key !== but && key !== "middle").map((key) => DOT_AT[key]));
     let pressed = { key: "" as DotKey | "", at: 0, x: 0, y: 0 };
     const dotEls = new Map<DotKey, HTMLDivElement>();
     let thick = { id: "", t: 6 };
@@ -366,7 +372,7 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
         pressed = again ? { key: "", at: 0, x: 0, y: 0 } : { key, at: event.timeStamp, x: event.clientX, y: event.clientY };
         const locked = new Set(lockedOf(tooth.id));
         if (again) { if (locked.has(key)) locked.delete(key); else locked.add(key); LOCKED.set(tooth.id, locked); }
-        if (locked.has(key)) { say(event.clientX, event.clientY, t("waxup.direct.dotLocked")); return; }
+        if (locked.has(key)) { say(event.clientX, event.clientY, t(key === "middle" ? "waxup.direct.placeLocked" : "waxup.direct.dotLocked", { fdi: tooth.fdi })); return; }
         el.setPointerCapture(event.pointerId);
         dotDrag = { key, tooth, point: dotAt(tooth, key), normal: [-r.direction[0], -r.direction[1], -r.direction[2]], pointer: event.pointerId };
         el.classList.add("held");
@@ -393,14 +399,15 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
           // torque). The way it is mostly dragged is the one taken - a slight wander the other ways changes nothing.
           const most = Math.max(Math.abs(u), Math.abs(o), Math.abs(m));
           const only = (x: number) => (Math.abs(x) < most * 0.4 ? 0 : x);
-          const torque = degrees(only(o), 0.66 * tooth.length), tip = degrees(only(m), 0.66 * tooth.length), longer = only(u);
+          const fixed = placeLocked(tooth.id);
+          const torque = fixed ? 0 : degrees(only(o), 0.66 * tooth.length), tip = fixed ? 0 : degrees(only(m), 0.66 * tooth.length), longer = fixed ? u : only(u);
           change = { kind: "dot", length: longer, torque, rotate: 0, contact: 0, side: null, tip };
           const angle = (name: string, x: number) => (Math.abs(x) >= 0.5 ? `  ${name} ${x >= 0 ? "+" : ""}${x.toFixed(0)}°` : "");
           text = `${Math.abs(longer) >= 0.05 ? mm(longer) : ""}${angle(t("waxup.direct.torque"), torque)}${angle(t("waxup.direct.tip"), tip)}`;
         } else {
           // Along the arch: that contact. Labially or palatally: that side goes there, the other staying (rotation).
           const outward = key === "mesial" ? 1 : -1;
-          const rotate = degrees(o, tooth.width) * outward;
+          const rotate = placeLocked(tooth.id) ? 0 : degrees(o, tooth.width) * outward;
           change = { kind: "dot", length: 0, torque: 0, rotate, contact: m * outward, side: key };
           text = `${mm(m * outward)}${Math.abs(rotate) >= 0.5 ? `  ${rotate >= 0 ? "+" : ""}${rotate.toFixed(0)}°` : ""}`;
         }
@@ -433,11 +440,17 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
       // While the tooth itself is dragged the dots are put away (they come back on the tooth where it is left).
       if (!tooth || !host || !project || drag) { for (const el of dotEls.values()) el.style.display = "none"; return; }
       const xy = project(DOTS.flatMap((key) => dotAt(tooth, key)));
+      // Build 305 (Rakesh: are ten dots too much for the user): only the dots of the face turned to the view are
+      // shown - from the lip the labial ones, from the palate the palatal ones - so a tooth carries seven at most.
+      const mid = project(dotAt(tooth, "middle"));
+      const look = ray(mid[0], mid[1])?.direction;
+      const facing = look ? dot(look, tooth.frame.out) : 0;
+      const hiddenFace = (key: DotKey) => (key === "palatal" || key === "palatalM" || key === "palatalD" ? facing < -0.25 : key === "labialM" || key === "labialD" || key === "neck" ? facing > 0.25 : false);
       DOTS.forEach((key, k) => {
         const el = dotEls.get(key)!;
         if (dotDrag?.key === key) return;
         const x = xy[k * 2], y = xy[k * 2 + 1];
-        const inside = x > host.left + 6 && x < host.right - 6 && y > host.top + 6 && y < host.bottom - 6;
+        const inside = !hiddenFace(key) && x > host.left + 6 && x < host.right - 6 && y > host.top + 6 && y < host.bottom - 6;
         // While one dot is held the others wait where they are (the tooth is changing under them).
         el.style.display = inside && !dotDrag ? "block" : dotDrag ? el.style.display : "none";
         if (!dotDrag) { el.style.left = `${x}px`; el.style.top = `${y}px`; el.classList.toggle("locked", lockedOf(tooth.id).has(key)); }
