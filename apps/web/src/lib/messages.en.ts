@@ -5983,7 +5983,7 @@ export const MESSAGES_EN = {
   "waxup.fitBite.title": "Fit to the bite",
   "waxup.fitBite.button": "Fit to the bite",
   "waxup.fitBite.working": "Fitting to the bite...",
-  "waxup.fitBite.hint": "Carves the wax back where the opposing teeth would meet it - closing, and in the forward and side movements - at the opening set in Open bite. Make does this first anyway; here you see it before you smooth and finish.",
+  "waxup.fitBite.hint": "Carves the wax back where the opposing teeth would meet it - closing, and in the forward and side movements - at the opening set in Open bite - and evens the trimmed face out. Export does this first anyway; here you see it and can go on shaping.",
   "waxup.fitBite.at": "Fits the palatal and every surface the opposing teeth reach, at the bite as opened ({mm} mm at the incisors).",
   "waxup.fitBite.clear": "Fitted: the opposing teeth clear the wax as it is.",
   "waxup.boundary.title": "Boundary line",
