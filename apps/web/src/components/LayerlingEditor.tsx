@@ -12300,7 +12300,7 @@ export function LayerlingEditor({
       return { strayArrays, strayMillions: strayNumbers / 1e6, readOnlyMeshes: readOnlyMeshes.size, shapes: shapesRef.current.length, shownMillions: shown / 1e6, historySteps: history.length, historyIndex: historyIndexRef.current, historyOnlyMillions: history.map((n) => +(n / 1e6).toFixed(1)), biteCopies: madeBiteRef.current.size, biteMillions: bite / 1e6 };
     };
   }, []);
-  useEffect(() => { (window as unknown as { layerlingWaxupState?: () => unknown }).layerlingWaxupState =() => { const w = waxupRef.current; return { slot: w.slot, setId: w.setId, setIds: w.setIds, setName: w.setName, single: w.single, placed: w.placed.length, busy: w.busy, error: w.error }; }; }, []);
+  useEffect(() => { (window as unknown as { layerlingWaxupState?: () => unknown }).layerlingWaxupState =() => { const w = waxupRef.current; return { slot: w.slot, setRank: w.setRank, setId: w.setId, setIds: w.setIds, setName: w.setName, single: w.single, placed: w.placed.length, busy: w.busy, error: w.error }; }; }, []);
   /**
    * Build 101: Wax-up Studio's own Undo and Redo - every step (placing, the sliders, nudges, the teeth
    * chosen, the set, the occlusion) records the wax-up's settings with the design's place in its history;
@@ -12425,7 +12425,7 @@ export function LayerlingEditor({
       setWaxup((latest) => ({ ...latest, setRank: { ...(latest.setRank ?? {}), [slot]: ranked } }));
       const scanId = dentalStudioRef.current?.slots[slot];
       const latest = waxupRef.current;
-      if (scanId && !waxTeethOf(scanId).length && !waxSetByHand.current.has(slot) && latest.slot === slot && latest.setIds?.[slot] !== ranked[0] && (latest.setIds?.[slot] || latest.setId)) void chooseBuiltInSet(ranked[0], true);
+      if (scanId && !waxTeethOf(scanId).length && !waxSetByHand.current.has(slot) && latest.slot === slot && latest.setIds?.[slot] !== ranked[0]) void chooseBuiltInSet(ranked[0], true);
     } catch { waxRankKey.current = ""; }
   }, [chooseBuiltInSet, waxArch]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 107: for checks - how far each wax-up dot is from the arch's scan (in the studio's coordinates), and where the placed teeth sit.
