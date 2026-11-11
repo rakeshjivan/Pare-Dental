@@ -400,7 +400,7 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
           const most = Math.max(Math.abs(u), Math.abs(o), Math.abs(m));
           const only = (x: number) => (Math.abs(x) < most * 0.4 ? 0 : x);
           const fixed = placeLocked(tooth.id);
-          const torque = fixed ? 0 : degrees(only(o), 0.66 * tooth.length), tip = fixed ? 0 : degrees(only(m), 0.66 * tooth.length), longer = fixed ? u : only(u);
+          const torque = fixed ? 0 : degrees(only(o), 0.66 * tooth.length), tip = fixed ? 0 : degrees(only(m), 0.66 * tooth.length), longer = only(u);
           change = { kind: "dot", length: longer, torque, rotate: 0, contact: 0, side: null, tip };
           const angle = (name: string, x: number) => (Math.abs(x) >= 0.5 ? `  ${name} ${x >= 0 ? "+" : ""}${x.toFixed(0)}°` : "");
           text = `${Math.abs(longer) >= 0.05 ? mm(longer) : ""}${angle(t("waxup.direct.torque"), torque)}${angle(t("waxup.direct.tip"), tip)}`;
