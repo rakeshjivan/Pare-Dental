@@ -25,11 +25,10 @@ export type PalatalForm = "patient" | "library" | "shell";
  * the scan pressed or moved onto the library teeth - every tooth keeps its own anatomy, labial and palatal. So the
  * whole library teeth joined on ("patient": the patient's own surface shows only where it stands outside a tooth).
  */
-export const PALATAL_DEFAULT: PalatalForm = "library";
-// Build 288 (Rakesh: the palatal of the 12 "not quite blending"): joined whole, a patient's tooth that stands palatal of
-// its wax tooth still showed as a ledge beside it. So the default joins the whole teeth AND presses the patient's
-// palatal onto them ("library"); "patient" joins them and leaves the scan alone; "shell" is build 283's scan shaped
-// to the teeth.
+export const PALATAL_DEFAULT: PalatalForm = "patient";
+// Build 288: three ways. "patient" (the default) joins the whole teeth and leaves the scan alone; "library" also presses
+// the patient's palatal onto the wax teeth where it stands out beyond them - tried as the default on the lab benchmark
+// and put back: it tears the scan into slivers at the palatal gum line; "shell" is build 283's scan shaped to the teeth.
 
 /** A wax tooth, in the scan's coordinates: its closed soup and frame (up towards the incisal edge, out labial). */
 export type PalatalTooth = { soup: Float32Array; origin: ArrayLike<number>; up: ArrayLike<number>; out: ArrayLike<number>; mesial: ArrayLike<number> };

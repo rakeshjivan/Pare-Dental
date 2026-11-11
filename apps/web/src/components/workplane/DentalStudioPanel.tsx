@@ -1081,7 +1081,7 @@ export function DentalStudioPanel({
         {/* Build 118: the palatal surface - the library tooth's (the patient's palatal pressed onto it) or the patient's. */}
         <h4 className="dental-substep-title">{t("waxup.palatalTitle")}</h4>
         <div className="studio-mm-choice three" role="radiogroup" aria-label={t("waxup.palatalTitle")}>
-          {(["library", "patient", "shell"] as const).map((form) => (
+          {(["patient", "library", "shell"] as const).map((form) => (
             <button key={form} type="button" role="radio" aria-checked={(wv.palatal ?? PALATAL_DEFAULT) === form} className={(wv.palatal ?? PALATAL_DEFAULT) === form ? "active" : ""} disabled={busy} onClick={() => waxup.actions.onPalatal?.(form)}>{t(`waxup.palatal.${form}`)}</button>
           ))}
         </div>
