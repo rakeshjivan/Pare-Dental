@@ -13,18 +13,22 @@ describe("extendNeck", () => {
     for (let i = 0; i < soup.length; i += 3) if (soup[i + 2] >= -10 * NECK_FROM) for (let k = 0; k < 3; k += 1) expect(out[i + k]).toBe(soup[i + k]);
   });
 
-  it("carries the cervical end gumwards and a little palatally, eased in from the crown", () => {
+  it("carries the palatal side of the cervical end gumwards and a little palatally, eased in from the crown", () => {
     let last = 0;
     for (let i = 0; i < soup.length; i += 3) {
-      if (soup[i] !== -3 || soup[i + 1] !== 0) continue;
+      if (soup[i] !== -3 || soup[i + 1] !== -6) continue;
       const moved = soup[i + 2] - out[i + 2];
       expect(moved).toBeGreaterThanOrEqual(last - 1e-6);
       last = moved;
       if (soup[i + 2] === -10) { expect(moved).toBeCloseTo(NECK_REACH, 4); expect(soup[i + 1] - out[i + 1]).toBeCloseTo(NECK_REACH * NECK_LEAN, 4); expect(out[i]).toBe(-3); }
     }
     // Just past where the neck begins it has hardly moved.
-    const k = soup.findIndex((_, i) => i % 3 === 2 && soup[i] === -7.5);
+    const k = soup.findIndex((_, i) => i % 3 === 2 && soup[i] === -7.5 && soup[i - 1] === -6);
     expect(soup[k] - out[k]).toBeLessThan(0.1);
+  });
+
+  it("leaves the labial side of the neck where it was laid", () => {
+    for (let i = 0; i < soup.length; i += 3) if (soup[i + 1] === 0) for (let k = 0; k < 3; k += 1) expect(out[i + k]).toBe(soup[i + k]);
   });
 
   it("gives back a tooth too short to have a neck as it is", () => {
