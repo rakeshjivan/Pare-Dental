@@ -5632,7 +5632,7 @@ export const MESSAGES_EN = {
   "waxStudio.step.find": "Find teeth",
   "waxStudio.step.choose": "Choose teeth",
   "waxStudio.step.set": "Library",
-  "waxStudio.step.place": "Position",
+  "waxStudio.step.place": "Design",
   "waxStudio.step.adjust": "Adapt",
   "waxStudio.step.occlusion": "Occlusion",
   "waxStudio.step.make": "Export",

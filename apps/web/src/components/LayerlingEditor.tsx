@@ -10822,7 +10822,9 @@ export function LayerlingEditor({
   const studioToolSlot = useStudioSlot("tool");
   // Build 107: Wax-up Studio's Sculpt step - the tooth picked (its number or on the model) opens its sculpt
   // tools in the panel at once; Done closes them, and they open again only for a tooth picked anew.
-  const studioWaxSculpt = studioShellOn && Boolean(dentalStudio?.waxStudio) && studioWaxStep === "sculpt";
+  // Build 302 (Rakesh: "the position, adjustment and sculpt steps are really a mess ... a single step"): in Wax-up Studio
+  // the brushes work in the one step where the teeth are placed and shaped ("place"); "sculpt" is no longer a step there.
+  const studioWaxSculpt = studioShellOn && Boolean(dentalStudio?.waxStudio) && (studioWaxStep === "sculpt" || studioWaxStep === "place");
   // Build 108: Open the bite - both arches seen from the patient's right, so the lower is seen to open.
   useEffect(() => {
     if (!studioShellOn || !dentalStudio?.waxStudio || studioWaxStep !== "bite") return;
@@ -13915,7 +13917,9 @@ export function LayerlingEditor({
   // Build 112 (as CEREC): in Sculpt, positioning, the handle goes to the tooth under the pointer - once the pointer
   // has rested on it a moment (passing over a tooth on the way to a handle does not take it).
   useEffect(() => {
-    if (!studioWaxSculpt || waxSculptBrush) return;
+    // Build 302: not in Wax-up Studio's one step - there a tooth is picked by clicking it (resting on a tooth on the
+    // way to a dot must not take the dots off the tooth being worked on).
+    if (!studioWaxSculpt || waxSculptBrush || waxupRef.current.stage === "position") return;
     let frame = 0, timer = 0, pending: string | null = null, x = 0, y = 0;
     const look = () => {
       frame = 0;
@@ -22933,13 +22937,13 @@ export function LayerlingEditor({
       {dentalStudio?.waxStudio && marksEditing && !waxup.toothPick ? (
         <WaxMarkDrag marks={markDragList()} surfaceAt={(x, y) => { const ray = window.layerlingScreenRay?.(x, y); return markSurfaceAt(x, y) ?? (ray ? archPlaneHit(ray.origin, ray.direction) : null); }} onMove={(id, point) => moveToothMark(id, point, false)} onDrop={(id, point) => moveToothMark(id, point, true)} />
       ) : null}
-      {dentalStudio?.waxStudio && waxup.stage === "position" && waxup.placed.length && waxup.picking === null && !marksEditing ? (
+      {dentalStudio?.waxStudio && waxup.stage === "position" && waxup.placed.length && waxup.picking === null && !marksEditing && !waxSculptBrush ? (
         <WaxToothDrag teeth={waxDragTeeth} restrict={waxup.restrict} onLibrary={cycleWaxSet} onSelect={(id) => selectShape(id, "replace")} onPreview={previewWaxTooth} onCommit={adjustWaxToothBy} onDouble={(id) => confirmWaxTooth(id, false)} />
       ) : null}
-      {dentalStudio?.waxStudio && waxDirectTeeth.length && !marksEditing && ((waxup.stage === "position" && waxup.picking === null) || (studioWaxSculpt && !waxSculptBrush)) ? (
+      {dentalStudio?.waxStudio && waxDirectTeeth.length && !marksEditing && !waxSculptBrush && !waxup.boundaryPick && ((waxup.stage === "position" && waxup.picking === null) || studioWaxSculpt) ? (
         <WaxToothDirect teeth={waxDirectTeeth} selected={selectedIds.length === 1 ? selectedIds[0] : null} onSelect={(id) => selectShape(id, "replace")} onBegin={beginWaxDirect} onDrag={(_id, change) => dragWaxDirect(change)} onEnd={() => { waxDirectBase.current = null; const held = waxLive.current; if (held) { window.clearTimeout(held.timer); held.finish(); } }} />
       ) : null}
-      {studioWaxSculpt && waxup.placed.length && !waxSculptBrush ? (
+      {studioWaxSculpt && waxup.stage !== "position" && waxup.placed.length && !waxSculptBrush ? (
         // Build 112: Sculpt, positioning - a tooth clicked is picked (its gimbal shows), dragged it moves.
         <WaxToothDrag teeth={waxDragTeeth} restrict={waxup.restrict} onSelect={(id) => selectShape(id, "replace")} onPreview={previewWaxTooth} onCommit={adjustWaxToothBy} onDouble={() => undefined} />
       ) : null}

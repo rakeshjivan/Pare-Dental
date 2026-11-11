@@ -426,7 +426,7 @@ export function DentalStudioPanel({
    */
   // Build 103: as Meshmixer (manual) - the teeth positioned, then sculpted, then the model made; nothing fitted for you.
   // Build 118: no Keep & erase step - the whole library tooth is kept and its palatal pressed on (Gum line); boundary lines are in Sculpt.
-  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "mark", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), ...(waxup.view.marginOn ? ["margin" as const] : []), "set", "place", "sculpt", "gum", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
+  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? (waxup.view.manual ? ["scans", "mark", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), ...(waxup.view.marginOn ? ["margin" as const] : []), "set", "place", "gum", "make"] : ["scans", "trim", "teeth", "set", "place", "adjust", ...(waxup.view.occlusion.ready ? ["occlusion" as const] : []), "make"]) : null;
   const [waxStepId, setWaxStepId] = useState<WaxStepId>(editing ? "make" : "scans");
   const waxStepName = (id: WaxStepId) => t(`waxStudio.step.${id}` as "waxStudio.step.scans");
   const waxStep = waxSteps ? (waxSteps.includes(waxStepId) ? waxStepId : "make") : null;
@@ -1175,7 +1175,7 @@ export function DentalStudioPanel({
       {/* Build 101: in Wax-up Studio's steps, the step's own part of it, on its own. */}
       {waxup && waxSteps && waxPart ? (
         <section className="dental-section dental-card current wax-step-body" aria-label={t(`waxStudio.step.${waxPart}` as "waxStudio.step.scans")}>
-          <WaxupCard part={waxPart} toolSlot={framed && waxPart === "sculpt" ? toolSlot : undefined} view={waxup.view} actions={{ ...waxup.actions, onConfirm: () => { setWaxAuto(false); goWax(waxup.view.manual ? "sculpt" : "adjust"); }, ...(waxStudio && waxPart === "place" ? { onChangeSet: () => { setWaxAuto(false); goWax("set"); } } : {}) }} slots={{ upper: Boolean(slots.upper) && waxStudio?.arches !== "lower", lower: Boolean(slots.lower) && waxStudio?.arches !== "upper" }} imt={waxStudio?.flow === "imt"} busy={busy || !analysis} workspace={workspace} />
+          <WaxupCard part={waxPart} toolSlot={framed && (waxPart === "sculpt" || (waxPart === "place" && waxup.view.manual)) ? toolSlot : undefined} view={waxup.view} actions={{ ...waxup.actions, onConfirm: () => { setWaxAuto(false); goWax(waxup.view.manual ? "sculpt" : "adjust"); }, ...(waxStudio && waxPart === "place" ? { onChangeSet: () => { setWaxAuto(false); goWax("set"); } } : {}) }} slots={{ upper: Boolean(slots.upper) && waxStudio?.arches !== "lower", lower: Boolean(slots.lower) && waxStudio?.arches !== "upper" }} imt={waxStudio?.flow === "imt"} busy={busy || !analysis} workspace={workspace} />
         </section>
       ) : null}
       {waxup && !waxSteps && !mbSteps ? card(3, t(waxStudio ? "waxup.stepStudio" : "waxup.step"), waxup.view.placed.length > 0, t(waxStudio ? "waxup.stepStudioHint" : "waxup.stepHint"), waxupSummary(waxup.view), (

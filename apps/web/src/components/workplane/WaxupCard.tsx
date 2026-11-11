@@ -784,7 +784,22 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
               <>
                 {/* Build 291 (Rakesh: "the panel on the right is insanely complicated"): one line of what to do and the
                     controls for it; the numbers, the patient's teeth showing through and the rest are folded away. */}
-                {view.toothEdit && actions.onToothEdit ? (
+                {/* Build 302 (Rakesh: "a single step where we can do all the movements and adjustments"): the brushes are
+                    here too - on the tooth picked, beside its dots and sliders; picking a brush puts the dots away, "Shape
+                    & place" (or Esc) brings them back. */}
+                {toolSlot && view.toothEdit && actions.onSculptTool ? (
+                  <div className="studio-mm-choice wax-sculpt-modes" role="radiogroup" aria-label={t("waxup.brush.title")}>
+                    {(["position", "add", "remove", "smooth", "move"] as const).map((tool) => (
+                      <button key={tool} type="button" role="radio" aria-checked={(view.sculptTool ?? "position") === tool} className={(view.sculptTool ?? "position") === tool ? "active" : ""} disabled={working || !view.selected} title={t(tool === "position" ? "waxup.brush.shapeHint" : `waxup.brush.${tool}Hint`)} onClick={() => actions.onSculptTool?.(tool)}>{t(tool === "position" ? "waxup.brush.shape" : `waxup.brush.${tool}`)}</button>
+                    ))}
+                  </div>
+                ) : null}
+                {toolSlot && view.toothEdit && view.sculptTool && view.sculptTool !== "position" && view.sculptTool !== "scale" ? (
+                  <>
+                    <p className="blend-hint" role="status">{t(`waxup.brush.${view.sculptTool}Hint`)}</p>
+                    <div className="studio-tool-slot waxup-sculpt-slot" ref={toolSlot} />
+                  </>
+                ) : view.toothEdit && actions.onToothEdit ? (
                   <ToothEditPanel tooth={view.toothEdit} workspace={workspace} disabled={working} onChange={actions.onToothEdit} onStep={actions.onToothStep} onMirror={actions.onToothMirror} onCopyAcross={actions.onToothCopyAcross} onGive={actions.onToothGive} />
                 ) : (
                   <SmileSetPanel set={view.smileSet} workspace={workspace} disabled={working} onChange={actions.onSmile} shapes={{ sets: view.builtIn.filter((entry) => entry.arch === view.slot), chosen: view.setIds?.[view.slot] ?? view.setId ?? null, best: view.setRank?.[view.slot]?.[0] ?? null, onPick: actions.onBuiltIn }} />
