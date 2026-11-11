@@ -775,29 +775,28 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
             {/* Build 277 (roadmap phase 2): the front teeth as one set on the arch, from whole-set controls. */}
             {view.smileSet && actions.onSmile ? (
               <>
-                {/* Build 277: the anchors the set is laid from - the midline at the centrals' edges and the canine tips - clicked on the scan. */}
-                <div className="dental-trim-buttons">
-                  <button type="button" className={view.picking !== null ? "active" : "secondary"} disabled={working || view.picking !== null} title={t("waxup.smileAnchorsHint")} onClick={actions.onMark}>{t("waxup.smileAnchors")}</button>
-                </div>
-                {view.picking !== null ? <p className="blend-hint" role="status">{t(WAXUP_LANDMARKS[view.picking])}</p> : null}
-                {/* Build 279 (Rakesh): where the patient's tooth stands proud of the wax - not always additive. */}
-                {view.proudTeeth?.some((tooth) => tooth.depth > 0) && actions.onReduce ? (
-                  <div className="wax-proud">
-                    <strong>{t("waxup.proudTitle")}</strong>
-                    <span className="blend-hint" role="status">{t("waxup.proudHint")}</span>
-                    {view.proudTeeth.filter((tooth) => tooth.depth > 0).map((tooth) => (
-                      <label key={tooth.fdi} className="edge-modifier-check">
-                        <input type="checkbox" checked={tooth.reduce} disabled={working} onChange={(event) => actions.onReduce?.(tooth.fdi, event.currentTarget.checked)} />
-                        <span>{t(tooth.reduce ? "waxup.proudReduced" : "waxup.proudTooth", { fdi: tooth.fdi, mm: tooth.depth.toFixed(1) })}</span>
-                      </label>
-                    ))}
-                  </div>
-                ) : null}
+                {/* Build 291 (Rakesh: "the panel on the right is insanely complicated"): one line of what to do and the
+                    controls for it; the numbers, the patient's teeth showing through and the rest are folded away. */}
                 {view.toothEdit && actions.onToothEdit ? (
                   <ToothEditPanel tooth={view.toothEdit} workspace={workspace} disabled={working} onChange={actions.onToothEdit} onStep={actions.onToothStep} onMirror={actions.onToothMirror} onCopyAcross={actions.onToothCopyAcross} />
                 ) : (
                   <SmileSetPanel set={view.smileSet} workspace={workspace} disabled={working} onChange={actions.onSmile} />
                 )}
+                {view.proudTeeth?.some((tooth) => tooth.depth > 0) && actions.onReduce ? (
+                  <details className="wax-fold">
+                    <summary>{t("waxup.proudFold", { count: view.proudTeeth.filter((tooth) => tooth.depth > 0).length })}</summary>
+                    <div className="wax-proud">
+                      <span className="blend-hint" role="status">{t("waxup.proudHint")}</span>
+                      {view.proudTeeth.filter((tooth) => tooth.depth > 0).map((tooth) => (
+                        <label key={tooth.fdi} className="edge-modifier-check">
+                          <input type="checkbox" checked={tooth.reduce} disabled={working} onChange={(event) => actions.onReduce?.(tooth.fdi, event.currentTarget.checked)} />
+                          <span>{t(tooth.reduce ? "waxup.proudReduced" : "waxup.proudTooth", { fdi: tooth.fdi, mm: tooth.depth.toFixed(1) })}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
+                {view.picking !== null ? <p className="blend-hint" role="status">{t(WAXUP_LANDMARKS[view.picking])}</p> : null}
               </>
             ) : (<>
             {view.selected && !view.selectedAll && view.toothEdit && actions.onToothStep ? (
@@ -807,16 +806,26 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
             {actions.onSetCurve ? <EdgeModifierSlider label={t("waxup.dropCurve")} title={t("waxup.dropCurveHint")} value={view.setCurve ?? 0} min={-4} max={4} step={0.1} workspace={workspace} length disabled={working} onChange={(value) => actions.onSetCurve?.(Math.max(-4, Math.min(4, Math.round(value * 10) / 10)))} /> : null}
             <p className="blend-hint">{t("waxup.dropCurveHint")}</p>
             </>)}
-            <label className="edge-modifier-check">
-              <input type="checkbox" checked={view.scanSeeThrough} onChange={(event) => actions.onScanSeeThrough?.(event.currentTarget.checked)} />
-              <span>{t("waxup.seeThrough")}</span>
-            </label>
-            {actions.onDropAgain || actions.onChangeSet ? (
-              <div className="dental-trim-buttons">
-                {actions.onChangeSet ? <button type="button" className="secondary" disabled={working} onClick={() => actions.onChangeSet?.()}>{t("waxup.changeSet")}</button> : null}
-                {actions.onDropAgain ? <button type="button" className="secondary" disabled={working} onClick={() => actions.onDropAgain?.()}>{t("waxup.dropAgain")}</button> : null}
-              </div>
-            ) : null}
+            {(() => {
+              const rest = (<>
+                {view.smileSet && actions.onSmile ? (
+                  <div className="dental-trim-buttons">
+                    <button type="button" className={view.picking !== null ? "active" : "secondary"} disabled={working || view.picking !== null} title={t("waxup.smileAnchorsHint")} onClick={actions.onMark}>{t("waxup.smileAnchors")}</button>
+                  </div>
+                ) : null}
+                <label className="edge-modifier-check">
+                  <input type="checkbox" checked={view.scanSeeThrough} onChange={(event) => actions.onScanSeeThrough?.(event.currentTarget.checked)} />
+                  <span>{t("waxup.seeThrough")}</span>
+                </label>
+                {actions.onDropAgain || actions.onChangeSet ? (
+                  <div className="dental-trim-buttons">
+                    {actions.onChangeSet ? <button type="button" className="secondary" disabled={working} onClick={() => actions.onChangeSet?.()}>{t("waxup.changeSet")}</button> : null}
+                    {actions.onDropAgain ? <button type="button" className="secondary" disabled={working} onClick={() => actions.onDropAgain?.()}>{t("waxup.dropAgain")}</button> : null}
+                  </div>
+                ) : null}
+              </>);
+              return view.smileSet && actions.onSmile ? <details className="wax-fold"><summary>{t("waxup.moreFold")}</summary>{rest}</details> : rest;
+            })()}
           </>
         ) : null}
         {show("place") && !dropMode ? (<>
@@ -1178,16 +1187,16 @@ function SmileSetPanel({ set, workspace, disabled, onChange }: { set: NonNullabl
     <div className="wax-smile-set">
       <div className="wax-guide">
         <strong>{t("waxup.smileTitle")}</strong>
-        <span>{t("waxup.smileHint")}</span>
+        <span>{t(set.marked ? "waxup.smileHintShort" : "waxup.smileHint")}</span>
       </div>
       {set.marked ? (<>
         {/* Build 278 (step 2): the widths, midline and canine tips are the dentist's marks - only the levels and fullness here. */}
-        <p className="blend-hint" role="status">{t("waxup.smileMarked")}</p>
         {mm("length", "waxup.smileLength", "waxup.smileLengthHint")}
         {mm("fullness", "waxup.smileFullness", "waxup.smileFullnessHint")}
         <div className="dental-trim-buttons">
           <button type="button" className="secondary" disabled={disabled} onClick={() => onChange({ ...SET_DEFAULTS })}>{t("waxup.smileReset")}</button>
         </div>
+        <details className="wax-fold"><summary>{t("waxup.howFold")}</summary><p className="blend-hint" role="status">{t("waxup.smileMarked")}</p></details>
       </>) : (<>
       {mm("length", "waxup.smileLength", "waxup.smileLengthHint")}
       {mm("midline", "waxup.smileMidline", "waxup.smileMidlineHint")}
@@ -1279,7 +1288,7 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror
         <strong>{t("waxup.toothTitle", { fdi: tooth.fdi })}</strong>
         <span>{t(live ? "waxup.toothHint" : "waxup.toothStepHint")}</span>
       </div>
-      <p className="blend-hint" role="status">{t("waxup.toothSize", { width: tooth.width.toFixed(1), length: tooth.length.toFixed(1), ratio: Math.round((tooth.width / Math.max(0.1, tooth.length)) * 100) })}</p>
+      <p className="blend-hint wax-tooth-size" role="status">{t("waxup.toothSize", { width: tooth.width.toFixed(1), length: tooth.length.toFixed(1), ratio: Math.round((tooth.width / Math.max(0.1, tooth.length)) * 100) })}</p>
       {/* Build 290 (Rakesh): one tooth changes alone unless asked; a tooth that is right can be copied across once. */}
       {onMirror && live ? (
         <div className="wax-tooth-across">
@@ -1290,6 +1299,8 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror
           {onCopyAcross ? <button type="button" className="secondary" disabled={disabled} title={t("waxup.toothCopyAcrossHint")} onClick={onCopyAcross}>{t("waxup.toothCopyAcross")}</button> : null}
         </div>
       ) : null}
+      {(() => {
+        const numbers = (<>
       <h4>{t("waxup.toothPlace")}</h4>
       {row("moveMesial", "waxup.toothMoveMesial", "waxup.toothMoveMesialHint")}
       {row("moveOut", "waxup.toothMoveOut", "waxup.toothMoveOutHint")}
@@ -1303,6 +1314,10 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror
       {row("distal", "waxup.toothDistal", "waxup.toothDistalHint")}
       {live ? row("spread", "waxup.toothSpread", "waxup.toothSpreadHint") : null}
       {row("thickness", "waxup.toothThickness", "waxup.toothThicknessHint")}
+        </>);
+        // Build 291: with the tooth itself to take hold of, the numbers are there for when an exact value is wanted.
+        return live ? <details className="wax-fold"><summary>{t("waxup.numbersFold")}</summary>{numbers}</details> : numbers;
+      })()}
       {live ? (
         <div className="dental-trim-buttons">
           <button type="button" className="secondary" disabled={disabled} onClick={() => onChange?.(tooth.fdi, { ...NO_EDIT })}>{t("waxup.toothReset")}</button>

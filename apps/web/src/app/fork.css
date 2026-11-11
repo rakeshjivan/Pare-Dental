@@ -2292,3 +2292,11 @@ html[data-theme="dark"] .dental-studio-panel .dental-picture-tiles button { back
 .wax-dot-edge:hover, .wax-dot-edge.held { background: #3b82f6; }
 .wax-tooth-across { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0 4px; }
 .wax-tooth-across button { white-space: nowrap; }
+
+/* Build 291: parts of the wax-up panel folded away until wanted. */
+.wax-fold { margin: 8px 0 0; border-top: 1px solid rgba(15, 23, 42, 0.08); padding-top: 6px; }
+.wax-fold > summary { cursor: pointer; font-weight: 600; font-size: 13px; padding: 6px 2px; color: #0a786c; list-style: none; display: flex; align-items: center; gap: 6px; }
+.wax-fold > summary::-webkit-details-marker { display: none; }
+.wax-fold > summary::before { content: "\25B8"; font-size: 11px; transition: transform 0.12s; }
+.wax-fold[open] > summary::before { transform: rotate(90deg); }
+.wax-fold > :not(summary) { margin-top: 4px; }
