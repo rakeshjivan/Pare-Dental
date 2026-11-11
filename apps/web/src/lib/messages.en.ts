@@ -5806,6 +5806,8 @@ export const MESSAGES_EN = {
   "waxup.toothMirrorHint": "Off (as it starts): only this tooth changes. On: changing 12 changes 22 the same way, mirrored.",
   "waxup.toothCopyAcross": "Copy to other side",
   "waxup.toothCopyAcrossHint": "Gives this tooth's changes to its partner across the midline, once - for when this tooth is right and the other should match.",
+  "waxup.toothGive": "Neighbour gives way",
+  "waxup.toothGiveHint": "Off (as it starts): moving a side of this tooth changes this tooth only - a gap opens or the teeth overlap, for you to close. On: the tooth next door narrows or widens by the same amount, so the contact stays closed.",
   "waxup.toothReset": "Undo this tooth's changes",
   "waxup.toothLess": "Less",
   "waxup.toothMore": "More",

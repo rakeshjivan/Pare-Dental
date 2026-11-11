@@ -14346,6 +14346,18 @@ export function LayerlingEditor({
     const own = { ...(record.pending ?? record.own ?? {}) };
     editWaxTeeth({ ...own, [partner]: { ...NO_EDIT, ...(own[fdi] ?? {}) } });
   };
+  /**
+   * Build 292 (Rakesh: changing one tooth changed the neighbour he had spent time aligning): which teeth a contact
+   * moved on `fdi` may change - the tooth itself (and its partner across the midline, when mirrored), and its
+   * neighbours only when "Neighbour gives way" is ticked.
+   */
+  const waxContactHas = (fdi: number) => (n: number) => {
+    const record = waxupRef.current.smile?.[waxupRef.current.slot];
+    if (!waxSetHas(n)) return false;
+    if (record?.give === true) return true;
+    const partner = Math.floor(fdi / 10) % 2 === 1 ? fdi + 10 : fdi - 10;
+    return n === fdi || (record?.mirror === true && n === partner);
+  };
   const dragWaxDirect = (change: DirectChange) => {
     const base = waxDirectBase.current;
     const slot = waxupRef.current.slot;
@@ -14354,7 +14366,7 @@ export function LayerlingEditor({
     const fdi = base.fdi;
     const mirror = record.mirror === true;
     const partner = Math.floor(fdi / 10) % 2 === 1 ? fdi + 10 : fdi - 10;
-    if (change.kind === "contact") { editWaxTeeth(moveContact(base.own, frontTeeth(slot), fdi, change.side, change.mm, mirror, waxSetHas)); return; }
+    if (change.kind === "contact") { editWaxTeeth(moveContact(base.own, frontTeeth(slot), fdi, change.side, change.mm, mirror, waxContactHas(fdi))); return; }
     if (change.kind === "moveAll") {
       // Build 290: the whole set moved as one - each tooth by the same way in the scene, read on its own directions.
       const own = { ...base.own };
@@ -14368,7 +14380,7 @@ export function LayerlingEditor({
     }
     if (change.kind === "dot") {
       // Build 290: a dot dragged - its contact moved (the neighbour giving way) and the tooth lengthened or turned with it.
-      const own = change.side && Math.abs(change.contact) > 1e-6 ? moveContact(base.own, frontTeeth(slot), fdi, change.side, change.contact, mirror, waxSetHas) : { ...base.own };
+      const own = change.side && Math.abs(change.contact) > 1e-6 ? moveContact(base.own, frontTeeth(slot), fdi, change.side, change.contact, mirror, waxContactHas(fdi)) : { ...base.own };
       const add = (n: number) => { if (!waxSetHas(n)) return; const was = { ...NO_EDIT, ...(own[n] ?? {}) }; own[n] = { ...was, length: was.length + change.length, torque: was.torque + change.torque, rotate: was.rotate + change.rotate }; };
       add(fdi);
       if (mirror) add(partner);
@@ -14428,7 +14440,7 @@ export function LayerlingEditor({
     if (record?.rest[fdi] && waxStepLive(shape.id)) {
       const own = record.pending ?? record.own ?? {};
       // Build 284: a side stepped moves its contact (the tooth beside gives way, no other tooth moves).
-      if (key === "mesial" || key === "distal") { editWaxTeeth(moveContact(own, frontTeeth(waxupRef.current.slot), fdi, key, delta, record.mirror === true, waxSetHas)); return; }
+      if (key === "mesial" || key === "distal") { editWaxTeeth(moveContact(own, frontTeeth(waxupRef.current.slot), fdi, key, delta, record.mirror === true, waxContactHas(fdi))); return; }
       const cur = { ...NO_EDIT, ...(own[fdi] ?? {}) };
       editWaxTooth(fdi, { ...cur, [key]: Math.round((cur[key] + delta) * 100) / 100 });
       return;
@@ -15628,7 +15640,7 @@ export function LayerlingEditor({
     const shape = shapes.find((candidate) => candidate.id === selectedIds[0]);
     const fdi = shape?.waxTooth?.fdi;
     if (!fdi || !smileNow.rest[fdi]) return null;
-    return { fdi, edit: smileNow.pending?.[fdi] ?? smileNow.own?.[fdi] ?? NO_EDIT, mirror: smileNow.mirror === true, width: shape!.waxTooth!.width, length: shape!.waxTooth!.length, live: true };
+    return { fdi, edit: smileNow.pending?.[fdi] ?? smileNow.own?.[fdi] ?? NO_EDIT, mirror: smileNow.mirror === true, give: smileNow.give === true, width: shape!.waxTooth!.width, length: shape!.waxTooth!.length, live: true };
   })();
   // Build 281 (Rakesh: the gimbal was his biggest problem): any other wax tooth chosen (not in a set laid from the
   // marks, or reshaped with the brushes) is stepped directly - the totals shown are what was stepped since it was chosen.
@@ -22988,6 +23000,7 @@ export function LayerlingEditor({
               onArchMarksFind: () => findArchMarks(false),
               onArchMarksClear: () => { waxRecord(); setWaxup((current) => { const next = { ...current, archMarksAuto: { ...current.archMarksAuto, [current.slot]: undefined }, archMarks: { ...(current.archMarks ?? {}), [current.slot]: Array(9).fill(null) } }; waxupRef.current = next; return next; }); window.setTimeout(() => startArchMarks(0), 30); },
               onToothCopyAcross: () => copyWaxToothAcross(),
+              onToothGive: (on: boolean) => setWaxup((latest) => { const record = latest.smile?.[latest.slot]; if (!record) return latest; const next = { ...latest, smile: { ...latest.smile, [latest.slot]: { ...record, give: on } } }; waxupRef.current = next; return next; }),
               onToothMirror: (on: boolean) => setWaxup((latest) => { const record = latest.smile?.[latest.slot]; if (!record) return latest; const next = { ...latest, smile: { ...latest.smile, [latest.slot]: { ...record, mirror: on } } }; waxupRef.current = next; return next; }),
               onBite: (raise: number) => void openWaxBite(raise),
               onGumMode: (mode: GumMode) => setWaxGumMode(mode),

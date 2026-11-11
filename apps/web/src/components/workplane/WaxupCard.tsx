@@ -45,7 +45,7 @@ export type WaxupView = {
   /** Build 277: the front teeth as one set on the arch - its controls and what they make (null: none for this arch). */
   smileSet?: { marked?: boolean; controls: SetControls; centralWidth: number; centralLength: number; red: number | null } | null;
   /** Build 277 (phase 3): the one front tooth chosen in the set, with its own changes. */
-  toothEdit?: { fdi: number; edit: ToothEdit; mirror: boolean; width: number; length: number; live?: boolean } | null;
+  toothEdit?: { fdi: number; edit: ToothEdit; mirror: boolean; give?: boolean; width: number; length: number; live?: boolean } | null;
   /** Build 278 (step 1, Mark): this arch's nine marks (null: not placed), each front tooth's width from them (mm, by FDI), and the arches fully marked. */
   archMarkList?: Array<[number, number, number] | null>;
   /** Build 285: the marks were found on the scan for the dentist to check ("failed": looked for, not made out). */
@@ -300,6 +300,8 @@ export type WaxupActions = {
   onMirrorShape?: () => void;
   /** Build 290: the tooth picked's changes copied to its partner across the midline, once. */
   onToothCopyAcross?: () => void;
+  /** Build 292: whether a tooth's neighbour gives way when its contact is moved. */
+  onToothGive?: (on: boolean) => void;
   onWaxContacts?: (on: boolean) => void;
   onOcclusal?: (mm: number) => void;
   onAdapt?: (what: "bite" | "contacts" | "both") => void;
@@ -778,7 +780,7 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
                 {/* Build 291 (Rakesh: "the panel on the right is insanely complicated"): one line of what to do and the
                     controls for it; the numbers, the patient's teeth showing through and the rest are folded away. */}
                 {view.toothEdit && actions.onToothEdit ? (
-                  <ToothEditPanel tooth={view.toothEdit} workspace={workspace} disabled={working} onChange={actions.onToothEdit} onStep={actions.onToothStep} onMirror={actions.onToothMirror} onCopyAcross={actions.onToothCopyAcross} />
+                  <ToothEditPanel tooth={view.toothEdit} workspace={workspace} disabled={working} onChange={actions.onToothEdit} onStep={actions.onToothStep} onMirror={actions.onToothMirror} onCopyAcross={actions.onToothCopyAcross} onGive={actions.onToothGive} />
                 ) : (
                   <SmileSetPanel set={view.smileSet} workspace={workspace} disabled={working} onChange={actions.onSmile} />
                 )}
@@ -1258,7 +1260,7 @@ function StepButton({ label, disabled, onStep, children }: { label: string; disa
   );
 }
 
-function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror, onCopyAcross }: { onCopyAcross?: () => void; tooth: NonNullable<WaxupView["toothEdit"]>; workspace: WorkplaneWorkspaceSettings; disabled: boolean; onChange?: (fdi: number, edit: ToothEdit) => void; onStep?: (key: keyof ToothEdit, delta: number) => void; onMirror?: (on: boolean) => void }) {
+function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror, onCopyAcross, onGive }: { onCopyAcross?: () => void; onGive?: (on: boolean) => void; tooth: NonNullable<WaxupView["toothEdit"]>; workspace: WorkplaneWorkspaceSettings; disabled: boolean; onChange?: (fdi: number, edit: ToothEdit) => void; onStep?: (key: keyof ToothEdit, delta: number) => void; onMirror?: (on: boolean) => void }) {
   const e = tooth.edit;
   const r = EDIT_RANGES;
   const tenth = (x: number) => Math.round(x * 10) / 10;
@@ -1298,6 +1300,12 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror
           </label>
           {onCopyAcross ? <button type="button" className="secondary" disabled={disabled} title={t("waxup.toothCopyAcrossHint")} onClick={onCopyAcross}>{t("waxup.toothCopyAcross")}</button> : null}
         </div>
+      ) : null}
+      {onGive && live ? (
+        <label className="edge-modifier-check" title={t("waxup.toothGiveHint")}>
+          <input type="checkbox" checked={tooth.give === true} disabled={disabled} onChange={(event) => onGive(event.currentTarget.checked)} />
+          <span>{t("waxup.toothGive")}</span>
+        </label>
       ) : null}
       {(() => {
         const numbers = (<>

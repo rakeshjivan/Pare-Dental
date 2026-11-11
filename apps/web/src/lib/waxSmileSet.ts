@@ -345,6 +345,8 @@ export type SmileRecord = {
   pending?: Record<number, import("@/lib/waxToothEdit").ToothEdit>;
   /** One tooth's change made on its partner across the midline too (default on). */
   mirror?: boolean;
+  /** Build 292: whether a tooth's neighbour gives way when its contact is moved (off: only the tooth itself changes). */
+  give?: boolean;
 };
 
 /** How far a tooth may have been reshaped (not just moved, turned or sized) and still follow the set, mm. */
