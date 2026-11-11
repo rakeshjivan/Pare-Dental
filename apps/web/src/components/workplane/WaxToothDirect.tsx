@@ -400,7 +400,8 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
       const tooth = live.current.teeth.find((candidate) => candidate.id === live.current.selected);
       const host = document.querySelector(".three-workplane-host canvas")?.getBoundingClientRect();
       const project = window.layerlingProjectPoints;
-      if (!tooth || !host || !project) { for (const el of dotEls.values()) el.style.display = "none"; return; }
+      // While the tooth itself is dragged the dots are put away (they come back on the tooth where it is left).
+      if (!tooth || !host || !project || drag) { for (const el of dotEls.values()) el.style.display = "none"; return; }
       const xy = project(DOTS.flatMap((key) => dotAt(tooth, key)));
       DOTS.forEach((key, k) => {
         const el = dotEls.get(key)!;

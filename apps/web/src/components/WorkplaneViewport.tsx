@@ -725,7 +725,7 @@ declare global {
      * Build 282 (Rakesh: a slider moved 13 before the other teeth): several parts drawn moved at once while a control
      * is dragged - each part's own working copy (its objects hidden), updated in place; null puts that part back.
      */
-    layerlingPreviewPart?: (shapeId: string, triangles: Float32Array | null) => void;
+    layerlingPreviewPart?: (shapeId: string, triangles: Float32Array | null, pose?: ArrayLike<number> | null) => void;
     /** Build 73: live Sculpt - the engine's own geometry drawn in the part's place (it updates the buffers itself); null puts the part back. */
     layerlingSculptLive?: (shapeId: string, geometry: THREE.BufferGeometry | null, color?: string) => void;
     /** Build 84: parts drawn with per-corner colours in place of their own (the bite contacts map); null clears. */
@@ -9701,7 +9701,7 @@ export function WorkplaneViewport({
       }
       return look;
     };
-    window.layerlingPreviewPart = (shapeId, triangles) => {
+    window.layerlingPreviewPart = (shapeId, triangles, pose) => {
       const state = threeRef.current;
       if (!state || !triangles || !triangles.length) { drop(shapeId); return; }
       let copy = copies.get(shapeId);
@@ -9740,6 +9740,11 @@ export function WorkplaneViewport({
         copy = { mesh, hidden };
         copies.set(shapeId, copy);
       }
+      // Build 297 (Rakesh: "virtually lag free"): a part only moved or turned is the same triangles under a new pose -
+      // nothing is made or sent again, the graphics card moves it.
+      const drawnMesh = copy.mesh;
+      if (pose) { drawnMesh.matrixAutoUpdate = false; drawnMesh.matrix.fromArray(pose); drawnMesh.matrixWorldNeedsUpdate = true; }
+      else if (!drawnMesh.matrixAutoUpdate) { drawnMesh.matrixAutoUpdate = true; drawnMesh.matrix.identity(); drawnMesh.matrixWorldNeedsUpdate = true; }
       state.needsRender = true;
     };
     return () => { for (const id of [...copies.keys()]) drop(id); for (const look of previewLooks.values()) look.dispose(); delete window.layerlingPreviewPart; };

@@ -1936,6 +1936,8 @@ const SHELL_HIDE = new Float32Array(9);
 /** Build 282: how long a live control may rest before its change is made anyway (it is made at once when let go). */
 /** Build 294: how often the panel's numbers follow a live change, ms. */
 const WAX_STATE_EVERY = 250;
+/** Build 297: the parts of a tooth's own change that reshape it (the rest only move or turn it). */
+const WAX_SHAPE_KEYS: Array<keyof ToothEdit> = ["length", "mesial", "distal", "spread", "thickness", "palatal"];
 const WAX_LIVE_PAUSE = 900;
 
 export function LayerlingEditor({
@@ -14164,6 +14166,8 @@ export function LayerlingEditor({
    */
   /** Build 294: while a change is live, how each tooth was last drawn - a tooth that has not changed is not made again. */
   const waxLiveDrawn = useRef(new Map<string, string>());
+  /** Build 297: while a change is live, each tooth's shape (its own changes without the moves and turns), kept until the shape changes. */
+  const waxLiveShape = useRef(new Map<string, { key: string; rest: Float32Array; soup: Float32Array }>());
   const waxSmileWork = (controls: SetControls, own: Record<number, ToothEdit>, drawn?: Map<string, string>) => {
     const current = waxupRef.current;
     const slot = current.slot;
@@ -14180,6 +14184,7 @@ export function LayerlingEditor({
     if (!layout) return null;
     const soups = new Map<string, Float32Array>();
     const totals = new Map<string, THREE.Matrix4>();
+    const poses = new Map<string, number[]>();
     const laid: Record<number, number[]> = { ...record.laid };
     for (const shape of teeth) {
       const fdi = shape.waxTooth!.fdi, restPose = record.rest[fdi];
@@ -14201,8 +14206,23 @@ export function LayerlingEditor({
         }
         const palatalSeen = waxSmilePalatal.current.get(shape.id) ?? palatalDepth(seen.rest, restPose.frame);
         const totalSeen = seen.dragged.matrix.clone().multiply(next);
-        soups.set(shape.id, transformSoup(isNoEdit(newEdit) ? seen.rest : editTooth(seen.rest, restPose.frame, restPose.width, restPose.length, newEdit, palatalSeen), totalSeen));
-        totals.set(shape.id, totalSeen.clone().multiply(editPose(restPose.frame, restPose.length, palatalSeen, newEdit)));
+        const poseSeen = totalSeen.clone().multiply(editPose(restPose.frame, restPose.length, palatalSeen, newEdit));
+        if (drawn) {
+          // Build 297: live, the tooth is its shape (made again only when a length, width or thickness changes) under
+          // its pose - a move or a turn makes no triangles at all.
+          const shapeEdit: ToothEdit = { ...newEdit, moveMesial: 0, moveOut: 0, moveUp: 0, rotate: 0, tip: 0, torque: 0 };
+          const shapeKey = WAX_SHAPE_KEYS.map((k) => (shapeEdit[k] ?? 0).toFixed(3)).join(",");
+          let made = waxLiveShape.current.get(shape.id);
+          if (!made || made.key !== shapeKey || made.rest !== seen.rest) {
+            made = { key: shapeKey, rest: seen.rest, soup: isNoEdit(shapeEdit) ? seen.rest : editTooth(seen.rest, restPose.frame, restPose.width, restPose.length, shapeEdit, palatalSeen) };
+            waxLiveShape.current.set(shape.id, made);
+          }
+          soups.set(shape.id, made.soup);
+          poses.set(shape.id, poseSeen.toArray());
+        } else {
+          soups.set(shape.id, transformSoup(isNoEdit(newEdit) ? seen.rest : editTooth(seen.rest, restPose.frame, restPose.width, restPose.length, newEdit, palatalSeen), totalSeen));
+        }
+        totals.set(shape.id, poseSeen);
         laid[fdi] = next.toArray();
         continue;
       }
@@ -14226,7 +14246,7 @@ export function LayerlingEditor({
       totals.set(shape.id, total.clone().multiply(editPose(restPose.frame, restPose.length, palatal, newEdit)));
       laid[fdi] = next.toArray();
     }
-    return { soups, totals, laid, layout, record };
+    return { soups, totals, poses, laid, layout, record };
   };
   /** Build 277: the set and the teeth's own changes laid and kept (one step of the history when `record` is true). */
   const commitWaxSmile = (controls: SetControls, record = true, own?: Record<number, ToothEdit>) => {
@@ -14285,12 +14305,16 @@ export function LayerlingEditor({
    * each), at most once a frame however fast the control moves, and the change is made when the control is let go
    * (or after a longer pause) - so dragging is never interrupted by the model being rebuilt.
    */
-  const waxLiveSoups = (key: string, soups: () => Map<string, Float32Array>, commit: () => void) => {
+  const waxLiveSoups = (key: string, work: () => { soups: Map<string, Float32Array>; poses?: Map<string, number[]> } | null, commit: () => void) => {
     let live = waxLive.current;
     if (live && live.key !== key) { window.clearTimeout(live.timer); live.finish(); live = null; }
-    if (!live) { waxRecord(); waxLiveBase.current = new Map(); waxLiveDrawn.current = new Map(); live = { key, start: null, timer: 0, finish: () => {} }; }
+    if (!live) { waxRecord(); waxLiveBase.current = new Map(); waxLiveDrawn.current = new Map(); waxLiveShape.current = new Map(); live = { key, start: null, timer: 0, finish: () => {} }; }
     const running = live;
-    waxLiveFrame(() => { for (const [id, soup] of soups()) { waxLiveBase.current.set(id, soup); window.layerlingPreviewPart?.(id, soup); } });
+    waxLiveFrame(() => {
+      const made = work();
+      if (!made) return;
+      for (const [id, soup] of made.soups) { waxLiveBase.current.set(id, soup); window.layerlingPreviewPart?.(id, soup, made.poses?.get(id)); }
+    });
     running.finish = () => {
       waxLiveFrame(null);
       const shown = [...waxLiveBase.current.keys()];
@@ -14310,7 +14334,7 @@ export function LayerlingEditor({
     const record = waxupRef.current.smile?.[slot];
     if (!record) return;
     waxStateFrame("smile", () => setWaxup((latest) => ({ ...latest, smile: { ...(latest.smile ?? {}), [slot]: { ...(latest.smile?.[slot] ?? record), controls: next } } })));
-    waxLiveSoups("smile", () => waxSmileWork(next, record.own ?? {}, waxLiveDrawn.current)?.soups ?? new Map(), () => commitWaxSmile(next, false));
+    waxLiveSoups("smile", () => waxSmileWork(next, record.own ?? {}, waxLiveDrawn.current), () => commitWaxSmile(next, false));
   };
   /**
    * Build 277 (phase 3): one tooth's own changes (lib/waxToothEdit) - and, with mirroring on, the same
@@ -14332,7 +14356,7 @@ export function LayerlingEditor({
     const controls = record.controls;
     waxupRef.current = { ...waxupRef.current, smile: { ...(waxupRef.current.smile ?? {}), [slot]: { ...record, pending: own } } };
     waxStateFrame("tooth", () => setWaxup((latest) => ({ ...latest, smile: { ...(latest.smile ?? {}), [slot]: { ...(latest.smile?.[slot] ?? record), pending: own } } })));
-    waxLiveSoups("tooth", () => waxSmileWork(controls, own, waxLiveDrawn.current)?.soups ?? new Map(), () => commitWaxSmile(controls, false, own));
+    waxLiveSoups("tooth", () => waxSmileWork(controls, own, waxLiveDrawn.current), () => commitWaxSmile(controls, false, own));
   };
   /** Build 284: which of the set's teeth the set can still lay (not held, not reshaped by the brushes). */
   const waxSetHas = (fdi: number) => {
@@ -14510,7 +14534,7 @@ export function LayerlingEditor({
     waxStepTotals.current.set(shape.id, { ...total, [key]: Math.round((total[key] + delta) * 100) / 100 });
     const held = work;
     waxStateFrame("step", () => setWaxStepTick((n) => n + 1));
-    waxLiveSoups(`step:${shape.id}`, () => new Map([[held.id, held.soup]]), () => {
+    waxLiveSoups(`step:${shape.id}`, () => ({ soups: new Map([[held.id, held.soup]]) }), () => {
       if (waxStepWork.current === held) waxStepWork.current = null;
       const latest = shapesRef.current.find((candidate) => candidate.id === held.id);
       if (!latest?.waxTooth) return;
