@@ -72,6 +72,7 @@ import { toothColour, transferLabels, type ScanTeeth } from "@/lib/toothSegment"
 import { smoothOpenEdges, smoothOpenEdgesOf } from "@/lib/edgeSmooth";
 import { solidPositions, toManifold, transformSoup, weld, type ManifoldSolid, cleanStlBinary, stlBinaryOf, stlSoupOf } from "@/lib/dentalMesh";
 import { WAX_SET_FORMS } from "@/lib/waxSetForms";
+import { archRoom, frameFromMarks, rankSets, setDims, type SetDims } from "@/lib/waxSetPick";
 import { BUILT_IN_LIBRARIES, loadToothLibrary, loadToothSet, type ToothLibraryManifest } from "@/lib/toothLibrary";
 import { exocadSets } from "@/lib/exocadLibrary";
 import { ArchMarkLabels } from "@/components/workplane/ArchMarkLabels";
@@ -82,7 +83,7 @@ import { moveContact } from "@/lib/waxContacts";
 import { contactColors, type BiteContactStats } from "@/lib/biteContacts";
 import { adaptWaxInBackground, biteHingeInBackground, recycleMeshWorkers, waxContactsInBackground } from "@/lib/meshJobs";
 import { alignToPlate, bridgeChoice, expandConnected, extrudeChoice, invertConnected, optimizeBoundary, shrinkChoice, smoothChoice } from "@/lib/meshEditTools";
-import { adjustMatrix, isIdentityAdjust, mirrorAdjust, setMoveAdjust, waxedNeighbourSides, ARC_DEPTH_DEFAULT, SMILE_LATERAL_STEP, CENTRAL_RATIO, contralateral, crownCutter, imtFirstInjection, moveFrame, nudgeMatrix, rigidMoveBetween, type ToothNudge, type ToothAdjust, fdiNumber, fdiKind, parseObj, splitShells, librarySet, type WaxLandmarks, marksFromTeeth, marksFromNeighbours, TOOTH_MARK_ORDER, type ToothMarks } from "@/lib/dentalWaxup";
+import { scanInArchFrame, adjustMatrix, isIdentityAdjust, mirrorAdjust, setMoveAdjust, waxedNeighbourSides, ARC_DEPTH_DEFAULT, SMILE_LATERAL_STEP, CENTRAL_RATIO, contralateral, crownCutter, imtFirstInjection, moveFrame, nudgeMatrix, rigidMoveBetween, type ToothNudge, type ToothAdjust, fdiNumber, fdiKind, parseObj, splitShells, librarySet, type WaxLandmarks, marksFromTeeth, marksFromNeighbours, TOOTH_MARK_ORDER, type ToothMarks } from "@/lib/dentalWaxup";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { WaxupPointOverlay, rayHit, rayGrid, rayHitGrid, type RayGrid } from "./workplane/WaxupPointOverlay";
 import { ANCHOR_ORDER, ARCH_DOT_ORDER, ARCH_STEP, LATERAL_SHORTER, archCurvePoints, canineOf, marksFromAnchors, type ToothAnchors } from "@/lib/waxArchDots";
@@ -12362,6 +12363,71 @@ export function LayerlingEditor({
     if (!shape || !scan || !toInput || !world) return null;
     return { slot, shape, scan: Float32Array.from(scan.positions), sceneToInput: toInput.clone().multiply(world.clone().invert()) };
   }, [dentalInput]);
+  /**
+   * Build 299 (Rakesh: "is there an algorithm we can use to help auto-select the best set of teeth"): the arch's sets
+   * put in order of fit to its marks and gum line (lib/waxSetPick) - once per set of marks. With no teeth placed yet
+   * and no set chosen by hand, the best is chosen.
+   */
+  const waxSetDims = useRef(new Map<string, SetDims | null>());
+  const waxRankKey = useRef("");
+  const waxSetByHand = useRef(new Set<string>());
+  const rankWaxSets = useCallback(async () => {
+    const current = waxupRef.current;
+    const arch = waxArch();
+    if (!arch || arch.slot !== current.slot) return;
+    const slot = arch.slot;
+    const marks = current.archMarks?.[slot];
+    if (nextArchMark(marks) !== null) return;
+    const all = marks as Array<[number, number, number]>;
+    const offered = current.builtIn.filter((set) => set.arch === slot && WAX_SET_FORMS.has(set.id));
+    const key = `${slot}|${JSON.stringify(all)}|${offered.map((set) => set.id).join(",")}`;
+    if (waxRankKey.current === key || offered.length < 2) return;
+    waxRankKey.current = key;
+    try {
+      const contacts = all.slice(0, 7);
+      // The gum line as the set laid on these marks read it; before that, read here the same way.
+      const record = current.smile?.[slot];
+      let up: [number, number, number] | null = null, margins: Array<number | null> | undefined, crown: number | null | undefined;
+      if (record?.anchors.margins && JSON.stringify(record.anchors.contacts) === JSON.stringify(contacts)) {
+        up = record.anchors.up; margins = record.anchors.margins; crown = record.anchors.crown;
+      } else {
+        const back = arch.sceneToInput.clone().invert();
+        let frame: { up: [number, number, number]; out: [number, number, number] } | null = null;
+        try {
+          const toScene = back.clone().multiply(scanInArchFrame(arch.scan).frame.clone().invert());
+          const dir = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z).transformDirection(toScene).toArray() as [number, number, number];
+          frame = { up: dir(0, 0, 1), out: dir(0, -1, 0) };
+        } catch { frame = frameFromMarks(all); }
+        if (!frame) return;
+        const gum = crownMargins(transformSoup(arch.scan, back), { contacts, up: frame.up, out: frame.out });
+        up = frame.up; margins = gum.margins; crown = gum.crown;
+      }
+      const room = archRoom(contacts, up, margins, crown);
+      if (!room) return;
+      const sets: Array<{ id: string; dims: SetDims }> = [];
+      for (const entry of offered) {
+        if (!waxSetDims.current.has(entry.id)) {
+          let shells = waxShellsById.current.get(entry.id);
+          if (!shells) {
+            const library = waxLibraries.current?.find((candidate) => candidate.sets.some((each) => each.id === entry.id));
+            const set = library?.sets.find((each) => each.id === entry.id);
+            if (!library || !set) continue;
+            shells = await loadToothSet(library.id, set);
+            waxShellsById.current.set(entry.id, shells);
+          }
+          waxSetDims.current.set(entry.id, setDims(shells));
+        }
+        const dims = waxSetDims.current.get(entry.id);
+        if (dims) sets.push({ id: entry.id, dims });
+      }
+      if (sets.length < 2) return;
+      const ranked = rankSets(sets, room).map((each) => each.id);
+      setWaxup((latest) => ({ ...latest, setRank: { ...(latest.setRank ?? {}), [slot]: ranked } }));
+      const scanId = dentalStudioRef.current?.slots[slot];
+      const latest = waxupRef.current;
+      if (scanId && !waxTeethOf(scanId).length && !waxSetByHand.current.has(slot) && latest.slot === slot && latest.setIds?.[slot] !== ranked[0] && (latest.setIds?.[slot] || latest.setId)) void chooseBuiltInSet(ranked[0], true);
+    } catch { waxRankKey.current = ""; }
+  }, [chooseBuiltInSet, waxArch]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 107: for checks - how far each wax-up dot is from the arch's scan (in the studio's coordinates), and where the placed teeth sit.
   useEffect(() => {
     (window as unknown as { layerlingWaxCheck?: () => unknown }).layerlingWaxCheck = () => {
@@ -12606,6 +12672,13 @@ export function LayerlingEditor({
     waxupRef.current = { ...current, smile: { ...(current.smile ?? {}), [current.slot]: anchored } };
     window.setTimeout(() => commitWaxSmile(anchored.controls), 30);
   }, [studioWaxStep, waxup.slot]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Build 299: once the nine marks are there (from Trim on), the sets are put in order of fit.
+  const waxRankMarks = JSON.stringify(waxup.archMarks?.[waxup.slot] ?? null);
+  useEffect(() => {
+    if (!dentalStudio?.waxStudio || !studioWaxStep || studioWaxStep === "scans" || studioWaxStep === "mark") return;
+    const timer = window.setTimeout(() => void rankWaxSets(), 400);
+    return () => window.clearTimeout(timer);
+  }, [studioWaxStep, waxup.slot, waxRankMarks, waxup.builtIn.length]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 279: at Position, where the patient's teeth stand proud of the wax teeth - shown in red, each tooth's depth in the panel.
   const waxProudScan = useRef<{ shape: WorkplaneShape; soup: Float32Array } | null>(null);
   const waxProudSeen = useRef(new Map<string, { shape: WorkplaneShape; level: number | null; found: ReturnType<typeof proudOfWax> }>());
@@ -14137,8 +14210,12 @@ export function LayerlingEditor({
         const up = sum((f) => f.up), out = sum((f) => f.out);
         // Each tooth's rest frame from the teeth themselves (a set has them turned along its own arch already).
         const frames = restFrames(front.map((tooth) => ({ fdi: tooth.fdi, soup: tooth.soup })), up, out);
+        // Build 299: laid again (another set chosen, the marks moved) - the whole-set and each tooth's own changes are kept.
+        const before = waxupRef.current.smile?.[arch.slot];
+        const keptOwn = before ? (before.pending ?? before.own) : undefined;
         const record: SmileRecord = {
-          controls: { ...SET_DEFAULTS },
+          ...(before ? { mirror: before.mirror, give: before.give } : {}),
+          controls: before ? { ...before.controls } : { ...SET_DEFAULTS },
           anchors: (() => {
             const anchors = markedAll
               ? { midline: markedAll[3], canines: [markedAll[7], markedAll[8]] as [[number, number, number], [number, number, number]], up, out, contacts: markedAll.slice(0, 7) }
@@ -14155,7 +14232,7 @@ export function LayerlingEditor({
         waxupRef.current = { ...waxupRef.current, smile: { ...(waxupRef.current.smile ?? {}), [arch.slot]: record } };
         setWaxup((latest) => ({ ...latest, smile: { ...(latest.smile ?? {}), [arch.slot]: record } }));
         // The first proposal: the set laid on the arch with the default controls.
-        window.setTimeout(() => commitWaxSmile(record.controls, false), 0);
+        window.setTimeout(() => commitWaxSmile(record.controls, false, keptOwn && Object.keys(keptOwn).length ? keptOwn : undefined), 0);
       } else if (drop) {
         setWaxup((latest) => { const { [arch.slot]: _gone, ...rest } = latest.smile ?? {}; return { ...latest, smile: rest }; }); // eslint-disable-line @typescript-eslint/no-unused-vars
       }
@@ -23004,7 +23081,8 @@ export function LayerlingEditor({
             view: waxupView,
             actions: {
               onSet: (files) => void loadWaxSet(files),
-              onBuiltIn: (id) => void chooseBuiltInSet(id),
+              onBuiltIn: (id) => { const of = waxupRef.current.builtIn.find((set) => set.id === id)?.arch; if (of) waxSetByHand.current.add(of); void chooseBuiltInSet(id); },
+              onBuiltInAuto: (ids) => { const best = waxupRef.current.setRank?.[waxupRef.current.slot]?.find((id) => ids.includes(id)); void chooseBuiltInSet(best ?? ids[0]); },
               onSingle: (arch: "upper" | "lower", teeth: number[] | null) => {
                 waxRecord(true);
                 // On the latest settings (a set just chosen may not have reached waxupRef yet - it would be lost).

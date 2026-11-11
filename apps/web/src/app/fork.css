@@ -2305,3 +2305,12 @@ html[data-theme="dark"] .dental-studio-panel .dental-picture-tiles button { back
 .wax-dot-palatal:hover, .wax-dot-palatal.held { background: #f97316; }
 .wax-dot-neck { background: #64748b; }
 .wax-dot-neck:hover, .wax-dot-neck.held { background: #94a3b8; }
+
+/* Build 299: the tooth shape changed at Position, and the set that fits best marked. */
+.wax-shape-switch { display: flex; flex-direction: column; gap: 6px; margin: 2px 0 10px; }
+.wax-shape-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.wax-shape-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--line, #d7dcdf); border-radius: 999px; background: #fff; font: inherit; font-size: 12.5px; cursor: pointer; }
+.wax-shape-chip:hover:not(:disabled) { border-color: #0a786c; }
+.wax-shape-chip.active { border-color: #0a786c; background: #e6f4f1; color: #064e46; font-weight: 600; }
+.waxup-set-best { font-style: normal; font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; padding: 1px 6px; border-radius: 999px; background: #0a786c; color: #fff; white-space: nowrap; }
+.waxup-set .waxup-set-best { margin-top: 3px; }

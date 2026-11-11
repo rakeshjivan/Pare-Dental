@@ -61,6 +61,8 @@ export type WaxupView = {
   setCurve?: number;
   /** Build 108: the set chosen for each arch (both arches waxed: one for the upper, one for the lower). */
   setIds?: { upper?: string; lower?: string };
+  /** Build 299: each arch's sets in order of fit to its marks (lib/waxSetPick), the best first; absent until worked out. */
+  setRank?: Partial<Record<"upper" | "lower", string[]>>;
   /** Build 117: single teeth instead of the whole set, by arch - the teeth to wax (each from the set chosen); absent: the whole set. */
   single?: Partial<Record<"upper" | "lower", number[]>>;
   /** Build 108: the Gum line step - follow the patient's gum, or an even line (each pair's visible crown length at its zenith, mm). */
@@ -238,6 +240,8 @@ export type WaxupActions = {
   onMarginCancel?: () => void;
   onSet: (files: File[]) => void;
   onBuiltIn: (id: string) => void;
+  /** Build 299: a set chosen for the dentist - the best fit among these when it is known, else the first. */
+  onBuiltInAuto?: (ids: string[]) => void;
   /** Build 117: the whole set, or single teeth (null: the whole set again), for an arch. */
   onSingle?: (arch: "upper" | "lower", teeth: number[] | null) => void;
   onSlot: (slot: "upper" | "lower") => void;
@@ -724,6 +728,7 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
                         <button key={set.id} type="button" role="radio" aria-checked={chosenFor(arch) === set.id} className={`waxup-set${chosenFor(arch) === set.id ? " active" : ""}`} disabled={working} title={set.name} draggable={false} onDragStart={(event) => event.preventDefault()} onClick={() => actions.onBuiltIn(set.id)}>
                           {set.preview ? <img src={set.preview} alt="" loading="lazy" draggable={false} /> : <span className="waxup-set-blank" aria-hidden="true" />}
                           <span>{set.name}</span>
+                          {view.setRank?.[arch]?.[0] === set.id ? <em className="waxup-set-best">{t("waxup.setBest")}</em> : null}
                         </button>
                       ))}
                     </div>
@@ -782,7 +787,7 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
                 {view.toothEdit && actions.onToothEdit ? (
                   <ToothEditPanel tooth={view.toothEdit} workspace={workspace} disabled={working} onChange={actions.onToothEdit} onStep={actions.onToothStep} onMirror={actions.onToothMirror} onCopyAcross={actions.onToothCopyAcross} onGive={actions.onToothGive} />
                 ) : (
-                  <SmileSetPanel set={view.smileSet} workspace={workspace} disabled={working} onChange={actions.onSmile} />
+                  <SmileSetPanel set={view.smileSet} workspace={workspace} disabled={working} onChange={actions.onSmile} shapes={{ sets: view.builtIn.filter((entry) => entry.arch === view.slot), chosen: view.setIds?.[view.slot] ?? view.setId ?? null, best: view.setRank?.[view.slot]?.[0] ?? null, onPick: actions.onBuiltIn }} />
                 )}
                 {view.proudTeeth?.some((tooth) => tooth.depth > 0) && actions.onReduce ? (
                   <details className="wax-fold">
@@ -1176,7 +1181,7 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
  * (RED), the smile arc, labial fullness; then, under More, the cant, the laterals' step and the curve.
  * Every value shown as a number; both sides change together and the teeth stay in contact.
  */
-function SmileSetPanel({ set, workspace, disabled, onChange }: { set: NonNullable<WaxupView["smileSet"]>; workspace: WorkplaneWorkspaceSettings; disabled: boolean; onChange: (controls: SetControls) => void }) {
+function SmileSetPanel({ set, workspace, disabled, onChange, shapes }: { set: NonNullable<WaxupView["smileSet"]>; workspace: WorkplaneWorkspaceSettings; disabled: boolean; onChange: (controls: SetControls) => void; shapes?: { sets: Array<{ id: string; name: string }>; chosen: string | null; best: string | null; onPick: (id: string) => void } }) {
   const [more, setMore] = useState(false);
   const c = set.controls;
   const r = SET_RANGES;
@@ -1191,6 +1196,20 @@ function SmileSetPanel({ set, workspace, disabled, onChange }: { set: NonNullabl
         <strong>{t("waxup.smileTitle")}</strong>
         <span>{t(set.marked ? "waxup.smileHintShort" : "waxup.smileHint")}</span>
       </div>
+      {shapes && shapes.sets.length > 1 ? (
+        // Build 299 (Rakesh: the set could not be changed without starting again): the tooth shape changed here, with the
+        // teeth in view - the new set laid on the same marks, the adjustments made so far kept.
+        <div className="wax-shape-switch">
+          <span className="waxup-shape-label">{t("waxup.shapeSwitch")}</span>
+          <div className="wax-shape-chips" role="radiogroup" aria-label={t("waxup.shapeSwitch")}>
+            {shapes.sets.map((entry) => (
+              <button key={entry.id} type="button" role="radio" aria-checked={shapes.chosen === entry.id} className={`wax-shape-chip${shapes.chosen === entry.id ? " active" : ""}`} disabled={disabled} title={shapes.best === entry.id ? t("waxup.setBestHint") : undefined} onClick={() => { if (shapes.chosen !== entry.id) shapes.onPick(entry.id); }}>
+                {entry.name}{shapes.best === entry.id ? <em className="waxup-set-best">{t("waxup.setBest")}</em> : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {set.marked ? (<>
         {/* Build 278 (step 2): the widths, midline and canine tips are the dentist's marks - only the levels and fullness here. */}
         {mm("length", "waxup.smileLength", "waxup.smileLengthHint")}
