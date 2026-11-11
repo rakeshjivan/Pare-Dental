@@ -26,7 +26,7 @@ const GUM_BAND = 0.5;
  */
 export function proudOfWax(scan: ArrayLike<number>, wax: ArrayLike<number>, frame: ToothFrame, width: number, length: number, keep = 600, gum?: { up: [number, number, number]; level: number }): Proud {
   const o = new THREE.Vector3(...frame.origin), m = new THREE.Vector3(...frame.mesial).normalize(), f = new THREE.Vector3(...frame.out).normalize(), u = new THREE.Vector3(...frame.up).normalize();
-  const local = (x: number, y: number, z: number) => { const d = new THREE.Vector3(x - o.x, y - o.y, z - o.z); return [d.dot(m), d.dot(f), d.dot(u)] as const; };
+  const local = (x: number, y: number, z: number) => { const dx = x - o.x, dy = y - o.y, dz = z - o.z; return [dx * m.x + dy * m.y + dz * m.z, dx * f.x + dy * f.y + dz * f.z, dx * u.x + dy * u.y + dz * u.z] as const; };
   // The wax's labial face and incisal edge as maps over the tooth: the most labial (b) per (a, h) cell, the highest (h) per a column.
   const face = new Map<string, number>();
   const edge = new Map<number, number>();
