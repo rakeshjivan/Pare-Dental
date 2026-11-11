@@ -2305,6 +2305,11 @@ html[data-theme="dark"] .dental-studio-panel .dental-picture-tiles button { back
 .wax-dot-palatal:hover, .wax-dot-palatal.held { background: #f97316; }
 .wax-dot-neck { background: #64748b; }
 .wax-dot-neck:hover, .wax-dot-neck.held { background: #94a3b8; }
+/* Build 305: the four side dots are smaller; a locked dot (double-clicked) is dark with a ring and is not dragged. */
+.wax-dot-palatalM, .wax-dot-palatalD, .wax-dot-labialM, .wax-dot-labialD { width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px; border-width: 2px; }
+.wax-dot-palatalM, .wax-dot-palatalD { background: #fb923c; }
+.wax-dot-labialM, .wax-dot-labialD { background: #14b8a6; }
+.wax-dot.locked, .wax-dot.locked:hover { background: #0f172a; border-color: #facc15; box-shadow: 0 0 0 2px #0f172a, 0 1px 4px rgba(0, 0, 0, 0.45); cursor: not-allowed; transform: none; }
 
 /* Build 299: the tooth shape changed at Position, and the set that fits best marked. */
 .wax-shape-switch { display: flex; flex-direction: column; gap: 6px; margin: 2px 0 10px; }

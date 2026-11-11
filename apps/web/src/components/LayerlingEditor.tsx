@@ -1937,7 +1937,7 @@ const SHELL_HIDE = new Float32Array(9);
 /** Build 294: how often the panel's numbers follow a live change, ms. */
 const WAX_STATE_EVERY = 250;
 /** Build 297: the parts of a tooth's own change that reshape it (the rest only move or turn it). */
-const WAX_SHAPE_KEYS: Array<keyof ToothEdit> = ["length", "mesial", "distal", "spread", "thickness", "palatal"];
+const WAX_SHAPE_KEYS: Array<keyof ToothEdit> = ["length", "mesial", "distal", "spread", "thickness", "palatal", "palatalM", "palatalD", "labialM", "labialD"];
 const WAX_LIVE_PAUSE = 900;
 /** Build 297: how long after the last change Wax-up Studio writes the design, ms. */
 const WAX_SAVE_AFTER = 2500;
@@ -14519,9 +14519,23 @@ export function LayerlingEditor({
     if (change.kind === "dot") {
       // Build 290: a dot dragged - its contact moved (the neighbour giving way) and the tooth lengthened or turned with it.
       const own = change.side && Math.abs(change.contact) > 1e-6 ? moveContact(base.own, frontTeeth(slot), fdi, change.side, change.contact, mirror, waxContactHas(fdi)) : { ...base.own };
-      const add = (n: number) => { if (!waxSetHas(n)) return; const was = { ...NO_EDIT, ...(own[n] ?? {}) }; own[n] = { ...was, length: was.length + change.length, torque: was.torque + change.torque, rotate: was.rotate + change.rotate, palatal: (was.palatal ?? 0) + (change.palatal ?? 0), moveUp: was.moveUp + (change.up ?? 0), tip: was.tip + (change.tip ?? 0) }; };
+      const add = (n: number) => { if (!waxSetHas(n)) return; const was = { ...NO_EDIT, ...(own[n] ?? {}) }; own[n] = { ...was, length: was.length + change.length, torque: was.torque + change.torque, rotate: was.rotate + change.rotate, palatal: (was.palatal ?? 0) + (change.palatal ?? 0), moveUp: was.moveUp + (change.up ?? 0), tip: was.tip + (change.tip ?? 0), ...(change.bulge ? { [change.bulge.key]: (was[change.bulge.key] ?? 0) + change.bulge.mm } : {}) }; };
       add(fdi);
       if (mirror) add(partner);
+      // Build 305 (Rakesh: a dot double-clicked is locked): the locked dots stay where they are - the tooth is moved
+      // back by as far as this change would have carried them (so it turns about a locked dot, or grows away from it).
+      const rest = record.rest[fdi];
+      if (change.hold?.length && rest && own[fdi] && waxSetHas(fdi)) {
+        const depth = Math.min(-0.5, waxSmilePalatal.current.get(base.id) ?? -6), f = rest.frame;
+        const pts = new Float32Array(change.hold.flatMap(([m, o, u]) => [0, 1, 2].map((k) => f.origin[k] + f.mesial[k] * m * rest.width + f.out[k] * o * -depth + f.up[k] * u * rest.length)));
+        const at = (edit: ToothEdit) => editTooth(pts, f, rest.width, rest.length, clampEdit(edit), depth);
+        const before = at({ ...NO_EDIT, ...(base.own[fdi] ?? {}) }), after = at(own[fdi]);
+        const gone = [0, 1, 2].map((k) => { let sum = 0; for (let i = k; i < pts.length; i += 3) sum += after[i] - before[i]; return sum / change.hold!.length; });
+        const along = (axis: ArrayLike<number>) => gone[0] * axis[0] + gone[1] * axis[1] + gone[2] * axis[2];
+        const back = (n: number) => { const was = own[n]; if (was && waxSetHas(n)) own[n] = { ...was, moveMesial: was.moveMesial - along(f.mesial), moveOut: was.moveOut - along(f.out), moveUp: was.moveUp - along(f.up) }; };
+        back(fdi);
+        if (mirror) back(partner);
+      }
       editWaxTeeth(own);
       return;
     }

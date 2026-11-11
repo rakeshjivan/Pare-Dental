@@ -30,6 +30,15 @@ export type ToothEdit = {
   thickness: number;
   /** Build 293: the palatal surface moved palatally (mm), the labial face held - the tooth made fuller bucco-palatally. */
   palatal: number;
+  /**
+   * Build 305 (Rakesh: "more control points ... either side of the middle palatal point"): the palatal surface on its
+   * mesial and its distal side (the marginal ridges), and the labial face on each side (the line angles), each moved
+   * outwards from the tooth (mm) - nothing at the middle of the tooth, nothing on the other face.
+   */
+  palatalM: number;
+  palatalD: number;
+  labialM: number;
+  labialD: number;
   moveMesial: number;
   moveOut: number;
   moveUp: number;
@@ -38,11 +47,12 @@ export type ToothEdit = {
   torque: number;
 };
 
-export const NO_EDIT: ToothEdit = { length: 0, mesial: 0, distal: 0, spread: 0, thickness: 0, palatal: 0, moveMesial: 0, moveOut: 0, moveUp: 0, rotate: 0, tip: 0, torque: 0 };
+export const NO_EDIT: ToothEdit = { length: 0, mesial: 0, distal: 0, spread: 0, thickness: 0, palatal: 0, palatalM: 0, palatalD: 0, labialM: 0, labialD: 0, moveMesial: 0, moveOut: 0, moveUp: 0, rotate: 0, tip: 0, torque: 0 };
 
 /** The ranges offered, mm and degrees. */
 export const EDIT_RANGES: Record<keyof ToothEdit, readonly [number, number]> = {
   length: [-3, 4], mesial: [-2.5, 2.5], distal: [-2.5, 2.5], spread: [-2, 3], thickness: [-1, 1.5], palatal: [-1, 3],
+  palatalM: [-1.5, 2], palatalD: [-1.5, 2], labialM: [-1.5, 2], labialD: [-1.5, 2],
   moveMesial: [-3, 3], moveOut: [-2, 2], moveUp: [-3, 3], rotate: [-25, 25], tip: [-15, 15], torque: [-15, 15],
 };
 
@@ -59,6 +69,9 @@ export const isNoEdit = (edit: ToothEdit | undefined) => !edit || (Object.keys(N
 
 /** How much of the crown, from the cervical, the width and thickness changes fade in over. */
 const FADE = 0.45;
+/** Build 305: how far from the middle of the tooth (a share of its half width) a side dot's change is whole; and the share of the crown below the incisal edge a labial one fades in over. */
+const SIDE_FULL = 0.6;
+const EDGE_FADE = 0.25;
 const smooth = (x: number) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
 
 /** The rigid part of an edit (turns about the cervical-third pivot, then the moves) as a matrix, scene coordinates. */
@@ -103,7 +116,15 @@ export function editTooth(rest: ArrayLike<number>, frame: ToothFrame, width: num
     // Build 293 (Rakesh: "pull the tooth on the palatal so it becomes wider bucco-palatal without affecting the buccal
     // surface"): the palatal surface out, more the further palatal, nothing at the labial face - all the way to the
     // neck, where the tooth has to reach the palatal gum.
-    b -= (edit.palatal ?? 0) * Math.min(1, Math.max(0, b / depth));
+    const back = Math.min(1, Math.max(0, b / depth));
+    b -= (edit.palatal ?? 0) * back;
+    // Build 305: one side of one face - most half way from the middle of the tooth to its contact and beyond, nothing
+    // at the middle (where the middle palatal dot is); the palatal ones as far as the neck (as the palatal is), the
+    // labial ones leaving the neck on the gum line and the incisal edge where it is.
+    const side = smooth(Math.abs(a) / (SIDE_FULL * half));
+    const pal = a >= 0 ? edit.palatalM ?? 0 : edit.palatalD ?? 0, lab = a >= 0 ? edit.labialM ?? 0 : edit.labialD ?? 0;
+    if (pal) b -= pal * side * smooth(back);
+    if (lab) b += lab * side * smooth(1 - back) * keepNeck * smooth((1 - share) / EDGE_FADE);
     h += edit.length * share;
     p.copy(o).addScaledVector(m, a).addScaledVector(f, b).addScaledVector(u, h).applyMatrix4(pose);
     out[i] = p.x; out[i + 1] = p.y; out[i + 2] = p.z;

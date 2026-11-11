@@ -32,10 +32,22 @@ export type DirectChange =
   | { kind: "move"; mesial: number; out: number; up: number }
   | { kind: "turn"; rotate: number; tip: number; torque: number }
   /** Build 290: a dot on the tooth dragged - whatever of these it stands for, all at once. */
-  | { kind: "dot"; length: number; torque: number; rotate: number; contact: number; side: "mesial" | "distal" | null; palatal?: number; up?: number; tip?: number }
+  | { kind: "dot"; length: number; torque: number; rotate: number; contact: number; side: "mesial" | "distal" | null; palatal?: number; up?: number; tip?: number;
+      /** Build 305: one side of the palatal or of the labial face moved outwards, mm. */
+      bulge?: { key: "palatalM" | "palatalD" | "labialM" | "labialD"; mm: number };
+      /** Build 305: the dots locked (double-clicked) - where each stands on the tooth, as shares of its width (mesial +), its thickness (labial +) and its length (incisal +): they are to stay where they are. */
+      hold?: Array<[number, number, number]> }
   /** Build 290: the whole set moved (no one tooth picked), mm in the scene. */
   | { kind: "moveAll"; by: [number, number, number] };
 type Zone = "length" | "mesial" | "distal" | "move";
+type DotKey = "edge" | "mesial" | "distal" | "middle" | "palatal" | "neck" | "palatalM" | "palatalD" | "labialM" | "labialD";
+/** Where each dot stands on its tooth: shares of its width (mesial +), of its thickness (labial +, from the labial face) and of its length (incisal +, from the edge). */
+const DOT_AT: Record<DotKey, [number, number, number]> = {
+  edge: [0, -0.15, 0], mesial: [0.5, -0.4, -0.4], distal: [-0.5, -0.4, -0.4], middle: [0, -0.45, -0.35], palatal: [0, -1, -0.6], neck: [0, -0.1, -0.92],
+  palatalM: [0.32, -0.9, -0.55], palatalD: [-0.32, -0.9, -0.55], labialM: [0.32, -0.08, -0.55], labialD: [-0.32, -0.08, -0.55],
+};
+/** The dots locked on each tooth (by its id) - kept while the app is open. */
+const LOCKED = new Map<string, Set<DotKey>>();
 
 /** The wheel: degrees for each notch (about 100 of a wheel's own units), and how long after the last notch the turn is kept. */
 const WHEEL_DEG = 1;
@@ -310,8 +322,16 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
     // Build 293: and one on its palatal surface - pulled palatally the tooth grows fuller there, its labial face held.
     // And one at its labial neck (Rakesh: the teeth first have to sit right at the buccal gingival margin, "growing from
     // the gum"): dragged up or down the tooth, the neck goes there and the incisal edge stays.
-    type DotKey = "edge" | "mesial" | "distal" | "middle" | "palatal" | "neck";
-    const DOTS: DotKey[] = ["edge", "mesial", "distal", "middle", "palatal", "neck"];
+    // Build 305 (Rakesh: "we need more control points ... either side of the middle palatal point"): and four small
+    // ones - the palatal surface on its mesial and its distal side, and the labial face on each side: dragged in or
+    // out, that part of that face goes with it and nothing else does.
+    // And (Rakesh: "double-clicking a control dot locks it from moving, so making finer adjustments is easier") a dot
+    // double-clicked is locked: it cannot be dragged, and it stays where it is while the other dots are (the tooth
+    // turns about it, or grows away from it). Double-clicked again it is free.
+    const DOTS: DotKey[] = ["edge", "mesial", "distal", "middle", "palatal", "neck", "palatalM", "palatalD", "labialM", "labialD"];
+    const lockedOf = (id: string) => LOCKED.get(id) ?? new Set<DotKey>();
+    const holdOf = (tooth: DirectTooth, but: DotKey) => [...lockedOf(tooth.id)].filter((key) => key !== but).map((key) => DOT_AT[key]);
+    let pressed = { key: "" as DotKey | "", at: 0, x: 0, y: 0 };
     const dotEls = new Map<DotKey, HTMLDivElement>();
     let thick = { id: "", t: 6 };
     const thicknessOf = (tooth: DirectTooth) => {
@@ -325,10 +345,11 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
     const dotAt = (tooth: DirectTooth, key: DotKey): V => {
       const f = tooth.frame, T = thicknessOf(tooth);
       const at = (m: number, o: number, u: number): V => [f.origin[0] + f.mesial[0] * m + f.out[0] * o + f.up[0] * u, f.origin[1] + f.mesial[1] * m + f.out[1] * o + f.up[1] * u, f.origin[2] + f.mesial[2] * m + f.out[2] * o + f.up[2] * u];
-      return key === "edge" ? at(0, -0.15 * T, 0) : key === "mesial" ? at(tooth.width / 2, -0.4 * T, -0.4 * tooth.length) : key === "distal" ? at(-tooth.width / 2, -0.4 * T, -0.4 * tooth.length) : key === "palatal" ? at(0, -T, -0.6 * tooth.length) : key === "neck" ? at(0, -0.1 * T, -0.92 * tooth.length) : at(0, -0.45 * T, -0.35 * tooth.length);
+      const [m, o, u] = DOT_AT[key];
+      return at(m * tooth.width, o * T, u * tooth.length);
     };
     let dotDrag: { key: DotKey; tooth: DirectTooth; point: V; normal: V; pointer: number } | null = null;
-    const dotName = (key: DotKey, fdi: number) => t(key === "edge" ? "waxup.direct.dotEdge" : key === "middle" ? "waxup.direct.move" : key === "palatal" ? "waxup.direct.dotPalatal" : key === "neck" ? "waxup.direct.dotNeck" : key === "mesial" ? "waxup.direct.dotMesial" : "waxup.direct.dotDistal", { fdi });
+    const dotName = (key: DotKey, fdi: number) => t(key === "palatalM" ? "waxup.direct.dotPalatalM" : key === "palatalD" ? "waxup.direct.dotPalatalD" : key === "labialM" ? "waxup.direct.dotLabialM" : key === "labialD" ? "waxup.direct.dotLabialD" : key === "edge" ? "waxup.direct.dotEdge" : key === "middle" ? "waxup.direct.move" : key === "palatal" ? "waxup.direct.dotPalatal" : key === "neck" ? "waxup.direct.dotNeck" : key === "mesial" ? "waxup.direct.dotMesial" : "waxup.direct.dotDistal", { fdi });
     for (const key of DOTS) {
       const el = document.createElement("div");
       el.className = `wax-dot wax-dot-${key}`;
@@ -340,6 +361,12 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
         event.preventDefault();
         event.stopPropagation();
         wheelDone();
+        // A second press on the same dot, at once and in the same place: locked, or let go.
+        const again = pressed.key === key && event.timeStamp - pressed.at < 400 && Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) < 6;
+        pressed = again ? { key: "", at: 0, x: 0, y: 0 } : { key, at: event.timeStamp, x: event.clientX, y: event.clientY };
+        const locked = new Set(lockedOf(tooth.id));
+        if (again) { if (locked.has(key)) locked.delete(key); else locked.add(key); LOCKED.set(tooth.id, locked); }
+        if (locked.has(key)) { say(event.clientX, event.clientY, t("waxup.direct.dotLocked")); return; }
         el.setPointerCapture(event.pointerId);
         dotDrag = { key, tooth, point: dotAt(tooth, key), normal: [-r.direction[0], -r.direction[1], -r.direction[2]], pointer: event.pointerId };
         el.classList.add("held");
@@ -355,7 +382,9 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
         const degrees = (opposite: number, arm: number) => (Math.atan2(opposite, Math.max(1, arm)) * 180) / Math.PI;
         let change: DirectChange;
         let text = "";
-        if (key === "middle") { change = { kind: "move", mesial: m, out: o, up: u }; text = `${Math.hypot(m, o, u).toFixed(1)} mm`; }
+        const hold = holdOf(tooth, key);
+        if (key === "palatalM" || key === "palatalD" || key === "labialM" || key === "labialD") { const by = key.startsWith("palatal") ? -o : o; change = { kind: "dot", length: 0, torque: 0, rotate: 0, contact: 0, side: null, bulge: { key, mm: by } }; text = mm(by); }
+        else if (key === "middle") { change = { kind: "move", mesial: m, out: o, up: u }; text = `${Math.hypot(m, o, u).toFixed(1)} mm`; }
         else if (key === "palatal") { change = { kind: "dot", length: 0, torque: 0, rotate: 0, contact: 0, side: null, palatal: -o }; text = mm(-o); }
         else if (key === "neck") { change = { kind: "dot", length: -u, torque: 0, rotate: 0, contact: 0, side: null, up: u }; text = mm(-u); }
         else if (key === "edge") {
@@ -375,6 +404,7 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
           change = { kind: "dot", length: 0, torque: 0, rotate, contact: m * outward, side: key };
           text = `${mm(m * outward)}${Math.abs(rotate) >= 0.5 ? `  ${rotate >= 0 ? "+" : ""}${rotate.toFixed(0)}°` : ""}`;
         }
+        if (change.kind === "dot" && hold.length) change.hold = hold;
         live.current.onDrag(tooth.id, change);
         el.style.left = `${event.clientX}px`; el.style.top = `${event.clientY}px`;
         say(event.clientX, event.clientY, `${dotName(key, tooth.fdi)}  ${text}`);
@@ -410,7 +440,7 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
         const inside = x > host.left + 6 && x < host.right - 6 && y > host.top + 6 && y < host.bottom - 6;
         // While one dot is held the others wait where they are (the tooth is changing under them).
         el.style.display = inside && !dotDrag ? "block" : dotDrag ? el.style.display : "none";
-        if (!dotDrag) { el.style.left = `${x}px`; el.style.top = `${y}px`; }
+        if (!dotDrag) { el.style.left = `${x}px`; el.style.top = `${y}px`; el.classList.toggle("locked", lockedOf(tooth.id).has(key)); }
       });
     };
     frame = window.requestAnimationFrame(place);
