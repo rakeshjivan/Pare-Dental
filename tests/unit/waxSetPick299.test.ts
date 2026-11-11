@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { archRoom, frameFromMarks, rankSets, scoreSet, type SetDims } from "@/lib/waxSetPick";
+import { COVER_WEIGHT, archRoom, frameFromMarks, rankSets, scoreSet, type SetDims } from "@/lib/waxSetPick";
 
 /** Build 299: the library set that fits an arch with the least change to its teeth. */
 describe("scoreSet", () => {
@@ -40,6 +40,17 @@ describe("scoreSet", () => {
   it("ranks the best first", () => {
     const ranked = rankSets([{ id: "squat", dims: made(fits.widths, fits.lengths.map((l) => l * 0.8)) }, { id: "fits", dims: fits }], room);
     expect(ranked.map((r) => r.id)).toEqual(["fits", "squat"]);
+  });
+
+  it("counts the patient's teeth left proud of the wax against a set (build 300)", () => {
+    const squat = made(fits.widths, fits.lengths.map((l) => l * 0.9));
+    const plain = rankSets([{ id: "fits", dims: fits }, { id: "squat", dims: squat }], room);
+    expect(plain[0].id).toBe("fits");
+    expect(plain[0].cover).toBeNull();
+    // The better-proportioned set leaves 1.5 mm of the patient's teeth showing, the other none.
+    const tried = rankSets([{ id: "fits", dims: fits }, { id: "squat", dims: squat }], room, new Map([["fits", 1.5], ["squat", 0]]));
+    expect(tried[0].id).toBe("squat");
+    expect(tried[1].score).toBeCloseTo(plain[0].score + COVER_WEIGHT * 1.5, 6);
   });
 
   it("leaves a tooth with no margin read out of the lengths", () => {

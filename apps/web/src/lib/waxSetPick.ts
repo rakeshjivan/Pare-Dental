@@ -9,6 +9,8 @@
  * - widths: how unevenly the six teeth are scaled across (a set whose laterals are too wide for these centrals);
  * - reach: how far a tooth's length would have to go past what the laying allows (its neck left short of the gum,
  *   or its edge beyond the design).
+ * - cover (build 300, when the set has been tried on the arch): how far the patient's own teeth are left standing
+ *   proud of the wax.
  * The lowest score fits best. It says nothing of which form suits the face - that stays the dentist's choice.
  */
 import * as THREE from "three";
@@ -85,9 +87,20 @@ export function scoreSet(dims: SetDims, room: ArchRoom): SetScore {
   return { score: form + widths + 2 * reach, form, widths, reach };
 }
 
-/** The sets in order of fit, the best first. */
-export function rankSets(sets: Array<{ id: string; dims: SetDims }>, room: ArchRoom): Array<{ id: string } & SetScore> {
-  return sets.map((set) => ({ id: set.id, ...scoreSet(set.dims, room) })).sort((a, b) => a.score - b.score);
+/** What a millimetre of the patient's teeth left standing proud of the wax (the mean over the six teeth) adds to a set's score. */
+export const COVER_WEIGHT = 0.2;
+
+/**
+ * The sets in order of fit, the best first. `cover` (build 300): for each set tried on the arch, how far the patient's
+ * teeth stand proud of its wax, mm (the mean over the teeth of each tooth's deepest) - a set that leaves the
+ * patient's teeth showing needs them cut back or the wax built out, so it counts against the set.
+ */
+export function rankSets(sets: Array<{ id: string; dims: SetDims }>, room: ArchRoom, cover?: ReadonlyMap<string, number>): Array<{ id: string; cover: number | null } & SetScore> {
+  return sets.map((set) => {
+    const scored = scoreSet(set.dims, room);
+    const proud = cover?.get(set.id);
+    return { id: set.id, ...scored, cover: proud ?? null, score: scored.score + COVER_WEIGHT * Math.max(0, proud ?? 0) };
+  }).sort((a, b) => a.score - b.score);
 }
 
 /**

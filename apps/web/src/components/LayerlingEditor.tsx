@@ -12300,7 +12300,7 @@ export function LayerlingEditor({
       return { strayArrays, strayMillions: strayNumbers / 1e6, readOnlyMeshes: readOnlyMeshes.size, shapes: shapesRef.current.length, shownMillions: shown / 1e6, historySteps: history.length, historyIndex: historyIndexRef.current, historyOnlyMillions: history.map((n) => +(n / 1e6).toFixed(1)), biteCopies: madeBiteRef.current.size, biteMillions: bite / 1e6 };
     };
   }, []);
-  useEffect(() => { (window as unknown as { layerlingWaxupState?: () => unknown }).layerlingWaxupState =() => { const w = waxupRef.current; return { slot: w.slot, setRank: w.setRank, setId: w.setId, setIds: w.setIds, setName: w.setName, single: w.single, placed: w.placed.length, busy: w.busy, error: w.error }; }; }, []);
+  useEffect(() => { (window as unknown as { layerlingWaxupState?: () => unknown }).layerlingWaxupState =() => { const w = waxupRef.current; return { slot: w.slot, setRank: w.setRank, rankInfo: waxRankInfo.current, setId: w.setId, setIds: w.setIds, setName: w.setName, single: w.single, placed: w.placed.length, busy: w.busy, error: w.error }; }; }, []);
   /**
    * Build 101: Wax-up Studio's own Undo and Redo - every step (placing, the sliders, nudges, the teeth
    * chosen, the set, the occlusion) records the wax-up's settings with the design's place in its history;
@@ -12371,6 +12371,8 @@ export function LayerlingEditor({
   const waxSetDims = useRef(new Map<string, SetDims | null>());
   const waxRankKey = useRef("");
   const waxSetByHand = useRef(new Set<string>());
+  /** For checks: the last order worked out, with each set's score and cover. */
+  const waxRankInfo = useRef<Array<{ id: string; score: number; cover: number | null }>>([]);
   const rankWaxSets = useCallback(async () => {
     const current = waxupRef.current;
     const arch = waxArch();
@@ -12421,11 +12423,62 @@ export function LayerlingEditor({
         if (dims) sets.push({ id: entry.id, dims });
       }
       if (sets.length < 2) return;
-      const ranked = rankSets(sets, room).map((each) => each.id);
-      setWaxup((latest) => ({ ...latest, setRank: { ...(latest.setRank ?? {}), [slot]: ranked } }));
       const scanId = dentalStudioRef.current?.slots[slot];
-      const latest = waxupRef.current;
-      if (scanId && !waxTeethOf(scanId).length && !waxSetByHand.current.has(slot) && latest.slot === slot && latest.setIds?.[slot] !== ranked[0]) void chooseBuiltInSet(ranked[0], true);
+      const settle = (cover?: Map<string, number>) => {
+        const scored = rankSets(sets, room, cover);
+        waxRankInfo.current = scored.map((each) => ({ id: each.id, score: Math.round(each.score * 1000) / 1000, cover: each.cover === null ? null : Math.round(each.cover * 100) / 100 }));
+        const ranked = scored.map((each) => each.id);
+        setWaxup((latest) => ({ ...latest, setRank: { ...(latest.setRank ?? {}), [slot]: ranked } }));
+        const latest = waxupRef.current;
+        if (scanId && !waxTeethOf(scanId).length && !waxSetByHand.current.has(slot) && latest.slot === slot && latest.setIds?.[slot] !== ranked[0]) void chooseBuiltInSet(ranked[0], true);
+      };
+      settle();
+      // Build 300: then each set is tried on the arch (laid on the marks as Position would lay it, nothing shown) and
+      // how far the patient's teeth are left proud of its wax counts against it - the order settled again.
+      const back = arch.sceneToInput.clone().invert();
+      // Only the scan round the front teeth is looked at (16 mm about the marks), so each try is short.
+      const whole = transformSoup(arch.scan, back);
+      const box = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+      for (const mark of all) for (let k = 0; k < 3; k += 1) { box[k] = Math.min(box[k], mark[k] - 16); box[k + 3] = Math.max(box[k + 3], mark[k] + 16); }
+      const near: number[] = [];
+      for (let i = 0; i + 8 < whole.length; i += 9) {
+        if (whole[i] < box[0] || whole[i] > box[3] || whole[i + 1] < box[1] || whole[i + 1] > box[4] || whole[i + 2] < box[2] || whole[i + 2] > box[5]) continue;
+        for (let k = 0; k < 9; k += 1) near.push(whole[i + k]);
+      }
+      const scanSoup = Float32Array.from(near);
+      const cover = new Map<string, number>();
+      for (const { id } of sets) {
+        if (waxRankKey.current !== key) return;
+        const shells = waxShellsById.current.get(id);
+        if (!shells) continue;
+        try {
+          const plan = await waxupInBackground(arch.scan, shells, null, { drop: true });
+          const front = plan.teeth.map((tooth) => ({ fdi: fdiNumber(tooth.kind, tooth.side, slot), soup: transformSoup(tooth.positions, back), frame: moveFrame(tooth.frame, back) })).filter((tooth) => tooth.fdi % 10 <= 3);
+          if (front.length < 6) continue;
+          const sum = (pick: (f: (typeof front)[number]["frame"]) => [number, number, number]) => front.reduce((acc, tooth) => acc.add(new THREE.Vector3(...pick(tooth.frame))), new THREE.Vector3()).normalize().toArray() as [number, number, number];
+          const upSet = sum((f) => f.up), outSet = sum((f) => f.out);
+          const frames = restFrames(front.map((tooth) => ({ fdi: tooth.fdi, soup: tooth.soup })), upSet, outSet);
+          const base = { midline: all[3], canines: [all[7], all[8]] as [[number, number, number], [number, number, number]], up: upSet, out: outSet, contacts };
+          const gum = crownMargins(scanSoup, base);
+          const anchors = { ...base, labial: labialProfile(scanSoup, base), crown: gum.crown ?? undefined, margins: gum.margins };
+          const setTeeth: SetTooth[] = front.flatMap((tooth) => { const f = frames.get(tooth.fdi); return f ? [{ id: String(tooth.fdi), fdi: tooth.fdi, kind: fdiKind(tooth.fdi, slot).kind, frame: f.frame, width: f.width, length: f.length, face: f.face }] : []; });
+          const layout = layoutSmileSet(setTeeth, anchors, { ...SET_DEFAULTS });
+          if (!layout) continue;
+          const upNow = new THREE.Vector3(...upSet).normalize();
+          let proud = 0, count = 0;
+          for (const tooth of front) {
+            const rest = frames.get(tooth.fdi), matrix = layout.matrices.get(String(tooth.fdi));
+            if (!rest || !matrix) continue;
+            const level = gum.margins[frontTeeth(slot).indexOf(tooth.fdi)];
+            const found = proudOfWax(scanSoup, transformSoup(tooth.soup, matrix), moveFrame(rest.frame, matrix), rest.width, rest.length, 1, level !== null && level !== undefined ? { up: [upNow.x, upNow.y, upNow.z], level } : undefined);
+            proud += found.depth; count += 1;
+          }
+          if (count) cover.set(id, proud / count);
+        } catch { /* a set that cannot be tried keeps its score without cover */ }
+        // A breath between sets, so the studio stays in hand while they are tried.
+        await new Promise((resolve) => window.setTimeout(resolve, 60));
+      }
+      if (waxRankKey.current === key && cover.size === sets.length) settle(cover);
     } catch { waxRankKey.current = ""; }
   }, [chooseBuiltInSet, waxArch]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 107: for checks - how far each wax-up dot is from the arch's scan (in the studio's coordinates), and where the placed teeth sit.
