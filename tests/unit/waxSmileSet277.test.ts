@@ -367,6 +367,8 @@ describe("the face laid against the patient's crown (build 286)", () => {
     return new THREE.Vector3(o[0], o[1] - 0.18 * (depth / scale), o[2] - depth / scale).applyMatrix4(m);
   };
 
+  const faceAtOf = (laid: NonNullable<ReturnType<typeof layoutSmileSet>>) => new THREE.Vector3(...central.frame.origin).applyMatrix4(laid.matrices.get(central.id)!).y;
+
   it("covers the crown by SET_CLEAR from the edge to the gum line, by turning the neck out rather than the whole tooth", () => {
     const edge = faceAt(0);
     for (const depth of [1, 3, 5, 7, 8]) {
@@ -377,8 +379,16 @@ describe("the face laid against the patient's crown (build 286)", () => {
     // Turned: the neck stands further out against the edge than the library face alone would have it.
     expect(faceAt(8).y - edge.y).toBeGreaterThan(-0.18 * 8 * (central.length / (9 + SET_BURY)) + 0.3);
     // And the edge is not pushed far in front of the patient's: within a millimetre of SET_CLEAR.
-    expect(edge.y).toBeLessThan(-0.03 * edge.x * edge.x + 1 + SET_CLEAR + 1);
+    // (The patient's face here is flat right across, where a tooth's own falls back at its sides: a little further out for that.)
+    expect(edge.y).toBeLessThan(-0.03 * edge.x * edge.x + 1 + SET_CLEAR + 1.6);
     expect(m.determinant()).toBeGreaterThan(0);
+  });
+
+  it("stands clear of a patient's tooth that sticks out at one side only (turned in the arch) (build 288)", () => {
+    // 11's distal third standing 1.5 mm further labial than the rest of it, from the edge to the gum line.
+    const turned: V[] = labial.map((p) => (p[0] < -5.5 && p[0] > -7.5 && p[2] > -9.4 ? [p[0], p[1] + 1.5, p[2]] as V : p));
+    const plain = faceAtOf(layoutSmileSet(teeth, marked, SET_DEFAULTS)!), out = faceAtOf(layoutSmileSet(teeth, { ...marked, labial: turned }, SET_DEFAULTS)!);
+    expect(out - plain).toBeGreaterThan(0.25);
   });
 
   it("never turns a tooth further than SET_TORQUE_MAX, and not at all when its face already covers", () => {

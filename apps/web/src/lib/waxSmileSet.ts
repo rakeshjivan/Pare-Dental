@@ -31,6 +31,8 @@ export type SetTooth = {
 };
 /** The step of a tooth's labial face profile down its length, mm. */
 export const FACE_STEP = 0.5;
+/** How far a tooth's labial face has fallen back at its mesial and distal ends, against its middle, mm. */
+export const SET_SIDE_FALL = 1;
 /** The most a tooth's neck is turned labially (about its incisal edge) to cover the patient's crown, degrees. */
 export const SET_TORQUE_MAX = 10;
 
@@ -608,12 +610,14 @@ function layoutFromMarks(teeth: SetTooth[], anchors: SetAnchors, c: SetControls,
     // from the edge to the gum line - the neck turned labially about the incisal edge (torque, to SET_TORQUE_MAX) as
     // far as saves moving the whole tooth out, then the tooth out until its face covers the crown by SET_CLEAR.
     const edgeLevel = mid.dot(up) + height;
-    const near: Array<{ f: number; d: number }> = [];
+    const near: Array<{ f: number; d: number; side: number }> = [];
     for (const point of anchors.labial ?? []) {
       const d = flat(v(point)).sub(middle);
       const across = Math.abs(d.dot(want));
       if (across > width / 2 + 0.5) continue;
-      near.push({ f: d.dot(out), d: across > width * 0.3 ? -1 : edgeLevel - v(point).dot(up) });
+      // How far the tooth's face has fallen back by there, towards its mesial and distal sides (nothing over its middle).
+      const side = Math.max(0, across / width - 0.3) / 0.2;
+      near.push({ f: d.dot(out), d: edgeLevel - v(point).dot(up), side: SET_SIDE_FALL * side * side });
     }
     let forward = 0, torque = 0;
     const faceOf = tooth.face;
@@ -625,11 +629,12 @@ function layoutFromMarks(teeth: SetTooth[], anchors: SetAnchors, c: SetControls,
         const slope = Math.tan((degrees * Math.PI) / 180);
         let most = 0;
         for (const q of near) {
-          // Over the middle of the tooth, from its edge to the gum line: against the face at that depth.
+          // From the tooth's edge to the gum line: against the face at that depth (build 288: across its whole
+          // width - a patient's tooth turned in the arch stands out at one side, which the middle alone missed).
           if (q.d < 0 || q.d > reachDown) continue;
           const at = q.d / stretch / FACE_STEP, k = Math.min(faceOf.length - 1, Math.floor(at)), k1 = Math.min(faceOf.length - 1, k + 1);
           const behind = faceOf[k] + (faceOf[k1] - faceOf[k]) * (at - k);
-          most = Math.max(most, q.f + SET_CLEAR - behind - slope * q.d);
+          most = Math.max(most, q.f + SET_CLEAR - behind + q.side - slope * q.d);
         }
         return most;
       };

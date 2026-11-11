@@ -18,14 +18,18 @@
  */
 
 
-export type PalatalForm = "patient" | "library";
+export type PalatalForm = "patient" | "library" | "shell";
 /**
  * Build 286: what a wax-up starts with. A lab's wax-up of the same scan was its library teeth joined to the scan whole
  * (each one long enough to stand in the gum and full enough to cover the patient's crown), and that read better than
  * the scan pressed or moved onto the library teeth - every tooth keeps its own anatomy, labial and palatal. So the
  * whole library teeth joined on ("patient": the patient's own surface shows only where it stands outside a tooth).
  */
-export const PALATAL_DEFAULT: PalatalForm = "patient";
+export const PALATAL_DEFAULT: PalatalForm = "library";
+// Build 288 (Rakesh: the palatal of the 12 "not quite blending"): joined whole, a patient's tooth that stands palatal of
+// its wax tooth still showed as a ledge beside it. So the default joins the whole teeth AND presses the patient's
+// palatal onto them ("library"); "patient" joins them and leaves the scan alone; "shell" is build 283's scan shaped
+// to the teeth.
 
 /** A wax tooth, in the scan's coordinates: its closed soup and frame (up towards the incisal edge, out labial). */
 export type PalatalTooth = { soup: Float32Array; origin: ArrayLike<number>; up: ArrayLike<number>; out: ArrayLike<number>; mesial: ArrayLike<number> };

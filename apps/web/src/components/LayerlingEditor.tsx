@@ -13456,7 +13456,7 @@ export function LayerlingEditor({
   // over the scan (components/workplane/palatalLayer) and the scan is never changed. What the opposing wax teeth bite on
   // (contacts, Fit to the bite) is each arch as Make will make it - its palatal pressed onto its wax teeth - worked out in
   // the background a moment after the teeth last moved while the contacts are shown, else when it is asked for.
-  const palatalLive = Boolean(dentalStudio?.waxStudio) && (waxup.palatal ?? PALATAL_DEFAULT) === "library" && dentalStudio?.stage !== "made" && ["place", "adjust", "occlusion", "keep", "sculpt", "gum", "make"].includes(studioWaxStep ?? "");
+  const palatalLive = Boolean(dentalStudio?.waxStudio) && (waxup.palatal ?? PALATAL_DEFAULT) !== "patient" && dentalStudio?.stage !== "made" && ["place", "adjust", "occlusion", "keep", "sculpt", "gum", "make"].includes(studioWaxStep ?? "");
   const palatalLiveRef = useRef(false);
   palatalLiveRef.current = palatalLive;
   const palatalCache = useRef(new Map<string, { key: string; scanKey: string; soup: Float32Array | null }>());
@@ -13546,7 +13546,7 @@ export function LayerlingEditor({
   const waxShellHidden = useRef(new Set<string>());
   const waxShellSetup = (scan: WorkplaneShape, only?: (fdi: number) => boolean) => {
     const studio = dentalStudioRef.current;
-    if (!studio?.waxStudio || (waxupRef.current.palatal ?? PALATAL_DEFAULT) !== "library") return null;
+    if (!studio?.waxStudio || (waxupRef.current.palatal ?? PALATAL_DEFAULT) !== "shell") return null;
     const slot = studio.slots.upper === scan.id ? "upper" as const : studio.slots.lower === scan.id ? "lower" as const : null;
     if (!slot) return null;
     const record = waxupRef.current.smile?.[slot];
