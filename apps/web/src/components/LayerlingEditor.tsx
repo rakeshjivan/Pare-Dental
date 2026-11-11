@@ -14302,7 +14302,7 @@ export function LayerlingEditor({
     if (!record) return;
     const next = clampEdit(edit);
     const partner = (Math.floor(fdi / 10) % 2 === 1 ? fdi + 10 : fdi - 10);
-    editWaxTeeth({ ...(record.pending ?? record.own ?? {}), [fdi]: next, ...(record.mirror !== false && record.rest[partner] ? { [partner]: next } : {}) });
+    editWaxTeeth({ ...(record.pending ?? record.own ?? {}), [fdi]: next, ...(record.mirror === true && record.rest[partner] ? { [partner]: next } : {}) });
   };
   /** Build 284: several teeth's own changes at once (a contact moved changes two teeth, four when mirrored). */
   const editWaxTeeth = (changed: Record<number, ToothEdit>) => {
@@ -14333,15 +14333,48 @@ export function LayerlingEditor({
     const fdi = shapesRef.current.find((shape) => shape.id === id)?.waxTooth?.fdi;
     waxDirectBase.current = record && fdi ? { fdi, own: { ...(record.pending ?? record.own ?? {}) } } : null;
   };
+  /** Build 290 (Rakesh: a button to mirror a tooth, once it is right, to the other side): the tooth picked's own changes given to its partner across the midline. */
+  const copyWaxToothAcross = () => {
+    const current = waxupRef.current;
+    const record = current.smile?.[current.slot];
+    const shape = selectedIdsRef.current.length === 1 ? shapesRef.current.find((candidate) => candidate.id === selectedIdsRef.current[0]) : undefined;
+    const fdi = shape?.waxTooth?.fdi;
+    if (!record || !fdi) return;
+    const partner = Math.floor(fdi / 10) % 2 === 1 ? fdi + 10 : fdi - 10;
+    if (!record.rest[partner] || current.locks[partner]) return;
+    waxRecord();
+    const own = { ...(record.pending ?? record.own ?? {}) };
+    editWaxTeeth({ ...own, [partner]: { ...NO_EDIT, ...(own[fdi] ?? {}) } });
+  };
   const dragWaxDirect = (change: DirectChange) => {
     const base = waxDirectBase.current;
     const slot = waxupRef.current.slot;
     const record = waxupRef.current.smile?.[slot];
     if (!base || !record) return;
     const fdi = base.fdi;
-    const mirror = record.mirror !== false;
+    const mirror = record.mirror === true;
     const partner = Math.floor(fdi / 10) % 2 === 1 ? fdi + 10 : fdi - 10;
     if (change.kind === "contact") { editWaxTeeth(moveContact(base.own, frontTeeth(slot), fdi, change.side, change.mm, mirror, waxSetHas)); return; }
+    if (change.kind === "moveAll") {
+      // Build 290: the whole set moved as one - each tooth by the same way in the scene, read on its own directions.
+      const own = { ...base.own };
+      for (const tooth of waxDirectTeeth) {
+        const f = tooth.frame, d = change.by, was = { ...NO_EDIT, ...(own[tooth.fdi] ?? {}) };
+        const along = (axis: ArrayLike<number>) => d[0] * axis[0] + d[1] * axis[1] + d[2] * axis[2];
+        own[tooth.fdi] = { ...was, moveMesial: was.moveMesial + along(f.mesial), moveOut: was.moveOut + along(f.out), moveUp: was.moveUp + along(f.up) };
+      }
+      editWaxTeeth(own);
+      return;
+    }
+    if (change.kind === "dot") {
+      // Build 290: a dot dragged - its contact moved (the neighbour giving way) and the tooth lengthened or turned with it.
+      const own = change.side && Math.abs(change.contact) > 1e-6 ? moveContact(base.own, frontTeeth(slot), fdi, change.side, change.contact, mirror, waxSetHas) : { ...base.own };
+      const add = (n: number) => { if (!waxSetHas(n)) return; const was = { ...NO_EDIT, ...(own[n] ?? {}) }; own[n] = { ...was, length: was.length + change.length, torque: was.torque + change.torque, rotate: was.rotate + change.rotate }; };
+      add(fdi);
+      if (mirror) add(partner);
+      editWaxTeeth(own);
+      return;
+    }
     const was = { ...NO_EDIT, ...(base.own[fdi] ?? {}) };
     const next = change.kind === "length" ? { ...was, length: was.length + change.mm }
       : change.kind === "spread" ? { ...was, spread: was.spread + change.mm }
@@ -14395,7 +14428,7 @@ export function LayerlingEditor({
     if (record?.rest[fdi] && waxStepLive(shape.id)) {
       const own = record.pending ?? record.own ?? {};
       // Build 284: a side stepped moves its contact (the tooth beside gives way, no other tooth moves).
-      if (key === "mesial" || key === "distal") { editWaxTeeth(moveContact(own, frontTeeth(waxupRef.current.slot), fdi, key, delta, record.mirror !== false, waxSetHas)); return; }
+      if (key === "mesial" || key === "distal") { editWaxTeeth(moveContact(own, frontTeeth(waxupRef.current.slot), fdi, key, delta, record.mirror === true, waxSetHas)); return; }
       const cur = { ...NO_EDIT, ...(own[fdi] ?? {}) };
       editWaxTooth(fdi, { ...cur, [key]: Math.round((cur[key] + delta) * 100) / 100 });
       return;
@@ -15595,7 +15628,7 @@ export function LayerlingEditor({
     const shape = shapes.find((candidate) => candidate.id === selectedIds[0]);
     const fdi = shape?.waxTooth?.fdi;
     if (!fdi || !smileNow.rest[fdi]) return null;
-    return { fdi, edit: smileNow.pending?.[fdi] ?? smileNow.own?.[fdi] ?? NO_EDIT, mirror: smileNow.mirror !== false, width: shape!.waxTooth!.width, length: shape!.waxTooth!.length, live: true };
+    return { fdi, edit: smileNow.pending?.[fdi] ?? smileNow.own?.[fdi] ?? NO_EDIT, mirror: smileNow.mirror === true, width: shape!.waxTooth!.width, length: shape!.waxTooth!.length, live: true };
   })();
   // Build 281 (Rakesh: the gimbal was his biggest problem): any other wax tooth chosen (not in a set laid from the
   // marks, or reshaped with the brushes) is stepped directly - the totals shown are what was stepped since it was chosen.
@@ -22954,6 +22987,7 @@ export function LayerlingEditor({
               onArchMarkUndo: () => undoArchMark(),
               onArchMarksFind: () => findArchMarks(false),
               onArchMarksClear: () => { waxRecord(); setWaxup((current) => { const next = { ...current, archMarksAuto: { ...current.archMarksAuto, [current.slot]: undefined }, archMarks: { ...(current.archMarks ?? {}), [current.slot]: Array(9).fill(null) } }; waxupRef.current = next; return next; }); window.setTimeout(() => startArchMarks(0), 30); },
+              onToothCopyAcross: () => copyWaxToothAcross(),
               onToothMirror: (on: boolean) => setWaxup((latest) => { const record = latest.smile?.[latest.slot]; if (!record) return latest; const next = { ...latest, smile: { ...latest.smile, [latest.slot]: { ...record, mirror: on } } }; waxupRef.current = next; return next; }),
               onBite: (raise: number) => void openWaxBite(raise),
               onGumMode: (mode: GumMode) => setWaxGumMode(mode),

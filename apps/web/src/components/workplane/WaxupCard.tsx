@@ -298,6 +298,8 @@ export type WaxupActions = {
   onMarksEditing?: (on: boolean) => void;
   /** Build 105: the selected tooth's shape mirrored onto its partner across the midline. */
   onMirrorShape?: () => void;
+  /** Build 290: the tooth picked's changes copied to its partner across the midline, once. */
+  onToothCopyAcross?: () => void;
   onWaxContacts?: (on: boolean) => void;
   onOcclusal?: (mm: number) => void;
   onAdapt?: (what: "bite" | "contacts" | "both") => void;
@@ -792,7 +794,7 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
                   </div>
                 ) : null}
                 {view.toothEdit && actions.onToothEdit ? (
-                  <ToothEditPanel tooth={view.toothEdit} workspace={workspace} disabled={working} onChange={actions.onToothEdit} onStep={actions.onToothStep} onMirror={actions.onToothMirror} />
+                  <ToothEditPanel tooth={view.toothEdit} workspace={workspace} disabled={working} onChange={actions.onToothEdit} onStep={actions.onToothStep} onMirror={actions.onToothMirror} onCopyAcross={actions.onToothCopyAcross} />
                 ) : (
                   <SmileSetPanel set={view.smileSet} workspace={workspace} disabled={working} onChange={actions.onSmile} />
                 )}
@@ -1247,7 +1249,7 @@ function StepButton({ label, disabled, onStep, children }: { label: string; disa
   );
 }
 
-function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror }: { tooth: NonNullable<WaxupView["toothEdit"]>; workspace: WorkplaneWorkspaceSettings; disabled: boolean; onChange?: (fdi: number, edit: ToothEdit) => void; onStep?: (key: keyof ToothEdit, delta: number) => void; onMirror?: (on: boolean) => void }) {
+function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror, onCopyAcross }: { onCopyAcross?: () => void; tooth: NonNullable<WaxupView["toothEdit"]>; workspace: WorkplaneWorkspaceSettings; disabled: boolean; onChange?: (fdi: number, edit: ToothEdit) => void; onStep?: (key: keyof ToothEdit, delta: number) => void; onMirror?: (on: boolean) => void }) {
   const e = tooth.edit;
   const r = EDIT_RANGES;
   const tenth = (x: number) => Math.round(x * 10) / 10;
@@ -1278,6 +1280,16 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror
         <span>{t(live ? "waxup.toothHint" : "waxup.toothStepHint")}</span>
       </div>
       <p className="blend-hint" role="status">{t("waxup.toothSize", { width: tooth.width.toFixed(1), length: tooth.length.toFixed(1), ratio: Math.round((tooth.width / Math.max(0.1, tooth.length)) * 100) })}</p>
+      {/* Build 290 (Rakesh): one tooth changes alone unless asked; a tooth that is right can be copied across once. */}
+      {onMirror && live ? (
+        <div className="wax-tooth-across">
+          <label className="edge-modifier-check" title={t("waxup.toothMirrorHint")}>
+            <input type="checkbox" checked={tooth.mirror} disabled={disabled} onChange={(event) => onMirror(event.currentTarget.checked)} />
+            <span>{t("waxup.toothMirror")}</span>
+          </label>
+          {onCopyAcross ? <button type="button" className="secondary" disabled={disabled} title={t("waxup.toothCopyAcrossHint")} onClick={onCopyAcross}>{t("waxup.toothCopyAcross")}</button> : null}
+        </div>
+      ) : null}
       <h4>{t("waxup.toothPlace")}</h4>
       {row("moveMesial", "waxup.toothMoveMesial", "waxup.toothMoveMesialHint")}
       {row("moveOut", "waxup.toothMoveOut", "waxup.toothMoveOutHint")}
@@ -1291,12 +1303,6 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror
       {row("distal", "waxup.toothDistal", "waxup.toothDistalHint")}
       {live ? row("spread", "waxup.toothSpread", "waxup.toothSpreadHint") : null}
       {row("thickness", "waxup.toothThickness", "waxup.toothThicknessHint")}
-      {onMirror && live ? (
-        <label className="edge-modifier-check" title={t("waxup.toothMirrorHint")}>
-          <input type="checkbox" checked={tooth.mirror} disabled={disabled} onChange={(event) => onMirror(event.currentTarget.checked)} />
-          <span>{t("waxup.toothMirror")}</span>
-        </label>
-      ) : null}
       {live ? (
         <div className="dental-trim-buttons">
           <button type="button" className="secondary" disabled={disabled} onClick={() => onChange?.(tooth.fdi, { ...NO_EDIT })}>{t("waxup.toothReset")}</button>

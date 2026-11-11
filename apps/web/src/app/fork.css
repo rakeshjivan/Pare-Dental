@@ -2281,3 +2281,14 @@ html[data-theme="dark"] .dental-studio-panel .dental-picture-tiles button { back
 
 /* Build 284: the label by the pointer over a wax tooth - what a press would do, how far it has gone. */
 .wax-direct-label { position: fixed; z-index: 60; pointer-events: none; padding: 3px 8px; border-radius: 8px; background: rgba(17, 24, 39, 0.86); color: #ffffff; font: 600 12px/1.4 system-ui, sans-serif; white-space: nowrap; }
+
+/* Build 290: the dots on the wax tooth picked (WaxToothDirect). */
+.wax-dot { position: fixed; z-index: 55; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: #0a786c; border: 2.5px solid #ffffff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45); cursor: grab; touch-action: none; }
+.wax-dot:hover, .wax-dot.held { transform: scale(1.25); background: #0d9488; }
+.wax-dot.held { cursor: grabbing; }
+.wax-dot-middle { width: 22px; height: 22px; margin: -11px 0 0 -11px; background: #ffffff; border-color: #0a786c; }
+.wax-dot-middle:hover, .wax-dot-middle.held { background: #d5f0ec; }
+.wax-dot-edge { background: #2563eb; }
+.wax-dot-edge:hover, .wax-dot-edge.held { background: #3b82f6; }
+.wax-tooth-across { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0 4px; }
+.wax-tooth-across button { white-space: nowrap; }

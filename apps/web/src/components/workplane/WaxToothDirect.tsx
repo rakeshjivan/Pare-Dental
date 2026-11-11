@@ -30,7 +30,11 @@ export type DirectChange =
   | { kind: "contact"; side: "mesial" | "distal"; mm: number }
   | { kind: "spread"; mm: number }
   | { kind: "move"; mesial: number; out: number; up: number }
-  | { kind: "turn"; rotate: number; tip: number; torque: number };
+  | { kind: "turn"; rotate: number; tip: number; torque: number }
+  /** Build 290: a dot on the tooth dragged - whatever of these it stands for, all at once. */
+  | { kind: "dot"; length: number; torque: number; rotate: number; contact: number; side: "mesial" | "distal" | null }
+  /** Build 290: the whole set moved (no one tooth picked), mm in the scene. */
+  | { kind: "moveAll"; by: [number, number, number] };
 type Zone = "length" | "mesial" | "distal" | "move";
 
 /** The wheel: degrees for each notch (about 100 of a wheel's own units), and how long after the last notch the turn is kept. */
@@ -142,11 +146,14 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
     };
     const mm = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)} mm`;
     type Kind = DirectChange["kind"];
+    // Build 290 (Rakesh: which part of a tooth did what was guesswork): a tooth taken hold of anywhere moves - the
+    // whole set when no one tooth is picked. Its length, contacts and turn are the dots'. (Shift + a side still widens
+    // it with the teeth behind moving along; Alt turns it.)
     const kindOf = (zone: Zone, event: { altKey: boolean; shiftKey: boolean }): Kind =>
-      event.altKey ? "turn" : event.shiftKey && zone !== "length" ? "spread" : zone === "length" ? "length" : zone === "move" ? "move" : "contact";
-    const cursorOf = (kind: Kind, zone: Zone) => (kind === "turn" ? "grab" : kind === "length" ? "ns-resize" : kind === "move" ? "move" : zone === "move" ? "ew-resize" : "ew-resize");
+      !live.current.selected ? "moveAll" : event.altKey ? "turn" : event.shiftKey && zone !== "length" && zone !== "move" ? "spread" : "move";
+    const cursorOf = (kind: Kind, zone: Zone) => (kind === "turn" ? "grab" : kind === "move" || kind === "moveAll" ? "move" : zone === "move" ? "ew-resize" : "ew-resize");
     const nameOf = (kind: Kind, zone: Zone, fdi: number) =>
-      kind === "contact" ? t(zone === "mesial" ? "waxup.direct.mesial" : "waxup.direct.distal", { fdi }) : t(`waxup.direct.${kind}`, { fdi });
+      kind === "moveAll" ? t("waxup.direct.moveAll") : kind === "dot" ? "" : kind === "contact" ? t(zone === "mesial" ? "waxup.direct.mesial" : "waxup.direct.distal", { fdi }) : t(`waxup.direct.${kind}`, { fdi });
 
     let drag: { tooth: DirectTooth; zone: Zone; kind: Kind; point: V; normal: V; start: [number, number]; pointer: number; right: V; up: V; canvas: HTMLElement; moved: boolean } | null = null;
     let hoverCanvas: HTMLElement | null = null;
@@ -168,7 +175,8 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
       const unit = (p: V | null): V => { if (!a || !p) return [0, 0, 0]; const d = sub(p, a), l = Math.hypot(...d) || 1; return [d[0] / l, d[1] / l, d[2] / l]; };
       drag = { tooth: hit.tooth, zone, kind, point: hit.point, normal: hit.normal, start: [event.clientX, event.clientY], pointer: event.pointerId, right: unit(r), up: unit(u), canvas, moved: false };
       canvas.style.cursor = kind === "turn" ? "grabbing" : cursorOf(kind, zone);
-      live.current.onSelect(hit.tooth.id);
+      // With no one tooth picked the set moves as one, and a click (no drag) picks the tooth.
+      if (kind !== "moveAll") live.current.onSelect(hit.tooth.id);
       live.current.onBegin(hit.tooth.id);
       say(event.clientX, event.clientY, nameOf(kind, zone, hit.tooth.fdi));
     };
@@ -198,7 +206,10 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
       drag.moved = true;
       let change: DirectChange | null = null;
       let text = "";
-      if (drag.kind === "length") {
+      if (drag.kind === "moveAll") {
+        change = { kind: "moveAll", by: delta };
+        text = `${Math.hypot(...delta).toFixed(1)} mm`;
+      } else if (drag.kind === "length") {
         const v = alongAxis(delta, f.up, drag.normal);
         if (v !== null) { change = { kind: "length", mm: v }; text = mm(v); }
       } else if (drag.kind === "contact" || drag.kind === "spread") {
@@ -245,11 +256,12 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
       if (!drag || event.pointerId !== drag.pointer) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      const { tooth, canvas } = drag;
+      const { tooth, canvas, kind, moved } = drag;
       drag = null;
       canvas.style.cursor = "";
       say(0, 0, null);
       live.current.onEnd(tooth.id);
+      if (kind === "moveAll" && !moved) live.current.onSelect(tooth.id);
     };
     // The wheel over the tooth picked turns it: from how it stood at the first notch, kept a moment after the last.
     let wheel: { tooth: DirectTooth; rotate: number; tip: number; torque: number; timer: number } | null = null;
@@ -280,6 +292,106 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
       live.current.onDrag(hit.tooth.id, { kind: "turn", rotate: wheel.rotate, tip: wheel.tip, torque: wheel.torque });
       say(event.clientX, event.clientY, `${t("waxup.direct.turn", { fdi: hit.tooth.fdi })}  ${wheel[key] >= 0 ? "+" : ""}${wheel[key].toFixed(1)}°`);
     };
+    // Build 290 (Rakesh: "dots placed on the tooth that appear when the tooth is clicked"): the tooth picked carries
+    // four dots, there from any view - its incisal edge (length; and, moved labially or palatally, its torque), its
+    // mesial and distal sides (that contact; and, moved labially or palatally, its rotation) and its middle (the
+    // whole tooth, any way). Each follows the pointer in the plane of the screen.
+    type DotKey = "edge" | "mesial" | "distal" | "middle";
+    const DOTS: DotKey[] = ["edge", "mesial", "distal", "middle"];
+    const dotEls = new Map<DotKey, HTMLDivElement>();
+    let thick = { id: "", t: 6 };
+    const thicknessOf = (tooth: DirectTooth) => {
+      if (thick.id === tooth.id) return thick.t;
+      const tris = tooth.triangles(), f = tooth.frame;
+      let back = 0;
+      for (let i = 0; i + 2 < tris.length; i += 3) back = Math.min(back, (tris[i] - f.origin[0]) * f.out[0] + (tris[i + 1] - f.origin[1]) * f.out[1] + (tris[i + 2] - f.origin[2]) * f.out[2]);
+      thick = { id: tooth.id, t: Math.min(12, Math.max(3, -back)) };
+      return thick.t;
+    };
+    const dotAt = (tooth: DirectTooth, key: DotKey): V => {
+      const f = tooth.frame, T = thicknessOf(tooth);
+      const at = (m: number, o: number, u: number): V => [f.origin[0] + f.mesial[0] * m + f.out[0] * o + f.up[0] * u, f.origin[1] + f.mesial[1] * m + f.out[1] * o + f.up[1] * u, f.origin[2] + f.mesial[2] * m + f.out[2] * o + f.up[2] * u];
+      return key === "edge" ? at(0, -0.15 * T, 0) : key === "mesial" ? at(tooth.width / 2, -0.4 * T, -0.4 * tooth.length) : key === "distal" ? at(-tooth.width / 2, -0.4 * T, -0.4 * tooth.length) : at(0, -0.5 * T, -0.55 * tooth.length);
+    };
+    let dotDrag: { key: DotKey; tooth: DirectTooth; point: V; normal: V; pointer: number } | null = null;
+    const dotName = (key: DotKey, fdi: number) => t(key === "edge" ? "waxup.direct.dotEdge" : key === "middle" ? "waxup.direct.move" : key === "mesial" ? "waxup.direct.dotMesial" : "waxup.direct.dotDistal", { fdi });
+    for (const key of DOTS) {
+      const el = document.createElement("div");
+      el.className = `wax-dot wax-dot-${key}`;
+      el.style.display = "none";
+      el.addEventListener("pointerdown", (event) => {
+        const tooth = live.current.teeth.find((candidate) => candidate.id === live.current.selected);
+        const r = ray(event.clientX, event.clientY);
+        if (event.button !== 0 || !tooth || !r) return;
+        event.preventDefault();
+        event.stopPropagation();
+        wheelDone();
+        el.setPointerCapture(event.pointerId);
+        dotDrag = { key, tooth, point: dotAt(tooth, key), normal: [-r.direction[0], -r.direction[1], -r.direction[2]], pointer: event.pointerId };
+        el.classList.add("held");
+        live.current.onBegin(tooth.id);
+      });
+      el.addEventListener("pointermove", (event) => {
+        if (!dotDrag || dotDrag.key !== key || event.pointerId !== dotDrag.pointer) { if (!dotDrag) { const tooth = live.current.teeth.find((candidate) => candidate.id === live.current.selected); if (tooth) say(event.clientX, event.clientY, dotName(key, tooth.fdi)); } return; }
+        event.preventDefault();
+        const p = planePoint(event.clientX, event.clientY, dotDrag.point, dotDrag.normal);
+        if (!p) return;
+        const d = sub(p, dotDrag.point), f = dotDrag.tooth.frame, tooth = dotDrag.tooth;
+        const m = dot(d, f.mesial), o = dot(d, f.out), u = dot(d, f.up);
+        const degrees = (opposite: number, arm: number) => (Math.atan2(opposite, Math.max(1, arm)) * 180) / Math.PI;
+        let change: DirectChange;
+        let text = "";
+        if (key === "middle") { change = { kind: "move", mesial: m, out: o, up: u }; text = `${Math.hypot(m, o, u).toFixed(1)} mm`; }
+        else if (key === "edge") {
+          // Along the tooth: longer or shorter. Labially or palatally: the edge goes there, the neck staying (torque).
+          const torque = degrees(o, 0.8 * tooth.length);
+          change = { kind: "dot", length: u, torque, rotate: 0, contact: 0, side: null };
+          text = `${mm(u)}${Math.abs(torque) >= 0.5 ? `  ${torque >= 0 ? "+" : ""}${torque.toFixed(0)}°` : ""}`;
+        } else {
+          // Along the arch: that contact. Labially or palatally: that side goes there, the other staying (rotation).
+          const outward = key === "mesial" ? 1 : -1;
+          const rotate = degrees(o, tooth.width) * outward;
+          change = { kind: "dot", length: 0, torque: 0, rotate, contact: m * outward, side: key };
+          text = `${mm(m * outward)}${Math.abs(rotate) >= 0.5 ? `  ${rotate >= 0 ? "+" : ""}${rotate.toFixed(0)}°` : ""}`;
+        }
+        live.current.onDrag(tooth.id, change);
+        el.style.left = `${event.clientX}px`; el.style.top = `${event.clientY}px`;
+        say(event.clientX, event.clientY, `${dotName(key, tooth.fdi)}  ${text}`);
+      });
+      const done = (event: PointerEvent) => {
+        if (!dotDrag || dotDrag.key !== key || event.pointerId !== dotDrag.pointer) return;
+        const id = dotDrag.tooth.id;
+        dotDrag = null;
+        el.classList.remove("held");
+        say(0, 0, null);
+        live.current.onEnd(id);
+      };
+      el.addEventListener("pointerup", done);
+      el.addEventListener("pointercancel", done);
+      el.addEventListener("pointerleave", () => { if (!dotDrag) say(0, 0, null); });
+      document.body.appendChild(el);
+      dotEls.set(key, el);
+    }
+    // The dots kept on the tooth as the view turns and the tooth changes.
+    let frame = 0;
+    const place = () => {
+      frame = window.requestAnimationFrame(place);
+      const tooth = live.current.teeth.find((candidate) => candidate.id === live.current.selected);
+      const host = document.querySelector(".three-workplane-host canvas")?.getBoundingClientRect();
+      const project = window.layerlingProjectPoints;
+      if (!tooth || !host || !project) { for (const el of dotEls.values()) el.style.display = "none"; return; }
+      const xy = project(DOTS.flatMap((key) => dotAt(tooth, key)));
+      DOTS.forEach((key, k) => {
+        const el = dotEls.get(key)!;
+        if (dotDrag?.key === key) return;
+        const x = xy[k * 2], y = xy[k * 2 + 1];
+        const inside = x > host.left + 6 && x < host.right - 6 && y > host.top + 6 && y < host.bottom - 6;
+        // While one dot is held the others wait where they are (the tooth is changing under them).
+        el.style.display = inside && !dotDrag ? "block" : dotDrag ? el.style.display : "none";
+        if (!dotDrag) { el.style.left = `${x}px`; el.style.top = `${y}px`; }
+      });
+    };
+    frame = window.requestAnimationFrame(place);
     const onMenu = (event: MouseEvent) => { if (canvasOf(event) && (drag || pick(event.clientX, event.clientY))) event.preventDefault(); };
     window.addEventListener("pointerdown", onDown, { capture: true });
     window.addEventListener("pointermove", onMove, { capture: true });
@@ -289,6 +401,8 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
     window.addEventListener("wheel", onWheel, { capture: true, passive: false });
     return () => {
       wheelDone();
+      window.cancelAnimationFrame(frame);
+      for (const el of dotEls.values()) el.remove();
       window.removeEventListener("wheel", onWheel, { capture: true });
       window.removeEventListener("pointerdown", onDown, { capture: true });
       window.removeEventListener("pointermove", onMove, { capture: true });
