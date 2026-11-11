@@ -32,7 +32,7 @@ export type DirectChange =
   | { kind: "move"; mesial: number; out: number; up: number }
   | { kind: "turn"; rotate: number; tip: number; torque: number }
   /** Build 290: a dot on the tooth dragged - whatever of these it stands for, all at once. */
-  | { kind: "dot"; length: number; torque: number; rotate: number; contact: number; side: "mesial" | "distal" | null }
+  | { kind: "dot"; length: number; torque: number; rotate: number; contact: number; side: "mesial" | "distal" | null; palatal?: number; up?: number }
   /** Build 290: the whole set moved (no one tooth picked), mm in the scene. */
   | { kind: "moveAll"; by: [number, number, number] };
 type Zone = "length" | "mesial" | "distal" | "move";
@@ -296,8 +296,11 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
     // four dots, there from any view - its incisal edge (length; and, moved labially or palatally, its torque), its
     // mesial and distal sides (that contact; and, moved labially or palatally, its rotation) and its middle (the
     // whole tooth, any way). Each follows the pointer in the plane of the screen.
-    type DotKey = "edge" | "mesial" | "distal" | "middle";
-    const DOTS: DotKey[] = ["edge", "mesial", "distal", "middle"];
+    // Build 293: and one on its palatal surface - pulled palatally the tooth grows fuller there, its labial face held.
+    // And one at its labial neck (Rakesh: the teeth first have to sit right at the buccal gingival margin, "growing from
+    // the gum"): dragged up or down the tooth, the neck goes there and the incisal edge stays.
+    type DotKey = "edge" | "mesial" | "distal" | "middle" | "palatal" | "neck";
+    const DOTS: DotKey[] = ["edge", "mesial", "distal", "middle", "palatal", "neck"];
     const dotEls = new Map<DotKey, HTMLDivElement>();
     let thick = { id: "", t: 6 };
     const thicknessOf = (tooth: DirectTooth) => {
@@ -311,10 +314,10 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
     const dotAt = (tooth: DirectTooth, key: DotKey): V => {
       const f = tooth.frame, T = thicknessOf(tooth);
       const at = (m: number, o: number, u: number): V => [f.origin[0] + f.mesial[0] * m + f.out[0] * o + f.up[0] * u, f.origin[1] + f.mesial[1] * m + f.out[1] * o + f.up[1] * u, f.origin[2] + f.mesial[2] * m + f.out[2] * o + f.up[2] * u];
-      return key === "edge" ? at(0, -0.15 * T, 0) : key === "mesial" ? at(tooth.width / 2, -0.4 * T, -0.4 * tooth.length) : key === "distal" ? at(-tooth.width / 2, -0.4 * T, -0.4 * tooth.length) : at(0, -0.5 * T, -0.55 * tooth.length);
+      return key === "edge" ? at(0, -0.15 * T, 0) : key === "mesial" ? at(tooth.width / 2, -0.4 * T, -0.4 * tooth.length) : key === "distal" ? at(-tooth.width / 2, -0.4 * T, -0.4 * tooth.length) : key === "palatal" ? at(0, -T, -0.6 * tooth.length) : key === "neck" ? at(0, -0.1 * T, -0.92 * tooth.length) : at(0, -0.45 * T, -0.35 * tooth.length);
     };
     let dotDrag: { key: DotKey; tooth: DirectTooth; point: V; normal: V; pointer: number } | null = null;
-    const dotName = (key: DotKey, fdi: number) => t(key === "edge" ? "waxup.direct.dotEdge" : key === "middle" ? "waxup.direct.move" : key === "mesial" ? "waxup.direct.dotMesial" : "waxup.direct.dotDistal", { fdi });
+    const dotName = (key: DotKey, fdi: number) => t(key === "edge" ? "waxup.direct.dotEdge" : key === "middle" ? "waxup.direct.move" : key === "palatal" ? "waxup.direct.dotPalatal" : key === "neck" ? "waxup.direct.dotNeck" : key === "mesial" ? "waxup.direct.dotMesial" : "waxup.direct.dotDistal", { fdi });
     for (const key of DOTS) {
       const el = document.createElement("div");
       el.className = `wax-dot wax-dot-${key}`;
@@ -342,6 +345,8 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
         let change: DirectChange;
         let text = "";
         if (key === "middle") { change = { kind: "move", mesial: m, out: o, up: u }; text = `${Math.hypot(m, o, u).toFixed(1)} mm`; }
+        else if (key === "palatal") { change = { kind: "dot", length: 0, torque: 0, rotate: 0, contact: 0, side: null, palatal: -o }; text = mm(-o); }
+        else if (key === "neck") { change = { kind: "dot", length: -u, torque: 0, rotate: 0, contact: 0, side: null, up: u }; text = mm(-u); }
         else if (key === "edge") {
           // Along the tooth: longer or shorter. Labially or palatally: the edge goes there, the neck staying (torque).
           const torque = degrees(o, 0.8 * tooth.length);

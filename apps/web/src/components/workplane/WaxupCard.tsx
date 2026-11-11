@@ -1322,6 +1322,7 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror
       {row("distal", "waxup.toothDistal", "waxup.toothDistalHint")}
       {live ? row("spread", "waxup.toothSpread", "waxup.toothSpreadHint") : null}
       {row("thickness", "waxup.toothThickness", "waxup.toothThicknessHint")}
+      {live ? row("palatal", "waxup.toothPalatal", "waxup.toothPalatalHint") : null}
         </>);
         // Build 291: with the tooth itself to take hold of, the numbers are there for when an exact value is wanted.
         return live ? <details className="wax-fold"><summary>{t("waxup.numbersFold")}</summary>{numbers}</details> : numbers;

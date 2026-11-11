@@ -92,4 +92,18 @@ describe("editTooth spread (build 284)", () => {
     expect(Math.min(...edge.map((p) => p[0]))).toBeCloseTo(-W / 2 - 1, 6);
     expect(Math.max(...edge.map((p) => p[0]))).toBeCloseTo(W / 2, 6);
   });
+
+  it("palatal fullness moves the palatal surface palatally and leaves the labial face where it is (build 293)", () => {
+    // A box of a tooth: labial face at y 0, palatal at y -6, edge at z 0, neck at z -10.
+    const frame = { origin: [0, 0, 0] as [number, number, number], mesial: [1, 0, 0] as [number, number, number], out: [0, 1, 0] as [number, number, number], up: [0, 0, 1] as [number, number, number] };
+    const rest = [0, 0, -2, 0, -3, -2, 0, -6, -2, 0, -6, -9.5, 0, 0, -9.5];
+    const out = editTooth(rest, frame, 8, 10, { ...NO_EDIT, palatal: 2 });
+    expect(out[1]).toBeCloseTo(0, 6);
+    expect(out[4]).toBeCloseTo(-4, 6);
+    expect(out[7]).toBeCloseTo(-8, 6);
+    // To the neck too, where the tooth has to reach the palatal gum; the labial neck stays.
+    expect(out[10]).toBeCloseTo(-8, 6);
+    expect(out[13]).toBeCloseTo(0, 6);
+    for (const k of [0, 2, 3, 5, 6, 8]) expect(out[k]).toBeCloseTo(rest[k], 6);
+  });
 });

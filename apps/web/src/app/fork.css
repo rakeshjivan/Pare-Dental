@@ -2301,3 +2301,7 @@ html[data-theme="dark"] .dental-studio-panel .dental-picture-tiles button { back
 .wax-fold > summary::before { content: "\25B8"; font-size: 11px; transition: transform 0.12s; }
 .wax-fold[open] > summary::before { transform: rotate(90deg); }
 .wax-fold > :not(summary) { margin-top: 4px; }
+.wax-dot-palatal { background: #ea580c; }
+.wax-dot-palatal:hover, .wax-dot-palatal.held { background: #f97316; }
+.wax-dot-neck { background: #64748b; }
+.wax-dot-neck:hover, .wax-dot-neck.held { background: #94a3b8; }

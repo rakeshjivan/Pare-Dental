@@ -14381,7 +14381,7 @@ export function LayerlingEditor({
     if (change.kind === "dot") {
       // Build 290: a dot dragged - its contact moved (the neighbour giving way) and the tooth lengthened or turned with it.
       const own = change.side && Math.abs(change.contact) > 1e-6 ? moveContact(base.own, frontTeeth(slot), fdi, change.side, change.contact, mirror, waxContactHas(fdi)) : { ...base.own };
-      const add = (n: number) => { if (!waxSetHas(n)) return; const was = { ...NO_EDIT, ...(own[n] ?? {}) }; own[n] = { ...was, length: was.length + change.length, torque: was.torque + change.torque, rotate: was.rotate + change.rotate }; };
+      const add = (n: number) => { if (!waxSetHas(n)) return; const was = { ...NO_EDIT, ...(own[n] ?? {}) }; own[n] = { ...was, length: was.length + change.length, torque: was.torque + change.torque, rotate: was.rotate + change.rotate, palatal: (was.palatal ?? 0) + (change.palatal ?? 0), moveUp: was.moveUp + (change.up ?? 0) }; };
       add(fdi);
       if (mirror) add(partner);
       editWaxTeeth(own);
