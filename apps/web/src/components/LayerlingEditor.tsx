@@ -12097,6 +12097,10 @@ export function LayerlingEditor({
           if (imt) extra.push({ arch: { ...waxed, ...(waxed.scanned ? { positions: waxed.scanned, scanned: undefined } : {}), wax: [], cuts: null }, kind: "preop" });
         }
         for (const { arch, kind } of extra) {
+          // Build 305 (Rakesh: a white screen making the IMT models with both arches loaded): each further model is
+          // made in a fresh worker - the one that made the pair has grown to what the pair took and gives none of it
+          // back while it lives, so the further models were made on top of that.
+          recycleMeshWorkers();
           const second = await makeDentalStudioInBackground({ arches: [arch], bite: null, ...(input.roles ? { roles: input.roles } : {}) }, { ...makeOptions, hinge: false });
           if (run !== dentalMakeRun.current) return;
           const part = second.parts[0];

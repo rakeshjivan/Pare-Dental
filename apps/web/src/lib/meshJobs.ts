@@ -356,7 +356,13 @@ export async function makeDentalStudioInBackground(input: DentalStudioInput, opt
     pending.set(partId, { resolve: (value: unknown) => { helperJobs.delete(partId); resolve(value as DentalArchPart); }, reject: (error: Error) => { helperJobs.delete(partId); reject(error); } });
     second.postMessage({ id: partId, base, kind: "dentalArch", input: forHelper, options, index: 1 } satisfies MeshJobRequest, buffersOf(forHelper));
   }).then(
-    (part) => main.postMessage({ archPartFor: id, part }, archPartBuffers(part)),
+    (part) => {
+      // Build 305 (Rakesh: a white screen making a pair of models): the helper has done its arch - it is closed now, not
+      // after the whole Make, so the memory its mesh engine grew to is given back before the pair is put together
+      // (the most memory a Make takes is then, in the main worker). The next pair starts a fresh one.
+      if (!helperJobs.size) { try { helper?.terminate(); } catch { /* gone */ } helper = null; }
+      main.postMessage({ archPartFor: id, part }, archPartBuffers(part));
+    },
     (error) => main.postMessage({ archPartFor: id, error: error instanceof Error ? error.message : String(error) }),
   );
   const data = copiedInput(input);
