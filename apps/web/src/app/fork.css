@@ -2314,3 +2314,6 @@ html[data-theme="dark"] .dental-studio-panel .dental-picture-tiles button { back
 .wax-shape-chip.active { border-color: #0a786c; background: #e6f4f1; color: #064e46; font-weight: 600; }
 .waxup-set-best { font-style: normal; font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; padding: 1px 6px; border-radius: 999px; background: #0a786c; color: #fff; white-space: nowrap; }
 .waxup-set .waxup-set-best { margin-top: 3px; }
+/* Build 302: Design's five ways to work on a tooth - each name whole, on as many rows as it takes. */
+.wax-sculpt-modes { display: flex; flex-wrap: wrap; gap: 6px; }
+.wax-sculpt-modes > button { flex: 1 0 auto; white-space: nowrap; min-width: 0; padding-inline: 10px; }
