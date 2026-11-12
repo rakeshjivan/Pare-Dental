@@ -46,6 +46,20 @@ type Zone = "length" | "mesial" | "distal" | "move";
 type DotKey = "edge" | "mesial" | "distal" | "middle" | "palatal" | "neck" | "palatalM" | "palatalD" | "labialM" | "labialD" | "flareM" | "flareD";
 /** Where each dot stands on its tooth: shares of its width (mesial +), of its thickness (labial +, from the labial face) and of its length (incisal +, from the edge). */
 const DOT_AT: Record<DotKey, [number, number, number]> = TOOTH_DOTS;
+/**
+ * Build 313 (Rakesh: "do you think we have made this much harder than the Meshmixer workflow that dentists have been
+ * using for years" - "yes lets do that"): a tooth carries five dots unless more are asked for - the edge, the two
+ * contacts, the neck and the white one that moves it. The side, corner and palatal dots are for whoever wants them
+ * ("More control points" in the panel; kept on this computer). A locked dot is always shown, so it can be let go.
+ */
+const BASIC: ReadonlySet<DotKey> = new Set<DotKey>(["edge", "mesial", "distal", "neck", "middle"]);
+const MORE_KEY = "pare.waxup.moreDots";
+let moreDots: boolean | null = null;
+export const waxMoreDots = (): boolean => {
+  if (moreDots === null) { try { moreDots = window.localStorage.getItem(MORE_KEY) === "1"; } catch { moreDots = false; } }
+  return moreDots;
+};
+export const setWaxMoreDots = (on: boolean) => { moreDots = on; try { window.localStorage.setItem(MORE_KEY, on ? "1" : "0"); } catch { /* not kept: it still holds while the app is open */ } };
 /** The dots locked on each tooth (by its id) - kept while the app is open. */
 const LOCKED = new Map<string, Set<DotKey>>();
 const placeLocked = (id: string) => LOCKED.get(id)?.has("middle") === true;
@@ -453,7 +467,8 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
         const el = dotEls.get(key)!;
         if (dotDrag?.key === key) return;
         const x = xy[k * 2], y = xy[k * 2 + 1];
-        const inside = !hiddenFace(key) && x > host.left + 6 && x < host.right - 6 && y > host.top + 6 && y < host.bottom - 6;
+        const offered = BASIC.has(key) || waxMoreDots() || lockedOf(tooth.id).has(key);
+        const inside = offered && !hiddenFace(key) && x > host.left + 6 && x < host.right - 6 && y > host.top + 6 && y < host.bottom - 6;
         // While one dot is held the others wait where they are (the tooth is changing under them).
         el.style.display = inside && !dotDrag ? "block" : dotDrag ? el.style.display : "none";
         if (!dotDrag) { el.style.left = `${x}px`; el.style.top = `${y}px`; el.classList.toggle("locked", lockedOf(tooth.id).has(key)); }

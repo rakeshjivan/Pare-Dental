@@ -8,6 +8,7 @@
 import { AlertTriangle, Check, LoaderCircle, Upload } from "lucide-react";
 import { WAX_SET_FORM_ORDER, type WaxSetForm } from "@/lib/waxSetForms";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { setWaxMoreDots, waxMoreDots } from "@/components/workplane/WaxToothDirect";
 import type { WaxRestrict } from "@/components/workplane/WaxToothDrag";
 /** Build 103: a confirmed tooth's colour, by FDI (each tooth its own, as Meshmixer shows them). */
 /** Build 105: each library tooth in its own colour while it is being positioned (light; a confirmed tooth takes the stronger colour below). */
@@ -919,6 +920,7 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror
   const tenth = (x: number) => Math.round(x * 10) / 10;
   const live = tooth.live !== false && Boolean(onChange);
   const set = (patch: Partial<ToothEdit>) => onChange?.(tooth.fdi, { ...e, ...patch });
+  const [more, setMore] = useState(() => waxMoreDots());
   const step = (key: EditKey, degrees: boolean, sign: 1 | -1) => {
     const delta = (degrees ? 0.5 : 0.1) * sign;
     if (onStep) onStep(key, delta);
@@ -941,8 +943,15 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror
     <div className="wax-tooth-edit">
       <div className="wax-guide">
         <strong>{t("waxup.toothTitle", { fdi: tooth.fdi })}</strong>
-        <span>{t("waxup.toothHint")}</span>
+        <span>{t(more ? "waxup.toothHintMore" : "waxup.toothHint")}</span>
       </div>
+      {/* Build 313 (Rakesh: is this harder than what dentists already use): five dots unless more are asked for. */}
+      {live ? (
+        <label className="edge-modifier-check" title={t("waxup.toothMoreDotsHint")}>
+          <input type="checkbox" checked={more} disabled={disabled} onChange={(event) => { setWaxMoreDots(event.currentTarget.checked); setMore(event.currentTarget.checked); }} />
+          <span>{t("waxup.toothMoreDots")}</span>
+        </label>
+      ) : null}
       <p className="blend-hint wax-tooth-size" role="status">{t("waxup.toothSize", { width: tooth.width.toFixed(1), length: tooth.length.toFixed(1), ratio: Math.round((tooth.width / Math.max(0.1, tooth.length)) * 100) })}</p>
       {/* Build 290 (Rakesh): one tooth changes alone unless asked; a tooth that is right can be copied across once. */}
       {onMirror && live ? (
