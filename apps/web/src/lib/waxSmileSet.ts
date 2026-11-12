@@ -525,6 +525,75 @@ export function crownMargins(points: ArrayLike<number>, anchors: Pick<SetAnchors
   return { margins, crown: central.length ? central.reduce((sum, x) => sum + x, 0) / central.length : null };
 }
 
+/** How little a mark lying palatal of the arch counts in finding it, against one on it or labial of it. */
+const ARCH_INSIDE = 0.1;
+
+/**
+ * Build 309 (Rakesh, of a crowded arch - a lateral tucked behind, a canine standing out: "even though I marked the
+ * contacts properly, why did the teeth import like this"): the seven contacts as they would stand on an even arch.
+ *
+ * Laid from mark to mark, each wax tooth copies the patient's tooth - a lateral tucked behind its neighbours put the
+ * wax lateral behind them too, turned as the patient's is: the crowding again, in wax. A wax-up is the arch put
+ * right. So: an even arch (a parabola seen from the occlusal) is found through the marks - by those that lie on it
+ * or labial of it; one tucked behind hardly counts - and made to pass through the midline mark and the two end
+ * marks (the canines' distal contacts, where the wax meets the teeth that stay). The four contacts between are set
+ * along it, each tooth given its share of the way round in proportion to its marked width (so where the teeth are
+ * crowded each is a little narrower than marked, where they are spaced a little wider - the dentist widens or
+ * narrows from there). Each contact keeps the height it was marked at. Marks already on an even arch are left where
+ * they are, near enough.
+ */
+export function idealArch(marks: Vec3[], upIn: Vec3, outIn: Vec3): Vec3[] {
+  if (marks.length !== 7) return marks;
+  const up = v(upIn).normalize();
+  const out = v(outIn).addScaledVector(up, -v(outIn).dot(up)).normalize();
+  const across = new THREE.Vector3().crossVectors(up, out).normalize();
+  const points = marks.map(v), origin = points[3];
+  let xs = points.map((p) => p.clone().sub(origin).dot(across));
+  // `across` runs from the first mark to the last.
+  if (xs[6] < xs[0]) { across.negate(); xs = xs.map((x) => -x); }
+  const ys = points.map((p) => p.clone().sub(origin).dot(out)), zs = points.map((p) => p.dot(up));
+  if (!(xs[0] < -2 && xs[6] > 2)) return marks;
+  // y = a + b x^2 by weighted least squares, the weights renewed: a mark palatal of the curve counts little.
+  let a = 0, b = 0;
+  const weight = new Array(7).fill(1);
+  for (let round = 0; round < 8; round += 1) {
+    let s0 = 0, s2 = 0, s4 = 0, t0 = 0, t2 = 0;
+    for (let i = 0; i < 7; i += 1) { const w = weight[i], q = xs[i] * xs[i]; s0 += w; s2 += w * q; s4 += w * q * q; t0 += w * ys[i]; t2 += w * q * ys[i]; }
+    const det = s0 * s4 - s2 * s2;
+    if (Math.abs(det) < 1e-9) return marks;
+    a = (t0 * s4 - t2 * s2) / det; b = (s0 * t2 - s2 * t0) / det;
+    for (let i = 0; i < 7; i += 1) weight[i] = ys[i] - (a + b * xs[i] * xs[i]) >= -0.05 ? 1 : ARCH_INSIDE;
+  }
+  // An arch curves back from the midline; one that does not is no arch to lay teeth on.
+  if (!(b < 0)) return marks;
+  const result = marks.map((p) => [...p] as Vec3);
+  for (const side of [-1, 1] as const) {
+    const end = side < 0 ? 0 : 6, span = Math.abs(xs[end]);
+    // The curve on this side, made to pass through the midline mark (0, 0) and the end mark.
+    const lift0 = -a, liftEnd = ys[end] - (a + b * xs[end] * xs[end]);
+    const yAt = (x: number) => a + b * x * x + lift0 + (liftEnd - lift0) * (Math.abs(x) / span);
+    const N = 240, along = new Float64Array(N + 1);
+    for (let k = 1; k <= N; k += 1) { const x0 = (side * span * (k - 1)) / N, x1 = (side * span * k) / N; along[k] = along[k - 1] + Math.hypot(x1 - x0, yAt(x1) - yAt(x0)); }
+    // The three teeth of this side from the midline out, by their marked widths (seen from the occlusal).
+    const order = side < 0 ? [3, 2, 1, 0] : [3, 4, 5, 6];
+    const widths = [0, 1, 2].map((k) => Math.hypot(xs[order[k + 1]] - xs[order[k]], ys[order[k + 1]] - ys[order[k]]));
+    const whole = widths[0] + widths[1] + widths[2];
+    if (!(whole > 1)) continue;
+    let share = 0;
+    for (const k of [0, 1]) {
+      share += widths[k] / whole;
+      const want = share * along[N];
+      let j = 1;
+      while (j < N && along[j] < want) j += 1;
+      const t = (want - along[j - 1]) / Math.max(1e-9, along[j] - along[j - 1]);
+      const x = (side * span * (j - 1 + t)) / N, y = yAt(x), i = order[k + 1];
+      const at = origin.clone().addScaledVector(up, -origin.dot(up)).addScaledVector(across, x).addScaledVector(out, y).addScaledVector(up, zs[i]);
+      result[i] = [at.x, at.y, at.z];
+    }
+  }
+  return result;
+}
+
 /**
  * Build 278 (Rakesh, step 2, revised): the library set fitted to the dentist's marks while keeping its own
  * design - each tooth keeps the set's tip, torque and rotation against its neighbours, and is only turned
@@ -536,12 +605,13 @@ export function crownMargins(points: ArrayLike<number>, anchors: Pick<SetAnchors
  * (plus fullness). A tooth widened on its own pushes the teeth distal to it along by as much.
  */
 function layoutFromMarks(teeth: SetTooth[], anchors: SetAnchors, c: SetControls, extra?: Map<string, { mesial: number; distal: number }>): SetLayout | null {
-  const contacts = anchors.contacts!.map(v);
   const up = v(anchors.up).normalize();
   const flat = (p: THREE.Vector3) => p.clone().addScaledVector(up, -p.dot(up));
   const mid = v(anchors.midline);
   const level = (p: THREE.Vector3) => p.clone().sub(mid).dot(up);
   const outHint = v(anchors.out).addScaledVector(up, -v(anchors.out).dot(up)).normalize();
+  // Build 309: the teeth are laid on an even arch through the marks, not from mark to mark (idealArch).
+  const contacts = idealArch(anchors.contacts!, anchors.up, [outHint.x, outHint.y, outHint.z]).map(v);
   const centre = flat(contacts.reduce((sum, p) => sum.add(p), new THREE.Vector3()).divideScalar(contacts.length)).addScaledVector(outHint, -15);
   const order = (fdi: number) => { const q = Math.floor(fdi / 10), n = fdi % 10; return q === 1 || q === 4 ? 3 - n : 2 + n; };
   const isLeft = (fdi: number) => { const q = Math.floor(fdi / 10); return q === 2 || q === 3; };
@@ -568,7 +638,9 @@ function layoutFromMarks(teeth: SetTooth[], anchors: SetAnchors, c: SetControls,
   // whole set starts longer by the difference - the canines and laterals with it, the set's own smile line kept.
   let proportion = 0;
   if (anchors.crown && contacts.length >= 5) {
-    const centralWide = (flat(contacts[2]).distanceTo(flat(contacts[3])) + flat(contacts[3]).distanceTo(flat(contacts[4]))) / 2;
+    // By the centrals as marked (the patient's own widths), not as shared out along the arch.
+    const marked = anchors.contacts!.map(v);
+    const centralWide = (flat(marked[2]).distanceTo(flat(marked[3])) + flat(marked[3]).distanceTo(flat(marked[4]))) / 2;
     proportion = Math.min(SET_LENGTHEN_MAX, Math.max(0, centralWide / c.ratio - anchors.crown));
   }
   const longer = Math.max(0, proportion - lift);
