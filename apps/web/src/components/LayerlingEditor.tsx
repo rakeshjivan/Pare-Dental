@@ -12675,12 +12675,37 @@ export function LayerlingEditor({
    * (lib/waxAutoMarks) and put down for the dentist to check and drag. Where the teeth cannot be made out,
    * the marks are clicked as before (`thenClick`).
    */
+  /** Build 317: the nine marks found on each arch as it was imported (scene coordinates; null where none could be), by its shape. */
+  const waxMarksAtImport = useRef(new Map<string, Array<[number, number, number]> | null>());
+  /** Whether marks (scene coordinates) still lie on a scan (input coordinates): each within a millimetre of a corner of it. */
+  const marksOnScan = (marks: Array<[number, number, number]>, scan: Float32Array, sceneToInput: THREE.Matrix4) => marks.every((mark) => {
+    const p = new THREE.Vector3(...mark).applyMatrix4(sceneToInput);
+    for (let i = 0; i + 2 < scan.length; i += 3) if (Math.abs(scan[i] - p.x) < 1 && Math.abs(scan[i + 1] - p.y) < 1 && Math.abs(scan[i + 2] - p.z) < 1) return true;
+    return false;
+  });
   const findArchMarks = useCallback((thenClick: boolean) => {
     const arch = waxArch();
     if (!arch) return;
     let found: ReturnType<typeof autoArchMarks> = null;
     try { found = autoArchMarks(arch.scan, arch.slot); } catch { found = null; }
+    // For the checks: the scan taken as unreadable (as one trimmed back to the front teeth is).
+    if ((window as unknown as { layerlingNoAutoMarks?: boolean }).layerlingNoAutoMarks) found = null;
     const current = waxupRef.current;
+    // Build 317 (Rakesh, of Find for me on the hard case: "Nothing - and I trimmed everything up to the first
+    // premolars"): the front teeth are read from the whole arch, and a scan trimmed back to them can no longer be
+    // read. The marks found on the scan as it was imported (before Trim) are used then - if they still lie on it.
+    const early = found ? null : waxMarksAtImport.current.get(arch.shape.id);
+    if (!found && early && marksOnScan(early, arch.scan, arch.sceneToInput)) {
+      waxRecord();
+      const next = { ...current, slot: arch.slot, archMarks: { ...(current.archMarks ?? {}), [arch.slot]: early.map((p) => [...p] as [number, number, number]) }, archMarkPick: null, picking: null, error: null, archMarksAuto: { ...current.archMarksAuto, [arch.slot]: "found" as const } };
+      waxupRef.current = next;
+      setWaxup(next);
+      archMarkView.current = null;
+      setDentalHidden([]);
+      setSelectedIds([]);
+      window.setTimeout(() => showDentalView(arch.slot, "front"), 50);
+      return;
+    }
     if (!found) {
       const next = { ...current, archMarksAuto: { ...current.archMarksAuto, [arch.slot]: "failed" as const } };
       waxupRef.current = next;
@@ -12758,6 +12783,19 @@ export function LayerlingEditor({
   };
   // Build 278: on the Mark step, the marks drawn on the scan - contacts teal, the midline blue, canine tips orange.
   const archMarkStep = Boolean(dentalStudio?.waxStudio) && studioWaxStep === "mark";
+  // Build 317: the marks are looked for as soon as an arch is in the Wax-up Studio (before it is trimmed), and kept.
+  useEffect(() => {
+    if (!dentalStudio?.waxStudio || !dentalStudio.analysis) return;
+    const timer = window.setTimeout(() => {
+      const arch = waxArch();
+      if (!arch || waxMarksAtImport.current.has(arch.shape.id)) return;
+      let found: ReturnType<typeof autoArchMarks> = null;
+      try { found = autoArchMarks(arch.scan, arch.slot); } catch { found = null; }
+      const toScene = arch.sceneToInput.clone().invert();
+      waxMarksAtImport.current.set(arch.shape.id, found ? found.marks.map((point) => new THREE.Vector3(...point).applyMatrix4(toScene).toArray() as [number, number, number]) : null);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [dentalStudio?.waxStudio, dentalStudio?.analysis, dentalStudio?.slots.upper, dentalStudio?.slots.lower, waxup.slot]); // eslint-disable-line react-hooks/exhaustive-deps
   const archMarksNow = waxup.archMarks?.[waxup.slot];
   useEffect(() => {
     if (!archMarkStep) return;

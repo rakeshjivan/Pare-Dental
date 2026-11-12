@@ -5865,6 +5865,8 @@ export const MESSAGES_EN = {
   "waxup.markHintRight": "Looking at the patient's right side: click 13's distal contact, then where 13 and 12 touch. Esc stops; Backspace undoes.",
   "waxup.markHintLeft": "Looking at the patient's left side: click where 22 and 23 touch, then 23's distal contact.",
   "waxup.markHintFront": "Looking from the front: click each canine's cusp tip.",
+  "waxup.markHintContacts": "Click the contacts: between each pair of front teeth, and behind each canine. Any order; turn the view as you need. Esc stops; Backspace undoes.",
+  "waxup.markHintTips": "Now click each canine's cusp tip. Either one first.",
   "waxup.archMarkDone": "All nine marked. Drag any dot to adjust it, or Next.",
   "waxup.markPaused": "Marking paused. Carry on when ready.",
   "waxup.markGuideFound": "The contacts between the six front teeth, the midline and the canine tips have been found on the scan for you. Check each dot against the list - 1 to 7 on the contacts from the patient's right, 8 and 9 on the canine tips - and drag any that is off. Turn the view to look from the side or the edge.",

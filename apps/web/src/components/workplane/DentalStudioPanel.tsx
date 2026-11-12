@@ -984,7 +984,7 @@ export function DentalStudioPanel({
             {/* Build 285: the marks looked for on the scan (again, or after clicking some by hand). */}
             {picking === null && waxup.actions.onArchMarksFind ? <button type="button" className="secondary" disabled={busy} title={t("waxup.markFindHint")} onClick={() => waxup.actions.onArchMarksFind?.()}>{t("waxup.markFind")}</button> : null}
           </div>
-          <p className="blend-hint" role="status">{t(picking !== null ? (picking <= 1 ? "waxup.markHintRight" : picking <= 4 ? "waxup.markHintOcclusal" : picking <= 6 ? "waxup.markHintLeft" : "waxup.markHintFront") : placed === 9 ? (wv.archMarksFound === "found" ? "waxup.archMarkFound" : "waxup.archMarkDone") : wv.archMarksFound === "failed" ? "waxup.markFindFailed" : "waxup.markPaused")}</p>
+          <p className="blend-hint" role="status">{wv.archMarksFound === "failed" && placed < 9 ? `${t("waxup.markFindFailed")} ` : ""}{t(picking !== null ? (picking <= 6 ? "waxup.markHintContacts" : "waxup.markHintTips") : placed === 9 ? (wv.archMarksFound === "found" ? "waxup.archMarkFound" : "waxup.archMarkDone") : wv.archMarksFound === "failed" ? "waxup.markFindFailed" : "waxup.markPaused")}</p>
         </>);
       })()) : null}
       {waxSteps && waxStep === "bite" && wv && waxup ? card(3, t("waxup.biteTitle"), true, t("waxStudio.stepHint.bite"), null, (<>
