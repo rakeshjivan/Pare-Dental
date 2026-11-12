@@ -10,6 +10,7 @@
  */
 import * as THREE from "three";
 import { meshForShape } from "@/lib/editorMeshCore";
+import { shapeHasExtrudeDeform, shapeHasTaper } from "@/lib/workplaneShapes";
 import type { WorkplaneShape } from "@/types/layerling";
 
 type ImportedMesh = NonNullable<WorkplaneShape["importedMesh"]>;
@@ -62,10 +63,8 @@ const localToWorldMemo = new WeakMap<WorkplaneShape, THREE.Matrix4 | null>();
 function localToWorldOnce(shape: WorkplaneShape): THREE.Matrix4 | null {
   const mesh = shape.importedMesh;
   if (!mesh || mesh.positions.length < 12) return null;
-  const world = meshForShape(shape);
   const local = mesh.positions;
   const count = Math.floor(local.length / 3);
-  if (world.vertices.length !== count) return null;
   // Four corners far apart: the first, the farthest from it, the farthest from that line, and the farthest from that plane.
   const at = (i: number) => new THREE.Vector3(local[i * 3], local[i * 3 + 1], local[i * 3 + 2]);
   const step = Math.max(1, Math.floor(count / 4000));
@@ -79,17 +78,29 @@ function localToWorldOnce(shape: WorkplaneShape): THREE.Matrix4 | null {
   let d4 = a; best = -1;
   for (let i = 0; i < count; i += step) { const d = Math.abs(at(i).sub(at(a)).dot(normal)); if (d > best) { best = d; d4 = i; } }
   const picks = [a, b, c, d4];
+  // Build 321 (Rakesh, of a 16 GB MacBook pushed into the red by loading three scans): where those corners stand in
+  // the world is asked of a mesh of those corners alone (the four, and the fifty the fit is checked on) - not of the
+  // whole drawn mesh, which for an arch scan is over a million small arrays made and thrown away each time a new
+  // version of the part is asked about; and Dental Studio asks on every import, trim and analysis. (A bent part's
+  // bend is measured over the whole of it, so that one is still asked whole - and is then found not to be one map.)
+  const checks: number[] = [];
+  for (let i = step * 7 + 1; i < count; i += Math.max(1, Math.floor(count / 50))) checks.push(i);
+  const bent = shapeHasTaper(shape) || shapeHasExtrudeDeform(shape);
+  const asked = bent ? null : [...picks, ...checks];
+  const world = meshForShape(asked ? { ...shape, importedMesh: { ...mesh, positions: asked.flatMap((i) => [local[i * 3], local[i * 3 + 1], local[i * 3 + 2]]), normals: undefined } } : shape);
+  if (world.vertices.length !== (asked ? asked.length : count)) return null;
+  const worldAt = (i: number) => new THREE.Vector3(...world.vertices[asked ? asked.indexOf(i) : i]);
   const L = new THREE.Matrix4(), W = new THREE.Matrix4();
-  const lp = picks.map(at), wp = picks.map((i) => new THREE.Vector3(...world.vertices[i]));
+  const lp = picks.map(at), wp = picks.map(worldAt);
   L.set(lp[0].x, lp[1].x, lp[2].x, lp[3].x, lp[0].y, lp[1].y, lp[2].y, lp[3].y, lp[0].z, lp[1].z, lp[2].z, lp[3].z, 1, 1, 1, 1);
   W.set(wp[0].x, wp[1].x, wp[2].x, wp[3].x, wp[0].y, wp[1].y, wp[2].y, wp[3].y, wp[0].z, wp[1].z, wp[2].z, wp[3].z, 1, 1, 1, 1);
   if (Math.abs(L.determinant()) < 1e-6) return null;
   const map = W.multiply(L.invert());
   // A bent part (taper, twist) is not one map: checked on corners the fit did not use.
   const check = new THREE.Vector3();
-  for (let i = step * 7 + 1; i < count; i += Math.max(1, Math.floor(count / 50))) {
+  for (const i of checks) {
     check.copy(at(i)).applyMatrix4(map);
-    if (check.distanceTo(new THREE.Vector3(...world.vertices[i])) > 1e-3) return null;
+    if (check.distanceTo(worldAt(i)) > 1e-3) return null;
   }
   return map;
 }

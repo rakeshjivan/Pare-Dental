@@ -45,3 +45,28 @@ describe("an imported mesh's triangles in the world, worked out directly (build 
 describe("a tapered or twisted mesh is left to meshForShape (build 321)", () => {
   it("a taper", () => { expect(importedWorldTriangles({ ...base, taperTopWidth: base.width / 2 } as WorkplaneShape)).toBeNull(); });
 });
+
+import * as THREE from "three";
+import { localToWorld } from "@/lib/scanFrame";
+
+describe("where a part's own positions stand in the world, found from a few corners (build 321)", () => {
+  const cases: Array<[string, Partial<WorkplaneShape>]> = [
+    ["as imported", {}],
+    ["moved, turned, resized and mirrored", { x: 9, z: -4, elevation: 2.5, rotation: 33, rotationX: -18, rotationZ: 71, width: base.width * 1.4, height: base.height * 0.9, mirrorZ: true }],
+  ];
+  for (const [name, change] of cases) {
+    it(`${name}: the map takes every corner where the drawn mesh has it`, () => {
+      const shape = { ...base, ...change } as WorkplaneShape;
+      const map = localToWorld(shape);
+      expect(map).not.toBeNull();
+      const world = meshForShape(shape), local = shape.importedMesh!.positions;
+      let worst = 0;
+      const p = new THREE.Vector3();
+      for (let i = 0; i < world.vertices.length; i += 1) { p.set(local[i * 3], local[i * 3 + 1], local[i * 3 + 2]).applyMatrix4(map!); worst = Math.max(worst, p.distanceTo(new THREE.Vector3(...world.vertices[i]))); }
+      expect(worst).toBeLessThan(1e-6);
+    });
+  }
+  it("a bent part is still not one map", () => {
+    expect(localToWorld({ ...base, taperTopWidth: base.width / 3 } as WorkplaneShape)).toBeNull();
+  });
+});
