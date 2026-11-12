@@ -26,16 +26,24 @@ let making = false;
 
 /** Whether a geometry is one to draw light: a large plain triangle list with no colours of its own. */
 function large(geometry: THREE.BufferGeometry | undefined): geometry is THREE.BufferGeometry {
-  if (!geometry || geometry.getIndex() || geometry.getAttribute("color")) return false;
+  if (!geometry || geometry.getAttribute("color")) return false;
   const position = geometry.getAttribute("position");
-  return Boolean(position && !("isInterleavedBufferAttribute" in position) && position.count / 3 >= MOTION_LOD_FROM);
+  return Boolean(position && !("isInterleavedBufferAttribute" in position) && trianglesOf(geometry) >= MOTION_LOD_FROM);
+}
+const trianglesOf = (geometry: THREE.BufferGeometry) => (geometry.getIndex()?.count ?? geometry.getAttribute("position")?.count ?? 0) / 3;
+/** A geometry's triangles as a plain list of corners (nine numbers a triangle), whether or not it is indexed. */
+function cornersOf(geometry: THREE.BufferGeometry): Float32Array {
+  const position = geometry.getAttribute("position").array as Float32Array, index = geometry.getIndex();
+  if (!index) return position;
+  const at = index.array, out = new Float32Array(at.length * 3);
+  for (let i = 0; i < at.length; i += 1) { const v = at[i] * 3; out[i * 3] = position[v]; out[i * 3 + 1] = position[v + 1]; out[i * 3 + 2] = position[v + 2]; }
+  return out;
 }
 
 /** The light geometry for a whole one: made here, once, in the same place and with smooth shading. */
 async function make(full: THREE.BufferGeometry): Promise<THREE.BufferGeometry | null> {
-  const position = full.getAttribute("position");
-  const triangles = position.count / 3;
-  const made = await simplifyTrianglePositions(position.array as Float32Array, Math.max(MOTION_LOD_LEAST, Math.round(triangles * MOTION_LOD_SHARE)));
+  const triangles = trianglesOf(full);
+  const made = await simplifyTrianglePositions(cornersOf(full), Math.max(MOTION_LOD_LEAST, Math.round(triangles * MOTION_LOD_SHARE)));
   if (made.triangleCount < 4 || made.triangleCount > triangles * 0.8) return null;
   const positions = Float32Array.from(made.positions);
   const light = new THREE.BufferGeometry();
@@ -103,8 +111,7 @@ export function describeMotionLod(root: THREE.Object3D): Array<{ triangles: numb
     const mesh = object as THREE.Mesh;
     if (!mesh.isMesh) return;
     const full = (mesh.userData.lodFull as THREE.BufferGeometry | undefined) ?? mesh.geometry;
-    const position = full?.getAttribute("position");
-    const count = full?.getIndex() ? (full.getIndex()!.count / 3) : (position ? position.count / 3 : 0);
+    const count = full ? trianglesOf(full) : 0;
     if (count < MOTION_LOD_FROM) return;
     const light = lights.get(full);
     out.push({ triangles: count, light: light && light !== "making" ? light.getAttribute("position").count / 3 : light === null ? -1 : 0, drawnLight: Boolean(mesh.userData.lodFull), indexed: Boolean(full.getIndex()), coloured: Boolean(full.getAttribute("color")) });
