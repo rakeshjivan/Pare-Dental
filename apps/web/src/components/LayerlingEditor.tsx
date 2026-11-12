@@ -12528,7 +12528,7 @@ export function LayerlingEditor({
           const base = { midline: all[3], canines: [all[7], all[8]] as [[number, number, number], [number, number, number]], up: upSet, out: outSet, contacts };
           const gum = crownMargins(scanSoup, base, gumMarks(all));
           const anchors = { ...base, gum: gum.gum, labial: labialProfile(scanSoup, base), crown: gum.crown ?? undefined, margins: gum.margins };
-          const setTeeth: SetTooth[] = front.flatMap((tooth) => { const f = frames.get(tooth.fdi); return f ? [{ id: String(tooth.fdi), fdi: tooth.fdi, kind: fdiKind(tooth.fdi, slot).kind, frame: f.frame, width: f.width, length: f.length, face: f.face }] : []; });
+          const setTeeth: SetTooth[] = front.flatMap((tooth) => { const f = frames.get(tooth.fdi); return f ? [{ id: String(tooth.fdi), fdi: tooth.fdi, kind: fdiKind(tooth.fdi, slot).kind, frame: f.frame, width: f.width, length: f.length, face: f.face, ends: f.ends }] : []; });
           const layout = layoutSmileSet(setTeeth, anchors, { ...SET_DEFAULTS });
           if (!layout) continue;
           const upNow = new THREE.Vector3(...upSet).normalize();
@@ -14428,7 +14428,7 @@ export function LayerlingEditor({
     const teeth = waxTeethOf(archId).filter((shape) => shape.waxTooth && record.rest[shape.waxTooth.fdi] && !current.locks[shape.waxTooth.fdi]);
     const setTeeth: SetTooth[] = teeth.map((shape) => {
       const fdi = shape.waxTooth!.fdi, rest = record.rest[fdi];
-      return { id: shape.id, fdi, kind: fdiKind(fdi, slot).kind, frame: rest.frame, width: rest.width, length: rest.length, face: rest.face };
+      return { id: shape.id, fdi, kind: fdiKind(fdi, slot).kind, frame: rest.frame, width: rest.width, length: rest.length, face: rest.face, ends: rest.ends };
     });
     const extra = new Map(teeth.map((shape) => { const e = own[shape.waxTooth!.fdi]; return [shape.id, { mesial: 0, distal: e?.spread ?? 0 }] as const; }));
     const layout = layoutSmileSet(setTeeth, record.anchors, controls, extra);
@@ -15976,7 +15976,7 @@ export function LayerlingEditor({
   }, [studioShellOn, dentalStudio?.waxStudio, studioWaxStep, waxup.gum, viewportShapes]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 277: the current arch's set, and what its controls make (no mesh: just the layout).
   const smileNow = waxup.smile?.[waxup.slot];
-  const smileLaid = smileNow ? layoutSmileSet(Object.entries(smileNow.rest).map(([fdi, rest]) => ({ id: fdi, fdi: Number(fdi), kind: fdiKind(Number(fdi), waxup.slot).kind, frame: rest.frame, width: rest.width, length: rest.length, face: rest.face })), smileNow.anchors, smileNow.controls) : null;
+  const smileLaid = smileNow ? layoutSmileSet(Object.entries(smileNow.rest).map(([fdi, rest]) => ({ id: fdi, fdi: Number(fdi), kind: fdiKind(Number(fdi), waxup.slot).kind, frame: rest.frame, width: rest.width, length: rest.length, face: rest.face, ends: rest.ends })), smileNow.anchors, smileNow.controls) : null;
   const smileFdi = (n: number) => (waxup.slot === "upper" ? 10 : 40) + n;
   // Build 277 (phase 3): the one front tooth chosen, with its own changes.
   const smileTooth = (() => {

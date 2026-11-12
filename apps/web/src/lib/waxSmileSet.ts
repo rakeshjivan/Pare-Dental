@@ -28,7 +28,14 @@ export type SetTooth = {
    * FACE_STEP from the incisal edge towards the neck, over the middle of its width (mm, 0 or less; restFrames).
    */
   face?: number[];
+  /**
+   * Build 323 (Rakesh: the marks on the patient's teeth had nothing marked on the wax teeth to meet): the tooth's own
+   * contacts at rest - the middle of where it touches its mesial and its distal neighbour in the set (toothEnds).
+   * With them a tooth laid on the marks has its contacts on the marked contacts; without, its outline's two ends.
+   */
+  ends?: ToothEnds;
 };
+export type ToothEnds = { mesial: Vec3; distal: Vec3 };
 /** The step of a tooth's labial face profile down its length, mm. */
 export const FACE_STEP = 0.5;
 /** How far a tooth's labial face has fallen back at its mesial and distal ends, against its middle, mm. */
@@ -345,7 +352,7 @@ export function affineBetween(before: ArrayLike<number>, after: ArrayLike<number
 export type SmileRecord = {
   controls: SetControls;
   anchors: SetAnchors;
-  rest: Record<number, { frame: ToothFrame; width: number; length: number; face?: number[] }>;
+  rest: Record<number, { frame: ToothFrame; width: number; length: number; face?: number[]; ends?: ToothEnds }>;
   laid: Record<number, number[]>;
   /** Build 277 (phase 3): each front tooth's own changes (lib/waxToothEdit), by FDI, as last laid. */
   own?: Record<number, import("@/lib/waxToothEdit").ToothEdit>;
@@ -366,7 +373,7 @@ export const SCULPTED_MISS = 0.02;
  * plane square to `up`; out labial (the side `out` points); the origin the middle of its incisal edge on
  * its labial face; width along mesial and length along up, mm. Teeth by FDI with their soups (scene coordinates).
  */
-export function restFrames(teeth: Array<{ fdi: number; soup: ArrayLike<number> }>, up: Vec3, out: Vec3): Map<number, { frame: ToothFrame; width: number; length: number; face: number[] }> {
+export function restFrames(teeth: Array<{ fdi: number; soup: ArrayLike<number> }>, up: Vec3, out: Vec3): Map<number, { frame: ToothFrame; width: number; length: number; face: number[]; ends?: ToothEnds }> {
   const u = v(up).normalize();
   const centroid = (soup: ArrayLike<number>) => {
     const c = new THREE.Vector3();
@@ -375,7 +382,7 @@ export function restFrames(teeth: Array<{ fdi: number; soup: ArrayLike<number> }
     return c;
   };
   const centres = new Map(teeth.map((t) => [t.fdi, centroid(t.soup)]));
-  const result = new Map<number, { frame: ToothFrame; width: number; length: number; face: number[] }>();
+  const result = new Map<number, { frame: ToothFrame; width: number; length: number; face: number[]; ends?: ToothEnds }>();
   for (const tooth of teeth) {
     const q = Math.floor(tooth.fdi / 10), n = tooth.fdi % 10;
     const towards = n === 1 ? centres.get((q === 1 ? 2 : q === 2 ? 1 : q === 3 ? 4 : 3) * 10 + 1) : centres.get(q * 10 + n - 1);
@@ -412,6 +419,66 @@ export function restFrames(teeth: Array<{ fdi: number; soup: ArrayLike<number> }
       if (k === steps || !face.slice(k + 1).some(Number.isFinite)) for (let j = k + 1; j <= steps; j += 1) face[j] = face[k];
     }
     result.set(tooth.fdi, { frame: { origin: origin.toArray() as Vec3, mesial: mesial.toArray() as Vec3, out: o.toArray() as Vec3, up: u.toArray() as Vec3 }, width: hi - lo, length: top - bottom, face: face.map((x) => (Number.isFinite(x) ? Math.round(x * 100) / 100 : 0)) });
+  }
+  for (const [fdi, ends] of toothEnds(teeth, result)) { const entry = result.get(fdi); if (entry) entry.ends = ends; }
+  return result;
+}
+
+/** A contact is the part of a tooth within this of its neighbour, beyond the gap between them, mm. */
+const CONTACT_BAND = 0.3;
+/** Two teeth further apart than this are not neighbours in contact, mm. */
+const CONTACT_GAP_MOST = 1.5;
+/** How many of a tooth's corners are looked at for its contacts. */
+const CONTACT_SAMPLE = 1500;
+
+/**
+ * Build 323: each tooth's own contacts as the set has it standing - the "marks" on the wax teeth that the marks on
+ * the patient's teeth are met with. A contact is the middle of the area where the tooth comes within CONTACT_BAND of
+ * its neighbour (beyond the gap between the two); the centrals' mesial contact is with each other. A tooth with no
+ * neighbour on a side (the canine's distal, in a set of six) has its most distal (or mesial) corner at the level of
+ * its other contact's side - the end of its outline. Teeth by FDI with their soups, and their rest frames.
+ */
+export function toothEnds(teeth: Array<{ fdi: number; soup: ArrayLike<number> }>, frames: Map<number, { frame: ToothFrame }>): Map<number, ToothEnds> {
+  const points = new Map<number, THREE.Vector3[]>();
+  for (const tooth of teeth) {
+    const count = Math.floor(tooth.soup.length / 3), step = Math.max(1, Math.floor(count / CONTACT_SAMPLE));
+    const list: THREE.Vector3[] = [];
+    for (let i = 0; i < count; i += step) list.push(new THREE.Vector3(tooth.soup[i * 3], tooth.soup[i * 3 + 1], tooth.soup[i * 3 + 2]));
+    points.set(tooth.fdi, list);
+  }
+  // The middle of a's contact with b, or null where the two do not touch.
+  const contact = (a: number, b: number): THREE.Vector3 | null => {
+    const pa = points.get(a), pb = points.get(b);
+    if (!pa?.length || !pb?.length) return null;
+    const least = new Float64Array(pa.length).fill(Infinity);
+    let gap = Infinity;
+    for (let i = 0; i < pa.length; i += 1) {
+      const p = pa[i];
+      let best = Infinity;
+      for (let j = 0; j < pb.length; j += 1) { const q = pb[j], dx = p.x - q.x, dy = p.y - q.y, dz = p.z - q.z, d = dx * dx + dy * dy + dz * dz; if (d < best) best = d; }
+      least[i] = best;
+      if (best < gap) gap = best;
+    }
+    gap = Math.sqrt(gap);
+    if (!(gap <= CONTACT_GAP_MOST)) return null;
+    const limit = (gap + CONTACT_BAND) * (gap + CONTACT_BAND);
+    const sum = new THREE.Vector3();
+    let n = 0;
+    for (let i = 0; i < pa.length; i += 1) if (least[i] <= limit) { sum.add(pa[i]); n += 1; }
+    return n ? sum.divideScalar(n) : null;
+  };
+  const mesialOf = (fdi: number) => { const q = Math.floor(fdi / 10), n = fdi % 10; return n === 1 ? (q === 1 ? 2 : q === 2 ? 1 : q === 3 ? 4 : 3) * 10 + 1 : q * 10 + n - 1; };
+  const result = new Map<number, ToothEnds>();
+  for (const tooth of teeth) {
+    const frame = frames.get(tooth.fdi)?.frame, own = points.get(tooth.fdi);
+    if (!frame || !own?.length) continue;
+    const m = v(frame.mesial).normalize();
+    // The end of the outline on a side: the corner furthest that way.
+    const end = (sign: 1 | -1) => own.reduce((best, p) => (sign * p.dot(m) > sign * best.dot(m) ? p : best), own[0]);
+    const mesial = contact(tooth.fdi, mesialOf(tooth.fdi)) ?? end(1);
+    const distal = contact(tooth.fdi, Math.floor(tooth.fdi / 10) * 10 + (tooth.fdi % 10) + 1) ?? end(-1);
+    if (mesial.distanceTo(distal) < 1) continue;
+    result.set(tooth.fdi, { mesial: mesial.toArray() as Vec3, distal: distal.toArray() as Vec3 });
   }
   return result;
 }
@@ -708,13 +775,26 @@ function layoutFromMarks(teeth: SetTooth[], anchors: SetAnchors, c: SetControls,
     if (width < 1) continue;
     const want = chord.clone().normalize();
     const r = tooth.frame;
-    const origin = v(r.origin);
-    const libMesial = flat(v(r.mesial)).normalize();
+    let origin = v(r.origin);
+    let libMesial = flat(v(r.mesial)).normalize();
+    let libWidth = tooth.width;
+    // Build 323: by the tooth's own contacts where it has them - the line from its distal contact to its mesial one
+    // is laid on the line between the two marks, and their middle on the marks' middle. (By its outline alone the
+    // centrals and laterals were out by 10 to 25 degrees: turned, and a little narrow.)
+    if (tooth.ends) {
+      const run = flat(v(tooth.ends.mesial)).sub(flat(v(tooth.ends.distal)));
+      if (run.length() >= 1) {
+        libWidth = run.length();
+        libMesial = run.normalize();
+        const middleOwn = v(tooth.ends.mesial).add(v(tooth.ends.distal)).multiplyScalar(0.5);
+        origin = origin.clone().addScaledVector(libMesial, middleOwn.sub(origin).dot(libMesial));
+      }
+    }
     // Turned about the vertical only, so the set's tip and torque stay.
     const yaw = Math.atan2(new THREE.Vector3().crossVectors(libMesial, want).dot(up), libMesial.dot(want));
     const turn = new THREE.Matrix4().makeRotationAxis(up, yaw);
     // Width along the tooth's own mesial direction, about its incisal middle.
-    const k = width / Math.max(1, tooth.width);
+    const k = width / Math.max(1, libWidth);
     const m = libMesial;
     const widen = new THREE.Matrix4().set(
       1 + (k - 1) * m.x * m.x, (k - 1) * m.x * m.y, (k - 1) * m.x * m.z, 0,
