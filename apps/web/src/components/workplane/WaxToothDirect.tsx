@@ -22,6 +22,7 @@
 import { useEffect, useRef } from "react";
 import { t } from "@/lib/i18n";
 import type { ToothFrame } from "@/lib/dentalWaxup";
+import { TOOTH_DOTS } from "@/lib/waxToothEdit";
 
 type V = [number, number, number];
 export type DirectTooth = { id: string; fdi: number; frame: ToothFrame; width: number; length: number; triangles: () => Float32Array; locked?: boolean };
@@ -36,17 +37,15 @@ export type DirectChange =
       /** Build 305: one side of the palatal or of the labial face moved outwards, mm. */
       bulge?: { key: "palatalM" | "palatalD" | "labialM" | "labialD" | "flareM" | "flareD"; mm: number };
       /** Build 305: the dots locked (double-clicked) - where each stands on the tooth, as shares of its width (mesial +), its thickness (labial +) and its length (incisal +): they are to stay where they are. */
-      hold?: Array<[number, number, number]> }
+      hold?: Array<[number, number, number]>;
+      /** Build 312: the tooth's place is locked - the locked dots keep their place on the tooth, but the tooth is not moved to keep them where they are. */
+      fixed?: boolean }
   /** Build 290: the whole set moved (no one tooth picked), mm in the scene. */
   | { kind: "moveAll"; by: [number, number, number] };
 type Zone = "length" | "mesial" | "distal" | "move";
 type DotKey = "edge" | "mesial" | "distal" | "middle" | "palatal" | "neck" | "palatalM" | "palatalD" | "labialM" | "labialD" | "flareM" | "flareD";
 /** Where each dot stands on its tooth: shares of its width (mesial +), of its thickness (labial +, from the labial face) and of its length (incisal +, from the edge). */
-const DOT_AT: Record<DotKey, [number, number, number]> = {
-  edge: [0, -0.15, 0], mesial: [0.5, -0.4, -0.4], distal: [-0.5, -0.4, -0.4], middle: [0, -0.45, -0.35], palatal: [0, -1, -0.6], neck: [0, -0.1, -0.92],
-  palatalM: [0.32, -0.9, -0.55], palatalD: [-0.32, -0.9, -0.55], labialM: [0.32, -0.08, -0.55], labialD: [-0.32, -0.08, -0.55],
-  flareM: [0.5, -0.3, -0.1], flareD: [-0.5, -0.3, -0.1],
-};
+const DOT_AT: Record<DotKey, [number, number, number]> = TOOTH_DOTS;
 /** The dots locked on each tooth (by its id) - kept while the app is open. */
 const LOCKED = new Map<string, Set<DotKey>>();
 const placeLocked = (id: string) => LOCKED.get(id)?.has("middle") === true;
@@ -339,7 +338,7 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
     const lockedOf = (id: string) => LOCKED.get(id) ?? new Set<DotKey>();
     // The white dot locked: the tooth's place is locked - it is not moved, turned, tipped or torqued by the mouse (its
     // length, width and fullness still change). The other locked dots then hold nothing: nothing moves the tooth.
-    const holdOf = (tooth: DirectTooth, but: DotKey) => (placeLocked(tooth.id) ? [] : [...lockedOf(tooth.id)].filter((key) => key !== but && key !== "middle").map((key) => DOT_AT[key]));
+    const holdOf = (tooth: DirectTooth, but: DotKey) => [...lockedOf(tooth.id)].filter((key) => key !== but && key !== "middle").map((key) => DOT_AT[key]);
     let pressed = { key: "" as DotKey | "", at: 0, x: 0, y: 0 };
     const dotEls = new Map<DotKey, HTMLDivElement>();
     let thick = { id: "", t: 6 };
@@ -415,7 +414,7 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
           change = { kind: "dot", length: 0, torque: 0, rotate, contact: m * outward, side: key };
           text = `${mm(m * outward)}${Math.abs(rotate) >= 0.5 ? `  ${rotate >= 0 ? "+" : ""}${rotate.toFixed(0)}°` : ""}`;
         }
-        if (change.kind === "dot" && hold.length) change.hold = hold;
+        if (change.kind === "dot") { change.hold = hold; change.fixed = placeLocked(tooth.id); }
         live.current.onDrag(tooth.id, change);
         el.style.left = `${event.clientX}px`; el.style.top = `${event.clientY}px`;
         say(event.clientX, event.clientY, `${dotName(key, tooth.fdi)}  ${text}`);

@@ -113,7 +113,7 @@ import { looksLikeDentalScan, type DentalAnalysis, type DentalRole, type DentalS
 import { DentalChrome } from "./workplane/DentalChrome";
 import { STUDIO_SHELL, WAXUP_ENABLED } from "@/lib/pareFeatures";
 import { fitArchLine, layOnArchLine, type ArchTooth } from "@/lib/waxArchLine";
-import { clampEdit, editPose, editTooth, isNoEdit, NO_EDIT, palatalDepth, uneditTooth, type ToothEdit, EDIT_RANGES } from "@/lib/waxToothEdit";
+import { clampEdit, editPose, editTooth, heldKey, isNoEdit, withLocks, NO_EDIT, palatalDepth, uneditTooth, type ToothEdit, type EditKey, EDIT_RANGES } from "@/lib/waxToothEdit";
 import { cutterBox, proudOfWax, sweptSurface } from "@/lib/waxReduce";
 import { ARCH_MARK_CONTACTS, ARCH_MARK_GUM, ARCH_MARK_GUMS, archMarkLabel, frontTeeth, gumMarks, markedWidths, nextArchMark } from "@/lib/waxArchMarks";
 import { autoArchMarks } from "@/lib/waxAutoMarks";
@@ -1946,7 +1946,7 @@ const WAX_COVER: boolean = false;
 /** How far incisal of a tooth's gingival margin the cut behind it starts, mm; and how far behind the wax it reaches, mm. */
 const COVER_ABOVE_GUM = 0.7;
 const COVER_BEHIND = 7;
-const WAX_SHAPE_KEYS: Array<keyof ToothEdit> = ["length", "mesial", "distal", "spread", "thickness", "palatal", "palatalM", "palatalD", "labialM", "labialD", "flareM", "flareD"];
+const WAX_SHAPE_KEYS: Array<EditKey> = ["length", "mesial", "distal", "spread", "thickness", "palatal", "palatalM", "palatalD", "labialM", "labialD", "flareM", "flareD"];
 const WAX_LIVE_PAUSE = 900;
 /** Build 297: how long after the last change Wax-up Studio writes the design, ms. */
 const WAX_SAVE_AFTER = 2500;
@@ -14371,7 +14371,7 @@ export function LayerlingEditor({
         if (!seen.dragged || seen.dragged.miss > SCULPTED_MISS || !next) continue;
         if (drawn) {
           // As it was last drawn (or, not yet drawn in this change, as it stands): nothing to make or draw.
-          const key = (matrix: ArrayLike<number>, edit: ToothEdit) => Array.from(matrix, (x) => x.toFixed(4)).join(",") + "|" + (Object.keys(NO_EDIT) as Array<keyof ToothEdit>).map((k) => (edit[k] ?? 0).toFixed(3)).join(",");
+          const key = (matrix: ArrayLike<number>, edit: ToothEdit) => Array.from(matrix, (x) => x.toFixed(4)).join(",") + "|" + (Object.keys(NO_EDIT) as Array<EditKey>).map((k) => (edit[k] ?? 0).toFixed(3)).join(",") + heldKey(edit);
           const now = key(next.elements, newEdit);
           if ((drawn.get(shape.id) ?? key(record.laid[fdi] ?? new THREE.Matrix4().elements, oldEdit)) === now) continue;
           drawn.set(shape.id, now);
@@ -14383,7 +14383,7 @@ export function LayerlingEditor({
           // Build 297: live, the tooth is its shape (made again only when a length, width or thickness changes) under
           // its pose - a move or a turn makes no triangles at all.
           const shapeEdit: ToothEdit = { ...newEdit, moveMesial: 0, moveOut: 0, moveUp: 0, rotate: 0, tip: 0, torque: 0 };
-          const shapeKey = WAX_SHAPE_KEYS.map((k) => (shapeEdit[k] ?? 0).toFixed(3)).join(",");
+          const shapeKey = WAX_SHAPE_KEYS.map((k) => (shapeEdit[k] ?? 0).toFixed(3)).join(",") + heldKey(shapeEdit);
           let made = waxLiveShape.current.get(shape.id);
           if (!made || made.key !== shapeKey || made.rest !== seen.rest) {
             made = { key: shapeKey, rest: seen.rest, soup: isNoEdit(shapeEdit) ? seen.rest : editTooth(seen.rest, restPose.frame, restPose.width, restPose.length, shapeEdit, palatalSeen) };
@@ -14538,7 +14538,7 @@ export function LayerlingEditor({
    * Build 284 (Rakesh: "we need direct control of the teeth"): a tooth of the set taken hold of on the screen
    * (components/workplane/WaxToothDirect) - what each kind of drag means for the set, from how it stood when taken.
    */
-  const waxDirectBase = useRef<{ fdi: number; own: Record<number, ToothEdit>; id: string; live: boolean; stepped: Partial<Record<keyof ToothEdit, number>> } | null>(null);
+  const waxDirectBase = useRef<{ fdi: number; own: Record<number, ToothEdit>; id: string; live: boolean; stepped: Partial<Record<EditKey, number>> } | null>(null);
   const beginWaxDirect = (id: string) => {
     const record = waxupRef.current.smile?.[waxupRef.current.slot];
     const fdi = shapesRef.current.find((shape) => shape.id === id)?.waxTooth?.fdi;
@@ -14583,14 +14583,14 @@ export function LayerlingEditor({
     const partner = Math.floor(fdi / 10) % 2 === 1 ? fdi + 10 : fdi - 10;
     if (!base.live) {
       if (change.kind === "moveAll") return;
-      const want: Partial<Record<keyof ToothEdit, number>> =
+      const want: Partial<Record<EditKey, number>> =
         change.kind === "move" ? { moveMesial: change.mesial, moveOut: change.out, moveUp: change.up }
         : change.kind === "turn" ? { rotate: change.rotate, tip: change.tip, torque: change.torque }
         : change.kind === "length" ? { length: change.mm }
         : change.kind === "contact" ? { [change.side]: change.mm }
         : change.kind === "spread" ? { distal: change.mm }
         : { length: change.length, torque: change.torque, rotate: change.rotate, tip: change.tip ?? 0, palatal: change.palatal ?? 0, moveUp: change.up ?? 0, ...(change.side ? { [change.side]: change.contact } : {}) };
-      for (const key of Object.keys(want) as Array<keyof ToothEdit>) {
+      for (const key of Object.keys(want) as Array<EditKey>) {
         const [lo, hi] = EDIT_RANGES[key];
         const to = Math.min(hi, Math.max(lo, want[key] ?? 0)), by = to - (base.stepped[key] ?? 0);
         const degrees = key === "rotate" || key === "tip" || key === "torque";
@@ -14622,7 +14622,14 @@ export function LayerlingEditor({
       // Build 305 (Rakesh: a dot double-clicked is locked): the locked dots stay where they are - the tooth is moved
       // back by as far as this change would have carried them (so it turns about a locked dot, or grows away from it).
       const rest = record.rest[fdi];
-      if (change.hold?.length && rest && own[fdi] && waxSetHas(fdi)) {
+      // Build 312 (Rakesh: "widen or flare the incisal whilst leaving the middle and neck narrow or a combination"): a
+      // locked dot's spot of the tooth also keeps its place on the tooth - the tooth gives round it (lib/waxToothEdit
+      // withLocks) instead of taking it along. What is left for the move back below is only what a turn would carry it.
+      if (rest && own[fdi] && waxSetHas(fdi)) {
+        const depth = Math.min(-0.5, waxSmilePalatal.current.get(base.id) ?? -6);
+        own[fdi] = withLocks(own[fdi], { ...NO_EDIT, ...(base.own[fdi] ?? {}) }, change.hold ?? [], rest.width, rest.length, depth);
+      }
+      if (change.hold?.length && !change.fixed && rest && own[fdi] && waxSetHas(fdi)) {
         const depth = Math.min(-0.5, waxSmilePalatal.current.get(base.id) ?? -6), f = rest.frame;
         const pts = new Float32Array(change.hold.flatMap(([m, o, u]) => [0, 1, 2].map((k) => f.origin[k] + f.mesial[k] * m * rest.width + f.out[k] * o * -depth + f.up[k] * u * rest.length)));
         const at = (edit: ToothEdit) => editTooth(pts, f, rest.width, rest.length, clampEdit(edit), depth);
@@ -14643,8 +14650,8 @@ export function LayerlingEditor({
       : { ...was, rotate: was.rotate + change.rotate, tip: was.tip + change.tip, torque: was.torque + change.torque };
     // The partner across the midline takes the same change on top of its own (their frames mirror each other).
     const other = { ...NO_EDIT, ...(base.own[partner] ?? {}) };
-    const delta = (key: keyof ToothEdit) => next[key] - was[key];
-    const mirrored = Object.fromEntries((Object.keys(NO_EDIT) as Array<keyof ToothEdit>).map((key) => [key, other[key] + delta(key)])) as ToothEdit;
+    const delta = (key: EditKey) => next[key] - was[key];
+    const mirrored = { ...other, ...Object.fromEntries((Object.keys(NO_EDIT) as Array<EditKey>).map((key) => [key, other[key] + delta(key)])) } as ToothEdit;
     editWaxTeeth({ ...base.own, [fdi]: next, ...(mirror && waxSetHas(partner) ? { [partner]: mirrored } : {}) });
   };
   /**
@@ -14672,7 +14679,7 @@ export function LayerlingEditor({
     const fit = waxSmileFit(shape, record, fdi).dragged;
     return Boolean(fit && fit.miss <= SCULPTED_MISS);
   };
-  const stepWaxTooth = (key: keyof ToothEdit, delta: number, toothId?: string) => {
+  const stepWaxTooth = (key: EditKey, delta: number, toothId?: string) => {
     const id = toothId ?? (selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null);
     const shape = id ? shapesRef.current.find((candidate) => candidate.id === id && candidate.dental === "wax" && candidate.waxTooth) : undefined;
     if (!shape?.waxTooth || waxupRef.current.busy || waxupRef.current.locks[shape.waxTooth.fdi]) return;
@@ -23183,7 +23190,7 @@ export function LayerlingEditor({
               onSetCurve: (curve: number) => bendWaxSet(curve),
               onSmile: (controls: SetControls) => layWaxSmile(controls),
               onToothEdit: (fdi: number, edit: ToothEdit) => editWaxTooth(fdi, edit),
-              onToothStep: (key: keyof ToothEdit, delta: number) => stepWaxTooth(key, delta),
+              onToothStep: (key: EditKey, delta: number) => stepWaxTooth(key, delta),
               onArchMarks: (index?: number) => startArchMarks(index),
               onReduce: (fdi: number, on: boolean) => { waxRecord(); setWaxup((current) => { const list = (current.reduce?.[current.slot] ?? []).filter((n) => n !== fdi); const next = { ...current, reduce: { ...(current.reduce ?? {}), [current.slot]: on ? [...list, fdi] : list } }; waxupRef.current = next; return next; }); },
               onArchMarkUndo: () => undoArchMark(),

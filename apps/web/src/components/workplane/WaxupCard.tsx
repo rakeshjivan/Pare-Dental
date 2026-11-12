@@ -30,7 +30,7 @@ import { CONTACT_STOPS, contactGradient } from "@/lib/biteContacts";
 import { t } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/messages.en";
 import { SET_DEFAULTS, SET_RANGES, type SetControls } from "@/lib/waxSmileSet";
-import { EDIT_RANGES, EDIT_SLIDERS, NO_EDIT, type ToothEdit } from "@/lib/waxToothEdit";
+import { EDIT_RANGES, EDIT_SLIDERS, NO_EDIT, type ToothEdit, type EditKey } from "@/lib/waxToothEdit";
 import { type SmileCheck, type ToothAdjust, type ToothNudge } from "@/lib/dentalWaxup";
 import type { WorkplaneWorkspaceSettings } from "@/types/layerling";
 
@@ -186,7 +186,7 @@ export type WaxupActions = {
   onToothEdit?: (fdi: number, edit: ToothEdit) => void;
   onToothMirror?: (on: boolean) => void;
   /** Build 281: one step of one change on the selected tooth (mm or degrees), on any wax tooth. */
-  onToothStep?: (key: keyof ToothEdit, delta: number) => void;
+  onToothStep?: (key: EditKey, delta: number) => void;
   /** Build 278: start clicking the marks (at `index`, else the first missing); take back the last; clear them all. */
   onArchMarks?: (index?: number) => void;
   onArchMarkUndo?: () => void;
@@ -913,18 +913,18 @@ function StepButton({ label, disabled, onStep, children }: { label: string; disa
   );
 }
 
-function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror, onCopyAcross, onGive }: { onCopyAcross?: () => void; onGive?: (on: boolean) => void; tooth: NonNullable<WaxupView["toothEdit"]>; workspace: WorkplaneWorkspaceSettings; disabled: boolean; onChange?: (fdi: number, edit: ToothEdit) => void; onStep?: (key: keyof ToothEdit, delta: number) => void; onMirror?: (on: boolean) => void }) {
+function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror, onCopyAcross, onGive }: { onCopyAcross?: () => void; onGive?: (on: boolean) => void; tooth: NonNullable<WaxupView["toothEdit"]>; workspace: WorkplaneWorkspaceSettings; disabled: boolean; onChange?: (fdi: number, edit: ToothEdit) => void; onStep?: (key: EditKey, delta: number) => void; onMirror?: (on: boolean) => void }) {
   const e = tooth.edit;
   const r = EDIT_RANGES;
   const tenth = (x: number) => Math.round(x * 10) / 10;
   const live = tooth.live !== false && Boolean(onChange);
   const set = (patch: Partial<ToothEdit>) => onChange?.(tooth.fdi, { ...e, ...patch });
-  const step = (key: keyof ToothEdit, degrees: boolean, sign: 1 | -1) => {
+  const step = (key: EditKey, degrees: boolean, sign: 1 | -1) => {
     const delta = (degrees ? 0.5 : 0.1) * sign;
     if (onStep) onStep(key, delta);
     else set({ [key]: degrees ? Math.round((e[key] + delta) * 2) / 2 : tenth(e[key] + delta) });
   };
-  const row = (key: keyof ToothEdit, label: MessageKey, hint: MessageKey, degrees = false) => (
+  const row = (key: EditKey, label: MessageKey, hint: MessageKey, degrees = false) => (
     <div className="wax-tooth-row">
       {live ? (
         <EdgeModifierSlider label={t(label)} title={t(hint)} value={e[key] ?? 0} min={Math.min(EDIT_SLIDERS[key][0], e[key] ?? 0)} max={Math.max(EDIT_SLIDERS[key][1], e[key] ?? 0)} step={degrees ? 0.5 : 0.1} unit={degrees ? "°" : undefined} length={!degrees} workspace={workspace} disabled={disabled} onChange={(value) => ((key === "mesial" || key === "distal") && onStep ? onStep(key, tenth(value) - (e[key] ?? 0)) : set({ [key]: degrees ? Math.round(value * 2) / 2 : tenth(value) }))} />
