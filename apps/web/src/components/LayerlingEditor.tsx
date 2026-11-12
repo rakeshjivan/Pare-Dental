@@ -12068,6 +12068,9 @@ export function LayerlingEditor({
         });
         // Build 79: stopped with Cancel while it was making - nothing is changed.
         if (run !== dentalMakeRun.current) return;
+        // Build 322: the workers that made them are closed now, before the page turns the result into parts (its own
+        // most memory-hungry moment) - not two seconds after, with both at their largest together.
+        recycleMeshWorkers();
         const current = shapesRef.current.filter((shape) => involved.includes(shape.id));
         if (projectShapesFingerprint(current) !== fingerprint) {
           setDentalStudio(null);
