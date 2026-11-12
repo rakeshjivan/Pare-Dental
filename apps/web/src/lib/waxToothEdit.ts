@@ -50,13 +50,22 @@ export type ToothEdit = {
 export const NO_EDIT: ToothEdit = { length: 0, mesial: 0, distal: 0, spread: 0, thickness: 0, palatal: 0, palatalM: 0, palatalD: 0, labialM: 0, labialD: 0, moveMesial: 0, moveOut: 0, moveUp: 0, rotate: 0, tip: 0, torque: 0 };
 
 /** The ranges offered, mm and degrees. */
-// Build 308 (Rakesh: "why is the canine restricted on how far I can move it buccally"): a tooth may be moved further
-// (it was 2 mm labially or palatally, 3 mm along the arch or up and down) - a canine set well inside a crowded arch
-// has further than that to come out.
+// Build 308 (Rakesh: "we need complete freedom of movement of teeth - if the marked teeth and the automatic placement
+// are wrong, the limited distance the teeth can move is a problem"): a tooth's place is not limited - it may be
+// moved anywhere and turned right round (the figures below are only there to stop a slip of the hand sending it out
+// of sight). Its shape still is: a library tooth stretched beyond these is no longer that tooth.
 export const EDIT_RANGES: Record<keyof ToothEdit, readonly [number, number]> = {
   length: [-3, 4], mesial: [-2.5, 2.5], distal: [-2.5, 2.5], spread: [-2, 3], thickness: [-1, 1.5], palatal: [-1, 3],
   palatalM: [-1.5, 2], palatalD: [-1.5, 2], labialM: [-1.5, 2], labialD: [-1.5, 2],
-  moveMesial: [-5, 5], moveOut: [-6, 6], moveUp: [-5, 5], rotate: [-25, 25], tip: [-15, 15], torque: [-15, 15],
+  moveMesial: [-60, 60], moveOut: [-60, 60], moveUp: [-60, 60], rotate: [-180, 180], tip: [-90, 90], torque: [-90, 90],
+};
+/**
+ * What a slider in the panel runs over (it is widened to hold a value already beyond it): fine control near where the
+ * set placed the tooth. Dragging the tooth itself is not held to these.
+ */
+export const EDIT_SLIDERS: Record<keyof ToothEdit, readonly [number, number]> = {
+  ...EDIT_RANGES,
+  moveMesial: [-5, 5], moveOut: [-6, 6], moveUp: [-5, 5], rotate: [-45, 45], tip: [-25, 25], torque: [-25, 25],
 };
 
 export function clampEdit(edit: Partial<ToothEdit>): ToothEdit {

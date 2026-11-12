@@ -30,7 +30,7 @@ import { CONTACT_STOPS, contactGradient } from "@/lib/biteContacts";
 import { t } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/messages.en";
 import { SET_DEFAULTS, SET_RANGES, type SetControls } from "@/lib/waxSmileSet";
-import { EDIT_RANGES, NO_EDIT, type ToothEdit } from "@/lib/waxToothEdit";
+import { EDIT_RANGES, EDIT_SLIDERS, NO_EDIT, type ToothEdit } from "@/lib/waxToothEdit";
 import { type SmileCheck, type ToothAdjust, type ToothNudge } from "@/lib/dentalWaxup";
 import type { WorkplaneWorkspaceSettings } from "@/types/layerling";
 
@@ -927,7 +927,7 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror
   const row = (key: keyof ToothEdit, label: MessageKey, hint: MessageKey, degrees = false) => (
     <div className="wax-tooth-row">
       {live ? (
-        <EdgeModifierSlider label={t(label)} title={t(hint)} value={e[key] ?? 0} min={r[key][0]} max={r[key][1]} step={degrees ? 0.5 : 0.1} unit={degrees ? "°" : undefined} length={!degrees} workspace={workspace} disabled={disabled} onChange={(value) => ((key === "mesial" || key === "distal") && onStep ? onStep(key, tenth(value) - (e[key] ?? 0)) : set({ [key]: degrees ? Math.round(value * 2) / 2 : tenth(value) }))} />
+        <EdgeModifierSlider label={t(label)} title={t(hint)} value={e[key] ?? 0} min={Math.min(EDIT_SLIDERS[key][0], e[key] ?? 0)} max={Math.max(EDIT_SLIDERS[key][1], e[key] ?? 0)} step={degrees ? 0.5 : 0.1} unit={degrees ? "°" : undefined} length={!degrees} workspace={workspace} disabled={disabled} onChange={(value) => ((key === "mesial" || key === "distal") && onStep ? onStep(key, tenth(value) - (e[key] ?? 0)) : set({ [key]: degrees ? Math.round(value * 2) / 2 : tenth(value) }))} />
       ) : (
         <span className="wax-tooth-readout" title={t(hint)}>{t(label)} <b>{(e[key] ?? 0) >= 0 ? "+" : ""}{degrees ? (e[key] ?? 0).toFixed(1) + "°" : (e[key] ?? 0).toFixed(1) + " mm"}</b></span>
       )}
