@@ -50,6 +50,14 @@ export type SetAnchors = {
    */
   contacts?: Vec3[];
   /**
+   * Build 310: the middle of each front tooth's labial gingival margin (from the patient's right; null where there
+   * is none) - marked by the dentist, or read on the scan. A tooth with one stands on it: its neck there (the tooth
+   * tipped and torqued about its incisal edge to reach it), its length from there to its edge.
+   */
+  gum?: Array<Vec3 | null>;
+  /** Build 310: the gum marks as the dentist left them when the set was laid (to tell when they have been moved). */
+  gumMarked?: Array<Vec3 | null>;
+  /**
    * Build 286: the patient's centrals as they stand - incisal edge to gingival margin, mm (crownLength). With
    * it the set starts at a central of the usual proportion (its width over `ratio`) where the patient's is
    * shorter than that - worn teeth are lengthened from the start, as a lab does.
@@ -446,10 +454,13 @@ const MARGIN_AGREE = 1.75;
  * middle of each tooth (between its marked contacts), the most labial surface at each height has a crease where
  * the crown meets the gum: the first clear one between 4.5 and 13 mm from the edge. `points`: the scan's corners.
  */
-export function crownMargins(points: ArrayLike<number>, anchors: Pick<SetAnchors, "contacts" | "up" | "out">): { margins: Array<number | null>; crown: number | null } {
+export function crownMargins(points: ArrayLike<number>, anchors: Pick<SetAnchors, "contacts" | "up" | "out">, marked?: ReadonlyArray<Vec3 | null | undefined>): { margins: Array<number | null>; crown: number | null; gum: Array<Vec3 | null> } {
   const contacts = anchors.contacts;
   const margins: Array<number | null> = [null, null, null, null, null, null];
-  if (!contacts || contacts.length < 7) return { margins, crown: null };
+  const gum: Array<Vec3 | null> = [null, null, null, null, null, null];
+  if (!contacts || contacts.length < 7) return { margins, crown: null, gum };
+  // Build 310: where on the labial face each margin is (its strip's middle, its front at each depth below the edge).
+  const strips: Array<{ middle: THREE.Vector3; out: THREE.Vector3; front: Float64Array } | null> = [null, null, null, null, null, null];
   const up = v(anchors.up).normalize();
   const flat = (p: THREE.Vector3) => p.clone().addScaledVector(up, -p.dot(up));
   const STEP = 0.25, REACH = Math.round(2 / STEP), DEEP = Math.round(15 / STEP);
@@ -479,6 +490,8 @@ export function crownMargins(points: ArrayLike<number>, anchors: Pick<SetAnchors
       if (h > edge) edge = h;
     }
     if (!Number.isFinite(edge)) continue;
+    // Build 310: a margin marked by the dentist is the margin; the tooth's edge is still read here (for the crown's length).
+    if (marked?.[tooth]) edges[tooth] = edge;
     const front = new Float64Array(DEEP + 1).fill(-Infinity);
     for (let i = 0; i < strip.length; i += 2) {
       const k = Math.round((edge - strip[i + 1]) / STEP);
@@ -504,6 +517,7 @@ export function crownMargins(points: ArrayLike<number>, anchors: Pick<SetAnchors
     if (best < 0) continue;
     edges[tooth] = edge;
     crowns[tooth] = best * STEP;
+    strips[tooth] = { middle, out, front };
   }
   // Build 293 (a hard scan: one central read 11.5 mm from edge to gum beside its twin's 4.5, and the set was laid with
   // one tooth towering over a squat one): the six readings checked against each other. Each crown's length as a
@@ -513,18 +527,39 @@ export function crownMargins(points: ArrayLike<number>, anchors: Pick<SetAnchors
   const share = [0.95, 0.86, 1, 1, 0.86, 0.95];
   const asCentral = crowns.map((length, tooth) => (length === null ? null : length / share[tooth]));
   const read = asCentral.filter((x): x is number => x !== null).sort((a, b) => a - b);
-  if (!read.length) return { margins, crown: null };
+  // Build 310: the marked ones, as marked - never checked against the others, never replaced.
+  const markedCentral: number[] = [];
+  for (let tooth = 0; tooth < 6; tooth += 1) {
+    const mark = marked?.[tooth];
+    if (!mark) continue;
+    margins[tooth] = v(mark).dot(up);
+    gum[tooth] = [mark[0], mark[1], mark[2]];
+    const edge = edges[tooth];
+    if ((tooth === 2 || tooth === 3) && edge !== null) markedCentral.push(edge - margins[tooth]!);
+  }
+  const crownOf = (lengths: number[]) => (lengths.length ? lengths.reduce((sum, x) => sum + x, 0) / lengths.length : null);
+  if (!read.length) return { margins, crown: crownOf(markedCentral), gum };
   const middle = read.length % 2 ? read[(read.length - 1) / 2] : (read[read.length / 2 - 1] + read[read.length / 2]) / 2;
   for (let tooth = 0; tooth < 6; tooth += 1) {
     const edge = edges[tooth], length = asCentral[tooth];
-    if (edge === null || length === null) continue;
+    if (marked?.[tooth] || edge === null || length === null) continue;
     const kept = Math.abs(length - middle) > MARGIN_AGREE ? middle : length;
     margins[tooth] = edge - kept * share[tooth];
     if (tooth === 2 || tooth === 3) central.push(kept);
+    // Where that is on the scan: the strip's most labial surface at that depth below the edge.
+    const strip = strips[tooth];
+    if (strip) {
+      const k = Math.min(strip.front.length - 1, Math.max(0, Math.round((kept * share[tooth]) / STEP)));
+      let f = strip.front[k];
+      for (let reach = 1; !Number.isFinite(f) && reach <= 4; reach += 1) f = Number.isFinite(strip.front[k - reach] ?? NaN) ? strip.front[k - reach] : strip.front[k + reach] ?? NaN;
+      if (Number.isFinite(f)) { const at = strip.middle.clone().addScaledVector(strip.out, f).addScaledVector(up, margins[tooth]!); gum[tooth] = [at.x, at.y, at.z]; }
+    }
   }
-  return { margins, crown: central.length ? central.reduce((sum, x) => sum + x, 0) / central.length : null };
+  return { margins, crown: crownOf([...central, ...markedCentral]), gum };
 }
 
+/** Build 310: the most a tooth is torqued or tipped to bring its neck over its gum mark, degrees. */
+export const GUM_TURN_MAX = 30;
 /** How little a mark lying palatal of the arch counts in finding it, against one on it or labial of it. */
 const ARCH_INSIDE = 0.1;
 
@@ -738,10 +773,43 @@ function layoutFromMarks(teeth: SetTooth[], anchors: SetAnchors, c: SetControls,
         if (cost < best - 1e-9) { best = cost; forward = out0; torque = degrees; }
       }
     }
+    // Build 310: with the tooth's gum mark, its neck stands on it - the tooth cannot leave its root. Seen from the
+    // occlusal the mark may lie off the even arch (a tooth tucked behind, one standing out): the edge stays on the
+    // arch and the tooth is torqued (labio-palatally) and tipped (mesio-distally) about its incisal edge until its
+    // neck is over the mark, each to GUM_TURN_MAX at most. The torque that clears the patient's crown is the least.
+    let tip = 0;
+    const gumAt = anchors.gum?.[i];
+    if (gumAt && margin !== null && margin !== undefined) {
+      const down = edgeLevel - margin;
+      if (down > 3) {
+        const g = flat(v(gumAt)).sub(middle);
+        const behindNeck = faceOf?.length ? faceOf[Math.min(faceOf.length - 1, Math.round(down / stretch / FACE_STEP))] : 0;
+        const degreesOf = (run: number) => Math.max(-GUM_TURN_MAX, Math.min(GUM_TURN_MAX, (Math.atan(run / down) * 180) / Math.PI));
+        // The neck's face over the mark: twice, as the tooth's way out changes with its torque.
+        for (let round = 0; round < 2; round += 1) {
+          const wanted = degreesOf(g.dot(out) - forward - behindNeck);
+          torque = wanted;
+          if (faceOf?.length) {
+            const slope = Math.tan((torque * Math.PI) / 180), reachDown = down - 0.5;
+            let most = 0;
+            for (const q of near) {
+              if (q.d < 0 || q.d > reachDown) continue;
+              const at = q.d / stretch / FACE_STEP, k = Math.min(faceOf.length - 1, Math.floor(at)), k1 = Math.min(faceOf.length - 1, k + 1);
+              most = Math.max(most, q.f + SET_CLEAR - (faceOf[k] + (faceOf[k1] - faceOf[k]) * (at - k)) + q.side - slope * q.d);
+            }
+            forward = most;
+          }
+        }
+        tip = degreesOf(g.dot(want) + (shiftOf.get(tooth.id) ?? 0));
+      }
+    }
     const target = middle.clone().addScaledVector(up, edgeLevel).addScaledVector(out, forward + c.fullness).addScaledVector(want, -(shiftOf.get(tooth.id) ?? 0));
     // The torque: about the tooth's own mesio-distal axis through its incisal middle, the neck going labially.
     const neckOut = new THREE.Vector3().crossVectors(libMesial, v(r.up).normalize()).dot(v(r.out)) > 0 ? -1 : 1;
-    const tilt = new THREE.Matrix4().makeRotationAxis(libMesial, neckOut * (torque * Math.PI) / 180);
+    // The tip: about the tooth's own labio-palatal axis through its incisal middle, the neck going mesially.
+    const libOut = flat(v(r.out)).normalize();
+    const neckMesial = new THREE.Vector3().crossVectors(libOut, v(r.up).normalize().negate()).dot(libMesial) > 0 ? 1 : -1;
+    const tilt = new THREE.Matrix4().makeRotationAxis(libOut, neckMesial * (tip * Math.PI) / 180).multiply(new THREE.Matrix4().makeRotationAxis(libMesial, neckOut * (torque * Math.PI) / 180));
     const a = v(r.up).normalize();
     const lengthen = new THREE.Matrix4().set(
       1 + (stretch - 1) * a.x * a.x, (stretch - 1) * a.x * a.y, (stretch - 1) * a.x * a.z, 0,

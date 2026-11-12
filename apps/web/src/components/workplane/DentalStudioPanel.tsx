@@ -715,7 +715,7 @@ export function DentalStudioPanel({
   const mbHintKey: Record<ModelStepId, string> = { scans: "dental.step1Hint", prepare: "dental.trimHint", model: "dental.step3Hint", base: "dental.stepBaseHint", articulator: "dental.step4Hint", fill: "studio.bodyHint", label: shell ? "studio.finishHint" : pair ? "dental.step4Hint" : "dental.stepNameHint" };
   const longHint = !framed ? null : stage === "made" ? t("dental.madeHint") : waxStep ? t(`waxStudio.stepHint.${waxStep}` as "waxStudio.stepHint.scans") : mbStep ? t(mbHintKey[mbStep] as "dental.step1Hint") : null;
   // The line over the 3D view: what to do now, in a few words; the rest is behind the (?).
-  const frameHint = !framed ? null : stage === "made" ? t(finishedCase ? "studio.hint.finished" : "studio.hint.made") : waxStep ? t(waxStep === "mark" && wv?.archMarkPick == null && (wv?.archMarkList ?? []).filter(Boolean).length === 9 ? "studio.hint.markCheck" : (`studio.hint.${waxStep}` as "studio.hint.scans")) : mbStep ? t(mbStep === "scans" && scansDone ? "studio.hint.mb.scansLoaded" : `studio.hint.mb.${mbStep}` as "studio.hint.mb.scans") : null;
+  const frameHint = !framed ? null : stage === "made" ? t(finishedCase ? "studio.hint.finished" : "studio.hint.made") : waxStep ? t(waxStep === "mark" && wv?.archMarkPick == null && (wv?.archMarkList ?? []).slice(0, 9).filter(Boolean).length === 9 ? "studio.hint.markCheck" : (`studio.hint.${waxStep}` as "studio.hint.scans")) : mbStep ? t(mbStep === "scans" && scansDone ? "studio.hint.mb.scansLoaded" : `studio.hint.mb.${mbStep}` as "studio.hint.mb.scans") : null;
   // Build 116: while the models are being made (and, in Wax-up Studio, while the wax is fitted to the bite first) the
   // button stays, fills slowly and says what is happening - the work can hold the screen for a minute.
   const fitting = Boolean(waxup?.view.occlusion.busy);
@@ -930,7 +930,7 @@ export function DentalStudioPanel({
         const widths = wv.archMarkWidths ?? {};
         const teeth = frontTeeth(wv.slot);
         const picking = wv.archMarkPick ?? null;
-        const placed = marks.filter(Boolean).length;
+        const placed = marks.slice(0, 9).filter(Boolean).length;
         const w = (fdi: number) => widths[fdi];
         const central = teeth[2], other = teeth[3];
         return (<>
@@ -953,6 +953,14 @@ export function DentalStudioPanel({
               );
             })}
           </ol>
+          {/* Build 310: the six gum marks - placed for the dentist, dragged where one is off. */}
+          {placed === 9 ? (
+            <div className="wax-mark-gum" role="status">
+              <strong>{t("waxup.markGum")}</strong>
+              <div>{teeth.map((fdi, k) => <span key={fdi} className={marks[9 + k] ? "found" : "missing"} title={marks[9 + k] ? undefined : t("waxup.markGumNone")}><b>{fdi}</b> {marks[9 + k] ? "●" : "—"}</span>)}</div>
+              <p className="blend-hint">{t("waxup.markGumHint")}</p>
+            </div>
+          ) : null}
           {Object.keys(widths).length ? (
             <div className="wax-mark-widths" role="status">
               <strong>{t("waxup.markWidths")}</strong>

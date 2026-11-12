@@ -115,7 +115,7 @@ import { STUDIO_SHELL, WAXUP_ENABLED } from "@/lib/pareFeatures";
 import { fitArchLine, layOnArchLine, type ArchTooth } from "@/lib/waxArchLine";
 import { clampEdit, editPose, editTooth, isNoEdit, NO_EDIT, palatalDepth, uneditTooth, type ToothEdit, EDIT_RANGES } from "@/lib/waxToothEdit";
 import { cutterBox, proudOfWax, sweptSurface } from "@/lib/waxReduce";
-import { ARCH_MARK_CONTACTS, archMarkLabel, frontTeeth, markedWidths, nextArchMark } from "@/lib/waxArchMarks";
+import { ARCH_MARK_CONTACTS, ARCH_MARK_GUM, ARCH_MARK_GUMS, archMarkLabel, frontTeeth, gumMarks, markedWidths, nextArchMark } from "@/lib/waxArchMarks";
 import { autoArchMarks } from "@/lib/waxAutoMarks";
 import { extendNeck } from "@/lib/waxNeck";
 import { affineBetween, clampControls, crownMargins, labialProfile, layoutSmileSet, restFrames, SCULPTED_MISS, SET_DEFAULTS, type SetControls, type SetTooth, type SmileRecord } from "@/lib/waxSmileSet";
@@ -12509,8 +12509,8 @@ export function LayerlingEditor({
           const upSet = sum((f) => f.up), outSet = sum((f) => f.out);
           const frames = restFrames(front.map((tooth) => ({ fdi: tooth.fdi, soup: tooth.soup })), upSet, outSet);
           const base = { midline: all[3], canines: [all[7], all[8]] as [[number, number, number], [number, number, number]], up: upSet, out: outSet, contacts };
-          const gum = crownMargins(scanSoup, base);
-          const anchors = { ...base, labial: labialProfile(scanSoup, base), crown: gum.crown ?? undefined, margins: gum.margins };
+          const gum = crownMargins(scanSoup, base, gumMarks(all));
+          const anchors = { ...base, gum: gum.gum, labial: labialProfile(scanSoup, base), crown: gum.crown ?? undefined, margins: gum.margins };
           const setTeeth: SetTooth[] = front.flatMap((tooth) => { const f = frames.get(tooth.fdi); return f ? [{ id: String(tooth.fdi), fdi: tooth.fdi, kind: fdiKind(tooth.fdi, slot).kind, frame: f.frame, width: f.width, length: f.length, face: f.face }] : []; });
           const layout = layoutSmileSet(setTeeth, anchors, { ...SET_DEFAULTS });
           if (!layout) continue;
@@ -12737,6 +12737,8 @@ export function LayerlingEditor({
     if (!Number.isInteger(i) || !marks[i]) return;
     if (keep) waxRecord();
     marks[i] = point;
+    // Build 310: a gum mark dragged is the dentist's from then on (the others are still placed for them).
+    if (i >= ARCH_MARK_GUM) waxGumByHand.current.add(`${current.slot}:${i}`);
     const next = { ...current, archMarks: { ...(current.archMarks ?? {}), [current.slot]: marks } };
     waxupRef.current = next;
     setWaxup(next);
@@ -12750,12 +12752,56 @@ export function LayerlingEditor({
     (archMarksNow ?? []).forEach((p, i) => {
       if (!p) return;
       points.push(p);
-      colors.push(i === 3 ? 0x2563eb : i >= ARCH_MARK_CONTACTS ? 0xf59e0b : 0x0a786c);
+      colors.push(i >= ARCH_MARK_GUM ? 0xec4899 : i === 3 ? 0x2563eb : i >= ARCH_MARK_CONTACTS ? 0xf59e0b : 0x0a786c);
       sizes.push(i === waxup.archMarkPick ? 1.4 : 1);
     });
     window.layerlingMarkDots?.(points.length ? points : null, 0.4, { colors, sizes });
     return () => { window.layerlingMarkDots?.(null); };
   }, [archMarkStep, archMarksNow, waxup.archMarkPick]);
+  // Build 310 (Rakesh: mid-buccal marks on the gingival, each tooth snapping to them): once the nine marks are there,
+  // each front tooth's gum mark is placed for the dentist - the margin read on the scan (lib/waxSmileSet
+  // crownMargins) - and placed again when a contact is moved, but for those the dentist has dragged.
+  const waxGumByHand = useRef(new Set<string>());
+  const waxGumKey = useRef("");
+  const archNineKey = JSON.stringify((archMarksNow ?? []).slice(0, ARCH_MARK_GUM));
+  useEffect(() => {
+    if (!archMarkStep) return;
+    const current = waxupRef.current;
+    const arch = waxArch();
+    const marks = current.archMarks?.[current.slot];
+    if (!arch || arch.slot !== current.slot || nextArchMark(marks) !== null || current.archMarkPick !== null) return;
+    const key = `${arch.shape.id}|${archNineKey}`;
+    if (waxGumKey.current === key) return;
+    const timer = window.setTimeout(() => {
+      waxGumKey.current = key;
+      try {
+        const all = waxupRef.current.archMarks?.[arch.slot] as Array<[number, number, number] | null>;
+        if (nextArchMark(all) !== null) return;
+        const back = arch.sceneToInput.clone().invert();
+        let frame: { up: [number, number, number]; out: [number, number, number] } | null = null;
+        try {
+          const toScene = back.clone().multiply(scanInArchFrame(arch.scan).frame.clone().invert());
+          const dir = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z).transformDirection(toScene).toArray() as [number, number, number];
+          frame = { up: dir(0, 0, 1), out: dir(0, -1, 0) };
+        } catch { frame = frameFromMarks(all.slice(0, ARCH_MARK_GUM) as Array<[number, number, number]>); }
+        if (!frame) return;
+        const read = crownMargins(transformSoup(arch.scan, back), { contacts: all.slice(0, 7) as Array<[number, number, number]>, up: frame.up, out: frame.out }).gum;
+        const next = [...all];
+        while (next.length < ARCH_MARK_GUM + ARCH_MARK_GUMS) next.push(null);
+        let changed = false;
+        for (let k = 0; k < ARCH_MARK_GUMS; k += 1) {
+          const i = ARCH_MARK_GUM + k;
+          if (waxGumByHand.current.has(`${arch.slot}:${i}`) && next[i]) continue;
+          if (JSON.stringify(next[i]) !== JSON.stringify(read[k])) { next[i] = read[k]; changed = true; }
+        }
+        if (!changed) return;
+        const state = { ...waxupRef.current, archMarks: { ...(waxupRef.current.archMarks ?? {}), [arch.slot]: next } };
+        waxupRef.current = state;
+        setWaxup(state);
+      } catch { /* the teeth are laid without gum marks, as before */ }
+    }, 400);
+    return () => { window.clearTimeout(timer); };
+  }, [archMarkStep, archNineKey, waxup.archMarkPick, waxup.slot]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 278 (step 2): back at Position after the marks were changed - the set laid again from the new marks.
   useEffect(() => {
     if (!dentalStudio?.waxStudio || studioWaxStep !== "place") return;
@@ -12765,13 +12811,14 @@ export function LayerlingEditor({
     if (!record || nextArchMark(marks) !== null) return;
     const all = marks as Array<[number, number, number]>;
     const contacts = all.slice(0, 7);
-    if (JSON.stringify(record.anchors.contacts) === JSON.stringify(contacts) && JSON.stringify(record.anchors.canines) === JSON.stringify([all[7], all[8]])) return;
+    const gumMarked = gumMarks(marks);
+    if (JSON.stringify(record.anchors.contacts) === JSON.stringify(contacts) && JSON.stringify(record.anchors.canines) === JSON.stringify([all[7], all[8]]) && JSON.stringify(record.anchors.gumMarked ?? gumMarks(undefined)) === JSON.stringify(gumMarked)) return;
     const archId = dentalStudioRef.current?.slots[current.slot];
     const scanShape = archId ? shapesRef.current.find((shape) => shape.id === archId) : undefined;
     const base = { midline: all[3], canines: [all[7], all[8]] as [[number, number, number], [number, number, number]], up: record.anchors.up, out: record.anchors.out, contacts };
     const scanSoup = scanShape ? worldTriangles(scanShape) : null;
-    const gum = scanSoup ? crownMargins(scanSoup, base) : null;
-    const anchored: SmileRecord = { ...record, anchors: { ...base, labial: scanSoup ? labialProfile(scanSoup, base) : record.anchors.labial, crown: gum ? gum.crown ?? undefined : record.anchors.crown, margins: gum ? gum.margins : record.anchors.margins } };
+    const gum = scanSoup ? crownMargins(scanSoup, base, gumMarked) : null;
+    const anchored: SmileRecord = { ...record, anchors: { ...base, gumMarked, gum: gum ? gum.gum : record.anchors.gum, labial: scanSoup ? labialProfile(scanSoup, base) : record.anchors.labial, crown: gum ? gum.crown ?? undefined : record.anchors.crown, margins: gum ? gum.margins : record.anchors.margins } };
     waxupRef.current = { ...current, smile: { ...(current.smile ?? {}), [current.slot]: anchored } };
     window.setTimeout(() => commitWaxSmile(anchored.controls), 30);
   }, [studioWaxStep, waxup.slot]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -14208,8 +14255,9 @@ export function LayerlingEditor({
               : { midline: at(plan.landmarks!.midline), canines: [at(plan.landmarks!.canines[0]), at(plan.landmarks!.canines[1])] as [[number, number, number], [number, number, number]], up, out };
             // The patient's labial surfaces across the front, so the set starts just clear of them.
             const scanSoup = transformSoup(arch.scan, back);
-            const gum = markedAll ? crownMargins(scanSoup, anchors) : null;
-            return { ...anchors, labial: labialProfile(scanSoup, anchors), crown: gum?.crown ?? undefined, margins: gum?.margins };
+            const gumMarked = gumMarks(waxupRef.current.archMarks?.[arch.slot]);
+            const gum = markedAll ? crownMargins(scanSoup, anchors, gumMarked) : null;
+            return { ...anchors, ...(gum ? { gumMarked, gum: gum.gum } : {}), labial: labialProfile(scanSoup, anchors), crown: gum?.crown ?? undefined, margins: gum?.margins };
           })(),
           rest: Object.fromEntries(front.flatMap((tooth) => { const f = frames.get(tooth.fdi); return f ? [[tooth.fdi, f]] : []; })),
           laid: Object.fromEntries(front.map((tooth) => [tooth.fdi, identity])),

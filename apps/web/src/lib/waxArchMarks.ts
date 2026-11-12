@@ -11,6 +11,19 @@ type Vec3 = [number, number, number];
 export const ARCH_MARK_COUNT = 9;
 export const ARCH_MARK_CONTACTS = 7;
 export const ARCH_MARK_MIDLINE = 3;
+/**
+ * Build 310 (Rakesh: "if we had mid-buccal ... marks on the gingival, would each tooth auto-size to snap to those
+ * points - I think that is the missing piece"): after the nine, one mark for each of the six front teeth at the
+ * middle of its labial gingival margin (from the patient's right) - marks 9 to 14. The app places them itself once
+ * the nine are there (the margin read on the scan); the dentist drags any that is off. They are never asked for:
+ * a tooth without one is laid as before.
+ */
+export const ARCH_MARK_GUM = 9;
+export const ARCH_MARK_GUMS = 6;
+/** The six gum marks of an arch's marks (null where there is none). */
+export function gumMarks(marks: ReadonlyArray<Vec3 | null | undefined> | undefined): Array<Vec3 | null> {
+  return Array.from({ length: ARCH_MARK_GUMS }, (_, i) => marks?.[ARCH_MARK_GUM + i] ?? null);
+}
 
 /** The FDI numbers of the six front teeth on an arch: right canine, lateral, central, then left central, lateral, canine. */
 export function frontTeeth(slot: "upper" | "lower"): [number, number, number, number, number, number] {
@@ -18,8 +31,9 @@ export function frontTeeth(slot: "upper" | "lower"): [number, number, number, nu
 }
 
 /** What each mark is, for the guide: its kind and the teeth it sits between. */
-export function archMarkLabel(slot: "upper" | "lower", index: number): { kind: "distal" | "contact" | "midline" | "tip"; teeth: number[] } {
+export function archMarkLabel(slot: "upper" | "lower", index: number): { kind: "distal" | "contact" | "midline" | "tip" | "gum"; teeth: number[] } {
   const [r3, r2, r1, l1, l2, l3] = frontTeeth(slot);
+  if (index >= ARCH_MARK_GUM) return { kind: "gum", teeth: [frontTeeth(slot)[Math.min(ARCH_MARK_GUMS - 1, index - ARCH_MARK_GUM)]] };
   switch (index) {
     case 0: return { kind: "distal", teeth: [r3] };
     case 1: return { kind: "contact", teeth: [r3, r2] };

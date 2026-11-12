@@ -220,6 +220,26 @@ describe("snapped to the marks (build 278, step 2)", () => {
   const lay = layoutSmileSet(teeth, marked, SET_DEFAULTS)!;
   const byFdi = new Map(teeth.map((t) => [t.fdi, t]));
 
+  it("build 310: with a gum mark, a tooth's neck stands on it - torqued and tipped about its incisal edge, the edge kept on the arch", () => {
+    const t = byFdi.get(12)!;
+    const cervicalOf = (m4: THREE.Matrix4) => new THREE.Vector3(t.frame.origin[0], t.frame.origin[1], t.frame.origin[2] - t.length).applyMatrix4(m4);
+    const margins = [null, -9, null, null, null, null];
+    const plain = layoutSmileSet(teeth, { ...marked, margins }, SET_DEFAULTS)!;
+    const was = cervicalOf(plain.matrices.get(t.id)!), edgeWas = ends(t, plain.matrices.get(t.id)!).edge;
+    // The lateral's gum line 3 mm palatal of where its neck stood, and 1.5 mm towards the midline.
+    const gum: Array<V | null> = [null, [was.x + 1.5, was.y - 3, -9], null, null, null, null];
+    const anchored = layoutSmileSet(teeth, { ...marked, margins, gum }, SET_DEFAULTS)!;
+    const now = cervicalOf(anchored.matrices.get(t.id)!), edgeNow = ends(t, anchored.matrices.get(t.id)!).edge;
+    expect(now.y - was.y).toBeLessThan(-2);
+    expect(now.y - was.y).toBeGreaterThan(-3.6);
+    expect(now.x - was.x).toBeGreaterThan(0.9);
+    expect(now.x - was.x).toBeLessThan(2.1);
+    expect(edgeNow.distanceTo(edgeWas)).toBeLessThan(0.05);
+    // The other teeth are as they were.
+    for (const other of teeth) if (other.fdi !== 12) expect(anchored.matrices.get(other.id)!.elements).toEqual(plain.matrices.get(other.id)!.elements);
+    expect(anchored.matrices.get(t.id)!.determinant()).toBeGreaterThan(0);
+  });
+
   it("puts each tooth's mesial and distal ends on its two marked contacts (occlusal view), width only", () => {
     const pairs: Record<number, [number, number]> = { 13: [1, 0], 12: [2, 1], 11: [3, 2], 21: [3, 4], 22: [4, 5], 23: [5, 6] };
     for (const [fdi, [m, d]] of Object.entries(pairs)) {
@@ -355,7 +375,17 @@ describe("crownMargins (build 286)", () => {
 
   it("reads how long the centrals stand, and nothing without the contacts", () => {
     expect(Math.abs(found.crown! - 9)).toBeLessThan(0.6);
-    expect(crownMargins(scan, { up: [0, 0, 1], out: [0, 1, 0] })).toEqual({ margins: [null, null, null, null, null, null], crown: null });
+    expect(crownMargins(scan, { up: [0, 0, 1], out: [0, 1, 0] })).toEqual({ margins: [null, null, null, null, null, null], crown: null, gum: [null, null, null, null, null, null] });
+  });
+
+  it("build 310: says where each margin is on the scan, and takes a marked one as marked", () => {
+    // Each margin read is a point on the labial face at its level.
+    found.gum.forEach((point, tooth) => { if (found.margins[tooth] !== null) { expect(point).not.toBeNull(); expect(point![2]).toBeCloseTo(found.margins[tooth]!, 6); } });
+    expect(found.gum.filter(Boolean).length).toBeGreaterThanOrEqual(4);
+    const mark: [number, number, number] = [1, 2, -7.25];
+    const withMark = crownMargins(scan, { contacts, up: [0, 0, 1], out: [0, 1, 0] }, [null, null, mark, null, null, null]);
+    expect(withMark.margins[2]).toBeCloseTo(-7.25, 9);
+    expect(withMark.gum[2]).toEqual(mark);
   });
 });
 

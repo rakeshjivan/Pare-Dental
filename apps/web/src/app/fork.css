@@ -2322,3 +2322,9 @@ html[data-theme="dark"] .dental-studio-panel .dental-picture-tiles button { back
 /* Build 302: Design's five ways to work on a tooth - each name whole, on as many rows as it takes. */
 .wax-sculpt-modes { display: flex; flex-wrap: wrap; gap: 6px; }
 .wax-sculpt-modes > button { flex: 1 0 auto; white-space: nowrap; min-width: 0; padding-inline: 10px; }
+
+/* Build 310: the gum marks in the Mark step's panel. */
+.wax-mark-gum { display: grid; gap: 4px; margin: 8px 0; }
+.wax-mark-gum > div { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; }
+.wax-mark-gum span.found { color: #be185d; }
+.wax-mark-gum span.missing { color: #94a3b8; }
