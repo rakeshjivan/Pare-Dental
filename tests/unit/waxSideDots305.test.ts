@@ -56,18 +56,19 @@ describe("side dots (build 305)", () => {
     expect(worst).toBeLessThan(5e-3);
   });
 
-  it("build 311: an incisal corner flared - that side goes out along the arch, most at the edge and nothing at the neck, in a straight run (no hollow in the middle)", () => {
+  it("build 311: an incisal corner flared - that side goes out along the arch, most at the edge and nothing at the neck, and stays full between (never hollow, never flat)", () => {
     const e = editTooth(box, frame, W, L, { ...NO_EDIT, flareM: 1 }, -T);
     const outAt = (h: number) => moved(e, (a, _b, hh) => a === W / 2 && hh === h);
     // The mesial face: the whole millimetre at the edge, nothing at the neck, along the arch only.
     expect(outAt(0)).toBeCloseTo(1, 5);
     expect(outAt(-L)).toBe(0);
     for (let i = 0; i < box.length; i += 3) { expect(e[i + 1]).toBe(box[i + 1]); expect(e[i + 2]).toBe(box[i + 2]); expect(e[i]).toBeGreaterThanOrEqual(box[i]); }
-    // A straight run: half way up it is out by about half, and nowhere does the side fall behind the straight line from
-    // neck to corner by more than 0.15 mm (a hollow).
-    expect(outAt(-0.5 * L)).toBeGreaterThan(0.38);
-    expect(outAt(-0.5 * L)).toBeLessThan(0.55);
-    for (let h = -L; h <= 0; h += 0.5) expect(outAt(h)).toBeGreaterThan((h + L) / L - 0.15);
+    // Full: half way up it is out by more than half, everywhere at or beyond the straight line from neck to corner,
+    // and bowed outwards all the way (each step up adds less than the one before).
+    expect(outAt(-0.5 * L)).toBeGreaterThan(0.55);
+    expect(outAt(-0.5 * L)).toBeLessThan(0.7);
+    for (let h = -L + 0.5; h <= 0; h += 0.5) expect(outAt(h)).toBeGreaterThan((h + L) / L - 0.02);
+    for (let h = -L + 1.5; h <= 0; h += 0.5) expect(outAt(h) - outAt(h - 0.5)).toBeLessThan(outAt(h - 0.5) - outAt(h - 1) + 1e-6);
     // The distal side and the middle of the tooth: as they were.
     expect(moved(e, (a) => a <= 0)).toBe(0);
     // And undone by uneditTooth, tucked in on the other side as well.
