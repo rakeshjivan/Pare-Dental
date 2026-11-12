@@ -52,7 +52,9 @@ const DOT_AT: Record<DotKey, [number, number, number]> = TOOTH_DOTS;
  * contacts, the neck and the white one that moves it. The side, corner and palatal dots are for whoever wants them
  * ("More control points" in the panel; kept on this computer). A locked dot is always shown, so it can be let go.
  */
-const BASIC: ReadonlySet<DotKey> = new Set<DotKey>(["edge", "mesial", "distal", "neck", "middle"]);
+// Build 320 (Rakesh: "the palatal fullness slider needs to be a button on the palatal side of the wax teeth in its
+// own colour"): the orange palatal dot is one of them - it only shows from the palatal side, where the neck dot does not.
+const BASIC: ReadonlySet<DotKey> = new Set<DotKey>(["edge", "mesial", "distal", "neck", "middle", "palatal"]);
 const MORE_KEY = "pare.waxup.moreDots";
 let moreDots: boolean | null = null;
 export const waxMoreDots = (): boolean => {
