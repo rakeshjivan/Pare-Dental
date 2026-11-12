@@ -15,6 +15,7 @@
  */
 import type { ManifoldRuntime, ManifoldSolid } from "@/lib/dentalMesh";
 import { solidPositions } from "@/lib/dentalMesh";
+import { smoothSolid } from "@/lib/dentalSmoothBase";
 import { sampler, squaredDistanceTo, voxelise, type Grid } from "@/lib/meshRound";
 
 /** How far apart the two surfaces may be for wax to be run between them, mm - the fillet is a quarter of this deep in a crease. */
@@ -22,7 +23,7 @@ export const BLEND_REACH = 1.6;
 /** The grid, mm. */
 export const BLEND_CELL = 0.12;
 /** The fillet is drawn in by this (the grid's uncertainty), so it never stands as a skin on a surface it only runs along, mm. */
-export const BLEND_INSET = 0.05;
+export const BLEND_INSET = 0.08;
 /** The most cells of a tooth's grid (a coarser grid beyond). */
 const BLEND_CELLS = 4_000_000;
 
@@ -65,8 +66,13 @@ export function waxBlend(runtime: ManifoldRuntime, model: ManifoldSolid, tooth: 
     if (local.isEmpty()) return null;
     const h = Math.max(BLEND_CELL, Math.cbrt((size[0] * size[1] * size[2]) / BLEND_CELLS));
     const grid: Grid = { nx: Math.ceil(size[0] / h), ny: Math.ceil(size[1] / h), nz: Math.ceil(size[2] / h), h, origin: min };
-    const a = evened(signed(voxelise(solidPositions(tooth), grid), grid), grid);
-    const b = evened(signed(voxelise(solidPositions(local), grid), grid), grid);
+    const inTooth = voxelise(solidPositions(tooth), grid), inModel = voxelise(solidPositions(local), grid);
+    // The model less what the tooth covers: wax is run only between the tooth and what shows beside it - the gum, a
+    // part of the patient's tooth standing out of it. Where the patient's tooth lies just under the wax tooth's face
+    // (two surfaces close and side by side, not a corner) there is nothing to fill.
+    for (let i = 0; i < inModel.length; i += 1) if (inTooth[i]) inModel[i] = 0;
+    const even = (field: Float32Array) => evened(evened(evened(field, grid), grid), grid);
+    const a = even(signed(inTooth, grid)), b = even(signed(inModel, grid));
     // The smooth union's surplus over the plain one, only where both surfaces are within reach.
     const field = new Float32Array(a.length);
     let any = false;
@@ -85,7 +91,8 @@ export function waxBlend(runtime: ManifoldRuntime, model: ManifoldSolid, tooth: 
     const bounds = { min, max: [min[0] + grid.nx * h, min[1] + grid.ny * h, min[2] + grid.nz * h] as [number, number, number] };
     const made = runtime.Manifold.levelSet(sampler(field, grid, -1), bounds, h, 0);
     if (made.isEmpty() || made.status() !== "NoError") { made.delete(); return null; }
-    return made;
+    // The marching grid's ripple taken off (it shows on a gently curved fillet).
+    return smoothSolid(runtime, made, 3);
   } catch {
     return null;
   } finally {

@@ -73,6 +73,20 @@ describe("waxBlend (build 306)", () => {
     [own, model, tooth, wax!, plain, joined].forEach((s) => s.delete());
   }, 60000);
 
+  it("runs no wax over a wax tooth's face where the patient's tooth lies just under it", () => {
+    // The patient's tooth, 5.4 mm square, inside the wax tooth, 6 mm square: their faces 0.3 mm apart all the way up.
+    const own = runtime.Manifold.cube([5.4, 5.4, 9], true).translate([0, 0, 1.5]);
+    const model = runtime.Manifold.union(gum(), own);
+    const tooth = runtime.Manifold.cube([6, 6, 11], true).translate([0, 0, 2.5]);
+    const wax = waxBlend(runtime, model, tooth);
+    const plain = runtime.Manifold.union(model, tooth), joined = wax ? runtime.Manifold.union(plain, wax) : plain;
+    // Half way up the wax tooth, just off each face: clear, as it was.
+    for (const [x, y] of [[3.06, 0.3], [-3.06, 0.3], [0.3, 3.06], [0.3, -3.06]]) expect(inside(joined, x, y, 4)).toBe(false);
+    // And still wax in the corner at the gum.
+    expect(inside(joined, 3.2, 0.3, 0.2)).toBe(true);
+    [own, model, tooth, plain].forEach((s) => s.delete());
+  }, 60000);
+
   it("gives nothing where the tooth and the model are apart", () => {
     const model = gum(), tooth = runtime.Manifold.cube([4, 4, 4], true).translate([0, 0, 8]);
     expect(waxBlend(runtime, model, tooth)).toBeNull();
