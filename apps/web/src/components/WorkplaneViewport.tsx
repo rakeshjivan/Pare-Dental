@@ -5116,7 +5116,8 @@ export function WorkplaneViewport({
       const restorePending = adapt.low && !wantLow;
       // Build 319: in the dental studios, the scans are drawn light while something moves and whole once it is still
       // (lib/motionLod) - and whole again is one more frame to draw.
-      const lodMoving = Boolean(state.dentalView) && now - adapt.lastMotion < MOTION_LOD_SETTLE_MS;
+      // (layerlingLodHold: for the checks, the light scans kept on the screen to be looked at.)
+      const lodMoving = Boolean(state.dentalView) && (now - adapt.lastMotion < MOTION_LOD_SETTLE_MS || Boolean((window as unknown as { layerlingLodHold?: boolean }).layerlingLodHold));
       const lodPending = motionLodLow && !lodMoving;
       if (!turning && !controlsChanged && !state.needsRender && !cameraSettled && !restorePending && !lodPending) {
         return;
