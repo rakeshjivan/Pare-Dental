@@ -16,6 +16,7 @@
 import type { ManifoldRuntime, ManifoldSolid } from "@/lib/dentalMesh";
 import { solidPositions } from "@/lib/dentalMesh";
 import { smoothSolid } from "@/lib/dentalSmoothBase";
+import { NearestSurface } from "@/lib/nearestSurface";
 import { sampler, squaredDistanceTo, voxelise, type Grid } from "@/lib/meshRound";
 
 /** How far apart the two surfaces may be for wax to be run between them, mm - the fillet is a quarter of this deep in a crease. */
@@ -24,14 +25,14 @@ export const BLEND_REACH = 1.6;
  * Build 306: the reach where the patient's own tooth stands out of a wax tooth (up its crown, away from the gum) -
  * wax runs up to it in a slope about a quarter of this deep at a square step.
  */
-export const BLEND_PROUD = 4.8;
+export const BLEND_PROUD = 3;
 /** How far up a wax tooth (0 its cervical end, 1 its edge) the reach starts to grow, and where it is whole. */
 const CROWN_FROM = 0.4;
 const CROWN_FULL = 0.6;
 /** The grid, mm. */
 export const BLEND_CELL = 0.12;
 /** The fillet is drawn in by this (the grid's uncertainty), so it never stands as a skin on a surface it only runs along, mm. */
-export const BLEND_INSET = 0.08;
+export const BLEND_INSET = 0.05;
 /** How far under the wax (into the two solids) the blend's solid reaches, to be joined by, mm. */
 const BLEND_SKIN = 0.5;
 /** The most cells of a tooth's grid (a coarser grid beyond). */
@@ -46,6 +47,20 @@ function signed(inside: Uint8Array, grid: Grid): Float32Array {
   const field = new Float32Array(inside.length);
   // A cell's centre is half a cell from the face between it and the other kind.
   for (let i = 0; i < field.length; i += 1) field[i] = inside[i] ? (Math.sqrt(toOut[i]) - 0.5) * h : -(Math.sqrt(toIn[i]) - 0.5) * h;
+  return field;
+}
+
+/** Within a few cells of the surface, a signed field's distance made the true distance to the nearest of `surfaces` (its sign kept). */
+function exact(field: Float32Array, grid: Grid, surfaces: NearestSurface[]): Float32Array {
+  const { nx, ny, h, origin } = grid, q = [0, 0, 0], within = 2.5 * h;
+  for (let i = 0; i < field.length; i += 1) {
+    const was = field[i];
+    if (was > within || was < -within) continue;
+    const x = origin[0] + ((i % nx) + 0.5) * h, y = origin[1] + ((Math.floor(i / nx) % ny) + 0.5) * h, z = origin[2] + (Math.floor(i / (nx * ny)) + 0.5) * h;
+    let d = Infinity;
+    for (const surface of surfaces) d = Math.min(d, surface.nearest(x, y, z, q));
+    if (d < Infinity) field[i] = was < 0 ? -d : d;
+  }
   return field;
 }
 
@@ -77,13 +92,16 @@ export function waxBlend(runtime: ManifoldRuntime, model: ManifoldSolid, tooth: 
     if (local.isEmpty()) return null;
     const h = Math.max(BLEND_CELL, Math.cbrt((size[0] * size[1] * size[2]) / BLEND_CELLS));
     const grid: Grid = { nx: Math.ceil(size[0] / h), ny: Math.ceil(size[1] / h), nz: Math.ceil(size[2] / h), h, origin: min };
-    const inTooth = voxelise(solidPositions(tooth), grid), inModel = voxelise(solidPositions(local), grid);
+    const toothSoup = solidPositions(tooth), localSoup = solidPositions(local);
+    const inTooth = voxelise(toothSoup, grid), inModel = voxelise(localSoup, grid);
     // The model less what the tooth covers: wax is run only between the tooth and what shows beside it - the gum, a
     // part of the patient's tooth standing out of it. Where the patient's tooth lies just under the wax tooth's face
     // (two surfaces close and side by side, not a corner) there is nothing to fill.
     for (let i = 0; i < inModel.length; i += 1) if (inTooth[i]) inModel[i] = 0;
-    const even = (field: Float32Array) => evened(evened(evened(field, grid), grid), grid);
-    const a = even(signed(inTooth, grid)), b = even(signed(inModel, grid));
+    // Near each surface the distance is measured to the surface itself (the cells alone are half a cell out either
+    // way - enough to ripple wax that thins out over a wide, gentle slope), then evened once.
+    const toTooth = new NearestSurface(toothSoup, 4 * h), toModel = new NearestSurface(localSoup, 4 * h);
+    const a = evened(exact(signed(inTooth, grid), grid, [toTooth]), grid), b = evened(exact(signed(inModel, grid), grid, [toModel, toTooth]), grid);
     // Build 306 (Rakesh: "if a patient's tooth stands out of the wax, we need a way to smoothly blend the wax to it"):
     // up the crown the reach grows - at the gum a small fillet (the neck stays slim), but where the patient's own
     // tooth stands out of the wax higher up, wax enough to run up to it in a slope, not a step. How far up the

@@ -93,7 +93,7 @@ describe("waxBlend (build 306)", () => {
     const model = runtime.Manifold.union(gum(), own);
     const tooth = runtime.Manifold.cube([6, 6, 13], true).translate([0, 0, 3.5]);
     const plain = runtime.Manifold.union(model, tooth);
-    const small = waxBlend(runtime, model, tooth)!, sloped = waxBlend(runtime, model, tooth, undefined, { up: [0, 0, 1], reach: 4.8 })!;
+    const small = waxBlend(runtime, model, tooth)!, sloped = waxBlend(runtime, model, tooth, undefined, { up: [0, 0, 1], reach: 3 })!;
     const a = runtime.Manifold.union(plain, small), b = runtime.Manifold.union(plain, sloped);
     // Under the shelf, 0.8 mm below it and 0.5 mm off the wax face: clear with the small fillet, wax with the slope.
     expect(inside(a, 0.3, -3.5, 4.2)).toBe(false);
