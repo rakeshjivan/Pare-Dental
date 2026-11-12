@@ -1937,8 +1937,12 @@ const SHELL_HIDE = new Float32Array(9);
 /** Build 294: how often the panel's numbers follow a live change, ms. */
 const WAX_STATE_EVERY = 250;
 /** Build 297: the parts of a tooth's own change that reshape it (the rest only move or turn it). */
-/** Build 306: every wax tooth covers the patient's - what of the patient's crown stands outside it is cut back on the wax-up model. */
-const WAX_COVER = true;
+/**
+ * Build 306: every wax tooth covers the patient's - what of the patient's crown stands outside it is cut back on the
+ * wax-up model. Off: a wax-up is added to the teeth as they are (nothing is reduced in the mouth unless the dentist
+ * says so, tooth by tooth), so where the patient's tooth stands out the wax is run up to it instead (lib/waxBlend).
+ */
+const WAX_COVER: boolean = false;
 /** How far incisal of a tooth's gingival margin the cut behind it starts, mm; and how far behind the wax it reaches, mm. */
 const COVER_ABOVE_GUM = 0.7;
 const COVER_BEHIND = 7;

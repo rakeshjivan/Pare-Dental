@@ -21,7 +21,7 @@ import { polygonDistance } from "@/lib/dentalSnapHinge";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
-import { waxBlend, waxWall } from "@/lib/waxBlend";
+import { BLEND_PROUD, BLEND_REACH, waxBlend, waxWall } from "@/lib/waxBlend";
 /** Build 306: the least wall a hollow model keeps round a wax tooth, mm. */
 const WAX_WALL = 1.5;
 import { GUM_REACH, marginRegion, moveGumCut, type GumCut } from "@/lib/waxGum";
@@ -1460,7 +1460,7 @@ function buildArch(
       waxJoined += 1;
       // Never at the cost of the tooth: a blend that cannot be made is left off.
       try {
-        const blend = waxBlend(runtime, beforeWax, tooth);
+        const blend = waxBlend(runtime, beforeWax, tooth, BLEND_REACH, { up: [0, 0, 1], reach: BLEND_PROUD });
         if (blend) {
           keepSolid(blend);
           const cut = hollowed ? keepSolid(runtime.Manifold.difference(blend, hollowTaken!)) : blend;

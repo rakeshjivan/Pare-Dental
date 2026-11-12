@@ -20,10 +20,20 @@ import { sampler, squaredDistanceTo, voxelise, type Grid } from "@/lib/meshRound
 
 /** How far apart the two surfaces may be for wax to be run between them, mm - the fillet is a quarter of this deep in a crease. */
 export const BLEND_REACH = 1.6;
+/**
+ * Build 306: the reach where the patient's own tooth stands out of a wax tooth (up its crown, away from the gum) -
+ * wax runs up to it in a slope about a quarter of this deep at a square step.
+ */
+export const BLEND_PROUD = 4.8;
+/** How far up a wax tooth (0 its cervical end, 1 its edge) the reach starts to grow, and where it is whole. */
+const CROWN_FROM = 0.4;
+const CROWN_FULL = 0.6;
 /** The grid, mm. */
 export const BLEND_CELL = 0.12;
 /** The fillet is drawn in by this (the grid's uncertainty), so it never stands as a skin on a surface it only runs along, mm. */
 export const BLEND_INSET = 0.08;
+/** How far under the wax (into the two solids) the blend's solid reaches, to be joined by, mm. */
+const BLEND_SKIN = 0.5;
 /** The most cells of a tooth's grid (a coarser grid beyond). */
 const BLEND_CELLS = 4_000_000;
 
@@ -54,9 +64,10 @@ function evened(field: Float32Array, grid: Grid): Float32Array {
  * The wax to run into the join of `tooth` and `model` - a solid to be joined on with the tooth, or null when the two
  * do not come together (or it cannot be made). The caller frees it.
  */
-export function waxBlend(runtime: ManifoldRuntime, model: ManifoldSolid, tooth: ManifoldSolid, reach = BLEND_REACH): ManifoldSolid | null {
+export function waxBlend(runtime: ManifoldRuntime, model: ManifoldSolid, tooth: ManifoldSolid, reach = BLEND_REACH, crown: { up: [number, number, number]; reach: number } | null = null): ManifoldSolid | null {
   if (reach <= 0 || tooth.isEmpty() || model.isEmpty()) return null;
-  const box = tooth.boundingBox(), pad = 2 * reach;
+  const most = Math.max(reach, crown?.reach ?? 0);
+  const box = tooth.boundingBox(), pad = 0.8 * most + 1;
   const min = [box.min[0] - pad, box.min[1] - pad, box.min[2] - pad] as [number, number, number];
   const size = [box.max[0] - box.min[0] + 2 * pad, box.max[1] - box.min[1] + 2 * pad, box.max[2] - box.min[2] + 2 * pad] as [number, number, number];
   let local: ManifoldSolid | null = null, room: ManifoldSolid | null = null;
@@ -73,21 +84,47 @@ export function waxBlend(runtime: ManifoldRuntime, model: ManifoldSolid, tooth: 
     for (let i = 0; i < inModel.length; i += 1) if (inTooth[i]) inModel[i] = 0;
     const even = (field: Float32Array) => evened(evened(evened(field, grid), grid), grid);
     const a = even(signed(inTooth, grid)), b = even(signed(inModel, grid));
+    // Build 306 (Rakesh: "if a patient's tooth stands out of the wax, we need a way to smoothly blend the wax to it"):
+    // up the crown the reach grows - at the gum a small fillet (the neck stays slim), but where the patient's own
+    // tooth stands out of the wax higher up, wax enough to run up to it in a slope, not a step. How far up the
+    // tooth a cell is: along `crown.up`, from the tooth's cervical end (0) to its incisal edge (1).
+    let low = Infinity, high = -Infinity;
+    if (crown) {
+      const p = solidPositions(tooth);
+      for (let i = 0; i < p.length; i += 3) { const z = p[i] * crown.up[0] + p[i + 1] * crown.up[1] + p[i + 2] * crown.up[2]; if (z < low) low = z; if (z > high) high = z; }
+    }
+    const span = high - low;
+    const reachAt = (i: number) => {
+      if (!crown || !(span > 1)) return reach;
+      const x = i % grid.nx, y = Math.floor(i / grid.nx) % grid.ny, z = Math.floor(i / (grid.nx * grid.ny));
+      const along = ((min[0] + (x + 0.5) * h) * crown.up[0] + (min[1] + (y + 0.5) * h) * crown.up[1] + (min[2] + (z + 0.5) * h) * crown.up[2] - low) / span;
+      const t = Math.min(1, Math.max(0, (along - CROWN_FROM) / (CROWN_FULL - CROWN_FROM)));
+      return reach + (crown.reach - reach) * t * t * (3 - 2 * t);
+    };
     // The smooth union's surplus over the plain one, only where both surfaces are within reach.
     const field = new Float32Array(a.length);
     let any = false;
     for (let i = 0; i < field.length; i += 1) {
       const p = a[i], q = b[i];
+      // Cheap first: nothing where either surface is beyond the most the reach can be.
+      if (Math.max(Math.abs(p), Math.abs(q)) >= 0.75 * most) { field[i] = -1; continue; }
+      const k = reachAt(i);
       // Beyond three quarters of the reach from either surface the wax is thinner than the inset: nothing there.
-      const near = 0.75 * reach - Math.max(Math.abs(p), Math.abs(q));
+      const near = 0.75 * k - Math.max(Math.abs(p), Math.abs(q));
       if (near <= 0) { field[i] = -1; continue; }
-      const t = Math.max(reach - Math.abs(p - q), 0) / reach;
-      const value = Math.min(Math.max(p, q) + (t * t * reach) / 4 - BLEND_INSET, near);
+      const t = Math.max(k - Math.abs(p - q), 0) / k;
+      const value = Math.min(Math.max(p, q) + (t * t * k) / 4 - BLEND_INSET, near);
       field[i] = value;
       // Wax there is only where neither solid is.
       if (value > 0 && p < 0 && q < 0) any = true;
     }
     if (!any) return null;
+    // Only the wax itself and a skin under it (to join by): the rest of the smooth union is the two solids over again,
+    // a hair inside their own surfaces - nothing to add, and a great deal to join (a Make stood still on it).
+    const wax = new Uint8Array(field.length);
+    for (let i = 0; i < field.length; i += 1) if (field[i] > 0 && a[i] < 0 && b[i] < 0) wax[i] = 1;
+    const toWax = squaredDistanceTo(wax, grid.nx, grid.ny, grid.nz);
+    for (let i = 0; i < field.length; i += 1) field[i] = Math.min(field[i], BLEND_SKIN - Math.sqrt(toWax[i]) * h);
     const bounds = { min, max: [min[0] + grid.nx * h, min[1] + grid.ny * h, min[2] + grid.nz * h] as [number, number, number] };
     const made = runtime.Manifold.levelSet(sampler(field, grid, -1), bounds, h, 0);
     if (made.isEmpty() || made.status() !== "NoError") { made.delete(); return null; }

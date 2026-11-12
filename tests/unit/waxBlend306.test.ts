@@ -87,6 +87,24 @@ describe("waxBlend (build 306)", () => {
     [own, model, tooth, plain].forEach((s) => s.delete());
   }, 60000);
 
+  it("up the crown, runs more wax up to a part of the patient's tooth standing out of the wax (a slope, not a step)", () => {
+    // The patient's tooth stands 1 mm out of the wax tooth's face over the upper half of the crown: a shelf at z = 5.
+    const own = runtime.Manifold.cube([4, 2, 5], true).translate([0, -3.5, 7.5]);
+    const model = runtime.Manifold.union(gum(), own);
+    const tooth = runtime.Manifold.cube([6, 6, 13], true).translate([0, 0, 3.5]);
+    const plain = runtime.Manifold.union(model, tooth);
+    const small = waxBlend(runtime, model, tooth)!, sloped = waxBlend(runtime, model, tooth, undefined, { up: [0, 0, 1], reach: 4.8 })!;
+    const a = runtime.Manifold.union(plain, small), b = runtime.Manifold.union(plain, sloped);
+    // Under the shelf, 0.8 mm below it and 0.5 mm off the wax face: clear with the small fillet, wax with the slope.
+    expect(inside(a, 0.3, -3.5, 4.2)).toBe(false);
+    expect(inside(b, 0.3, -3.5, 4.2)).toBe(true);
+    // More wax in all, but at the gum the fillet is the small one still.
+    expect(b.volume()).toBeGreaterThan(a.volume() + 0.5);
+    expect(inside(b, 3.6, 0.3, 0.6)).toBe(false);
+    expect(inside(b, 3.2, 0.3, 0.2)).toBe(true);
+    [own, model, tooth, plain, small, sloped, a, b].forEach((s) => s.delete());
+  }, 60000);
+
   it("gives nothing where the tooth and the model are apart", () => {
     const model = gum(), tooth = runtime.Manifold.cube([4, 4, 4], true).translate([0, 0, 8]);
     expect(waxBlend(runtime, model, tooth)).toBeNull();
