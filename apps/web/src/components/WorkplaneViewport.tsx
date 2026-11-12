@@ -190,7 +190,7 @@ import { aimPickRay, firstShapeHit, pickLayFlatFace, pickMateFace, pickRotationP
 export type { LayFlatPick } from "@/components/workplane/viewportPicking";
 import { fastEdgesGeometry } from "@/lib/fastEdgesGeometry";
 import { buildImportedMeshGeometry, computeImportedBoundsTree, putGeometryOnBase, takePreparedImportedMeshGeometry } from "@/lib/importedMeshDisplay";
-import { applyMotionLod, MOTION_LOD_SETTLE_MS, prepareMotionLod } from "@/lib/motionLod";
+import { applyMotionLod, describeMotionLod, MOTION_LOD_SETTLE_MS, prepareMotionLod } from "@/lib/motionLod";
 import { RENDER_LAYER_HELPERS, sharedOverlayLineMaterial, sharedShapeGeometryCache, sharedEdgesGeometryCache, sharedShapeMaterialCache, type PointCardOffset, type ShapeRenderRecord, type ThreeState, type MoveDimensionSession, type NoteOverlayState, type TapePoint, type TapeAttachment, type TapeEdgeAttachment, type TapeModel, type TapeOverlayState, type TapeCandidate, type RotationHandleSide, type RotationHandleSides, type DragItem, quaternionForShape, projectToScreen, syncMoveDimensionWorldLines, syncTransformGuideWorldLines, tapeShapeDimensions, tapePointWorld, tapeEdgeWorldPoints, tapeSegmentWorldPoints, tapeMovableShapeId, syncTapeOverlay, syncNoteOverlay, NoteOverlay, TapeOverlay, type RulerDimensionOverlayItem, type RulerDimensionOverlayState, syncRulerDimensionOverlay, RulerDimensionOverlay, type CornerRulerInstance, type CornerRulerOverlayState, syncCornerRulerToolOverlay, CornerRulerToolOverlay, syncOriginDimensionWorldLines, shapeCenter, shapeLocalExtents, projectShapeExtent, projectShapesExtent, type OriginDimensionFrame, setObjectRenderLayer, freezeStaticObjectMatrices, formatMeasure, findShapeObject, trimSharedShapeGeometryCache, releaseSharedShapeGeometry, trimSharedShapeMaterialCache, releaseSharedShapeMaterials, disposeMaterialResource, disposeChildren, disposeObject } from "@/components/workplane/ViewportOverlays";
 
 const WORKPLANE_WIDTH = 200;
@@ -5124,7 +5124,10 @@ export function WorkplaneViewport({
       if (lodMoving || motionLodLow) {
         applyMotionLod(state.scene, lodMoving);
         motionLodLow = lodMoving;
-      } else if (state.dentalView && now - motionLodLooked > 1000) {
+      }
+      // The light copies are made when nothing moves - looked for on any frame drawn then (the one that brings the
+      // whole scans back among them: the view is only drawn when something changes).
+      if (!lodMoving && state.dentalView && now - motionLodLooked > 1000) {
         motionLodLooked = now;
         prepareMotionLod(state.scene);
       }
@@ -5406,6 +5409,7 @@ export function WorkplaneViewport({
           programs: state?.renderer.info.programs?.length ?? 0,
           geometries: state?.renderer.info.memory.geometries ?? 0,
           textures: state?.renderer.info.memory.textures ?? 0,
+          lod: state ? describeMotionLod(state.scene) : [],
         };
       },
     };

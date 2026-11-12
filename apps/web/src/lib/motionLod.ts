@@ -95,3 +95,19 @@ export function applyMotionLod(root: THREE.Object3D, moving: boolean): boolean {
   });
   return changed;
 }
+
+/** For the checks: each large mesh under `root` - its triangles, and its light copy's (0: none yet, -1: none could be made). */
+export function describeMotionLod(root: THREE.Object3D): Array<{ triangles: number; light: number; drawnLight: boolean; indexed: boolean; coloured: boolean }> {
+  const out: Array<{ triangles: number; light: number; drawnLight: boolean; indexed: boolean; coloured: boolean }> = [];
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const full = (mesh.userData.lodFull as THREE.BufferGeometry | undefined) ?? mesh.geometry;
+    const position = full?.getAttribute("position");
+    const count = full?.getIndex() ? (full.getIndex()!.count / 3) : (position ? position.count / 3 : 0);
+    if (count < MOTION_LOD_FROM) return;
+    const light = lights.get(full);
+    out.push({ triangles: count, light: light && light !== "making" ? light.getAttribute("position").count / 3 : light === null ? -1 : 0, drawnLight: Boolean(mesh.userData.lodFull), indexed: Boolean(full.getIndex()), coloured: Boolean(full.getAttribute("color")) });
+  });
+  return out;
+}
