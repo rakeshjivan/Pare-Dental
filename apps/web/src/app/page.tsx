@@ -704,6 +704,16 @@ function saveProjectShapesWhenIdle(projectId: string, entry: ProjectShapeCacheEn
   );
 }
 
+/** Build 322: from this many triangles of imported mesh (scans) a design counts as heavy to save. */
+const HEAVY_SAVE_FROM_TRIANGLES = 300_000;
+const HEAVY_SAVE_PAUSE_MS = 5000;
+const HEAVY_SAVE_PAUSE_MAX_MS = 45000;
+function heavyToSave(shapes: WorkplaneShape[]) {
+  let numbers = 0;
+  for (const shape of shapes) numbers += shape.importedMesh?.positions.length ?? 0;
+  return numbers >= HEAVY_SAVE_FROM_TRIANGLES * 9;
+}
+
 function saveProjectShapesWhenIdleInner(projectId: string, entry: ProjectShapeCacheEntry, context: ProjectShapeSaveContext): Promise<ProjectShapesSaveResult | void> {
   // Saves of one project run one after another. Each change queues one, so a
   // run of quick changes would otherwise be written once per change, and a
@@ -729,7 +739,10 @@ function saveProjectShapesWhenIdleInner(projectId: string, entry: ProjectShapeCa
     }
     // Hold back while someone is dragging or typing; a click that comes in during a save has to wait for it.
     watchUserInput();
-    void waitForInputPause().then(() => {
+    // Build 322 (Rakesh: the wax teeth "catching up" now and then, and memory pressure): a design that holds scans is
+    // written whole on every save - hundreds of megabytes packed and sent - so it waits for a longer pause in the work.
+    const heavy = heavyToSave(entry.shapes);
+    void waitForInputPause(heavy ? HEAVY_SAVE_PAUSE_MS : undefined, heavy ? HEAVY_SAVE_PAUSE_MAX_MS : undefined).then(() => {
       if ("requestIdleCallback" in window && document.visibilityState !== "hidden") {
         window.requestIdleCallback(save, { timeout: 1200 });
         return;

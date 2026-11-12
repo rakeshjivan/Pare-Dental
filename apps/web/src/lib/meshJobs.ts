@@ -312,7 +312,22 @@ function archPartBuffers(part: DentalArchPart): ArrayBuffer[] {
 /** Build 267: how far a Make has got - its share (0 to 1) and the stage it is in, of the slower arch while both are made. */
 export type DentalMakeProgress = { share: number; stage: DentalStage; arch?: "upper" | "lower" };
 
-/** Dental Studio: makes the models (Z-up positions) - a pair's two arches side by side in two workers (build 68). */
+/**
+ * Build 322 (Rakesh: memory pressure on a 16 GB Mac while the models are made): from this many triangles in the pair's
+ * two scans together, the arches are made one after the other - the lower in its worker, that worker closed, then the
+ * upper - not side by side. Side by side both workers' mesh engines are at their largest at once, and that is the
+ * most memory the app ever takes; one after the other it is about half, for a Make that takes a little longer.
+ */
+export const MAKE_ONE_AT_A_TIME_FROM = 600_000;
+export function makesOneAtATime(input: DentalStudioInput): boolean {
+  const forced = typeof window !== "undefined" ? (window as unknown as { layerlingMakeOneAtATime?: boolean }).layerlingMakeOneAtATime : undefined;
+  if (typeof forced === "boolean") return forced;
+  let triangles = 0;
+  for (const arch of input.arches) triangles += Math.floor((arch.positions?.length ?? 0) / 9);
+  return triangles >= MAKE_ONE_AT_A_TIME_FROM;
+}
+
+/** Dental Studio: makes the models (Z-up positions) - a pair's two arches in two workers (build 68): side by side, or for large scans one after the other (build 322). */
 export async function makeDentalStudioInBackground(input: DentalStudioInput, options: DentalStudioOptions, onProgress?: (made: DentalMakeProgress) => void): Promise<DentalStudioResult> {
   const main = meshWorker();
   const second = input.arches.length === 2 && main ? helperWorker() : null;
@@ -350,6 +365,10 @@ export async function makeDentalStudioInBackground(input: DentalStudioInput, opt
     ...(data.bite ? [(data.bite as Float32Array).buffer] : []),
   ] as ArrayBuffer[];
   // The lower (index 1) in the helper; whatever it brings, or that it failed, goes on to the main worker.
+  const oneAtATime = makesOneAtATime(input);
+  (window as unknown as { layerlingMakeOrder?: string }).layerlingMakeOrder = oneAtATime ? "one after the other" : "side by side";
+  let startMain: (() => void) | null = null, mainStarted = false;
+  const beginMain = () => { if (mainStarted || !startMain) return; mainStarted = true; startMain(); };
   const forHelper = copiedInput(input);
   new Promise<DentalArchPart>((resolve, reject) => {
     helperJobs.add(partId);
@@ -362,14 +381,17 @@ export async function makeDentalStudioInBackground(input: DentalStudioInput, opt
       // (the most memory a Make takes is then, in the main worker). The next pair starts a fresh one.
       if (!helperJobs.size) { try { helper?.terminate(); } catch { /* gone */ } helper = null; }
       main.postMessage({ archPartFor: id, part }, archPartBuffers(part));
+      beginMain();
     },
-    (error) => main.postMessage({ archPartFor: id, error: error instanceof Error ? error.message : String(error) }),
+    (error) => { main.postMessage({ archPartFor: id, error: error instanceof Error ? error.message : String(error) }); beginMain(); },
   );
   const data = copiedInput(input);
   try {
     return await new Promise<DentalStudioResult>((resolve, reject) => {
       pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
-      main.postMessage({ id, base, kind: "dentalStudio", input: data, options, remoteIndex: 1 } satisfies MeshJobRequest, buffersOf(data));
+      startMain = () => main.postMessage({ id, base, kind: "dentalStudio", input: data, options, remoteIndex: 1 } satisfies MeshJobRequest, buffersOf(data));
+      // One after the other: the main worker starts when the helper has brought its arch (or failed) and is closed.
+      if (!oneAtATime) beginMain();
     });
   } catch (error) {
     if (error instanceof Error && error.message === "worker-unavailable") return (await import("@/lib/dentalModel")).makeDentalStudio(input, options);
