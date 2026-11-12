@@ -12675,8 +12675,9 @@ export function LayerlingEditor({
    * (lib/waxAutoMarks) and put down for the dentist to check and drag. Where the teeth cannot be made out,
    * the marks are clicked as before (`thenClick`).
    */
-  /** Build 317: the nine marks found on each arch as it was imported (scene coordinates; null where none could be), by its shape. */
-  const waxMarksAtImport = useRef(new Map<string, Array<[number, number, number]> | null>());
+  /** Build 317: the nine marks found on each arch as it was imported (scene coordinates; null where none could be), by its slot. */
+  const waxMarksAtImport = useRef(new Map<string, Array<[number, number, number]>>());
+  const waxMarksTried = useRef(new Set<string>());
   /** Whether marks (scene coordinates) still lie on a scan (input coordinates): each within a millimetre of a corner of it. */
   const marksOnScan = (marks: Array<[number, number, number]>, scan: Float32Array, sceneToInput: THREE.Matrix4) => marks.every((mark) => {
     const p = new THREE.Vector3(...mark).applyMatrix4(sceneToInput);
@@ -12694,7 +12695,7 @@ export function LayerlingEditor({
     // Build 317 (Rakesh, of Find for me on the hard case: "Nothing - and I trimmed everything up to the first
     // premolars"): the front teeth are read from the whole arch, and a scan trimmed back to them can no longer be
     // read. The marks found on the scan as it was imported (before Trim) are used then - if they still lie on it.
-    const early = found ? null : waxMarksAtImport.current.get(arch.shape.id);
+    const early = found ? null : waxMarksAtImport.current.get(arch.slot);
     if (!found && early && marksOnScan(early, arch.scan, arch.sceneToInput)) {
       waxRecord();
       const next = { ...current, slot: arch.slot, archMarks: { ...(current.archMarks ?? {}), [arch.slot]: early.map((p) => [...p] as [number, number, number]) }, archMarkPick: null, picking: null, error: null, archMarksAuto: { ...current.archMarksAuto, [arch.slot]: "found" as const } };
@@ -12788,14 +12789,17 @@ export function LayerlingEditor({
     if (!dentalStudio?.waxStudio || !dentalStudio.analysis) return;
     const timer = window.setTimeout(() => {
       const arch = waxArch();
-      if (!arch || waxMarksAtImport.current.has(arch.shape.id)) return;
+      // Once for each state of the arch (trimming makes a new shape of it): what a later state cannot be read for
+      // never takes away what an earlier one gave.
+      if (!arch || waxMarksTried.current.has(arch.shape.id)) return;
+      waxMarksTried.current.add(arch.shape.id);
       let found: ReturnType<typeof autoArchMarks> = null;
       try { found = autoArchMarks(arch.scan, arch.slot); } catch { found = null; }
       const toScene = arch.sceneToInput.clone().invert();
-      waxMarksAtImport.current.set(arch.shape.id, found ? found.marks.map((point) => new THREE.Vector3(...point).applyMatrix4(toScene).toArray() as [number, number, number]) : null);
+      if (found) waxMarksAtImport.current.set(arch.slot, found.marks.map((point) => new THREE.Vector3(...point).applyMatrix4(toScene).toArray() as [number, number, number]));
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [dentalStudio?.waxStudio, dentalStudio?.analysis, dentalStudio?.slots.upper, dentalStudio?.slots.lower, waxup.slot]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dentalStudio?.waxStudio, dentalStudio?.analysis, dentalStudio?.slots.upper, dentalStudio?.slots.lower, waxup.slot, studioWaxStep]); // eslint-disable-line react-hooks/exhaustive-deps
   const archMarksNow = waxup.archMarks?.[waxup.slot];
   useEffect(() => {
     if (!archMarkStep) return;
