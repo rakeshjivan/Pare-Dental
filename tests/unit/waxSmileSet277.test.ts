@@ -233,7 +233,11 @@ describe("snapped to the marks (build 278, step 2)", () => {
     // Seen from the occlusal, the neck is much nearer the mark than it was (it was 3.4 mm off).
     const off = (p: THREE.Vector3) => Math.hypot(p.x - gum[1]![0], p.y - gum[1]![1]);
     expect(off(was)).toBeGreaterThan(3.2);
-    expect(off(now)).toBeLessThan(1.6);
+    // To within the slack a neck is allowed (1 mm each way) and a little.
+    expect(off(now)).toBeLessThan(2.2);
+    // A mark within that slack of where the neck stands changes nothing.
+    const near: Array<V | null> = [null, [was.x + 0.4, was.y - 0.6, -9], null, null, null, null];
+    expect(layoutSmileSet(teeth, { ...marked, margins, gum: near }, SET_DEFAULTS)!.matrices.get(t.id)!.elements).toEqual(plain.matrices.get(t.id)!.elements);
     expect(edgeNow.distanceTo(edgeWas)).toBeLessThan(0.05);
     // The other teeth are as they were.
     for (const other of teeth) if (other.fdi !== 12) expect(anchored.matrices.get(other.id)!.elements).toEqual(plain.matrices.get(other.id)!.elements);

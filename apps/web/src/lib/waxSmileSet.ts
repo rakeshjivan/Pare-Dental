@@ -562,6 +562,8 @@ export function crownMargins(points: ArrayLike<number>, anchors: Pick<SetAnchors
 export const GUM_TURN_MAX = 30;
 /** How much of the way a tooth is tipped along the arch towards its gum mark, and the most, degrees. */
 export const GUM_TIP_SHARE = 0.5;
+/** How far off its gum mark a tooth's neck may stand before the tooth is turned towards it, mm. */
+export const GUM_SLACK = 1;
 export const GUM_TIP_MAX = 6;
 /** How little a mark lying palatal of the arch counts in finding it, against one on it or labial of it. */
 const ARCH_INSIDE = 0.1;
@@ -787,12 +789,16 @@ function layoutFromMarks(teeth: SetTooth[], anchors: SetAnchors, c: SetControls,
       if (down > 3) {
         const g = flat(v(gumAt)).sub(middle);
         const behindNeck = faceOf?.length ? faceOf[Math.min(faceOf.length - 1, Math.round(down / stretch / FACE_STEP))] : 0;
-        const degreesOf = (run: number) => Math.max(-GUM_TURN_MAX, Math.min(GUM_TURN_MAX, (Math.atan(run / down) * 180) / Math.PI));
-        // The neck's face over the mark: twice, as the tooth's way out changes with its torque.
-        for (let round = 0; round < 2; round += 1) {
-          const wanted = degreesOf(g.dot(out) - forward - behindNeck);
-          torque = wanted;
+        // Only as far as the neck is really off its mark (more than GUM_SLACK): a tooth laid against the patient's
+        // own crown has its neck near enough already, and one brought exactly onto the mark while its face still
+        // had to clear the crown ended flared - the edge thrown out, the neck drawn in.
+        const slack = (run: number) => Math.sign(run) * Math.max(0, Math.abs(run) - GUM_SLACK);
+        const degreesOf = (run: number) => (Math.atan(run / down) * 180) / Math.PI;
+        const off = slack(g.dot(out) - (forward + behindNeck + Math.tan((torque * Math.PI) / 180) * down));
+        if (off !== 0) {
+          torque = Math.max(-GUM_TURN_MAX, Math.min(GUM_TURN_MAX, torque + degreesOf(off)));
           if (faceOf?.length) {
+            // Still clear of the patient's crown, at this torque.
             const slope = Math.tan((torque * Math.PI) / 180), reachDown = down - 0.5;
             let most = 0;
             for (const q of near) {
@@ -806,7 +812,7 @@ function layoutFromMarks(teeth: SetTooth[], anchors: SetAnchors, c: SetControls,
         // Along the arch only part of the way, and little: teeth tipped fully to their necks lean apart or across
         // each other (two centrals with their necks a little apart stood open like a book) - the long axes of a
         // wax-up stay near the set's own.
-        tip = Math.max(-GUM_TIP_MAX, Math.min(GUM_TIP_MAX, GUM_TIP_SHARE * degreesOf(g.dot(want) + (shiftOf.get(tooth.id) ?? 0))));
+        tip = Math.max(-GUM_TIP_MAX, Math.min(GUM_TIP_MAX, GUM_TIP_SHARE * degreesOf(slack(g.dot(want) + (shiftOf.get(tooth.id) ?? 0)))));
       }
     }
     const target = middle.clone().addScaledVector(up, edgeLevel).addScaledVector(out, forward + c.fullness).addScaledVector(want, -(shiftOf.get(tooth.id) ?? 0));

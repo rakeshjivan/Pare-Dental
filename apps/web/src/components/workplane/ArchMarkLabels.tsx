@@ -31,11 +31,13 @@ export function ArchMarkLabels({ marks }: { marks: ReadonlyArray<[number, number
       {placed.map((m, k) => {
         const x = screen[k * 2], y = screen[k * 2 + 1];
         if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-        const fill = m.i === 3 ? "#2563eb" : m.i >= 7 ? "#d97706" : "#0a786c";
+        // Build 310: the six gum marks (after the nine) are pink and carry no number - a "G".
+        const gum = m.i >= 9;
+        const fill = gum ? "#db2777" : m.i === 3 ? "#2563eb" : m.i >= 7 ? "#d97706" : "#0a786c";
         return (
           <g key={m.i} transform={`translate(${(x + 14).toFixed(1)},${(y - 14).toFixed(1)})`}>
-            <circle r={10} fill={fill} stroke="#ffffff" strokeWidth={2} />
-            <text textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={700} fill="#ffffff">{m.i + 1}</text>
+            <circle r={gum ? 8 : 10} fill={fill} stroke="#ffffff" strokeWidth={2} />
+            <text textAnchor="middle" dominantBaseline="central" fontSize={gum ? 10 : 12} fontWeight={700} fill="#ffffff">{gum ? "G" : m.i + 1}</text>
           </g>
         );
       })}

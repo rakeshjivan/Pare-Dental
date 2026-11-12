@@ -5514,7 +5514,7 @@ export const MESSAGES_EN = {
   "waxup.archLined": "Wax-up teeth lined up on the arch",
   "studio.hint.scans": "Bring in the scans.",
   "studio.hint.mark": "Click the points in the order the panel shows.",
-  "studio.hint.markCheck": "Check the nine dots. Drag any that is off.",
+  "studio.hint.markCheck": "Check the nine dots and the pink gum-line dots (G). Drag any that is off.",
   "studio.hint.trim": "Trim away any base or tags.",
   "studio.hint.select": "Choose the teeth to wax up.",
   "studio.hint.teeth": "Three dots on each tooth, then three for the arch - drag any that are off.",
