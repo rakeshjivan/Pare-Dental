@@ -70,7 +70,10 @@ describe("editTooth", () => {
 
   it("keeps edits in range", () => {
     expect(clampEdit({ length: 9, rotate: -90 }).length).toBe(4);
-    expect(clampEdit({ length: 9, rotate: -90 }).rotate).toBe(-25);
+    // Build 308: a tooth's place is not limited (only a slip of the hand is stopped) - its shape is.
+    expect(clampEdit({ length: 9, rotate: -90 }).rotate).toBe(-90);
+    expect(clampEdit({ moveOut: 12, moveMesial: -9, moveUp: 7 })).toMatchObject({ moveOut: 12, moveMesial: -9, moveUp: 7 });
+    expect(clampEdit({ rotate: 400 }).rotate).toBe(180);
   });
 
   it("is smooth: neighbouring corners stay neighbours (no tearing)", () => {
