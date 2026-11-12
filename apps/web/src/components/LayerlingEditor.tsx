@@ -12678,6 +12678,7 @@ export function LayerlingEditor({
   /** Build 317: the nine marks found on each arch as it was imported (the scan's own coordinates), by its slot. */
   const waxMarksAtImport = useRef(new Map<string, Array<[number, number, number]>>());
   const waxMarksTried = useRef(new Set<string>());
+  const waxMarksWas = useRef<unknown>(null);
   /** Whether marks still lie on a scan (both in the scan's own coordinates): each within a millimetre of a corner of it. */
   const marksOnScan = (marks: Array<[number, number, number]>, scan: Float32Array) => marks.every((mark) => {
     const p = new THREE.Vector3(...mark);
@@ -12697,7 +12698,11 @@ export function LayerlingEditor({
     // read. The marks found on the scan as it was imported (before Trim) are used then - if they still lie on it.
     const kept = found ? null : waxMarksAtImport.current.get(arch.slot), turnNow = dentalFileTurn.current;
     const early = kept && turnNow ? kept.map((p) => new THREE.Vector3(...p).applyMatrix4(turnNow).toArray() as [number, number, number]) : null;
-    (window as unknown as { layerlingMarkDebug?: unknown }).layerlingMarkDebug = { kept: kept?.length ?? 0, turn: Boolean(turnNow), on: early ? marksOnScan(early, arch.scan) : null };
+    {
+      const box = (p: ArrayLike<number>) => { const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]; for (let i = 0; i < p.length; i += 1) { lo[i % 3] = Math.min(lo[i % 3], p[i]); hi[i % 3] = Math.max(hi[i % 3], p[i]); } return [...lo, ...hi].map((x) => Math.round(x * 10) / 10); };
+      const near = (m: number[]) => { let best = Infinity; for (let i = 0; i + 2 < arch.scan.length; i += 3) best = Math.min(best, Math.hypot(arch.scan[i] - m[0], arch.scan[i + 1] - m[1], arch.scan[i + 2] - m[2])); return Math.round(best * 10) / 10; };
+      (window as unknown as { layerlingMarkDebug?: unknown }).layerlingMarkDebug = { kept: kept?.length ?? 0, turn: turnNow?.elements.slice(0, 12).map((x) => Math.round(x * 100) / 100), nowBox: box(arch.scan), nowCorners: arch.scan.length / 3, early: early?.[3], near: early?.map(near), was: waxMarksWas.current };
+    }
     if (!found && early && marksOnScan(early, arch.scan)) {
       waxRecord();
       const back = arch.sceneToInput.clone().invert();
@@ -12802,6 +12807,7 @@ export function LayerlingEditor({
       // nor the turn given to the coordinates handed to the studio, which is judged from the scan's spans (a scan
       // trimmed to its front teeth is no longer flattest along the vertical).
       const turn = dentalFileTurn.current;
+      { const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]; for (let i = 0; i < arch.scan.length; i += 1) { lo[i % 3] = Math.min(lo[i % 3], arch.scan[i]); hi[i % 3] = Math.max(hi[i % 3], arch.scan[i]); } waxMarksWas.current = { box: [...lo, ...hi].map((x) => Math.round(x * 10) / 10), corners: arch.scan.length / 3, turn: turn?.elements.slice(0, 12).map((x) => Math.round(x * 100) / 100), mark: found?.marks[3], score: found?.score }; }
       if (found && turn) { const back = turn.clone().invert(); waxMarksAtImport.current.set(arch.slot, found.marks.map((point) => new THREE.Vector3(...point).applyMatrix4(back).toArray() as [number, number, number])); }
     }, 400);
     return () => window.clearTimeout(timer);
