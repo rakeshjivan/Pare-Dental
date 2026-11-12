@@ -55,4 +55,20 @@ describe("side dots (build 305)", () => {
     for (let i = 0; i < box.length; i += 1) worst = Math.max(worst, Math.abs(rest[i] - box[i]));
     expect(worst).toBeLessThan(5e-3);
   });
+
+  it("build 311: an incisal corner flared - the incisal third on that side goes out along the arch; the middle, the neck and the other side stay", () => {
+    const e = editTooth(box, frame, W, L, { ...NO_EDIT, flareM: 1 }, -T);
+    // The mesial face over the incisal fifth: out by the whole millimetre, along the arch only.
+    expect(moved(e, (a, _b, h) => a === W / 2 && h >= -0.2 * L)).toBeCloseTo(1, 5);
+    for (let i = 0; i < box.length; i += 3) { expect(e[i + 1]).toBe(box[i + 1]); expect(e[i + 2]).toBe(box[i + 2]); expect(e[i]).toBeGreaterThanOrEqual(box[i]); }
+    // Below the middle of the crown, the distal side, and the middle of the tooth: as they were.
+    expect(moved(e, (_a, _b, h) => h <= -0.55 * L)).toBe(0);
+    expect(moved(e, (a) => a <= 0)).toBe(0);
+    // And undone by uneditTooth, tucked in on the other side as well.
+    const edit = { ...NO_EDIT, flareM: 1.5, flareD: -0.8, mesial: 0.5 };
+    const rest = uneditTooth(editTooth(box, frame, W, L, edit, -T), frame, W, L, edit, -T);
+    let worst = 0;
+    for (let i = 0; i < box.length; i += 1) worst = Math.max(worst, Math.abs(rest[i] - box[i]));
+    expect(worst).toBeLessThan(5e-3);
+  });
 });

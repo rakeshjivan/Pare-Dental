@@ -39,6 +39,13 @@ export type ToothEdit = {
   palatalD: number;
   labialM: number;
   labialD: number;
+  /**
+   * Build 311 (Rakesh: "often you need to widen or flare the incisal whilst leaving the middle and neck narrow"): the
+   * mesial and the distal incisal corner moved outwards along the arch (mm) - the incisal third with it, fading to
+   * nothing by the middle of the crown; the middle and the neck stay as they are.
+   */
+  flareM: number;
+  flareD: number;
   moveMesial: number;
   moveOut: number;
   moveUp: number;
@@ -47,7 +54,7 @@ export type ToothEdit = {
   torque: number;
 };
 
-export const NO_EDIT: ToothEdit = { length: 0, mesial: 0, distal: 0, spread: 0, thickness: 0, palatal: 0, palatalM: 0, palatalD: 0, labialM: 0, labialD: 0, moveMesial: 0, moveOut: 0, moveUp: 0, rotate: 0, tip: 0, torque: 0 };
+export const NO_EDIT: ToothEdit = { length: 0, mesial: 0, distal: 0, spread: 0, thickness: 0, palatal: 0, palatalM: 0, palatalD: 0, labialM: 0, labialD: 0, flareM: 0, flareD: 0, moveMesial: 0, moveOut: 0, moveUp: 0, rotate: 0, tip: 0, torque: 0 };
 
 /** The ranges offered, mm and degrees. */
 // Build 308 (Rakesh: "we need complete freedom of movement of teeth - if the marked teeth and the automatic placement
@@ -56,7 +63,7 @@ export const NO_EDIT: ToothEdit = { length: 0, mesial: 0, distal: 0, spread: 0, 
 // of sight). Its shape still is: a library tooth stretched beyond these is no longer that tooth.
 export const EDIT_RANGES: Record<keyof ToothEdit, readonly [number, number]> = {
   length: [-3, 4], mesial: [-2.5, 2.5], distal: [-2.5, 2.5], spread: [-2, 3], thickness: [-1, 1.5], palatal: [-1, 3],
-  palatalM: [-1.5, 2], palatalD: [-1.5, 2], labialM: [-1.5, 2], labialD: [-1.5, 2],
+  palatalM: [-1.5, 2], palatalD: [-1.5, 2], labialM: [-1.5, 2], labialD: [-1.5, 2], flareM: [-1.5, 2], flareD: [-1.5, 2],
   moveMesial: [-60, 60], moveOut: [-60, 60], moveUp: [-60, 60], rotate: [-180, 180], tip: [-90, 90], torque: [-90, 90],
 };
 /**
@@ -84,6 +91,9 @@ const FADE = 0.45;
 /** Build 305: how far from the middle of the tooth (a share of its half width) a side dot's change is whole; and the share of the crown below the incisal edge a labial one fades in over. */
 const SIDE_FULL = 0.6;
 const EDGE_FADE = 0.25;
+/** Build 311: how far up the crown (0 the cervical end, 1 the edge) an incisal corner's change starts, and where it is whole. */
+const FLARE_FROM = 0.45;
+const FLARE_FULL = 0.8;
 const smooth = (x: number) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
 
 /** The rigid part of an edit (turns about the cervical-third pivot, then the moves) as a matrix, scene coordinates. */
@@ -124,6 +134,9 @@ export function editTooth(rest: ArrayLike<number>, frame: ToothFrame, width: num
     const keepNeck = smooth(share / FADE);
     if (a >= 0) a += edit.mesial * Math.min(1, a / half) * keepNeck;
     else a -= (edit.distal + (edit.spread ?? 0)) * Math.min(1, -a / half) * keepNeck;
+    // Build 311: the incisal corners - whole over the incisal third, nothing below the middle of the crown.
+    const flare = a >= 0 ? edit.flareM ?? 0 : edit.flareD ?? 0;
+    if (flare) a += Math.sign(a) * flare * Math.min(1, Math.abs(a) / half) * smooth((share - FLARE_FROM) / (FLARE_FULL - FLARE_FROM));
     b += edit.thickness * Math.min(1, Math.max(0, (b - depth) / -depth)) * keepNeck;
     // Build 293 (Rakesh: "pull the tooth on the palatal so it becomes wider bucco-palatal without affecting the buccal
     // surface"): the palatal surface out, more the further palatal, nothing at the labial face - all the way to the

@@ -1946,7 +1946,7 @@ const WAX_COVER: boolean = false;
 /** How far incisal of a tooth's gingival margin the cut behind it starts, mm; and how far behind the wax it reaches, mm. */
 const COVER_ABOVE_GUM = 0.7;
 const COVER_BEHIND = 7;
-const WAX_SHAPE_KEYS: Array<keyof ToothEdit> = ["length", "mesial", "distal", "spread", "thickness", "palatal", "palatalM", "palatalD", "labialM", "labialD"];
+const WAX_SHAPE_KEYS: Array<keyof ToothEdit> = ["length", "mesial", "distal", "spread", "thickness", "palatal", "palatalM", "palatalD", "labialM", "labialD", "flareM", "flareD"];
 const WAX_LIVE_PAUSE = 900;
 /** Build 297: how long after the last change Wax-up Studio writes the design, ms. */
 const WAX_SAVE_AFTER = 2500;

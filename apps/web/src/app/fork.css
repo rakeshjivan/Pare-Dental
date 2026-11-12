@@ -2328,3 +2328,6 @@ html[data-theme="dark"] .dental-studio-panel .dental-picture-tiles button { back
 .wax-mark-gum > div { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; }
 .wax-mark-gum span.found { color: #be185d; }
 .wax-mark-gum span.missing { color: #94a3b8; }
+
+/* Build 311: the two incisal corner dots - small, the contacts' colour. */
+.wax-dot-flareM, .wax-dot-flareD { width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px; border-width: 2px; background: #134e4a; }
