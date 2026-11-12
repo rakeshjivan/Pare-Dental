@@ -939,6 +939,14 @@ export function DentalStudioPanel({
             <strong>{t("waxup.markTitle")}</strong>
             <span>{t(wv.archMarksFound === "found" && placed === 9 ? "waxup.markGuideFound" : "waxup.markGuide")}</span>
           </div>
+          {/* Build 315 (Rakesh: "marked the teeth and this happened"): marks no arch of teeth could give are said here, by their dots, before any tooth is laid on them. */}
+          {problems.length ? (
+            <div className="wax-mark-problems" role="alert">
+              <strong>{t("waxup.markProblems")}</strong>
+              <ul>{problems.map((p, k) => <li key={k}>{p.kind === "width" ? t(p.mm < 5 ? "waxup.markProblem.narrow" : "waxup.markProblem.wide", { fdi: p.fdi, mm: p.mm.toFixed(1), a: p.dots[0], b: p.dots[1] }) : p.kind === "order" ? t("waxup.markProblem.order", { a: p.dots[0] }) : t("waxup.markProblem.tip", { fdi: p.fdi, a: p.dots[0] })}</li>)}</ul>
+              <p className="blend-hint">{t("waxup.markProblemsHint")}</p>
+            </div>
+          ) : null}
           <ol className="wax-mark-list">
             {Array.from({ length: 9 }, (_, i) => {
               const { kind, teeth: pair } = archMarkLabel(wv.slot, i);
@@ -960,14 +968,6 @@ export function DentalStudioPanel({
               <strong>{t("waxup.markGum")}</strong>
               <div>{teeth.map((fdi, k) => <span key={fdi} className={marks[9 + k] ? "found" : "missing"} title={marks[9 + k] ? undefined : t("waxup.markGumNone")}><b>{fdi}</b> {marks[9 + k] ? "●" : "—"}</span>)}</div>
               <p className="blend-hint">{t("waxup.markGumHint")}</p>
-            </div>
-          ) : null}
-          {/* Build 315 (Rakesh: "marked the teeth and this happened"): marks no arch of teeth could give are said here, by their dots, before any tooth is laid on them. */}
-          {problems.length ? (
-            <div className="wax-mark-problems" role="alert">
-              <strong>{t("waxup.markProblems")}</strong>
-              <ul>{problems.map((p, k) => <li key={k}>{p.kind === "width" ? t(p.mm < 5 ? "waxup.markProblem.narrow" : "waxup.markProblem.wide", { fdi: p.fdi, mm: p.mm.toFixed(1), a: p.dots[0], b: p.dots[1] }) : p.kind === "order" ? t("waxup.markProblem.order", { a: p.dots[0] }) : t("waxup.markProblem.tip", { fdi: p.fdi, a: p.dots[0] })}</li>)}</ul>
-              <p className="blend-hint">{t("waxup.markProblemsHint")}</p>
             </div>
           ) : null}
           {Object.keys(widths).length ? (
