@@ -426,7 +426,9 @@ export function DentalStudioPanel({
    */
   // Build 103: as Meshmixer (manual) - the teeth positioned, then sculpted, then the model made; nothing fitted for you.
   // Build 118: no Keep & erase step - the whole library tooth is kept and its palatal pressed on (Gum line); boundary lines are in Sculpt.
-  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? ["scans", "mark", "trim", ...(slots.upper && slots.lower ? ["bite" as const] : []), ...(waxup.view.marginOn ? ["margin" as const] : []), "set", "place", "gum", "make"] : null;
+  // Build 308 (Rakesh: "we should trim the model before the automatic marking step"): Trim comes before Mark - the
+  // marks are found on the scan as it will be used, with its tags and excess gum already off.
+  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? ["scans", "trim", "mark", ...(slots.upper && slots.lower ? ["bite" as const] : []), ...(waxup.view.marginOn ? ["margin" as const] : []), "set", "place", "gum", "make"] : null;
   const [waxStepId, setWaxStepId] = useState<WaxStepId>(editing ? "make" : "scans");
   const waxStepName = (id: WaxStepId) => t(`waxStudio.step.${id}` as "waxStudio.step.scans");
   const waxStep = waxSteps ? (waxSteps.includes(waxStepId) ? waxStepId : "make") : null;
