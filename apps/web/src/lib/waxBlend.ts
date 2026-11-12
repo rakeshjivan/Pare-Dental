@@ -100,3 +100,48 @@ export function waxBlend(runtime: ManifoldRuntime, model: ManifoldSolid, tooth: 
     try { room?.delete(); } catch { /* gone */ }
   }
 }
+
+/** The coarser grid a wall is measured on, mm. */
+const WALL_CELL = 0.25;
+
+/**
+ * Build 306: a hollow model's wall made good round a wax tooth. Where the patient's tooth has been cut back to the
+ * wax (the wax teeth cover the scan) the model's own wall may be gone - the cavity was made a wall inside the scan
+ * as scanned - and the model would stand open or paper thin there. Within `reach` mm of the tooth, the model's
+ * outside (the model, the wax `teeth` whole, and its `cavity` filled wherever the `cutters` did not take the scan
+ * away) is given a wall `wall` mm thick again: a solid to join on, or null when the wall is whole. Its outer face is
+ * the model's own, exactly; only its inner face is from the grid. The caller frees it.
+ */
+export function waxWall(runtime: ManifoldRuntime, model: ManifoldSolid, cavity: ManifoldSolid, tooth: ManifoldSolid, teeth: ManifoldSolid[], cutters: ManifoldSolid[], wall: number, reach = 3): ManifoldSolid | null {
+  if (tooth.isEmpty() || cavity.isEmpty() || wall <= 0) return null;
+  const made: ManifoldSolid[] = [];
+  const keep = (solid: ManifoldSolid) => { made.push(solid); return solid; };
+  try {
+    const box = tooth.boundingBox(), h = WALL_CELL;
+    const min = [box.min[0] - reach, box.min[1] - reach, box.min[2] - reach] as [number, number, number];
+    const grid: Grid = { nx: Math.ceil((box.max[0] - box.min[0] + 2 * reach) / h), ny: Math.ceil((box.max[1] - box.min[1] + 2 * reach) / h), nz: Math.ceil((box.max[2] - box.min[2] + 2 * reach) / h), h, origin: min };
+    const size = [grid.nx * h, grid.ny * h, grid.nz * h] as [number, number, number];
+    const room = keep(runtime.Manifold.cube(size, false).translate(min));
+    let hollow = keep(runtime.Manifold.intersection(cavity, room));
+    if (hollow.isEmpty()) return null;
+    for (const cutter of cutters) hollow = keep(runtime.Manifold.difference(hollow, cutter));
+    const here = keep(runtime.Manifold.intersection(model, room));
+    // The model's outside here. The room's own faces are not its surface (the grid is the room: nothing lies beyond
+    // them to be measured from).
+    const whole = keep(runtime.Manifold.union([here, hollow, ...teeth.map((one) => keep(runtime.Manifold.intersection(one, room)))]));
+    const deep = signed(voxelise(solidPositions(whole), grid), grid);
+    // Everything but what lies deeper than the wall (a cell to spare) ...
+    for (let i = 0; i < deep.length; i += 1) deep[i] = wall + h - deep[i];
+    const bounds = { min, max: [min[0] + size[0], min[1] + size[1], min[2] + size[2]] as [number, number, number] };
+    const shell = keep(runtime.Manifold.levelSet(sampler(deep, grid, -1), bounds, h, 0));
+    // ... of the model's outside: its wall. Joined on only if the model lacks some of it.
+    const fill = runtime.Manifold.intersection(shell, whole);
+    const lacking = keep(runtime.Manifold.difference(fill, here));
+    if (fill.isEmpty() || fill.status() !== "NoError" || lacking.volume() < 0.05) { fill.delete(); return null; }
+    return fill;
+  } catch {
+    return null;
+  } finally {
+    made.forEach((solid) => { try { solid.delete(); } catch { /* gone */ } });
+  }
+}

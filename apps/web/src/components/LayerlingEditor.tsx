@@ -1937,6 +1937,11 @@ const SHELL_HIDE = new Float32Array(9);
 /** Build 294: how often the panel's numbers follow a live change, ms. */
 const WAX_STATE_EVERY = 250;
 /** Build 297: the parts of a tooth's own change that reshape it (the rest only move or turn it). */
+/** Build 306: every wax tooth covers the patient's - what of the patient's crown stands outside it is cut back on the wax-up model. */
+const WAX_COVER = true;
+/** How far incisal of a tooth's gingival margin the cut behind it starts, mm; and how far behind the wax it reaches, mm. */
+const COVER_ABOVE_GUM = 0.7;
+const COVER_BEHIND = 7;
 const WAX_SHAPE_KEYS: Array<keyof ToothEdit> = ["length", "mesial", "distal", "spread", "thickness", "palatal", "palatalM", "palatalD", "labialM", "labialD"];
 const WAX_LIVE_PAUSE = 900;
 /** Build 297: how long after the last change Wax-up Studio writes the design, ms. */
@@ -11069,13 +11074,14 @@ export function LayerlingEditor({
       // (what stands in front of it or beyond its edge, within its reach), on the wax-up model only.
       const slotOfArch = dentalStudioRef.current?.slots.upper === shape.id ? "upper" : dentalStudioRef.current?.slots.lower === shape.id ? "lower" : null;
       const reduceHere = slotOfArch ? waxupRef.current.reduce?.[slotOfArch] ?? [] : [];
-      if (reduceHere.length) {
+      if (slotOfArch && (WAX_COVER || reduceHere.length)) {
         const toInput = dentalLocalToInput.current.get(shape.id), world = localToWorld(shape);
         if (!toInput || !world) return undefined;
+        const anchors = waxupRef.current.smile?.[slotOfArch]?.anchors;
         const move = toInput.clone().multiply(world.clone().invert());
         const turn = new THREE.Matrix3().setFromMatrix4(move);
         const cuts: NonNullable<DentalStudioInput["arches"][number]["cuts"]> = [];
-        for (const tooth of shapesRef.current.filter((candidate) => candidate.dental === "wax" && candidate.waxFor === shape.id && !candidate.hidden && candidate.waxTooth && reduceHere.includes(candidate.waxTooth.fdi))) {
+        for (const tooth of shapesRef.current.filter((candidate) => candidate.dental === "wax" && candidate.waxFor === shape.id && !candidate.hidden && candidate.waxTooth && (!waxTeeth || waxTeeth(candidate.waxTooth.fdi)) && (WAX_COVER || reduceHere.includes(candidate.waxTooth.fdi)))) {
           const toothWorld = localToWorld(tooth);
           if (!toothWorld) continue;
           const frame = moveFrame(tooth.waxTooth!.frame, toothWorld);
@@ -11110,8 +11116,40 @@ export function LayerlingEditor({
             swept += 1;
           }
           if (!swept) cuts.push({ positions: cutterBox(cover), facing: [facing.x, facing.y, facing.z], through: [x, y, z], cover, up: [up.x, up.y, up.z] });
+          // Build 306 (Rakesh: "we ideally want the full wax-up teeth to appear over the entire scan"): and behind it -
+          // the wax tooth's palatal surface swept palatally, so the patient's tooth standing behind the wax (a tooth
+          // set back in a crowded arch, a thick cingulum) ends flush with it too. From just incisal of the tooth's
+          // gingival margin (read on the scan when the set was laid): the gum is never cut. With no margin read, the
+          // incisal two thirds as in front.
+          if (WAX_COVER) {
+            const levelWorld = anchors?.margins?.[frontTeeth(slotOfArch).indexOf(tooth.waxTooth!.fdi)];
+            if (anchors && levelWorld !== null && levelWorld !== undefined) {
+              const upWorld = new THREE.Vector3(...anchors.up).normalize();
+              const upInput = upWorld.clone().applyMatrix3(turn).normalize();
+              // The margin's level along the arch's up, carried into the model's coordinates; then along the tooth's own up.
+              const onMargin = upWorld.clone().multiplyScalar(levelWorld).applyMatrix4(move);
+              const sign = upInput.dot(up) >= 0 ? 1 : -1;
+              const level = sign * upInput.dot(onMargin) + COVER_ABOVE_GUM;
+              // Never beyond the tooth's incisal half: a margin misread cannot take the whole crown's worth of gum.
+              const kept2: number[] = [];
+              for (let i = 0; i + 8 < whole.length; i += 9) {
+                let low = Infinity;
+                for (let k = 0; k < 9; k += 3) low = Math.min(low, sign * (whole[i + k] * upInput.x + whole[i + k + 1] * upInput.y + whole[i + k + 2] * upInput.z));
+                if (low >= level) for (let k = 0; k < 9; k += 1) kept2.push(whole[i + k]);
+              }
+              if (kept2.length >= 36) {
+                const back = facing.clone().negate();
+                const prism = sweptSurface(Float32Array.from(kept2), [back.x, back.y, back.z], COVER_BEHIND);
+                if (prism) cuts.push({ positions: prism, facing: [back.x, back.y, back.z], through: [x, y, z], exact: true });
+              }
+            } else {
+              const back = facing.clone().negate();
+              const prism = sweptSurface(cover, [back.x, back.y, back.z], COVER_BEHIND);
+              if (prism) cuts.push({ positions: prism, facing: [back.x, back.y, back.z], through: [x, y, z], exact: true });
+            }
+          }
         }
-        return cuts.length ? cuts : undefined;
+        if (cuts.length || reduceHere.length) return cuts.length ? cuts : undefined;
       }
       const found = waxFoundRef.current[shape.id];
       const toInput = dentalLocalToInput.current.get(shape.id), world = localToWorld(shape);

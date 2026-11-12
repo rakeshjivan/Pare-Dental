@@ -21,7 +21,9 @@ import { polygonDistance } from "@/lib/dentalSnapHinge";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
-import { waxBlend } from "@/lib/waxBlend";
+import { waxBlend, waxWall } from "@/lib/waxBlend";
+/** Build 306: the least wall a hollow model keeps round a wax tooth, mm. */
+const WAX_WALL = 1.5;
 import { GUM_REACH, marginRegion, moveGumCut, type GumCut } from "@/lib/waxGum";
 import { smoothBase as makeSmoothBase, SMOOTH } from "@/lib/dentalSmoothBase";
 import { dentalStage } from "@/lib/dentalStages";
@@ -855,6 +857,7 @@ function uncoverCrowns(runtime: ManifoldRuntime, solid: ManifoldSolid, scanSolid
   const pieces: ManifoldSolid[] = [];
   /** The wax run into the joins: what it covers of the scan is covered on purpose, as under a wax tooth. */
   const blendShells: Float32Array[] = [];
+  const waxTeethMade: ManifoldSolid[] = [];
   for (let t = 0; t + 2 < f.length; t += 3) {
     const a = f[t], b = f[t + 1], c = f[t + 2];
     if (!crowns[a] || !crowns[b] || !crowns[c] || (on(a) && on(b) && on(c))) continue;
@@ -1358,6 +1361,9 @@ function buildArch(
   // away (resin prints stand on supports, and its cut was where some of the foot's bad edges came from).
   // Build 102: the crowns the wax-up replaces, cut back to the margin first - their facial side.
   const cutShells: Float32Array[] = [];
+  /** Build 306: the cutters themselves (what each took of the scan), for the wall made good round the wax teeth. */
+  const cutSolids: ManifoldSolid[] = [];
+  const exactCutters: ManifoldSolid[] = [];
   const rotation = new THREE.Matrix3().setFromMatrix4(arch.frame);
   for (const entry of cutAway ?? []) {
     const shell = transformSoup(entry.positions, arch.frame);
@@ -1366,8 +1372,10 @@ function buildArch(
       const through = new THREE.Vector3(...entry.through).applyMatrix4(arch.frame);
       const cutter = keepSolid(toManifold(runtime, weld(shell, 1e-6)));
       if (entry.exact) {
-        solid = keepSolid(runtime.Manifold.difference(solid, cutter));
+        // Taken together once all are in: a cut each made (and held) a copy of the whole model.
+        exactCutters.push(cutter);
         cutShells.push(solidPositions(cutter));
+        cutSolids.push(cutter);
         continue;
       }
       let facial = keepSolid(cutter.trimByPlane([n.x, n.y, n.z], n.dot(through)));
@@ -1406,9 +1414,13 @@ function buildArch(
       }
       solid = keepSolid(runtime.Manifold.difference(solid, facial));
       cutShells.push(solidPositions(facial));
+      cutSolids.push(facial);
     } catch {
       warnings.push("cut");
     }
+  }
+  if (exactCutters.length) {
+    try { solid = keepSolid(runtime.Manifold.difference(solid, exactCutters.length > 1 ? keepSolid(runtime.Manifold.union(exactCutters)) : exactCutters[0])); } catch { warnings.push("cut"); }
   }
   // Build 79: the wax-up, tooth by tooth (library teeth may overlap their neighbours).
   const waxShells = wax && wax.length ? splitShells(transformSoup(wax, arch.frame), 4) : [];
@@ -1422,6 +1434,7 @@ function buildArch(
   const pieces: ManifoldSolid[] = [];
   /** The wax run into the joins: what it covers of the scan is covered on purpose, as under a wax tooth. */
   const blendShells: Float32Array[] = [];
+  const waxTeethMade: ManifoldSolid[] = [];
   for (const shell of waxShells) {
     // Build 116: a wax tooth that will not close as it is is made watertight (corners joined, openings capped)
     // and tried again - never silently left out of the model.
@@ -1439,6 +1452,7 @@ function buildArch(
       const piece = hollowed ? keepSolid(runtime.Manifold.difference(tooth, hollowTaken!)) : tooth;
       if (piece.isEmpty() || piece.status() !== "NoError") { warnings.push("wax"); continue; }
       pieces.push(piece);
+      waxTeethMade.push(tooth);
       waxJoined += 1;
       // Never at the cost of the tooth: a blend that cannot be made is left off.
       try {
@@ -1460,6 +1474,15 @@ function buildArch(
     } catch {
       warnings.push("wax");
       waxJoined = 0;
+    }
+  }
+  // Build 306: on a hollow model, the wall made good round each wax tooth - where the patient's tooth was cut back to
+  // the wax the model's own wall may be gone (lib/waxBlend waxWall).
+  if (hollowTaken && !hollowTaken.isEmpty() && waxTeethMade.length && (cutAway?.length ?? 0) > 0) {
+    const fills: ManifoldSolid[] = [];
+    for (const tooth of waxTeethMade) { const fill = waxWall(runtime, solid, hollowTaken, tooth, waxTeethMade, cutSolids, WAX_WALL); if (fill) fills.push(keepSolid(fill)); }
+    if (fills.length) {
+      try { solid = keepSolid(runtime.Manifold.union(solid, fills.length > 1 ? keepSolid(runtime.Manifold.union(fills)) : fills[0])); } catch { warnings.push("wax"); }
     }
   }
   dentalStage("details", stageArch);

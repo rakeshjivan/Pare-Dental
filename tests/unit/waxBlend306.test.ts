@@ -1,6 +1,6 @@
 import manifoldModule, { type ManifoldToplevel } from "manifold-3d";
 import { beforeAll, describe, expect, it } from "vitest";
-import { BLEND_REACH, waxBlend } from "@/lib/waxBlend";
+import { BLEND_REACH, waxBlend, waxWall } from "@/lib/waxBlend";
 import { solidPositions } from "@/lib/dentalMesh";
 
 /** Build 306: wax run into the join of a wax tooth and the model - the crease filled, nothing else touched. */
@@ -91,5 +91,29 @@ describe("waxBlend (build 306)", () => {
     const model = gum(), tooth = runtime.Manifold.cube([4, 4, 4], true).translate([0, 0, 8]);
     expect(waxBlend(runtime, model, tooth)).toBeNull();
     [model, tooth].forEach((s) => s.delete());
+  }, 60000);
+
+  it("makes a hollow model's wall good where a cut has opened its cavity", () => {
+    // A hollow block (walls 2 mm) with the patient's tooth, hollow too, standing on it; the cut takes the tooth's
+    // back half away, down to 1 mm above the block - the cavity stands open; the wax tooth is a thin plate in front.
+    const outer = runtime.Manifold.union(runtime.Manifold.cube([20, 20, 8], true), runtime.Manifold.cube([6, 6, 8], true).translate([0, 0, 8]));
+    const cavity = runtime.Manifold.union(runtime.Manifold.cube([16, 16, 4], true), runtime.Manifold.cube([2, 2, 9], true).translate([0, 0, 5.5]));
+    const cutter = runtime.Manifold.cube([8, 4, 8], true).translate([0, 2, 9]);
+    const tooth = runtime.Manifold.cube([6, 1.5, 9], true).translate([0, -2.5, 8]);
+    const hollowed = runtime.Manifold.difference(runtime.Manifold.difference(outer, cavity), cutter);
+    const model = runtime.Manifold.union(hollowed, runtime.Manifold.difference(tooth, cavity));
+    // The cavity's chimney is open to the cut: a point in it, and one just behind the cut face, are empty.
+    expect(inside(model, 0.3, 0.2, 7)).toBe(false);
+    const fill = waxWall(runtime, model, cavity, tooth, [tooth], [cutter], 1.5);
+    expect(fill).not.toBeNull();
+    const made = runtime.Manifold.union(model, fill!);
+    expect(made.status()).toBe("NoError");
+    // Closed over now: solid just inside the cut face; the cavity deep in the block is still there; nothing added outside.
+    expect(inside(made, 0.3, -0.3, 7)).toBe(true);
+    expect(inside(made, 5.1, 5.2, 0.1)).toBe(false);
+    const was = model.boundingBox(), now = made.boundingBox();
+    for (let k = 0; k < 3; k += 1) { expect(now.max[k]).toBeCloseTo(was.max[k], 3); expect(now.min[k]).toBeCloseTo(was.min[k], 3); }
+    // And where the wall is whole there is nothing to add.
+    expect(waxWall(runtime, runtime.Manifold.union(runtime.Manifold.difference(outer, cavity), runtime.Manifold.difference(tooth, cavity)), cavity, tooth, [tooth], [], 1.5)).toBeNull();
   }, 60000);
 });
