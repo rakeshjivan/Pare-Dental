@@ -220,7 +220,7 @@ describe("snapped to the marks (build 278, step 2)", () => {
   const lay = layoutSmileSet(teeth, marked, SET_DEFAULTS)!;
   const byFdi = new Map(teeth.map((t) => [t.fdi, t]));
 
-  it("build 310: with a gum mark, a tooth's neck stands on it - torqued and tipped about its incisal edge, the edge kept on the arch", () => {
+  it("build 310: with a gum mark, a tooth's neck stands on it - torqued about its incisal edge (and tipped a little), the edge kept on the arch", () => {
     const t = byFdi.get(12)!;
     const cervicalOf = (m4: THREE.Matrix4) => new THREE.Vector3(t.frame.origin[0], t.frame.origin[1], t.frame.origin[2] - t.length).applyMatrix4(m4);
     const margins = [null, -9, null, null, null, null];
@@ -230,10 +230,10 @@ describe("snapped to the marks (build 278, step 2)", () => {
     const gum: Array<V | null> = [null, [was.x + 1.5, was.y - 3, -9], null, null, null, null];
     const anchored = layoutSmileSet(teeth, { ...marked, margins, gum }, SET_DEFAULTS)!;
     const now = cervicalOf(anchored.matrices.get(t.id)!), edgeNow = ends(t, anchored.matrices.get(t.id)!).edge;
-    expect(now.y - was.y).toBeLessThan(-2);
-    expect(now.y - was.y).toBeGreaterThan(-3.6);
-    expect(now.x - was.x).toBeGreaterThan(0.9);
-    expect(now.x - was.x).toBeLessThan(2.1);
+    // Seen from the occlusal, the neck is much nearer the mark than it was (it was 3.4 mm off).
+    const off = (p: THREE.Vector3) => Math.hypot(p.x - gum[1]![0], p.y - gum[1]![1]);
+    expect(off(was)).toBeGreaterThan(3.2);
+    expect(off(now)).toBeLessThan(1.6);
     expect(edgeNow.distanceTo(edgeWas)).toBeLessThan(0.05);
     // The other teeth are as they were.
     for (const other of teeth) if (other.fdi !== 12) expect(anchored.matrices.get(other.id)!.elements).toEqual(plain.matrices.get(other.id)!.elements);

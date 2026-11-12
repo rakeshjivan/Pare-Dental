@@ -560,6 +560,9 @@ export function crownMargins(points: ArrayLike<number>, anchors: Pick<SetAnchors
 
 /** Build 310: the most a tooth is torqued or tipped to bring its neck over its gum mark, degrees. */
 export const GUM_TURN_MAX = 30;
+/** How much of the way a tooth is tipped along the arch towards its gum mark, and the most, degrees. */
+export const GUM_TIP_SHARE = 0.5;
+export const GUM_TIP_MAX = 6;
 /** How little a mark lying palatal of the arch counts in finding it, against one on it or labial of it. */
 const ARCH_INSIDE = 0.1;
 
@@ -775,8 +778,8 @@ function layoutFromMarks(teeth: SetTooth[], anchors: SetAnchors, c: SetControls,
     }
     // Build 310: with the tooth's gum mark, its neck stands on it - the tooth cannot leave its root. Seen from the
     // occlusal the mark may lie off the even arch (a tooth tucked behind, one standing out): the edge stays on the
-    // arch and the tooth is torqued (labio-palatally) and tipped (mesio-distally) about its incisal edge until its
-    // neck is over the mark, each to GUM_TURN_MAX at most. The torque that clears the patient's crown is the least.
+    // arch and the tooth is torqued (labio-palatally, to GUM_TURN_MAX) about its incisal edge until its neck is over
+    // the mark, and tipped (mesio-distally) part of the way towards it. The torque that clears the patient's crown is the least.
     let tip = 0;
     const gumAt = anchors.gum?.[i];
     if (gumAt && margin !== null && margin !== undefined) {
@@ -800,7 +803,10 @@ function layoutFromMarks(teeth: SetTooth[], anchors: SetAnchors, c: SetControls,
             forward = most;
           }
         }
-        tip = degreesOf(g.dot(want) + (shiftOf.get(tooth.id) ?? 0));
+        // Along the arch only part of the way, and little: teeth tipped fully to their necks lean apart or across
+        // each other (two centrals with their necks a little apart stood open like a book) - the long axes of a
+        // wax-up stay near the set's own.
+        tip = Math.max(-GUM_TIP_MAX, Math.min(GUM_TIP_MAX, GUM_TIP_SHARE * degreesOf(g.dot(want) + (shiftOf.get(tooth.id) ?? 0))));
       }
     }
     const target = middle.clone().addScaledVector(up, edgeLevel).addScaledVector(out, forward + c.fullness).addScaledVector(want, -(shiftOf.get(tooth.id) ?? 0));
