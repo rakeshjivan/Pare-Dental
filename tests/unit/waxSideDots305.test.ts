@@ -56,13 +56,19 @@ describe("side dots (build 305)", () => {
     expect(worst).toBeLessThan(5e-3);
   });
 
-  it("build 311: an incisal corner flared - the incisal third on that side goes out along the arch; the middle, the neck and the other side stay", () => {
+  it("build 311: an incisal corner flared - that side goes out along the arch, most at the edge and nothing at the neck, in a straight run (no hollow in the middle)", () => {
     const e = editTooth(box, frame, W, L, { ...NO_EDIT, flareM: 1 }, -T);
-    // The mesial face over the incisal fifth: out by the whole millimetre, along the arch only.
-    expect(moved(e, (a, _b, h) => a === W / 2 && h >= -0.2 * L)).toBeCloseTo(1, 5);
+    const outAt = (h: number) => moved(e, (a, _b, hh) => a === W / 2 && hh === h);
+    // The mesial face: the whole millimetre at the edge, nothing at the neck, along the arch only.
+    expect(outAt(0)).toBeCloseTo(1, 5);
+    expect(outAt(-L)).toBe(0);
     for (let i = 0; i < box.length; i += 3) { expect(e[i + 1]).toBe(box[i + 1]); expect(e[i + 2]).toBe(box[i + 2]); expect(e[i]).toBeGreaterThanOrEqual(box[i]); }
-    // Below the middle of the crown, the distal side, and the middle of the tooth: as they were.
-    expect(moved(e, (_a, _b, h) => h <= -0.55 * L)).toBe(0);
+    // A straight run: half way up it is out by about half, and nowhere does the side fall behind the straight line from
+    // neck to corner by more than 0.15 mm (a hollow).
+    expect(outAt(-0.5 * L)).toBeGreaterThan(0.38);
+    expect(outAt(-0.5 * L)).toBeLessThan(0.55);
+    for (let h = -L; h <= 0; h += 0.5) expect(outAt(h)).toBeGreaterThan((h + L) / L - 0.15);
+    // The distal side and the middle of the tooth: as they were.
     expect(moved(e, (a) => a <= 0)).toBe(0);
     // And undone by uneditTooth, tucked in on the other side as well.
     const edit = { ...NO_EDIT, flareM: 1.5, flareD: -0.8, mesial: 0.5 };

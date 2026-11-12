@@ -41,8 +41,8 @@ export type ToothEdit = {
   labialD: number;
   /**
    * Build 311 (Rakesh: "often you need to widen or flare the incisal whilst leaving the middle and neck narrow"): the
-   * mesial and the distal incisal corner moved outwards along the arch (mm) - the incisal third with it, fading to
-   * nothing by the middle of the crown; the middle and the neck stay as they are.
+   * mesial and the distal incisal corner moved outwards along the arch (mm) - the whole side of the tooth with it
+   * in a straight run, the full amount at the edge and nothing at the neck.
    */
   flareM: number;
   flareD: number;
@@ -91,9 +91,15 @@ const FADE = 0.45;
 /** Build 305: how far from the middle of the tooth (a share of its half width) a side dot's change is whole; and the share of the crown below the incisal edge a labial one fades in over. */
 const SIDE_FULL = 0.6;
 const EDGE_FADE = 0.25;
-/** Build 311: how far up the crown (0 the cervical end, 1 the edge) an incisal corner's change starts, and where it is whole. */
-const FLARE_FROM = 0.45;
-const FLARE_FULL = 0.8;
+/**
+ * Build 311: an incisal corner's change runs from just above the neck (FLARE_FROM of the way up the crown) to the
+ * edge, growing almost evenly - the side of the tooth stays a straight run from neck to corner. (It first came in
+ * over the incisal half only, eased at both ends: Rakesh, of the tooth that made - "it's not quite right due to the
+ * concavity in the middle that is created". A tooth's side is straight or full between its neck and its contact,
+ * never hollow.)
+ */
+const FLARE_FROM = 0.1;
+const FLARE_BOW = 1.15;
 const smooth = (x: number) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
 
 /** The rigid part of an edit (turns about the cervical-third pivot, then the moves) as a matrix, scene coordinates. */
@@ -134,9 +140,9 @@ export function editTooth(rest: ArrayLike<number>, frame: ToothFrame, width: num
     const keepNeck = smooth(share / FADE);
     if (a >= 0) a += edit.mesial * Math.min(1, a / half) * keepNeck;
     else a -= (edit.distal + (edit.spread ?? 0)) * Math.min(1, -a / half) * keepNeck;
-    // Build 311: the incisal corners - whole over the incisal third, nothing below the middle of the crown.
+    // Build 311: the incisal corners - the full amount at the edge, nothing at the neck, a straight run between.
     const flare = a >= 0 ? edit.flareM ?? 0 : edit.flareD ?? 0;
-    if (flare) a += Math.sign(a) * flare * Math.min(1, Math.abs(a) / half) * smooth((share - FLARE_FROM) / (FLARE_FULL - FLARE_FROM));
+    if (flare) a += Math.sign(a) * flare * Math.min(1, Math.abs(a) / half) * Math.pow(Math.min(1, Math.max(0, (share - FLARE_FROM) / (1 - FLARE_FROM))), FLARE_BOW);
     b += edit.thickness * Math.min(1, Math.max(0, (b - depth) / -depth)) * keepNeck;
     // Build 293 (Rakesh: "pull the tooth on the palatal so it becomes wider bucco-palatal without affecting the buccal
     // surface"): the palatal surface out, more the further palatal, nothing at the labial face - all the way to the
