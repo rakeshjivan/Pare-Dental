@@ -5892,7 +5892,7 @@ export const MESSAGES_EN = {
   "waxup.brush.smooth": "Smooth",
   "waxup.brush.positionHint": "Point at a tooth and its handle appears. Press and hold an arrow and the tooth moves that way until you let go (faster the longer you hold); the arrowheads on the rings turn, tip and torque it the same way. Or drag an arrow or ring, or the tooth itself. Right-click a tooth for its tool wheel.",
   "waxup.brush.scaleHint": "Press and hold an arrow to make the tooth wider or narrower, longer or shorter, thicker or thinner - or drag it. Drag the gold ball in the middle up or down to size the whole tooth.",
-  "waxup.brush.moveHint": "Grab the surface and pull it. Esc puts the brush down.",
+  "waxup.brush.moveHint": "Grab the tooth anywhere and pull: everything inside the circle follows, most at the middle. A larger circle re-forms more of the tooth. Esc puts the brush down.",
   "waxup.brush.addHint": "Brush on to build wax up (Ctrl takes it away). The orange circle shows the area. Esc puts the brush down.",
   "waxup.brush.removeHint": "Brush on to take wax away (Ctrl adds). The orange circle shows the area. Esc puts the brush down.",
   "waxup.brush.smoothHint": "Brush on to even the surface out. Esc puts the brush down.",

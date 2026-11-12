@@ -9668,6 +9668,12 @@ export function LayerlingEditor({
   };
   /** Build 108: Wax-up Studio's Sculpt - the brush, size and strength in hand, kept from tooth to tooth. */
   const waxSculptLast = useRef<{ tool: SculptTool; size: number; strength: number } | null>(null);
+  /**
+   * Build 314: Move keeps a size of its own on a wax tooth, and starts large - it re-forms a part of the tooth (a
+   * corner, a side, a third of a face), where Add, Remove and Smooth work on a spot. The other brushes' size is kept
+   * beside it.
+   */
+  const waxSculptSizes = useRef({ move: 60, spot: 30 });
   const openSculpt = useCallback((shape: WorkplaneShape, trim = false) => {
     if (shape.locked || shape.hole || isNonSolidShapeKind(shape.kind)) { setNotice(t("sculpt.selectOne")); return; }
     setMeshRoundTool(null);
@@ -10116,11 +10122,15 @@ export function LayerlingEditor({
     state.live.beginPatch();
     if (brush === "move") {
       const radius = brushRadiusAt(x, y, tool.size, hit.point);
+      const wholeGrab = shape.dental === "wax";
       const grabOf = (centre: Vec3, seed: number) => {
         const out: Array<[number, number, number, number, number]> = [];
         for (const [v, d] of state.live.region(centre, radius, seed)) {
           const f = (1 - (d / radius) ** 2) * Math.sqrt(state.live.freeOf(v));
-          if (f > 0) out.push([v, f * f * tool.strength * 2, state.live.pos[v * 3], state.live.pos[v * 3 + 1], state.live.pos[v * 3 + 2]]);
+          // Build 314 (Rakesh, of a morph tool that takes the surface with the pointer: "our current move tool is not as
+          // good as theirs"): on a wax tooth the spot taken hold of goes exactly where the pointer goes, whatever the
+          // strength is set to (it had followed by 58% of the way, and so felt slack).
+          if (f > 0) out.push([v, f * f * (wholeGrab ? 1 : tool.strength * 2), state.live.pos[v * 3], state.live.pos[v * 3 + 1], state.live.pos[v * 3 + 2]]);
         }
         return out;
       };
@@ -10886,12 +10896,12 @@ export function LayerlingEditor({
     }
     const tool = WAX_BRUSH_TOOL[waxSculptBrush];
     if (sculptToolRef.current?.shapeId === id) {
-      if (sculptToolRef.current.tool !== tool) setSculptTool((current) => (current ? { ...current, tool } : current));
+      if (sculptToolRef.current.tool !== tool) setSculptTool((current) => (current ? { ...current, tool, size: tool === "move" ? waxSculptSizes.current.move : current.tool === "move" ? waxSculptSizes.current.spot : current.size } : current));
       return;
     }
     waxSculptOpened.current = id;
     if (sculptToolRef.current) { flushSculptRef.current(); setSculptTool(null); setSelectedIds([shape.id]); }
-    waxSculptLast.current = { tool, size: waxSculptLast.current?.size ?? 30, strength: waxSculptLast.current?.strength ?? SCULPT_STRENGTH };
+    waxSculptLast.current = { tool, size: tool === "move" ? waxSculptSizes.current.move : waxSculptSizes.current.spot, strength: waxSculptLast.current?.strength ?? SCULPT_STRENGTH };
     attractOnly.current = null;
     window.setTimeout(() => openSculpt(shape), 0);
   }, [studioWaxSculpt, selectedIds, waxSculptBrush]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -10907,6 +10917,7 @@ export function LayerlingEditor({
   useEffect(() => {
     if (!studioWaxSculpt || !sculptTool || sculptTool.trim || !sculptTool.tool || !WAX_SCULPT_TOOLS.includes(sculptTool.tool)) return;
     waxSculptLast.current = { tool: sculptTool.tool, size: sculptTool.size, strength: sculptTool.strength };
+    if (sculptTool.tool === "move") waxSculptSizes.current.move = sculptTool.size; else waxSculptSizes.current.spot = sculptTool.size;
   }, [studioWaxSculpt, sculptTool?.tool, sculptTool?.size, sculptTool?.strength]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 106: the Model Builder step open in the frame - the right-click menu follows it.
   // Build 106: Trim and tidy's Done moves on - to the lower arch after the upper, then to the next step.
