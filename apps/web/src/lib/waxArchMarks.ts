@@ -127,6 +127,13 @@ export function orderArchMarks<T extends Vec3 | null | undefined>(slot: "upper" 
     if (wrong(sorted) < wrong(seven)) seven = sorted;
     seven.forEach((p, i) => { out[i] = p as T; });
   }
+  // All nine placed and still something wrong (a click that missed puts a tip among the contacts): across the arch
+  // a canine's tip lies between its two contacts, so of the nine in order the second from each end are the tips.
+  if (out.slice(0, ARCH_MARK_COUNT).every(Boolean) && archMarkProblems(slot, out).length) {
+    const nine = (out.slice(0, ARCH_MARK_COUNT) as Vec3[]).sort((a, b) => side(a) - side(b));
+    const tried = [nine[0], nine[2], nine[3], nine[4], nine[5], nine[6], nine[8], nine[1], nine[7]];
+    if (archMarkProblems(slot, tried).length < archMarkProblems(slot, out).length) tried.forEach((p, i) => { out[i] = p as T; });
+  }
   const tipRight = out[ARCH_MARK_CONTACTS], tipLeft = out[ARCH_MARK_CONTACTS + 1];
   if (tipRight && tipLeft && side(tipRight) > side(tipLeft)) { out[ARCH_MARK_CONTACTS] = tipLeft; out[ARCH_MARK_CONTACTS + 1] = tipRight; }
   return out;

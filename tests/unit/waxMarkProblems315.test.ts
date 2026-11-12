@@ -105,3 +105,12 @@ describe("marks clicked in any order are put in order (build 316)", () => {
     expect(orderArchMarks("upper", m, left)).toEqual(m);
   });
 });
+
+describe("a tip clicked among the contacts is found out (build 316)", () => {
+  it("all nine in any order at all - a tip clicked before the last contact - come out right", () => {
+    const m = arch();
+    // Clicked: six contacts, then a tip (taken for the seventh contact), then the last contact and the other tip (taken for tips).
+    const clicked = [m[3], m[0], m[6], m[2], m[5], m[1], m[8], m[4], m[7]];
+    expect(orderArchMarks("upper", clicked, [1, 0, 0])).toEqual(m);
+  });
+});
