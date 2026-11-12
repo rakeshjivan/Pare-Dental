@@ -88,3 +88,53 @@ describe("a tooth shaped by handles (build 311)", () => {
     expect(worst).toBeLessThan(1e-9);
   });
 });
+
+/**
+ * Build 312 (Rakesh, of a flared side that came out hollow and then flat: "no straight, you can see the 3
+ * dimensional curve of the tooth"): the stiff spread carries a pull out in a full curve, so a side keeps its bulge.
+ */
+describe("a tooth flared by its incisal corners keeps the full curve of its sides (build 312)", () => {
+  // Only what is pulled or held is a handle: both incisal corners pulled, the neck held.
+  const at = (id: string, fx: number, fz: number): Handle => ({ id, at: cornerAt(fx, 0.5, fz), reach: 0.6 });
+  const set = [at("il", 0, 1), at("ir", 1, 1), at("nl", 0.15, 0.08), at("nr", 0.85, 0.08), at("neck", 0.5, 0)];
+  const pulls = { il: [-1.5, 0, 0] as const, ir: [1.5, 0, 0] as const };
+  const t0 = performance.now();
+  const stiff = handleWeights(mesh, set, 1e-4, true);
+  const took = performance.now() - t0;
+  const soft = handleWeights(mesh, set);
+  /** The outline of the tooth's right side: its outermost x at each tenth of its length, neck to edge. */
+  const side = (points: Float64Array) => [0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85].map((f) => {
+    const z = box.lo[2] + f * (box.hi[2] - box.lo[2]);
+    let most = -Infinity;
+    for (let v = 0; v < n; v += 1) if (Math.abs(mesh.points[v * 3 + 2] - z) < 0.3) most = Math.max(most, points[v * 3]);
+    return most;
+  });
+
+  it("is found in a few seconds", () => {
+    console.log(`stiff handles: ${stiff.rounds} rounds, ${took.toFixed(0)} ms`);
+    expect(took).toBeLessThan(8000);
+  });
+
+  it("the side widens more and more towards the edge, and bows outwards all the way: never hollow, never a straight run", () => {
+    const was = side(mesh.points), now = side(pullHandles(mesh.points, stiff, pulls));
+    for (let i = 1; i < now.length; i += 1) expect(now[i] - was[i]).toBeGreaterThan(now[i - 1] - was[i - 1]);
+    const steps = now.slice(1).map((x, i) => x - now[i]);
+    // Each step outwards is smaller than the one below it: a curve that is full, as the tooth's own side is.
+    for (let i = 1; i < steps.length; i += 1) expect(steps[i]).toBeLessThan(steps[i - 1] - 0.02);
+  });
+
+  it("is fuller in the middle of the side than the soft spread, which runs nearly straight there", () => {
+    const hard = side(pullHandles(mesh.points, stiff, pulls)), easy = side(pullHandles(mesh.points, soft, pulls));
+    expect(hard[2] - easy[2]).toBeGreaterThan(0.15);
+    expect(hard[3] - easy[3]).toBeGreaterThan(0.15);
+  });
+
+  it("holds the held handles still and moves the pulled ones by the whole pull", () => {
+    const pulled = pullHandles(mesh.points, stiff, pulls);
+    for (let v = 0; v < n; v += 1) {
+      const dx = pulled[v * 3] - mesh.points[v * 3];
+      if (stiff.weights[1][v] === 1) expect(dx).toBeCloseTo(1.5, 9);
+      if (stiff.weights[4][v] === 1) expect(dx).toBe(0);
+    }
+  });
+});

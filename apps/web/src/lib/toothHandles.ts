@@ -16,7 +16,16 @@
  * held one without a crease. The weights are found once for a tooth and its set of handles; after that any pull of
  * any handle is a sum - instant, and exactly undone by taking the same sum off.
  *
- * Written here from the mathematics (harmonic coordinates on a mesh; the conjugate gradient method); no code taken.
+ * Build 312 (Rakesh, of a side that came out hollow and then flat: "no straight, you can see the 3 dimensional
+ * curve of the tooth"): the stiff spread. The smoothest spread above behaves like a stretched membrane - it comes
+ * to a point at a handle and runs nearly straight between two - so a side pulled by it loses its fullness. The stiff
+ * spread behaves like a bent sheet of spring steel instead (the least bending, not the least stretching: each
+ * corner's difference from its neighbours is itself as even as it can be). It leaves a handle level, with no
+ * point and no crease, and carries the pull out in a full curve - so the tooth's own bulge rides on a gently
+ * curved move and stays a bulge.
+ *
+ * Written here from the mathematics (harmonic and biharmonic coordinates on a mesh; the conjugate gradient method);
+ * no code taken.
  */
 
 export type HandleMesh = { points: Float64Array; triangles: Uint32Array };
@@ -60,7 +69,7 @@ const ease = (x: number) => { const t = Math.min(1, Math.max(0, x)); return t * 
  * for the others; where two reaches overlap, the nearer handle's). `tolerance`: how close the spread is brought to
  * the smoothest (the largest change left in any weight).
  */
-export function handleWeights(mesh: HandleMesh, handles: Handle[], tolerance = 1e-4): HandleWeights {
+export function handleWeights(mesh: HandleMesh, handles: Handle[], tolerance = 1e-4, stiff = false): HandleWeights {
   const n = mesh.points.length / 3, p = mesh.points;
   const { start, other, weight, total } = edges(mesh);
   // Which handle holds each corner (-1: free).
@@ -93,6 +102,7 @@ export function handleWeights(mesh: HandleMesh, handles: Handle[], tolerance = 1
       out[i] = sum;
     }
   };
+  if (stiff) return stiffWeights(n, handles, held, free, slot, { start, other, weight, total }, tolerance);
   const weights: Float32Array[] = [];
   let rounds = 0;
   const x = new Float64Array(m), r = new Float64Array(m), z = new Float64Array(m), d = new Float64Array(m), q = new Float64Array(m);
@@ -126,6 +136,77 @@ export function handleWeights(mesh: HandleMesh, handles: Handle[], tolerance = 1
     }
     const w = new Float32Array(n);
     for (let v = 0; v < n; v += 1) w[v] = held[v] === k ? 1 : held[v] >= 0 ? 0 : ease(x[slot[v]]);
+    weights.push(w);
+  });
+  return { ids: handles.map((handle) => handle.id), weights, rounds };
+}
+
+/**
+ * The stiff spread: for each handle the weights w (1 on it, 0 on the others) whose unevenness - at every corner,
+ * its difference from the average of its neighbours - is as small as can be over the whole tooth, handles'
+ * corners included (which is what keeps the surface level where it leaves a handle). That is least squares:
+ * (Lf' Lf) x = -Lf' Lh h, with L the difference-from-neighbours of every corner, split into its free and its held
+ * columns; solved by conjugate gradients, each corner scaled by its own diagonal.
+ */
+function stiffWeights(n: number, handles: Handle[], held: Int32Array, free: number[], slot: Int32Array, graph: ReturnType<typeof edges>, tolerance: number): HandleWeights {
+  const { start, other, weight, total } = graph;
+  const m = free.length;
+  // L y for every corner, y given on all corners.
+  const lap = (y: Float64Array, out: Float64Array) => {
+    for (let v = 0; v < n; v += 1) {
+      let sum = 0;
+      for (let e = start[v]; e < start[v + 1]; e += 1) sum += weight[e] * y[other[e]];
+      out[v] = y[v] - sum / total[v];
+    }
+  };
+  // L' y (L is not symmetric once each row is divided by its own total).
+  const lapT = (y: Float64Array, out: Float64Array) => {
+    for (let v = 0; v < n; v += 1) out[v] = y[v];
+    for (let v = 0; v < n; v += 1) { const share = y[v] / total[v]; for (let e = start[v]; e < start[v + 1]; e += 1) out[other[e]] -= weight[e] * share; }
+  };
+  // The diagonal of Lf' Lf: for free corner u, 1 + the sum over its neighbours v of (w / total_v) squared.
+  const scale = new Float64Array(m);
+  for (let i = 0; i < m; i += 1) scale[i] = 1;
+  for (let v = 0; v < n; v += 1) for (let e = start[v]; e < start[v + 1]; e += 1) { const j = slot[other[e]]; if (j >= 0) scale[j] += (weight[e] / total[v]) ** 2; }
+  const full = new Float64Array(n), mid = new Float64Array(n), back = new Float64Array(n);
+  const apply = (x: Float64Array, out: Float64Array) => {
+    full.fill(0);
+    for (let i = 0; i < m; i += 1) full[free[i]] = x[i];
+    lap(full, mid); lapT(mid, back);
+    for (let i = 0; i < m; i += 1) out[i] = back[free[i]];
+  };
+  const weights: Float32Array[] = [];
+  let rounds = 0;
+  const x = new Float64Array(m), r = new Float64Array(m), z = new Float64Array(m), d = new Float64Array(m), q = new Float64Array(m);
+  handles.forEach((_, k) => {
+    x.fill(0);
+    full.fill(0);
+    for (let v = 0; v < n; v += 1) if (held[v] === k) full[v] = 1;
+    lap(full, mid); lapT(mid, back);
+    let rz = 0;
+    for (let i = 0; i < m; i += 1) { r[i] = -back[free[i]]; z[i] = r[i] / scale[i]; d[i] = z[i]; rz += r[i] * z[i]; }
+    let calm = 0;
+    for (let round = 0; round < 20000 && rz > 1e-30; round += 1) {
+      apply(d, q);
+      let dq = 0;
+      for (let i = 0; i < m; i += 1) dq += d[i] * q[i];
+      if (!(dq > 0)) break;
+      const alpha = rz / dq;
+      let most = 0;
+      for (let i = 0; i < m; i += 1) { const step = alpha * d[i]; x[i] += step; r[i] -= alpha * q[i]; if (Math.abs(step) > most) most = Math.abs(step); }
+      rounds += 1;
+      // A stiff spread settles slowly and unevenly: stop only once the steps have stayed small for a while.
+      calm = most < tolerance ? calm + 1 : 0;
+      if (calm >= 20) break;
+      let next = 0;
+      for (let i = 0; i < m; i += 1) { z[i] = r[i] / scale[i]; next += r[i] * z[i]; }
+      const beta = next / rz;
+      rz = next;
+      for (let i = 0; i < m; i += 1) d[i] = z[i] + beta * d[i];
+    }
+    const w = new Float32Array(n);
+    // A bent sheet may spring a little past its ends (under 0, over 1); the share is kept as found, not eased.
+    for (let v = 0; v < n; v += 1) w[v] = held[v] === k ? 1 : held[v] >= 0 ? 0 : x[slot[v]];
     weights.push(w);
   });
   return { ids: handles.map((handle) => handle.id), weights, rounds };
