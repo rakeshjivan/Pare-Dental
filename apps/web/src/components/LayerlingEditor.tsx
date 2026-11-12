@@ -12695,7 +12695,9 @@ export function LayerlingEditor({
     // Build 317 (Rakesh, of Find for me on the hard case: "Nothing - and I trimmed everything up to the first
     // premolars"): the front teeth are read from the whole arch, and a scan trimmed back to them can no longer be
     // read. The marks found on the scan as it was imported (before Trim) are used then - if they still lie on it.
-    const early = found ? null : waxMarksAtImport.current.get(arch.slot);
+    const kept = found ? null : waxMarksAtImport.current.get(arch.slot), turnNow = dentalFileTurn.current;
+    const early = kept && turnNow ? kept.map((p) => new THREE.Vector3(...p).applyMatrix4(turnNow).toArray() as [number, number, number]) : null;
+    (window as unknown as { layerlingMarkDebug?: unknown }).layerlingMarkDebug = { kept: kept?.length ?? 0, turn: Boolean(turnNow), on: early ? marksOnScan(early, arch.scan) : null };
     if (!found && early && marksOnScan(early, arch.scan)) {
       waxRecord();
       const back = arch.sceneToInput.clone().invert();
@@ -12796,8 +12798,11 @@ export function LayerlingEditor({
       waxMarksTried.current.add(arch.shape.id);
       let found: ReturnType<typeof autoArchMarks> = null;
       try { found = autoArchMarks(arch.scan, arch.slot); } catch { found = null; }
-      // In the scan's own coordinates: those are kept through trimming, where its place in the scene is not.
-      if (found) waxMarksAtImport.current.set(arch.slot, found.marks.map((point) => [point[0], point[1], point[2]] as [number, number, number]));
+      // In the scan file's own coordinates: those are kept through trimming, where its place in the scene is not -
+      // nor the turn given to the coordinates handed to the studio, which is judged from the scan's spans (a scan
+      // trimmed to its front teeth is no longer flattest along the vertical).
+      const turn = dentalFileTurn.current;
+      if (found && turn) { const back = turn.clone().invert(); waxMarksAtImport.current.set(arch.slot, found.marks.map((point) => new THREE.Vector3(...point).applyMatrix4(back).toArray() as [number, number, number])); }
     }, 400);
     return () => window.clearTimeout(timer);
   }, [dentalStudio?.waxStudio, dentalStudio?.analysis, dentalStudio?.slots.upper, dentalStudio?.slots.lower, waxup.slot, studioWaxStep]); // eslint-disable-line react-hooks/exhaustive-deps
