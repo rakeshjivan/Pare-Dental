@@ -12361,7 +12361,7 @@ export function LayerlingEditor({
       return { strayArrays, strayMillions: strayNumbers / 1e6, readOnlyMeshes: readOnlyMeshes.size, shapes: shapesRef.current.length, shownMillions: shown / 1e6, historySteps: history.length, historyIndex: historyIndexRef.current, historyOnlyMillions: history.map((n) => +(n / 1e6).toFixed(1)), biteCopies: madeBiteRef.current.size, biteMillions: bite / 1e6 };
     };
   }, []);
-  useEffect(() => { (window as unknown as { layerlingWaxupState?: () => unknown }).layerlingWaxupState =() => { const w = waxupRef.current; return { slot: w.slot, setRank: w.setRank, rankInfo: waxRankInfo.current, setId: w.setId, setIds: w.setIds, setName: w.setName, single: w.single, placed: w.placed.length, busy: w.busy, error: w.error }; }; }, []);
+  useEffect(() => { (window as unknown as { layerlingWaxupState?: () => unknown }).layerlingWaxupState =() => { const w = waxupRef.current; return { slot: w.slot, setRank: w.setRank, rankInfo: waxRankInfo.current, setId: w.setId, setIds: w.setIds, setName: w.setName, single: w.single, placed: w.placed.length, busy: w.busy, error: w.error, archMarks: w.archMarks?.[w.slot] ?? [] }; }; }, []);
   /**
    * Build 101: Wax-up Studio's own Undo and Redo - every step (placing, the sliders, nudges, the teeth
    * chosen, the set, the occlusion) records the wax-up's settings with the design's place in its history;
