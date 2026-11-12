@@ -116,6 +116,7 @@ import { DentalChrome } from "./workplane/DentalChrome";
 import { STUDIO_SHELL, WAXUP_ENABLED } from "@/lib/pareFeatures";
 import { fitArchLine, layOnArchLine, type ArchTooth } from "@/lib/waxArchLine";
 import { clampEdit, editPose, editTooth, heldKey, isNoEdit, withLocks, NO_EDIT, palatalDepth, uneditTooth, type ToothEdit, type EditKey, EDIT_RANGES } from "@/lib/waxToothEdit";
+import { coverChange, coverNeed } from "@/lib/waxCover";
 import { cutterBox, proudOfWax, sweptSurface } from "@/lib/waxReduce";
 import { ARCH_MARK_CONTACTS, ARCH_MARK_GUM, ARCH_MARK_GUMS, archMarkLabel, frontTeeth, gumMarks, markedWidths, nextArchMark, orderArchMarks } from "@/lib/waxArchMarks";
 import { autoArchMarks } from "@/lib/waxAutoMarks";
@@ -14332,7 +14333,12 @@ export function LayerlingEditor({
         waxupRef.current = { ...waxupRef.current, smile: { ...(waxupRef.current.smile ?? {}), [arch.slot]: record } };
         setWaxup((latest) => ({ ...latest, smile: { ...(latest.smile ?? {}), [arch.slot]: record } }));
         // The first proposal: the set laid on the arch with the default controls.
-        window.setTimeout(() => commitWaxSmile(record.controls, false, keptOwn && Object.keys(keptOwn).length ? keptOwn : undefined), 0);
+        window.setTimeout(() => {
+          commitWaxSmile(record.controls, false, keptOwn && Object.keys(keptOwn).length ? keptOwn : undefined);
+          // Build 318: a set laid for the first time is made to cover the patient's teeth (one laid again keeps the
+          // dentist's own changes, and is left as it is).
+          if (!(keptOwn && Object.keys(keptOwn).length)) window.setTimeout(() => { (window as unknown as { layerlingWaxCovered?: unknown }).layerlingWaxCovered = waxCoverSet(false); }, 250);
+        }, 0);
       } else if (drop) {
         setWaxup((latest) => { const { [arch.slot]: _gone, ...rest } = latest.smile ?? {}; return { ...latest, smile: rest }; }); // eslint-disable-line @typescript-eslint/no-unused-vars
       }
@@ -14475,6 +14481,39 @@ export function LayerlingEditor({
     }
     return { soups, totals, poses, laid, layout, record };
   };
+  /**
+   * Build 318 (Rakesh: "the teeth not auto scaling so the wax-up covers the whole tooth on placement ... it can't
+   * just scale so the tooth becomes giant. It needs to remain anatomical"): each tooth of the set, as it is laid,
+   * made to cover the patient's tooth where that still shows behind it or beyond its edge - fuller palatally and a
+   * little longer, by no more than a dentist would add by hand (lib/waxCover). Returns what was added per tooth.
+   */
+  const waxCoverSet = (record = true): Record<number, { palatal: number; length: number }> => {
+    const current = waxupRef.current, slot = current.slot;
+    const smile = current.smile?.[slot];
+    const arch = waxArch();
+    const archId = dentalStudioRef.current?.slots[slot];
+    if (!smile || !arch || !archId) return {};
+    const scan = worldTriangles(arch.shape);
+    const upArch = new THREE.Vector3(...smile.anchors.up).normalize();
+    const own: Record<number, ToothEdit> = { ...(smile.pending ?? smile.own ?? {}) };
+    const added: Record<number, { palatal: number; length: number }> = {};
+    for (const shape of waxTeethOf(archId)) {
+      const fdi = shape.waxTooth?.fdi, rest = fdi ? smile.rest[fdi] : undefined;
+      if (!fdi || !rest || current.locks[fdi] || !smile.laid[fdi]) continue;
+      const edit = { ...NO_EDIT, ...(own[fdi] ?? {}) };
+      const depth = Math.min(-0.5, waxSmilePalatal.current.get(shape.id) ?? -6);
+      const total = new THREE.Matrix4().fromArray(smile.laid[fdi]).multiply(editPose(rest.frame, rest.length, depth, edit));
+      const level = smile.anchors.margins?.[frontTeeth(slot).indexOf(fdi)];
+      const need = coverNeed(scan, worldTriangles(shape), moveFrame(rest.frame, total), rest.width + edit.mesial + edit.distal, rest.length + edit.length, level !== null && level !== undefined ? { up: [upArch.x, upArch.y, upArch.z], level } : undefined);
+      const change = coverChange(need, rest.width + edit.mesial + edit.distal, rest.length, { palatal: edit.palatal, length: edit.length });
+      if (change.palatal < 0.05 && change.length < 0.05) continue;
+      own[fdi] = clampEdit({ ...edit, palatal: edit.palatal + change.palatal, length: edit.length + change.length });
+      added[fdi] = change;
+    }
+    if (Object.keys(added).length) commitWaxSmileRef.current?.(smile.controls, record, own);
+    return added;
+  };
+  const commitWaxSmileRef = useRef<((controls: SetControls, record?: boolean, own?: Record<number, ToothEdit>) => void) | null>(null);
   /** Build 277: the set and the teeth's own changes laid and kept (one step of the history when `record` is true). */
   const commitWaxSmile = (controls: SetControls, record = true, own?: Record<number, ToothEdit>) => {
     const current = waxupRef.current;
@@ -14513,6 +14552,7 @@ export function LayerlingEditor({
       placed: latest.placed.map((entry) => { const shape = changed.get(entry.id); return shape?.waxTooth ? { ...entry, width: shape.waxTooth.width, length: shape.waxTooth.length, clearance: null } : entry; }),
     }));
   };
+  commitWaxSmileRef.current = commitWaxSmile;
   /** Build 282: a control's shown value updated at most once a frame (the editor redrawn once, not on every event). */
   const waxStateNext = useRef(new Map<string, () => void>());
   const waxStateFrameId = useRef(0);
