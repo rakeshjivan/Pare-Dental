@@ -29,6 +29,15 @@ export const BLEND_PROUD = 3;
 /** How far up a wax tooth (0 its cervical end, 1 its edge) the reach starts to grow, and where it is whole. */
 const CROWN_FROM = 0.4;
 const CROWN_FULL = 0.6;
+/**
+ * Build 308 (Rakesh: "the smoothing at the gum that is automatically applied when the models are made is a
+ * regression - it was much better" before): the reach at the gum line on a made model. None: a wax tooth meets the
+ * gum at its own crisp margin, as a tooth does; wax is run in only up the crown, where the patient's tooth stands
+ * out of it.
+ */
+export const BLEND_GUM = 0;
+/** Below this reach there is no wax at all, mm. */
+const LEAST_REACH = 0.3;
 /** The grid, mm. */
 export const BLEND_CELL = 0.12;
 /** The fillet is drawn in by this (the grid's uncertainty), so it never stands as a skin on a surface it only runs along, mm. */
@@ -80,8 +89,8 @@ function evened(field: Float32Array, grid: Grid): Float32Array {
  * do not come together (or it cannot be made). The caller frees it.
  */
 export function waxBlend(runtime: ManifoldRuntime, model: ManifoldSolid, tooth: ManifoldSolid, reach = BLEND_REACH, crown: { up: [number, number, number]; reach: number } | null = null): ManifoldSolid | null {
-  if (reach <= 0 || tooth.isEmpty() || model.isEmpty()) return null;
   const most = Math.max(reach, crown?.reach ?? 0);
+  if (most <= 0 || tooth.isEmpty() || model.isEmpty()) return null;
   const box = tooth.boundingBox(), pad = 0.8 * most + 1;
   const min = [box.min[0] - pad, box.min[1] - pad, box.min[2] - pad] as [number, number, number];
   const size = [box.max[0] - box.min[0] + 2 * pad, box.max[1] - box.min[1] + 2 * pad, box.max[2] - box.min[2] + 2 * pad] as [number, number, number];
@@ -127,6 +136,8 @@ export function waxBlend(runtime: ManifoldRuntime, model: ManifoldSolid, tooth: 
       // Cheap first: nothing where either surface is beyond the most the reach can be.
       if (Math.max(Math.abs(p), Math.abs(q)) >= 0.75 * most) { field[i] = -1; continue; }
       const k = reachAt(i);
+      // No reach here (the gum, when only what stands out up the crown is blended): no wax.
+      if (k < LEAST_REACH) { field[i] = -1; continue; }
       // Beyond three quarters of the reach from either surface the wax is thinner than the inset: nothing there.
       const near = 0.75 * k - Math.max(Math.abs(p), Math.abs(q));
       if (near <= 0) { field[i] = -1; continue; }

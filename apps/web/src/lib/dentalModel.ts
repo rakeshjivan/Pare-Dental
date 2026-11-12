@@ -21,7 +21,15 @@ import { polygonDistance } from "@/lib/dentalSnapHinge";
 import { labelSection, labelText, labelWidth } from "@/lib/dentalLabel";
 import { insideOf, splitShells } from "@/lib/dentalWaxup";
 import { makeSolidPositions } from "@/lib/meshRepair";
-import { BLEND_PROUD, BLEND_REACH, waxBlend, waxWall } from "@/lib/waxBlend";
+import { BLEND_GUM, BLEND_PROUD, waxBlend, waxWall } from "@/lib/waxBlend";
+/**
+ * Build 308 (Rakesh, of the models of test build 307: "these would not be usable ... the smoothing that is
+ * automatically applied when the models are made is a regression - it was much better" in build 303): no wax is run
+ * into the joins when a model is made. On a crowded arch, where the patient's teeth lie close to the wax teeth all
+ * round, it webbed the wax teeth to each other and to the gum and left seams across their faces. The wax teeth go on
+ * as designed, crisp, as they did. lib/waxBlend is kept for a tool the dentist applies where it is wanted.
+ */
+const WAX_BLEND: boolean = false;
 /** Build 306: the least wall a hollow model keeps round a wax tooth, mm. */
 const WAX_WALL = 1.5;
 import { GUM_REACH, marginRegion, moveGumCut, type GumCut } from "@/lib/waxGum";
@@ -1425,6 +1433,8 @@ function buildArch(
   // Build 79: the wax-up, tooth by tooth (library teeth may overlap their neighbours).
   const waxShells = wax && wax.length ? splitShells(transformSoup(wax, arch.frame), 4) : [];
   let waxJoined = 0;
+  // Build 308: only up the crown, where the patient's own tooth stands out of the wax - at the gum a wax tooth keeps
+  // its own crisp margin (the fillet there read as the gum smoothed over).
   // Build 306: wax is run into each tooth's join with the model as the patient's is (the model before any wax tooth
   // is on it: the embrasures between the wax teeth are not filled) - lib/waxBlend.
   const beforeWax = solid;
@@ -1456,7 +1466,7 @@ function buildArch(
       waxJoined += 1;
       // Never at the cost of the tooth: a blend that cannot be made is left off.
       try {
-        const blend = waxBlend(runtime, beforeWax, tooth, BLEND_REACH, { up: [0, 0, 1], reach: BLEND_PROUD });
+        const blend = WAX_BLEND ? waxBlend(runtime, beforeWax, tooth, BLEND_GUM, { up: [0, 0, 1], reach: BLEND_PROUD }) : null;
         if (blend) {
           keepSolid(blend);
           const cut = hollowed ? keepSolid(runtime.Manifold.difference(blend, hollowTaken!)) : blend;

@@ -105,6 +105,22 @@ describe("waxBlend (build 306)", () => {
     [own, model, tooth, plain, small, sloped, a, b].forEach((s) => s.delete());
   }, 60000);
 
+  it("with no reach at the gum, leaves the gum line as it is and still runs wax up to what stands out up the crown", () => {
+    const own = runtime.Manifold.cube([4, 2, 5], true).translate([0, -3.5, 7.5]);
+    const model = runtime.Manifold.union(gum(), own);
+    const tooth = runtime.Manifold.cube([6, 6, 13], true).translate([0, 0, 3.5]);
+    const plain = runtime.Manifold.union(model, tooth);
+    const wax = waxBlend(runtime, model, tooth, 0, { up: [0, 0, 1], reach: 3 })!;
+    expect(wax).not.toBeNull();
+    const joined = runtime.Manifold.union(plain, wax);
+    // The corner at the gum is a corner still; under the shelf up the crown there is wax.
+    expect(inside(joined, 3.2, 0.3, 0.2)).toBe(false);
+    expect(inside(joined, 0.3, -3.25, 4.6)).toBe(true);
+    // And the gum is untouched: nothing of the wax below a third of the way up the tooth.
+    expect(wax.boundingBox().min[2]).toBeGreaterThan(-3 + 13 * 0.33);
+    [own, model, tooth, plain, wax, joined].forEach((s) => s.delete());
+  }, 60000);
+
   it("gives nothing where the tooth and the model are apart", () => {
     const model = gum(), tooth = runtime.Manifold.cube([4, 4, 4], true).translate([0, 0, 8]);
     expect(waxBlend(runtime, model, tooth)).toBeNull();
