@@ -10105,6 +10105,9 @@ export function LayerlingEditor({
     if (stroke.refine !== "off") state.live.reserve(stroke.refine === "fine" ? 120000 : 40000);
     // Build 92: Attract pulls towards the other parts on the plate (the opposing arch, a tooth beside it).
     state.live.attractTarget = brush === "attract" ? attractTargetFor(shape, ownTooth) : null;
+    // Build 306 (Rakesh): on a wax tooth every other brush stops at the patient's own tooth - the wax is never
+    // taken under the scan it stands on.
+    state.live.floor = brush !== "attract" && shape.dental === "wax" && shape.waxFor ? attractTargetFor(shape, true) : null;
     if (brush === "attract" && !state.live.attractTarget) { setNotice(t("sculpt.attractNothing")); return; }
     state.live.beginPatch();
     if (brush === "move") {

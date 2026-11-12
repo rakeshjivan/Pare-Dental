@@ -57,6 +57,9 @@ class Grid {
 /** Corners (x y z alive, four numbers each) and triangles (a b c alive) to put back, with the counts in use. */
 export type LivePatch = { vCount: number; tCount: number; verts: Int32Array; vData: Float64Array; tris: Int32Array; tData: Int32Array };
 
+/** Build 306: how far above a floor a corner stops, and how far under it a corner counts as buried (free), mm. */
+const FLOOR_GAP = 0.03;
+const FLOOR_BURIED = 0.2;
 export class LiveMesh {
   /** Corner positions (x y z), capacity-sized; `vCount` in use, `vAlive` 0 for removed corners. */
   pos: Float64Array;
@@ -1136,6 +1139,29 @@ export class LiveMesh {
         }
       }
     }
+    // Build 306 (Rakesh: "the patient's tooth is the stop point when smoothing ... the wax doesn't go negative to
+    // it"): with a floor set (the scan under a wax tooth), no corner is taken through it - one that would end
+    // under the scan's surface stops on it. A corner already well under it (a wax tooth's neck stands in the gum)
+    // is left to move as it will.
+    const floor = this.floor;
+    if (floor && brush !== "attract") {
+      const q = this.attractPoint, tn = this.attractNormal;
+      for (let i = 0; i < count; i += 1) {
+        const v = corners[i];
+        const ox = p[v * 3], oy = p[v * 3 + 1], oz = p[v * 3 + 2];
+        const nx = ox + moves[i * 3], ny = oy + moves[i * 3 + 1], nz = oz + moves[i * 3 + 2];
+        const d = floor.nearest(nx, ny, nz, q);
+        const tri = floor.lastTriangle ?? -1;
+        if (!(d < Infinity) || tri < 0 || !floor.triangleNormal) continue;
+        floor.triangleNormal(tri, tn);
+        const after = (nx - q[0]) * tn[0] + (ny - q[1]) * tn[1] + (nz - q[2]) * tn[2];
+        if (after >= FLOOR_GAP) continue;
+        const before = (ox - q[0]) * tn[0] + (oy - q[1]) * tn[1] + (oz - q[2]) * tn[2];
+        if (before < -FLOOR_BURIED || after >= before) continue;
+        const back = Math.min(FLOOR_GAP, before) - after;
+        moves[i * 3] += tn[0] * back; moves[i * 3 + 1] += tn[1] * back; moves[i * 3 + 2] += tn[2] * back;
+      }
+    }
     for (let i = 0; i < count; i += 1) { const v = corners[i]; p[v * 3] += moves[i * 3]; p[v * 3 + 1] += moves[i * 3 + 1]; p[v * 3 + 2] += moves[i * 3 + 2]; this.moved(v); }
     this.rebin(corners, count);
     if (brush === "drag") this.dragPrev = [centre[0], centre[1], centre[2]];
@@ -1238,6 +1264,8 @@ export class LiveMesh {
   private attractNormal = new Float64Array(3);
   /** Build 105: Attract stops this short of the target, mm (the clearance; 0: onto it). */
   attractGap = 0;
+  /** Build 306: a surface no brush takes a corner through (the scan under a wax tooth), or none. */
+  floor: { nearest: (x: number, y: number, z: number, out: Float64Array) => number; lastTriangle?: number; triangleNormal?: (t: number, out: Float64Array) => void } | null = null;
   /** Build 108: Attract pulls onto what lies behind the surface (the tooth under a wax tooth), not in front. */
   attractInward = false;
   /** Build 105: Attract as before (onto the nearest point of anything within reach, no facing test or limits). */
