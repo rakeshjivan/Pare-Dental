@@ -8,7 +8,7 @@
  * bodies so that grouping joins all three without a skin.
  */
 import * as THREE from "three";
-import { meshForShape } from "@/lib/editorMeshCore";
+import { importedWorldTriangles, meshForShape } from "@/lib/editorMeshCore";
 import { meshShapeFromPositions } from "@/lib/lithophane";
 import { readPerforableFace, type PerforableFace } from "@/lib/holePatternShapes";
 import type { Point2 } from "@/lib/holePattern";
@@ -55,6 +55,9 @@ export function normalizeBlend(settings: Partial<BlendSettings>): BlendSettings 
 
 /** The triangles of a body in the world, nine numbers each. */
 export function worldTriangles(shape: WorkplaneShape): number[] {
+  // Build 321: an imported mesh (a scan, a wax tooth) straight to its triangles, without a mesh of small arrays.
+  const direct = importedWorldTriangles(shape);
+  if (direct) return direct;
   const mesh = meshForShape(shape);
   const out: number[] = [];
   mesh.faces.forEach((face) => face.forEach((index) => out.push(mesh.vertices[index][0], mesh.vertices[index][1], mesh.vertices[index][2])));

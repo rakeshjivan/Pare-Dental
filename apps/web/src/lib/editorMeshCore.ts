@@ -34,7 +34,7 @@ import { textDisplayGeometry } from "@/lib/textFill";
 import { rememberManifoldRuntime, setManifoldLoader } from "@/lib/manifoldHandle";
 import { meshForTwist, twistBandCount } from "@/lib/heightSlices";
 import { groupedContentScale, scaleGroupedVertices } from "@/lib/groupScale";
-import { deformsAboutOrigin, meshYawDegrees, mirroredAxisCount, mirrorSign, resizedImportedMeshPositions, shapeDepth, shapeExtrudeDeformAt, shapeHasExtrudeDeform, shapeHasTaper, shapeTaperScaleAt, shapeWidth } from "@/lib/workplaneShapes";
+import { deformsAboutOrigin, preservesEdgeTreatmentSize, meshYawDegrees, mirroredAxisCount, mirrorSign, resizedImportedMeshPositions, shapeDepth, shapeExtrudeDeformAt, shapeHasExtrudeDeform, shapeHasTaper, shapeTaperScaleAt, shapeWidth } from "@/lib/workplaneShapes";
 import type { WorkplaneShape } from "@/types/layerling";
 
 export type Vec3 = [number, number, number];
@@ -821,6 +821,49 @@ function importedMeshForShape(shape: WorkplaneShape): MeshData {
   }
 
   return transformMesh({ name: sanitizeName(shape.name), vertices, faces }, shape);
+}
+
+/**
+ * Build 321 (Rakesh, of a 16 GB MacBook pushed into the red by loading three scans: "Pare 3D's memory usage is the
+ * bottleneck"): an imported mesh's triangles in the world, nine numbers each, worked out directly - exactly what
+ * meshForShape gives, corner for corner, without its meshes of small arrays.
+ *
+ * meshForShape makes a three-number array for every corner of the mesh, then another for each one moved into the
+ * world, then a face for every triangle: for an arch scan well over a million small objects each time it is asked,
+ * and it is asked many times while scans are imported (a quarter of all the memory the page allocated). They are
+ * thrown away at once, but an engine that is slow to give memory back keeps the room they took.
+ *
+ * Null for what this does not cover (no mesh, a taper, a twist): the caller then asks meshForShape.
+ */
+export function importedWorldTriangles(shape: WorkplaneShape): number[] | null {
+  const mesh = shape.importedMesh;
+  if (shape.kind !== "mesh" || !mesh || mesh.positions.length < 9 || shapeHasTaper(shape) || shapeHasExtrudeDeform(shape)) return null;
+  // Resized as resizedImportedCoordinates does it, corner by corner - without a second list of the whole mesh
+  // (one whose edges are kept through a resize is left to that function).
+  const keeps = preservesEdgeTreatmentSize(shape);
+  const local = keeps ? resizedImportedMeshPositions(shape) : mesh.positions;
+  const width = shapeWidth(shape), depth = shapeDepth(shape), height = shape.height;
+  const baseWidth = Math.max(0.001, mesh.baseWidth), baseHeight = Math.max(0.001, mesh.baseHeight), baseDepth = Math.max(0.001, mesh.baseDepth);
+  const e = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(THREE.MathUtils.degToRad(shape.rotationX ?? 0), THREE.MathUtils.degToRad(meshYawDegrees(shape)), THREE.MathUtils.degToRad(shape.rotationZ ?? 0), "XYZ")).elements;
+  const mirrorX = mirrorSign(shape.mirrorX), mirrorY = mirrorSign(shape.mirrorY), mirrorZ = mirrorSign(shape.mirrorZ);
+  const centerY = shape.height / 2, lift = (shape.elevation ?? 0) + centerY;
+  const corners = Math.floor(local.length / 9) * 3;
+  const out = new Array<number>(corners * 3);
+  // A mesh mirrored an odd number of times has its triangles wound the other way: the second and third corner swapped.
+  const swap = mirroredAxisCount(shape) % 2 === 1;
+  for (let corner = 0; corner < corners; corner += 1) {
+    const from = corner * 3;
+    const lx = keeps ? local[from] : local[from] * width / baseWidth, ly = keeps ? local[from + 1] : local[from + 1] * height / baseHeight, lz = keeps ? local[from + 2] : local[from + 2] * depth / baseDepth;
+    const x = lx * mirrorX, y = (ly - centerY) * mirrorY, z = lz * mirrorZ;
+    // As THREE.Vector3.applyMatrix4 does it (the divide by w included), so the numbers are the same to the last bit.
+    const w = 1 / (e[3] * x + e[7] * y + e[11] * z + e[15]);
+    const k = corner % 3;
+    const to = (swap && k ? corner + (k === 1 ? 1 : -1) : corner) * 3;
+    out[to] = (e[0] * x + e[4] * y + e[8] * z + e[12]) * w + shape.x;
+    out[to + 1] = (e[1] * x + e[5] * y + e[9] * z + e[13]) * w + lift;
+    out[to + 2] = (e[2] * x + e[6] * y + e[10] * z + e[14]) * w + shape.z;
+  }
+  return out;
 }
 
 /** Tausender trennen, in der gerade eingestellten Sprache. */
