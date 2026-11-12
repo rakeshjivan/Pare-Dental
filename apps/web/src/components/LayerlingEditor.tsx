@@ -103,6 +103,8 @@ import { setHandleStyle, setHandleStyleStudio, useHandleStyle } from "@/lib/hand
 import { RADIAL_TOOLS, SculptRadialMenu, radialIndex } from "./workplane/SculptRadialMenu";
 /** Build 112: Wax-up Studio's four brushes, and the sculpt tool each is. */
 type WaxSculptBrush = "add" | "remove" | "smooth" | "move";
+/** Build 317: how near a corner of the scan a kept mark must be to count as still on it, mm. */
+const MARK_ON_SCAN = 3;
 const WAX_BRUSH_TOOL: Record<WaxSculptBrush, SculptTool> = { add: "draw", remove: "draw", smooth: "smooth", move: "move" };
 /** Build 112: Sculpt's tools, as CEREC's Design tools: Position & Rotate and Scale (the tooth's handles), then the brushes. */
 type WaxSculptTool = "position" | "scale" | WaxSculptBrush;
@@ -12678,11 +12680,14 @@ export function LayerlingEditor({
   /** Build 317: the nine marks found on each arch as it was imported (the scan's own coordinates), by its slot. */
   const waxMarksAtImport = useRef(new Map<string, Array<[number, number, number]>>());
   const waxMarksTried = useRef(new Set<string>());
-  const waxMarksWas = useRef<unknown>(null);
-  /** Whether marks still lie on a scan (both in the scan's own coordinates): each within a millimetre of a corner of it. */
+  /**
+   * Whether marks still lie on a scan (both in the scan's own coordinates): each within MARK_ON_SCAN of a corner of
+   * it. Not closer: a contact mark stands in the gap between two teeth (the midline one by a millimetre and a half
+   * on the hard case), off the surface of either.
+   */
   const marksOnScan = (marks: Array<[number, number, number]>, scan: Float32Array) => marks.every((mark) => {
     const p = new THREE.Vector3(...mark);
-    for (let i = 0; i + 2 < scan.length; i += 3) if (Math.abs(scan[i] - p.x) < 1 && Math.abs(scan[i + 1] - p.y) < 1 && Math.abs(scan[i + 2] - p.z) < 1) return true;
+    for (let i = 0; i + 2 < scan.length; i += 3) if (Math.abs(scan[i] - p.x) < MARK_ON_SCAN && Math.abs(scan[i + 1] - p.y) < MARK_ON_SCAN && Math.abs(scan[i + 2] - p.z) < MARK_ON_SCAN) return true;
     return false;
   });
   const findArchMarks = useCallback((thenClick: boolean) => {
@@ -12698,11 +12703,6 @@ export function LayerlingEditor({
     // read. The marks found on the scan as it was imported (before Trim) are used then - if they still lie on it.
     const kept = found ? null : waxMarksAtImport.current.get(arch.slot), turnNow = dentalFileTurn.current;
     const early = kept && turnNow ? kept.map((p) => new THREE.Vector3(...p).applyMatrix4(turnNow).toArray() as [number, number, number]) : null;
-    {
-      const box = (p: ArrayLike<number>) => { const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]; for (let i = 0; i < p.length; i += 1) { lo[i % 3] = Math.min(lo[i % 3], p[i]); hi[i % 3] = Math.max(hi[i % 3], p[i]); } return [...lo, ...hi].map((x) => Math.round(x * 10) / 10); };
-      const near = (m: number[]) => { let best = Infinity; for (let i = 0; i + 2 < arch.scan.length; i += 3) best = Math.min(best, Math.hypot(arch.scan[i] - m[0], arch.scan[i + 1] - m[1], arch.scan[i + 2] - m[2])); return Math.round(best * 10) / 10; };
-      (window as unknown as { layerlingMarkDebug?: unknown }).layerlingMarkDebug = { kept: kept?.length ?? 0, turn: turnNow?.elements.slice(0, 12).map((x) => Math.round(x * 100) / 100), nowBox: box(arch.scan), nowCorners: arch.scan.length / 3, early: early?.[3], near: early?.map(near), was: waxMarksWas.current };
-    }
     if (!found && early && marksOnScan(early, arch.scan)) {
       waxRecord();
       const back = arch.sceneToInput.clone().invert();
@@ -12807,7 +12807,6 @@ export function LayerlingEditor({
       // nor the turn given to the coordinates handed to the studio, which is judged from the scan's spans (a scan
       // trimmed to its front teeth is no longer flattest along the vertical).
       const turn = dentalFileTurn.current;
-      { const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]; for (let i = 0; i < arch.scan.length; i += 1) { lo[i % 3] = Math.min(lo[i % 3], arch.scan[i]); hi[i % 3] = Math.max(hi[i % 3], arch.scan[i]); } waxMarksWas.current = { box: [...lo, ...hi].map((x) => Math.round(x * 10) / 10), corners: arch.scan.length / 3, turn: turn?.elements.slice(0, 12).map((x) => Math.round(x * 100) / 100), mark: found?.marks[3], score: found?.score }; }
       if (found && turn) { const back = turn.clone().invert(); waxMarksAtImport.current.set(arch.slot, found.marks.map((point) => new THREE.Vector3(...point).applyMatrix4(back).toArray() as [number, number, number])); }
     }, 400);
     return () => window.clearTimeout(timer);
