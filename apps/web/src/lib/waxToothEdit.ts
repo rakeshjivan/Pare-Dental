@@ -50,10 +50,13 @@ export type ToothEdit = {
 export const NO_EDIT: ToothEdit = { length: 0, mesial: 0, distal: 0, spread: 0, thickness: 0, palatal: 0, palatalM: 0, palatalD: 0, labialM: 0, labialD: 0, moveMesial: 0, moveOut: 0, moveUp: 0, rotate: 0, tip: 0, torque: 0 };
 
 /** The ranges offered, mm and degrees. */
+// Build 308 (Rakesh: "why is the canine restricted on how far I can move it buccally"): a tooth may be moved further
+// (it was 2 mm labially or palatally, 3 mm along the arch or up and down) - a canine set well inside a crowded arch
+// has further than that to come out.
 export const EDIT_RANGES: Record<keyof ToothEdit, readonly [number, number]> = {
   length: [-3, 4], mesial: [-2.5, 2.5], distal: [-2.5, 2.5], spread: [-2, 3], thickness: [-1, 1.5], palatal: [-1, 3],
   palatalM: [-1.5, 2], palatalD: [-1.5, 2], labialM: [-1.5, 2], labialD: [-1.5, 2],
-  moveMesial: [-3, 3], moveOut: [-2, 2], moveUp: [-3, 3], rotate: [-25, 25], tip: [-15, 15], torque: [-15, 15],
+  moveMesial: [-5, 5], moveOut: [-6, 6], moveUp: [-5, 5], rotate: [-25, 25], tip: [-15, 15], torque: [-15, 15],
 };
 
 export function clampEdit(edit: Partial<ToothEdit>): ToothEdit {
