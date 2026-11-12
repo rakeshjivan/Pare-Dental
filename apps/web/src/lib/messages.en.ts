@@ -5754,6 +5754,8 @@ export const MESSAGES_EN = {
   "waxup.smileCurve": "Arch curve",
   "waxup.smileCurveHint": "The depth of the curve the teeth sit on: 100% runs through the canine tips; more is a narrower, deeper arch.",
   "waxup.smileReset": "Back to the first proposal",
+  "waxup.smileCover": "Cover the teeth",
+  "waxup.smileCoverHint": "Makes each wax tooth a little fuller palatally and a little longer where the patient's tooth still shows behind it or beyond its edge. Capped (1.5 mm palatally, 1 mm in length) and kept in proportion, so no tooth is made oversized; what it cannot cover still shows in red.",
   "waxup.shapeSwitch": "Tooth shape",
   "waxup.setBest": "Best fit",
   "waxup.setBestHint": "Of the sets, this one needs the least change to fit the spaces you marked and the gum line. The choice of form is still yours.",

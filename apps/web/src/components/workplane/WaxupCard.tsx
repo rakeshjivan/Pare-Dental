@@ -183,6 +183,8 @@ export type WaxupView = {
 export type WaxupActions = {
   /** Build 277: a whole-set control changed. */
   onSmile?: (controls: SetControls) => void;
+  /** Build 318: the set's teeth made to cover the patient's teeth (lib/waxCover). */
+  onSmileCover?: () => void;
   /** Build 277: one tooth's own changes; and whether its partner across the midline follows. */
   onToothEdit?: (fdi: number, edit: ToothEdit) => void;
   onToothMirror?: (on: boolean) => void;
@@ -582,7 +584,7 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
                 ) : view.toothEdit && actions.onToothEdit ? (
                   <ToothEditPanel tooth={view.toothEdit} workspace={workspace} disabled={working} onChange={actions.onToothEdit} onStep={actions.onToothStep} onMirror={actions.onToothMirror} onCopyAcross={actions.onToothCopyAcross} onGive={actions.onToothGive} />
                 ) : (
-                  <SmileSetPanel set={view.smileSet} workspace={workspace} disabled={working} onChange={actions.onSmile} shapes={{ sets: view.builtIn.filter((entry) => entry.arch === view.slot), chosen: view.setIds?.[view.slot] ?? view.setId ?? null, best: view.setRank?.[view.slot]?.[0] ?? null, onPick: actions.onBuiltIn }} />
+                  <SmileSetPanel set={view.smileSet} workspace={workspace} disabled={working} onChange={actions.onSmile} onCover={actions.onSmileCover} shapes={{ sets: view.builtIn.filter((entry) => entry.arch === view.slot), chosen: view.setIds?.[view.slot] ?? view.setId ?? null, best: view.setRank?.[view.slot]?.[0] ?? null, onPick: actions.onBuiltIn }} />
                 )}
                 {/* Build 304 (Rakesh: the wax teeth adjusted to the patient's bite, then smoothed): Fit to the bite, here in
                     Design with both arches loaded - the palatal (and every surface the opposing teeth reach) trimmed back
@@ -816,7 +818,7 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
  * (RED), the smile arc, labial fullness; then, under More, the cant, the laterals' step and the curve.
  * Every value shown as a number; both sides change together and the teeth stay in contact.
  */
-function SmileSetPanel({ set, workspace, disabled, onChange, shapes }: { set: NonNullable<WaxupView["smileSet"]>; workspace: WorkplaneWorkspaceSettings; disabled: boolean; onChange: (controls: SetControls) => void; shapes?: { sets: Array<{ id: string; name: string }>; chosen: string | null; best: string | null; onPick: (id: string) => void } }) {
+function SmileSetPanel({ set, workspace, disabled, onChange, onCover, shapes }: { set: NonNullable<WaxupView["smileSet"]>; workspace: WorkplaneWorkspaceSettings; disabled: boolean; onChange: (controls: SetControls) => void; onCover?: () => void; shapes?: { sets: Array<{ id: string; name: string }>; chosen: string | null; best: string | null; onPick: (id: string) => void } }) {
   const [more, setMore] = useState(false);
   const c = set.controls;
   const r = SET_RANGES;
@@ -850,6 +852,8 @@ function SmileSetPanel({ set, workspace, disabled, onChange, shapes }: { set: No
         {mm("length", "waxup.smileLength", "waxup.smileLengthHint")}
         {mm("fullness", "waxup.smileFullness", "waxup.smileFullnessHint")}
         <div className="dental-trim-buttons">
+          {/* Build 318 (Rakesh: "why can't it run again"): the teeth made to cover the patient's teeth, whenever asked. */}
+          {onCover ? <button type="button" className="secondary" disabled={disabled} title={t("waxup.smileCoverHint")} onClick={onCover}>{t("waxup.smileCover")}</button> : null}
           <button type="button" className="secondary" disabled={disabled} onClick={() => onChange({ ...SET_DEFAULTS })}>{t("waxup.smileReset")}</button>
         </div>
         <details className="wax-fold"><summary>{t("waxup.howFold")}</summary><p className="blend-hint" role="status">{t("waxup.smileMarked")}</p></details>

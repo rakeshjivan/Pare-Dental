@@ -14335,9 +14335,10 @@ export function LayerlingEditor({
         // The first proposal: the set laid on the arch with the default controls.
         window.setTimeout(() => {
           commitWaxSmile(record.controls, false, keptOwn && Object.keys(keptOwn).length ? keptOwn : undefined);
-          // Build 318: a set laid for the first time is made to cover the patient's teeth (one laid again keeps the
-          // dentist's own changes, and is left as it is).
-          if (!(keptOwn && Object.keys(keptOwn).length)) window.setTimeout(() => { (window as unknown as { layerlingWaxCovered?: unknown }).layerlingWaxCovered = waxCoverSet(false); }, 250);
+          // Build 318: a set as it is laid is made to cover the patient's teeth - the first time, and each time it is
+          // laid again (another set chosen, the marks moved): the cover only adds what is still needed, up to its
+          // caps, on top of whatever the dentist has changed.
+          window.setTimeout(() => { (window as unknown as { layerlingWaxCovered?: unknown }).layerlingWaxCovered = waxCoverSet(false); }, 250);
         }, 0);
       } else if (drop) {
         setWaxup((latest) => { const { [arch.slot]: _gone, ...rest } = latest.smile ?? {}; return { ...latest, smile: rest }; }); // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -23295,6 +23296,7 @@ export function LayerlingEditor({
               onSculptTool: (tool: WaxSculptTool) => pickWaxSculptTool(tool),
               onSetCurve: (curve: number) => bendWaxSet(curve),
               onSmile: (controls: SetControls) => layWaxSmile(controls),
+              onSmileCover: () => { waxCoverSet(true); },
               onToothEdit: (fdi: number, edit: ToothEdit) => editWaxTooth(fdi, edit),
               onToothStep: (key: EditKey, delta: number) => stepWaxTooth(key, delta),
               onArchMarks: (index?: number) => startArchMarks(index),
