@@ -190,6 +190,7 @@ import { aimPickRay, firstShapeHit, pickLayFlatFace, pickMateFace, pickRotationP
 export type { LayFlatPick } from "@/components/workplane/viewportPicking";
 import { fastEdgesGeometry } from "@/lib/fastEdgesGeometry";
 import { buildImportedMeshGeometry, computeImportedBoundsTree, putGeometryOnBase, takePreparedImportedMeshGeometry } from "@/lib/importedMeshDisplay";
+import { applyMotionLod, MOTION_LOD_SETTLE_MS, prepareMotionLod } from "@/lib/motionLod";
 import { RENDER_LAYER_HELPERS, sharedOverlayLineMaterial, sharedShapeGeometryCache, sharedEdgesGeometryCache, sharedShapeMaterialCache, type PointCardOffset, type ShapeRenderRecord, type ThreeState, type MoveDimensionSession, type NoteOverlayState, type TapePoint, type TapeAttachment, type TapeEdgeAttachment, type TapeModel, type TapeOverlayState, type TapeCandidate, type RotationHandleSide, type RotationHandleSides, type DragItem, quaternionForShape, projectToScreen, syncMoveDimensionWorldLines, syncTransformGuideWorldLines, tapeShapeDimensions, tapePointWorld, tapeEdgeWorldPoints, tapeSegmentWorldPoints, tapeMovableShapeId, syncTapeOverlay, syncNoteOverlay, NoteOverlay, TapeOverlay, type RulerDimensionOverlayItem, type RulerDimensionOverlayState, syncRulerDimensionOverlay, RulerDimensionOverlay, type CornerRulerInstance, type CornerRulerOverlayState, syncCornerRulerToolOverlay, CornerRulerToolOverlay, syncOriginDimensionWorldLines, shapeCenter, shapeLocalExtents, projectShapeExtent, projectShapesExtent, type OriginDimensionFrame, setObjectRenderLayer, freezeStaticObjectMatrices, formatMeasure, findShapeObject, trimSharedShapeGeometryCache, releaseSharedShapeGeometry, trimSharedShapeMaterialCache, releaseSharedShapeMaterials, disposeMaterialResource, disposeChildren, disposeObject } from "@/components/workplane/ViewportOverlays";
 
 const WORKPLANE_WIDTH = 200;
@@ -5113,8 +5114,19 @@ export function WorkplaneViewport({
       const adapt = adaptiveResolution(state, state.renderer.domElement);
       const wantLow = adapt.base > 1 && now - adapt.lastMotion < ADAPTIVE_SETTLE_MS;
       const restorePending = adapt.low && !wantLow;
-      if (!turning && !controlsChanged && !state.needsRender && !cameraSettled && !restorePending) {
+      // Build 319: in the dental studios, the scans are drawn light while something moves and whole once it is still
+      // (lib/motionLod) - and whole again is one more frame to draw.
+      const lodMoving = Boolean(state.dentalView) && now - adapt.lastMotion < MOTION_LOD_SETTLE_MS;
+      const lodPending = motionLodLow && !lodMoving;
+      if (!turning && !controlsChanged && !state.needsRender && !cameraSettled && !restorePending && !lodPending) {
         return;
+      }
+      if (lodMoving || motionLodLow) {
+        applyMotionLod(state.scene, lodMoving);
+        motionLodLow = lodMoving;
+      } else if (state.dentalView && now - motionLodLooked > 1000) {
+        motionLodLooked = now;
+        prepareMotionLod(state.scene);
       }
       if (wantLow !== adapt.low) {
         adapt.low = wantLow;
@@ -9707,6 +9719,7 @@ export function WorkplaneViewport({
     window.layerlingPreviewPart = (shapeId, triangles, pose) => {
       const state = threeRef.current;
       if (!state || !triangles || !triangles.length) { drop(shapeId); return; }
+      markViewMotion(state);
       let copy = copies.get(shapeId);
       if (copy) {
         // The part's objects drawn again since (rebuilt, or a new opacity) are hidden too, and the copy takes their look.
@@ -12864,6 +12877,9 @@ function createWorkplaneLabel(
  * ADAPTIVE_SETTLE_MS after the movement stops. Keyed by the viewport's state object.
  */
 const ADAPTIVE_SETTLE_MS = 180;
+/** Build 319: whether the large meshes are drawn light just now, and when their light copies were last looked for. */
+let motionLodLow = false;
+let motionLodLooked = 0;
 const adaptiveResolutionStates = new WeakMap<object, { base: number; low: boolean; lastMotion: number }>();
 /**
  * Movement is read from the pointer and the wheel over the view: a drag with a button held
@@ -12897,6 +12913,11 @@ function adaptiveResolution(state: object, canvas?: HTMLElement) {
     }
   }
   return entry;
+}
+/** Build 319: something in the view is moving that the pointer over the view does not tell of (a wax tooth drawn live from a dot). */
+function markViewMotion(state: object) {
+  const entry = adaptiveResolutionStates.get(state);
+  if (entry) entry.lastMotion = performance.now();
 }
 
 function createGridLines(

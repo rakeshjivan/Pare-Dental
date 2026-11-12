@@ -12364,7 +12364,7 @@ export function LayerlingEditor({
       return { strayArrays, strayMillions: strayNumbers / 1e6, readOnlyMeshes: readOnlyMeshes.size, shapes: shapesRef.current.length, shownMillions: shown / 1e6, historySteps: history.length, historyIndex: historyIndexRef.current, historyOnlyMillions: history.map((n) => +(n / 1e6).toFixed(1)), biteCopies: madeBiteRef.current.size, biteMillions: bite / 1e6 };
     };
   }, []);
-  useEffect(() => { (window as unknown as { layerlingWaxupState?: () => unknown }).layerlingWaxupState =() => { const w = waxupRef.current; return { slot: w.slot, setRank: w.setRank, rankInfo: waxRankInfo.current, setId: w.setId, setIds: w.setIds, setName: w.setName, single: w.single, placed: w.placed.length, busy: w.busy, error: w.error, archMarks: w.archMarks?.[w.slot] ?? [], marksKept: waxMarksAtImport.current.get(w.slot)?.length ?? 0, marksTried: waxMarksTried.current.size }; }; }, []);
+  useEffect(() => { (window as unknown as { layerlingWaxupState?: () => unknown }).layerlingWaxupState =() => { const w = waxupRef.current; return { slot: w.slot, setRank: w.setRank, rankInfo: waxRankInfo.current, setId: w.setId, setIds: w.setIds, setName: w.setName, single: w.single, placed: w.placed.length, busy: w.busy, error: w.error, archMarks: w.archMarks?.[w.slot] ?? [], marksKept: waxMarksAtImport.current.get(w.slot)?.length ?? 0, marksTried: waxMarksTried.current.size, toothReads: waxSmileFitCalls.current }; }; }, []);
   /**
    * Build 101: Wax-up Studio's own Undo and Redo - every step (placing, the sliders, nudges, the teeth
    * chosen, the set, the occlusion) records the wax-up's settings with the design's place in its history;
@@ -14364,6 +14364,8 @@ export function LayerlingEditor({
   /** Build 277: each front tooth's rest soup (as dropped, scene coordinates), and its palatal depth, by its part's id. */
   const waxSmileRest = useRef(new Map<string, Float32Array>());
   const waxSmilePalatal = useRef(new Map<string, number>());
+  /** Build 319: how many times a tooth has been read back from the scene (for the checks: it should not grow while teeth are only dragged). */
+  const waxSmileFitCalls = useRef(0);
   const waxSmileDragged = useRef(new Map<string, { shape: WorkplaneShape; laidKey: string; rest: Float32Array; dragged: ReturnType<typeof affineBetween> }>());
   /**
    * Build 277 (roadmap phases 2 and 3): where the set and each tooth's own changes put each front tooth -
@@ -14442,6 +14444,15 @@ export function LayerlingEditor({
       if (seen && seen.shape === shape && seen.laidKey === laidKey && waxSmileRest.current.get(shape.id) === seen.rest) {
         const next = layout.matrices.get(shape.id);
         if (!seen.dragged || seen.dragged.miss > SCULPTED_MISS || !next) continue;
+        // Build 319 (Rakesh: "look at lag in a very concentrated fashion ... especially bad after teeth are placed and
+        // we are moving them one by one"): kept, a tooth that the change has not touched - laid where it was, its own
+        // changes as they were - is left exactly as it stands. Every tooth of the set used to be made again and
+        // written back each time one of them was let go: six meshes rebuilt for one moved, and all six read again
+        // at the first frame of the next change.
+        if (!drawn) {
+          const was = record.laid[fdi];
+          if (was && next.elements.every((x, k) => Math.abs(x - was[k]) < 1e-9) && JSON.stringify(oldEdit) === JSON.stringify(newEdit)) { laid[fdi] = was; continue; }
+        }
         if (drawn) {
           // As it was last drawn (or, not yet drawn in this change, as it stands): nothing to make or draw.
           const key = (matrix: ArrayLike<number>, edit: ToothEdit) => Array.from(matrix, (x) => x.toFixed(4)).join(",") + "|" + (Object.keys(NO_EDIT) as Array<EditKey>).map((k) => (edit[k] ?? 0).toFixed(3)).join(",") + heldKey(edit);
@@ -14472,6 +14483,7 @@ export function LayerlingEditor({
         continue;
       }
       const { rest, palatal, dragged } = waxSmileFit(shape, record, fdi);
+      waxSmileFitCalls.current += 1;
       waxSmileDragged.current.set(shape.id, { shape, laidKey, rest, dragged });
       const next = layout.matrices.get(shape.id);
       if (!dragged || dragged.miss > SCULPTED_MISS || !next) continue;
@@ -14547,6 +14559,15 @@ export function LayerlingEditor({
     const kept: SmileRecord = { ...work.record, controls, laid: work.laid, own: edits, pending: undefined };
     waxupRef.current = { ...waxupRef.current, smile: { ...(waxupRef.current.smile ?? {}), [slot]: kept } };
     if (changed.size) commitShapes(shapesRef.current.map((shape) => changed.get(shape.id) ?? shape), selectedIdsRef.current, t("waxup.smileLaid"));
+    // Build 319: what was read of each tooth still holds for the tooth as it has just been written (it was written
+    // from that reading), so the next change starts at once and does not read the tooth again.
+    for (const [id, shape] of changed) {
+      const seen = waxSmileDragged.current.get(id), fdi = shape.waxTooth?.fdi;
+      const now = shapesRef.current.find((one) => one.id === id);
+      if (!seen || !fdi || !now || !seen.dragged || seen.dragged.miss > SCULPTED_MISS) continue;
+      seen.shape = now;
+      seen.laidKey = (kept.laid[fdi] ?? []).join(",") + "|" + JSON.stringify(edits[fdi] ?? NO_EDIT);
+    }
     setWaxup((latest) => ({
       ...latest,
       smile: { ...(latest.smile ?? {}), [slot]: kept },
