@@ -2276,6 +2276,8 @@ html[data-theme="dark"] .dental-studio-panel .dental-picture-tiles button { back
 .wax-mark-row .wax-mark-state { font-size: 12px; color: #0a786c; font-weight: 600; }
 .wax-mark-row button { padding: 2px 8px; font-size: 12px; min-height: 26px; }
 .wax-mark-widths { margin: 8px 0; font-size: 13px; }
+.wax-mark-problems { margin: 8px 0; padding: 10px 12px; border: 1px solid #f0b429; background: #fff8e6; border-radius: 10px; font-size: 13px; }
+.wax-mark-problems ul { margin: 6px 0 4px; padding-left: 18px; }
 .wax-mark-widths > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 10px; margin-top: 4px; }
 .arch-mark-labels { pointer-events: none; }
 

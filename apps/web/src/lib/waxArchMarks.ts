@@ -63,3 +63,44 @@ export function markedWidths(slot: "upper" | "lower", marks: ReadonlyArray<Vec3 
   });
   return out;
 }
+
+/**
+ * Build 315 (Rakesh, of the hard case marked by hand: "marked the teeth and this happened" - two teeth thrown onto
+ * the palate): what looks wrong with the nine marks, before teeth are laid on them. A mark clicked on the wrong
+ * spot (the view turns between clicks) gives a tooth no tooth could be - and the set laid on it was wrecked with
+ * nothing said. Each problem names the dots to look at (their numbers as shown, from 1).
+ *  - width: a tooth between two contacts narrower than MARK_NARROW or wider than MARK_WIDE;
+ *  - order: the contacts double back on themselves at a dot (it was clicked out of turn, or on the wrong tooth);
+ *  - tip: a canine tip further than MARK_TIP_FAR from the canine its contacts mark.
+ */
+export const MARK_NARROW = 2.5;
+export const MARK_WIDE = 13;
+export const MARK_TIP_FAR = 9;
+export type ArchMarkProblem = { kind: "width"; fdi: number; mm: number; dots: [number, number] } | { kind: "order"; dots: [number] } | { kind: "tip"; fdi: number; dots: [number] };
+export function archMarkProblems(slot: "upper" | "lower", marks: ReadonlyArray<Vec3 | null | undefined> | undefined): ArchMarkProblem[] {
+  const out: ArchMarkProblem[] = [];
+  if (!marks) return out;
+  const teeth = frontTeeth(slot);
+  const far = (a: Vec3, b: Vec3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  teeth.forEach((fdi, i) => {
+    const a = marks[i], b = marks[i + 1];
+    if (!a || !b) return;
+    const mm = far(a, b);
+    if (mm < MARK_NARROW || mm > MARK_WIDE) out.push({ kind: "width", fdi, mm, dots: [i + 1, i + 2] });
+  });
+  for (let i = 1; i < ARCH_MARK_CONTACTS - 1; i += 1) {
+    const a = marks[i - 1], b = marks[i], c = marks[i + 1];
+    if (!a || !b || !c) continue;
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [c[0] - b[0], c[1] - b[1], c[2] - b[2]];
+    const lu = Math.hypot(u[0], u[1], u[2]), lw = Math.hypot(w[0], w[1], w[2]);
+    // Round an arch each step turns a little; one that turns back by more than a right angle and a bit is no arch.
+    if (lu > 0.5 && lw > 0.5 && (u[0] * w[0] + u[1] * w[1] + u[2] * w[2]) / (lu * lw) < -0.3) out.push({ kind: "order", dots: [i + 1] });
+  }
+  ([[7, 0, teeth[0]], [8, 5, teeth[5]]] as const).forEach(([tip, contact, fdi]) => {
+    const p = marks[tip], a = marks[contact], b = marks[contact + 1];
+    if (!p || !a || !b) return;
+    const mid: Vec3 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+    if (far(p, mid) > MARK_TIP_FAR) out.push({ kind: "tip", fdi, dots: [tip + 1] });
+  });
+  return out;
+}
