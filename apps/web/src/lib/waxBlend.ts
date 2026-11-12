@@ -72,7 +72,8 @@ export function waxBlend(runtime: ManifoldRuntime, model: ManifoldSolid, tooth: 
     let any = false;
     for (let i = 0; i < field.length; i += 1) {
       const p = a[i], q = b[i];
-      const near = reach - Math.max(Math.abs(p), Math.abs(q));
+      // Beyond three quarters of the reach from either surface the wax is thinner than the inset: nothing there.
+      const near = 0.75 * reach - Math.max(Math.abs(p), Math.abs(q));
       if (near <= 0) { field[i] = -1; continue; }
       const t = Math.max(reach - Math.abs(p - q), 0) / reach;
       const value = Math.min(Math.max(p, q) + (t * t * reach) / 4 - BLEND_INSET, near);

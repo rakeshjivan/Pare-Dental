@@ -853,6 +853,8 @@ function uncoverCrowns(runtime: ManifoldRuntime, solid: ManifoldSolid, scanSolid
   const shown = new Int8Array(v.length / 3);
   const on = (i: number) => { if (!shown[i]) shown[i] = grid.within(v[i * 3], v[i * 3 + 1], v[i * 3 + 2], 0.01) ? 1 : -1; return shown[i] === 1; };
   const pieces: ManifoldSolid[] = [];
+  /** The wax run into the joins: what it covers of the scan is covered on purpose, as under a wax tooth. */
+  const blendShells: Float32Array[] = [];
   for (let t = 0; t + 2 < f.length; t += 3) {
     const a = f[t], b = f[t + 1], c = f[t + 2];
     if (!crowns[a] || !crowns[b] || !crowns[c] || (on(a) && on(b) && on(c))) continue;
@@ -1414,7 +1416,12 @@ function buildArch(
   // Build 306: wax is run into each tooth's join with the model as the patient's is (the model before any wax tooth
   // is on it: the embrasures between the wax teeth are not filled) - lib/waxBlend.
   const beforeWax = solid;
-  const blends: ManifoldSolid[] = [];
+  // The teeth and the wax run into their joins are put together first (small solids), then joined to the model in
+  // one go: a join each made a copy of the whole model for every tooth and every blend, all held until the model
+  // was done - more memory than a big scan left (the page went white).
+  const pieces: ManifoldSolid[] = [];
+  /** The wax run into the joins: what it covers of the scan is covered on purpose, as under a wax tooth. */
+  const blendShells: Float32Array[] = [];
   for (const shell of waxShells) {
     // Build 116: a wax tooth that will not close as it is is made watertight (corners joined, openings capped)
     // and tried again - never silently left out of the model.
@@ -1428,17 +1435,32 @@ function buildArch(
       // Build 108: on a hollow model the hollow goes on under the wax teeth as under the scan's own - the wax
       // below the gum, reaching into it, came out as solid lumps inside the model. Only what lies in the hollow
       // goes: the crowns, the gum and the wall a wall thick are as they were.
-      solid = keepSolid(runtime.Manifold.union(solid, hollowTaken && !hollowTaken.isEmpty() ? keepSolid(runtime.Manifold.difference(tooth, hollowTaken)) : tooth));
+      const hollowed = hollowTaken && !hollowTaken.isEmpty();
+      const piece = hollowed ? keepSolid(runtime.Manifold.difference(tooth, hollowTaken!)) : tooth;
+      if (piece.isEmpty() || piece.status() !== "NoError") { warnings.push("wax"); continue; }
+      pieces.push(piece);
       waxJoined += 1;
-      const blend = waxBlend(runtime, beforeWax, tooth);
-      if (blend) blends.push(keepSolid(hollowTaken && !hollowTaken.isEmpty() ? keepSolid(runtime.Manifold.difference(keepSolid(blend), hollowTaken)) : blend));
+      // Never at the cost of the tooth: a blend that cannot be made is left off.
+      try {
+        const blend = waxBlend(runtime, beforeWax, tooth);
+        if (blend) {
+          keepSolid(blend);
+          const cut = hollowed ? keepSolid(runtime.Manifold.difference(blend, hollowTaken!)) : blend;
+          if (!cut.isEmpty() && cut.status() === "NoError") { pieces.push(cut); blendShells.push(solidPositions(cut)); }
+        }
+      } catch { /* left off */ }
     } catch {
       warnings.push("wax");
     }
   }
-  for (const blend of blends) {
-    // Never at the cost of the model: a blend that will not join is left off.
-    try { const joined = runtime.Manifold.union(solid, blend); if (joined.status() === "NoError" && !joined.isEmpty()) solid = keepSolid(joined); else joined.delete(); } catch { /* left off */ }
+  if (pieces.length) {
+    try {
+      const all = pieces.length > 1 ? keepSolid(runtime.Manifold.union(pieces)) : pieces[0];
+      solid = keepSolid(runtime.Manifold.union(solid, all));
+    } catch {
+      warnings.push("wax");
+      waxJoined = 0;
+    }
   }
   dentalStage("details", stageArch);
   const text = labelText(labelLine);
@@ -1517,7 +1539,7 @@ function buildArch(
   // Build 51: the teeth as found on the whole scan - within TOOTH_REACH of every cusp tip and down
   // to TOOTH_CROWN below it - not the narrower crowns the outline is drawn round.
   // Build 79: the scan's corners under the wax-up are covered on purpose, not lost.
-  const underWax = waxShells.map(insideOf);
+  const underWax = [...waxShells, ...blendShells].map(insideOf);
   const waxedCorner = new Uint8Array(m.v.length / 3);
   // Build 102: and those of a crown cut back for the wax-up are changed on purpose too.
   const underCut = cutShells.map(insideOf);
