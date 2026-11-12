@@ -1419,9 +1419,12 @@ function buildArch(
       warnings.push("cut");
     }
   }
+  let ZZT = Date.now(); const zz = (label: string) => { console.error("ZZWAX", label, Date.now() - ZZT, "ms"); ZZT = Date.now(); };
+  zz("cutters made " + exactCutters.length);
   if (exactCutters.length) {
     try { solid = keepSolid(runtime.Manifold.difference(solid, exactCutters.length > 1 ? keepSolid(runtime.Manifold.union(exactCutters)) : exactCutters[0])); } catch { warnings.push("cut"); }
   }
+  zz("cuts taken");
   // Build 79: the wax-up, tooth by tooth (library teeth may overlap their neighbours).
   const waxShells = wax && wax.length ? splitShells(transformSoup(wax, arch.frame), 4) : [];
   let waxJoined = 0;
@@ -1452,6 +1455,7 @@ function buildArch(
       const piece = hollowed ? keepSolid(runtime.Manifold.difference(tooth, hollowTaken!)) : tooth;
       if (piece.isEmpty() || piece.status() !== "NoError") { warnings.push("wax"); continue; }
       pieces.push(piece);
+      zz("tooth piece");
       waxTeethMade.push(tooth);
       waxJoined += 1;
       // Never at the cost of the tooth: a blend that cannot be made is left off.
@@ -1462,6 +1466,7 @@ function buildArch(
           const cut = hollowed ? keepSolid(runtime.Manifold.difference(blend, hollowTaken!)) : blend;
           if (!cut.isEmpty() && cut.status() === "NoError") { pieces.push(cut); blendShells.push(solidPositions(cut)); }
         }
+        zz("blend");
       } catch { /* left off */ }
     } catch {
       warnings.push("wax");
@@ -1476,15 +1481,17 @@ function buildArch(
       waxJoined = 0;
     }
   }
+  zz("pieces joined " + pieces.length);
   // Build 306: on a hollow model, the wall made good round each wax tooth - where the patient's tooth was cut back to
   // the wax the model's own wall may be gone (lib/waxBlend waxWall).
   if (hollowTaken && !hollowTaken.isEmpty() && waxTeethMade.length && (cutAway?.length ?? 0) > 0) {
     const fills: ManifoldSolid[] = [];
-    for (const tooth of waxTeethMade) { const fill = waxWall(runtime, solid, hollowTaken, tooth, waxTeethMade, cutSolids, WAX_WALL); if (fill) fills.push(keepSolid(fill)); }
+    for (const tooth of waxTeethMade) { const fill = waxWall(runtime, solid, hollowTaken, tooth, waxTeethMade, cutSolids, WAX_WALL); if (fill) fills.push(keepSolid(fill)); zz("wall " + (fill ? "fill" : "none")); }
     if (fills.length) {
       try { solid = keepSolid(runtime.Manifold.union(solid, fills.length > 1 ? keepSolid(runtime.Manifold.union(fills)) : fills[0])); } catch { warnings.push("wax"); }
     }
   }
+  zz("walls joined");
   dentalStage("details", stageArch);
   const text = labelText(labelLine);
   if (text) {
