@@ -115,7 +115,7 @@ import { STUDIO_SHELL, WAXUP_ENABLED } from "@/lib/pareFeatures";
 import { fitArchLine, layOnArchLine, type ArchTooth } from "@/lib/waxArchLine";
 import { clampEdit, editPose, editTooth, heldKey, isNoEdit, withLocks, NO_EDIT, palatalDepth, uneditTooth, type ToothEdit, type EditKey, EDIT_RANGES } from "@/lib/waxToothEdit";
 import { cutterBox, proudOfWax, sweptSurface } from "@/lib/waxReduce";
-import { ARCH_MARK_CONTACTS, ARCH_MARK_GUM, ARCH_MARK_GUMS, archMarkLabel, frontTeeth, gumMarks, markedWidths, nextArchMark } from "@/lib/waxArchMarks";
+import { ARCH_MARK_CONTACTS, ARCH_MARK_GUM, ARCH_MARK_GUMS, archMarkLabel, frontTeeth, gumMarks, markedWidths, nextArchMark, orderArchMarks } from "@/lib/waxArchMarks";
 import { autoArchMarks } from "@/lib/waxAutoMarks";
 import { extendNeck } from "@/lib/waxNeck";
 import { affineBetween, clampControls, crownMargins, labialProfile, layoutSmileSet, restFrames, SCULPTED_MISS, SET_DEFAULTS, type SetControls, type SetTooth, type SmileRecord } from "@/lib/waxSmileSet";
@@ -12654,7 +12654,6 @@ export function LayerlingEditor({
    * midline, the left side for 23's, then the front for the canine tips.
    */
   // Build 279 (Rakesh): the midline and the contacts either side of it from the front, so the midline mark sits on the incisal edge.
-  const archMarkViewFor = (index: number): DentalView => (index <= 1 ? "right" : index <= 4 ? "front" : index <= 6 ? "left" : "front");
   const startArchMarks = useCallback((index?: number) => {
     const arch = waxArch();
     const state = dentalStudioRef.current;
@@ -12667,8 +12666,9 @@ export function LayerlingEditor({
     setWaxup(next);
     setDentalHidden([...(Object.values(state.slots).filter((id) => id && id !== arch.shape.id) as string[]), ...waxTeethOf(arch.shape.id).map((shape) => shape.id)]);
     setSelectedIds([]);
-    const view = archMarkViewFor(at);
-    if (archMarkView.current !== view) { archMarkView.current = view; showDentalView(arch.slot, view, undefined, 0.6); }
+    // Build 316 (Rakesh: "the way the marks are placed is not easy" - the view swinging round between clicks): the view
+    // is turned to the front once, when marking starts, and after that it is left where the dentist puts it.
+    if (archMarkView.current === null) { archMarkView.current = "front"; showDentalView(arch.slot, "front", undefined, 0.6); }
   }, [waxArch]); // eslint-disable-line react-hooks/exhaustive-deps
   /**
    * Build 285 (Rakesh: the app should find the landmarks itself): the nine marks looked for on the scan
@@ -12712,16 +12712,20 @@ export function LayerlingEditor({
     const hit = markSurfaceAt(x, y);
     if (!hit) return;
     waxRecord();
-    const marks = [...(current.archMarks?.[arch.slot] ?? Array(9).fill(null))];
+    let marks = [...(current.archMarks?.[arch.slot] ?? Array(9).fill(null))];
     marks[current.archMarkPick] = hit;
+    // Build 316: contacts clicked out of turn (or from the patient's left) are put in their order round the arch,
+    // and the canine tips on their own sides - the dentist clicks the points, the app numbers them.
+    const state = dentalStudioRef.current;
+    const info = state?.analysis?.arches.find((one) => one.id === arch.shape.id);
+    const toScene = dentalSceneDirection.current.get(arch.shape.id);
+    if (info && toScene) marks = orderArchMarks(arch.slot, marks, toScene(info.axes.left));
     const archMarks = { ...(current.archMarks ?? {}), [arch.slot]: marks };
     const after = nextArchMark(marks);
     const next = { ...current, archMarks, archMarkPick: after };
     waxupRef.current = next;
     setWaxup(next);
     if (after === null) { archMarkView.current = null; setDentalHidden([]); window.setTimeout(() => showDentalView(arch.slot, "front"), 50); return; }
-    const view = archMarkViewFor(after);
-    if (archMarkView.current !== view) { archMarkView.current = view; window.setTimeout(() => showDentalView(arch.slot, view, undefined, 0.6), 50); }
   }, [waxArch]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Backspace: the last mark placed before this one taken back, to be clicked again. */
   const undoArchMark = useCallback(() => {
@@ -12737,8 +12741,6 @@ export function LayerlingEditor({
     const next = { ...current, archMarks: { ...(current.archMarks ?? {}), [slot]: marks }, archMarkPick: i };
     waxupRef.current = next;
     setWaxup(next);
-    const view = archMarkViewFor(i);
-    if (archMarkView.current !== view) { archMarkView.current = view; showDentalView(slot, view, undefined, 0.6); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   /** A placed mark dragged over the scan (kept when let go). */
   const moveArchMark = (id: string, point: [number, number, number], keep: boolean) => {

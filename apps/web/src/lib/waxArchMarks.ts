@@ -76,6 +76,7 @@ export function markedWidths(slot: "upper" | "lower", marks: ReadonlyArray<Vec3 
 export const MARK_NARROW = 2.5;
 export const MARK_WIDE = 13;
 export const MARK_TIP_FAR = 9;
+export const MARK_TURN_BACK = -0.6;
 export type ArchMarkProblem = { kind: "width"; fdi: number; mm: number; dots: [number, number] } | { kind: "order"; dots: [number] } | { kind: "tip"; fdi: number; dots: [number] };
 export function archMarkProblems(slot: "upper" | "lower", marks: ReadonlyArray<Vec3 | null | undefined> | undefined): ArchMarkProblem[] {
   const out: ArchMarkProblem[] = [];
@@ -93,8 +94,9 @@ export function archMarkProblems(slot: "upper" | "lower", marks: ReadonlyArray<V
     if (!a || !b || !c) continue;
     const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [c[0] - b[0], c[1] - b[1], c[2] - b[2]];
     const lu = Math.hypot(u[0], u[1], u[2]), lw = Math.hypot(w[0], w[1], w[2]);
-    // Round an arch each step turns a little; one that turns back by more than a right angle and a bit is no arch.
-    if (lu > 0.5 && lw > 0.5 && (u[0] * w[0] + u[1] * w[1] + u[2] * w[2]) / (lu * lw) < -0.3) out.push({ kind: "order", dots: [i + 1] });
+    // Round an arch each step turns a little, and round a tooth tucked behind its neighbours a good deal; one that
+    // turns back on itself by more than MARK_TURN_BACK (as a cosine) is no arch.
+    if (lu > 0.5 && lw > 0.5 && (u[0] * w[0] + u[1] * w[1] + u[2] * w[2]) / (lu * lw) < MARK_TURN_BACK) out.push({ kind: "order", dots: [i + 1] });
   }
   ([[7, 0, teeth[0]], [8, 5, teeth[5]]] as const).forEach(([tip, contact, fdi]) => {
     const p = marks[tip], a = marks[contact], b = marks[contact + 1];
@@ -102,5 +104,30 @@ export function archMarkProblems(slot: "upper" | "lower", marks: ReadonlyArray<V
     const mid: Vec3 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
     if (far(p, mid) > MARK_TIP_FAR) out.push({ kind: "tip", fdi, dots: [tip + 1] });
   });
+  return out;
+}
+
+/**
+ * Build 316 (Rakesh: "the way the marks are placed is not easy"): the marks in their proper order, whatever order
+ * they were clicked in. `left`: the patient's left, as a direction in the marks' coordinates.
+ *  - the seven contacts, once all are placed: if they run from the patient's left they are turned round; if they
+ *    still double back (clicked out of turn) they are put in order across the arch - but only when that order has
+ *    less wrong with it, so contacts that truly overlap on a crowded arch are left as the dentist put them;
+ *  - the two canine tips, once both are placed: each on its own side.
+ */
+export function orderArchMarks<T extends Vec3 | null | undefined>(slot: "upper" | "lower", marks: ReadonlyArray<T>, left: ArrayLike<number>): T[] {
+  const out = [...marks];
+  const side = (p: Vec3) => p[0] * left[0] + p[1] * left[1] + p[2] * left[2];
+  const contacts = out.slice(0, ARCH_MARK_CONTACTS);
+  if (contacts.every(Boolean)) {
+    let seven = contacts as Vec3[];
+    if (side(seven[ARCH_MARK_CONTACTS - 1]) < side(seven[0])) seven = [...seven].reverse();
+    const wrong = (list: Vec3[]) => archMarkProblems(slot, list).length;
+    const sorted = [...seven].sort((a, b) => side(a) - side(b));
+    if (wrong(sorted) < wrong(seven)) seven = sorted;
+    seven.forEach((p, i) => { out[i] = p as T; });
+  }
+  const tipRight = out[ARCH_MARK_CONTACTS], tipLeft = out[ARCH_MARK_CONTACTS + 1];
+  if (tipRight && tipLeft && side(tipRight) > side(tipLeft)) { out[ARCH_MARK_CONTACTS] = tipLeft; out[ARCH_MARK_CONTACTS + 1] = tipRight; }
   return out;
 }
