@@ -68,7 +68,9 @@ const placeLocked = (id: string) => LOCKED.get(id)?.has("middle") === true;
 
 /** The wheel: degrees for each notch (about 100 of a wheel's own units), and how long after the last notch the turn is kept. */
 const WHEEL_DEG = 1;
-const WHEEL_REST = 350;
+const WHEEL_REST = 700;
+/** A turn under way keeps its tooth while the pointer stays this near where the turn began, px. */
+const WHEEL_STAY = 60;
 /** A press that just misses a tooth still takes it: this far round the pointer is tried, px. */
 const NEAR_PX = 7;
 const DEG_PER_PX = 0.2;
@@ -307,10 +309,19 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
       if (kind === "moveAll" && !moved) live.current.onSelect(tooth.id);
     };
     // The wheel over the tooth picked turns it: from how it stood at the first notch, kept a moment after the last.
-    let wheel: { tooth: DirectTooth; rotate: number; tip: number; torque: number; timer: number } | null = null;
+    // Build 324 (Rakesh: turning a tooth with the wheel is very laggy): a trackpad sends dozens of wheel events between
+    // two frames and each one rebuilt the tooth; now they add up and the tooth is rebuilt once per frame drawn.
+    let wheel: { tooth: DirectTooth; rotate: number; tip: number; torque: number; timer: number; frame: number; x: number; y: number } | null = null;
+    const wheelDraw = () => {
+      if (!wheel) return;
+      wheel.frame = 0;
+      live.current.onDrag(wheel.tooth.id, { kind: "turn", rotate: wheel.rotate, tip: wheel.tip, torque: wheel.torque });
+    };
     function wheelDone() {
       if (!wheel) return;
       window.clearTimeout(wheel.timer);
+      // What the last notches added is drawn before the turn ends.
+      if (wheel.frame) { window.cancelAnimationFrame(wheel.frame); wheelDraw(); }
       const id = wheel.tooth.id;
       wheel = null;
       say(0, 0, null);
@@ -319,12 +330,14 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
     const onWheel = (event: WheelEvent) => {
       // A pinch (and Ctrl or ⌘ with the wheel) zooms, as does the wheel anywhere but on the tooth picked.
       if (drag || !canvasOf(event) || event.ctrlKey || event.metaKey) return;
-      const hit = pick(event.clientX, event.clientY);
+      // A turn under way keeps its tooth: as the tooth turns it can leave the pointer, and a notch that then missed it
+      // ended the turn (a rebuild of the design) and zoomed the view instead.
+      const hit = wheel && wheel.tooth.id === live.current.selected && Math.hypot(event.clientX - wheel.x, event.clientY - wheel.y) < WHEEL_STAY ? { tooth: wheel.tooth } : pick(event.clientX, event.clientY);
       if (!hit || hit.tooth.id !== live.current.selected || placeLocked(hit.tooth.id)) { wheelDone(); return; }
       event.preventDefault();
       event.stopImmediatePropagation();
       if (wheel && wheel.tooth.id !== hit.tooth.id) wheelDone();
-      if (!wheel) { wheel = { tooth: hit.tooth, rotate: 0, tip: 0, torque: 0, timer: 0 }; live.current.onBegin(hit.tooth.id); }
+      if (!wheel) { wheel = { tooth: hit.tooth, rotate: 0, tip: 0, torque: 0, timer: 0, frame: 0, x: event.clientX, y: event.clientY }; live.current.onBegin(hit.tooth.id); }
       // A notch of a wheel is about 100 units (in pixels), 3 in lines; a trackpad sends many small ones.
       const units = event.deltaMode === 1 ? event.deltaY * 33 : event.deltaMode === 2 ? event.deltaY * 300 : (event.deltaY || event.deltaX);
       const by = -(units / 100) * WHEEL_DEG;
@@ -332,7 +345,7 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
       wheel[key] += by;
       window.clearTimeout(wheel.timer);
       wheel.timer = window.setTimeout(wheelDone, WHEEL_REST);
-      live.current.onDrag(hit.tooth.id, { kind: "turn", rotate: wheel.rotate, tip: wheel.tip, torque: wheel.torque });
+      if (!wheel.frame) wheel.frame = window.requestAnimationFrame(wheelDraw);
       say(event.clientX, event.clientY, `${t("waxup.direct.turn", { fdi: hit.tooth.fdi })}  ${wheel[key] >= 0 ? "+" : ""}${wheel[key].toFixed(1)}°`);
     };
     // Build 290 (Rakesh: "dots placed on the tooth that appear when the tooth is clicked"): the tooth picked carries

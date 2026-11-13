@@ -21480,7 +21480,7 @@ export function LayerlingEditor({
    * Auswahl - der Viewport hat den angeklickten Koerper schon ausgewaehlt.
    */
   // `stack`: every body under the pointer, front to back; `listing`: the menu shows them for "Select other" (#804).
-  const [shapeContextMenu, setShapeContextMenu] = useState<{ x: number; y: number; onShape: boolean; stack: string[]; listing?: boolean; submenu?: string } | null>(null);
+  const [shapeContextMenu, setShapeContextMenu] = useState<{ x: number; y: number; onShape: boolean; /** Build 324: the part right-clicked. */ shapeId?: string; stack: string[]; listing?: boolean; submenu?: string } | null>(null);
   const [menuHighlightIds, setMenuHighlightIds] = useState<string[]>([]);
   const closeShapeContextMenu = useCallback(() => {
     setShapeContextMenu(null);
@@ -21489,7 +21489,7 @@ export function LayerlingEditor({
   const openShapeContextMenu = useCallback((request: { shapeId: string | null; clientX: number; clientY: number; stackIds: string[] }) => {
     // Build 112: in Sculpt a right-click on a wax tooth opens its tool wheel instead.
     if (studioWaxSculptRef.current && Date.now() - waxWheelOpened.current < 600) return;
-    setShapeContextMenu({ x: request.clientX, y: request.clientY, onShape: Boolean(request.shapeId), stack: request.stackIds });
+    setShapeContextMenu({ x: request.clientX, y: request.clientY, onShape: Boolean(request.shapeId), ...(request.shapeId ? { shapeId: request.shapeId } : {}), stack: request.stackIds });
     setMenuHighlightIds([]);
   }, []);
   // Locking (Ctrl+L, the outliner, the inspector) while a tool is open puts the tool down,
@@ -21653,7 +21653,9 @@ export function LayerlingEditor({
       { key: "viewLingual", label: t("dentalMenu.viewLingual"), onSelect: show([0, 0, -1]) },
     );
     if (viewStep) {
-      const tooth = shapeContextMenu?.onShape && selectedShapes.length === 1 && selectedShapes[0].dental === "wax" && selectedShapes[0].waxTooth ? selectedShapes[0] : null;
+      // Build 324 (Rakesh: Lock, which becomes Unlock, over a tooth): the tooth right-clicked, picked or not.
+      const under = shapeContextMenu?.shapeId ? shapes.find((shape) => shape.id === shapeContextMenu.shapeId) : undefined;
+      const tooth = under?.dental === "wax" && under.waxTooth ? under : shapeContextMenu?.onShape && selectedShapes.length === 1 && selectedShapes[0].dental === "wax" && selectedShapes[0].waxTooth ? selectedShapes[0] : null;
       if (dentalStudio?.waxStudio && tooth?.waxTooth && dentalStudio.stage !== "made" && !studioWaxSculpt) {
         const confirmed = Boolean(waxup.locks[tooth.waxTooth.fdi]);
         items.push({ key: "waxConfirm", label: t(confirmed ? "dentalMenu.waxRelease" : "dentalMenu.waxConfirm"), shortcut: confirmed ? undefined : "Enter", separated: true, onSelect: () => confirmWaxTooth(tooth.id, !confirmed) });
