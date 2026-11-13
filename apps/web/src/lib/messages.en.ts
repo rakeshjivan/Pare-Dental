@@ -5909,6 +5909,8 @@ export const MESSAGES_EN = {
   "waxup.brush.more": "More tools",
   "waxup.wheel": "Tools for this tooth",
   "waxup.wheel.mirror": "Mirror",
+  "waxup.wheel.lock": "Lock",
+  "waxup.wheel.unlock": "Unlock",
   "waxup.brush.less": "Fewer tools",
   "waxup.marginFind": "Find margins",
   "waxup.marginFindAgain": "Find margins again",
