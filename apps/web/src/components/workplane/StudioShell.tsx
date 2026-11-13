@@ -137,7 +137,7 @@ export function StudioShell({
       {sideTabs ? sideTab("right") : null}
       <header className="studio-top">
         <div className="studio-brand">
-          <b>Pare<span>3D</span></b>
+          <b>Pare <span>Dental</span></b>
           <i aria-hidden="true" />
           {/* Build 107: one click back to Dental Studio's home page, on every step. */}
           <button type="button" className="studio-icon studio-home" onClick={onHome ?? onClose} aria-label={t("studio.home")} title={t("studio.home")}>
