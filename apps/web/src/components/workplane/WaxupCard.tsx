@@ -31,7 +31,7 @@ import { CONTACT_STOPS, contactGradient } from "@/lib/biteContacts";
 import { t } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/messages.en";
 import { SET_DEFAULTS, SET_RANGES, type SetControls } from "@/lib/waxSmileSet";
-import { GUIDE_RANGES, type GuideSet } from "@/lib/waxGuides";
+import { GUIDE_RANGES, type GuidePart, type GuideSet } from "@/lib/waxGuides";
 import { EDIT_RANGES, EDIT_SLIDERS, NO_EDIT, type ToothEdit, type EditKey } from "@/lib/waxToothEdit";
 import { type SmileCheck, type ToothAdjust, type ToothNudge } from "@/lib/dentalWaxup";
 import type { WorkplaneWorkspaceSettings } from "@/types/layerling";
@@ -846,6 +846,13 @@ function GuidePanel({ set, workspace, onChange }: { set: NonNullable<WaxupView["
   const line = (key: "midline" | "incisal" | "zenith", label: MessageKey, hint: MessageKey) => (
     <EdgeModifierSlider label={t(label)} title={t(hint)} value={set[key]} min={r[key][0]} max={r[key][1]} step={0.1} workspace={workspace} length onChange={(value) => onChange({ [key]: tenth(value) })} />
   );
+  const part = (key: GuidePart, label: MessageKey) => (
+    <label className="edge-modifier-check wax-guide-part" title={t("waxup.guides.partHint")}>
+      <input type="checkbox" checked={!set.hide?.[key]} onChange={(event) => onChange({ hide: { ...(set.hide ?? {}), [key]: !event.currentTarget.checked } })} />
+      {key === "caliper" ? null : <i className={`wax-guide-swatch ${key}`} />}
+      <span>{t(label)}</span>
+    </label>
+  );
   return (
     <div className="wax-guide-panel">
       <div className="wax-guide-head">
@@ -853,15 +860,17 @@ function GuidePanel({ set, workspace, onChange }: { set: NonNullable<WaxupView["
         <button type="button" className="secondary" aria-pressed={set.show} title={t("waxup.guides.showHint")} onClick={() => onChange({ show: !set.show })}>{t(set.show ? "waxup.guides.hide" : "waxup.guides.show")}</button>
       </div>
       {set.show ? (<>
-        <ul className="wax-guide-key">
-          <li><i className="wax-guide-swatch midline" />{t("waxup.guides.keyMidline")}</li>
-          <li><i className="wax-guide-swatch incisal" />{t("waxup.guides.keyIncisal")}</li>
-          <li><i className="wax-guide-swatch zenith" />{t("waxup.guides.keyZenith")}</li>
-        </ul>
-        {line("midline", "waxup.guides.midline", "waxup.guides.midlineHint")}
-        {line("incisal", "waxup.guides.incisal", "waxup.guides.incisalHint")}
-        <EdgeModifierSlider label={t("waxup.guides.arc")} title={t("waxup.guides.arcHint")} value={Math.min(r.arc[1], Math.max(r.arc[0], arc))} min={r.arc[0]} max={r.arc[1]} step={0.1} workspace={workspace} length onChange={(value) => onChange({ arc: tenth(value) })} />
-        {line("zenith", "waxup.guides.zenith", "waxup.guides.zenithHint")}
+        {/* Build 332 (Rakesh: each line shown or hidden on its own): a tick by each line, and its sliders only while it shows. */}
+        {part("midline", "waxup.guides.keyMidline")}
+        {set.hide?.midline ? null : line("midline", "waxup.guides.midline", "waxup.guides.midlineHint")}
+        {part("incisal", "waxup.guides.keyIncisal")}
+        {set.hide?.incisal ? null : (<>
+          {line("incisal", "waxup.guides.incisal", "waxup.guides.incisalHint")}
+          <EdgeModifierSlider label={t("waxup.guides.arc")} title={t("waxup.guides.arcHint")} value={Math.min(r.arc[1], Math.max(r.arc[0], arc))} min={r.arc[0]} max={r.arc[1]} step={0.1} workspace={workspace} length onChange={(value) => onChange({ arc: tenth(value) })} />
+        </>)}
+        {part("zenith", "waxup.guides.keyZenith")}
+        {set.hide?.zenith ? null : line("zenith", "waxup.guides.zenith", "waxup.guides.zenithHint")}
+        {part("caliper", "waxup.guides.keyCaliper")}
         <div className="dental-trim-buttons">
           <button type="button" className="secondary" disabled={!moved} title={t("waxup.guides.resetHint")} onClick={() => onChange(null)}>{t("waxup.guides.reset")}</button>
         </div>

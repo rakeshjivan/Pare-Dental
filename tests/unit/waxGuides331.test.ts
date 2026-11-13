@@ -96,3 +96,11 @@ describe("a tooth measured as with a caliper (build 331)", () => {
     expect(toothCaliper([], frame)).toBeNull();
   });
 });
+
+describe("each guide line hidden on its own (build 332)", () => {
+  it("leaves out only the lines unticked", () => {
+    expect(guideLines(arch(), { ...GUIDE_DEFAULTS, hide: { zenith: true } }).map((one) => one.key)).toEqual(["midline", "incisal"]);
+    expect(guideLines(arch(), { ...GUIDE_DEFAULTS, hide: { midline: true, incisal: true } }).map((one) => one.key)).toEqual(["zenith"]);
+    expect(guideLines(arch(), { ...GUIDE_DEFAULTS, hide: { caliper: true } }).map((one) => one.key)).toEqual(["midline", "incisal", "zenith"]);
+  });
+});

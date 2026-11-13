@@ -26,7 +26,13 @@ export type GuideSet = {
   arc: number | null;
   /** The zenith line moved incisally (+) or gingivally (-). */
   zenith: number;
+  /**
+   * Build 332 (Rakesh: "we do need to have the individual zenith and curve lines to be able to hide and show each
+   * separately"): the lines - and the teeth's measurements - put out of view one by one, the rest still shown.
+   */
+  hide?: Partial<Record<GuidePart, boolean>>;
 };
+export type GuidePart = "midline" | "incisal" | "zenith" | "caliper";
 export const GUIDE_DEFAULTS: GuideSet = { show: true, midline: 0, incisal: 0, arc: null, zenith: 0 };
 export const GUIDE_RANGES = { midline: [-4, 4], incisal: [-4, 4], arc: [-2, 5], zenith: [-4, 4] } as const;
 /** How far the midline runs past the incisal edge and past the gum line, mm. */
@@ -86,7 +92,7 @@ export function guideLines(anchors: GuideAnchors, set: GuideSet): GuideLine[] {
   const level = (p: Vec3) => dot(sub(p, origin), up), side = (p: Vec3) => dot(sub(p, origin), across);
   /** A point brought to a level along up. */
   const atLevel = (p: Vec3, h: number) => add(p, up, h - level(p));
-  const out: GuideLine[] = [];
+  const all: GuideLine[] = [], out = { push: (line: GuideLine) => { if (!set.hide?.[line.key]) all.push(line); } };
   const gums = (anchors.gum ?? []).map((g) => g ?? null);
   const gumLevels = gums.filter(Boolean).map((g) => level(g as Vec3));
   const neck = gumLevels.length ? gumLevels.reduce((a, b) => a + b, 0) / gumLevels.length : -CROWN_GUESS;
@@ -114,7 +120,7 @@ export function guideLines(anchors: GuideAnchors, set: GuideSet): GuideLine[] {
     });
     out.push({ key: "zenith", points: run });
   }
-  return out;
+  return all;
 }
 
 export type Caliper = {

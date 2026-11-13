@@ -16045,7 +16045,7 @@ export function LayerlingEditor({
     return caliper;
   };
   const waxGuideLines: GuideDrawn[] = waxGuidesHere && waxGuideSet.show && waxDirectSmile ? guideLines(waxDirectSmile.anchors, waxGuideSet).map((line) => ({ key: line.key, points: line.points, className: `wax-guide-line wax-guide-${line.key}` })) : [];
-  const waxGuideLabels: GuideLabel[] = waxGuidesHere && waxGuideSet.show ? waxDirectTeeth.flatMap((tooth) => {
+  const waxGuideLabels: GuideLabel[] = waxGuidesHere && waxGuideSet.show && !waxGuideSet.hide?.caliper ? waxDirectTeeth.flatMap((tooth) => {
     const c = waxCaliperOf(tooth);
     if (!c) return [];
     const picked = selectedIds.length === 1 && selectedIds[0] === tooth.id;
@@ -23425,7 +23425,7 @@ export function LayerlingEditor({
               onSculptTool: (tool: WaxSculptTool) => pickWaxSculptTool(tool),
               onSetCurve: (curve: number) => bendWaxSet(curve),
               onSmile: (controls: SetControls) => layWaxSmile(controls),
-              onGuides: (patch: Partial<GuideSet> | null) => setWaxup((now) => { const next = { ...now, guides: { ...(now.guides ?? {}), [now.slot]: patch ? { ...GUIDE_DEFAULTS, ...(now.guides?.[now.slot] ?? {}), ...patch } : { ...GUIDE_DEFAULTS, show: now.guides?.[now.slot]?.show ?? true } } }; waxupRef.current = next; return next; }),
+              onGuides: (patch: Partial<GuideSet> | null) => setWaxup((now) => { const next = { ...now, guides: { ...(now.guides ?? {}), [now.slot]: patch ? { ...GUIDE_DEFAULTS, ...(now.guides?.[now.slot] ?? {}), ...patch } : { ...GUIDE_DEFAULTS, show: now.guides?.[now.slot]?.show ?? true, hide: now.guides?.[now.slot]?.hide } } }; waxupRef.current = next; return next; }),
               onSmileCover: () => { waxCoverSet(true); },
               onToothEdit: (fdi: number, edit: ToothEdit) => editWaxTooth(fdi, edit),
               onToothStep: (key: EditKey, delta: number) => stepWaxTooth(key, delta),

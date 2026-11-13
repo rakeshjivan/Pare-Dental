@@ -2305,8 +2305,8 @@ html[data-theme="dark"] .dental-studio-panel .dental-picture-tiles button { back
 .wax-guide-panel { margin: 8px 0 4px; border-top: 1px solid rgba(15, 23, 42, 0.08); padding-top: 8px; }
 .wax-guide-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .wax-guide-head button { min-width: 64px; }
-.wax-guide-key { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 6px 0 2px; padding: 0; font-size: 12px; color: #475569; }
-.wax-guide-key li { display: flex; align-items: center; gap: 5px; }
+.wax-guide-part { margin-top: 8px; font-weight: 600; }
+.wax-guide-part .wax-guide-swatch { margin: 0 2px; }
 .wax-guide-swatch { display: inline-block; width: 16px; height: 0; border-top: 2.5px solid #2563eb; }
 .wax-guide-swatch.midline { border-top-style: dashed; }
 .wax-guide-swatch.incisal { border-top-color: #f59e0b; }
