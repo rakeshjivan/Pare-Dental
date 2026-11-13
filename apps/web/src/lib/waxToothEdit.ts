@@ -49,6 +49,14 @@ export type ToothEdit = {
    */
   flareM: number;
   flareD: number;
+  /**
+   * Build 325 (Rakesh: "dots near the cervical, mesial and distal, to help with curving a tooth to create the
+   * papillary space - otherwise the teeth can look like straight tombstones"): the mesial and the distal side of the
+   * cervical third moved along the arch (mm; minus tucks it in towards the middle of the tooth, opening the space
+   * for the papilla; plus fills it) - the full amount low on the crown, nothing from the contact up to the edge.
+   */
+  cervM: number;
+  cervD: number;
   moveMesial: number;
   moveOut: number;
   moveUp: number;
@@ -70,16 +78,17 @@ export type ToothEdit = {
 /** The numbers of an edit (all of it but the locks). */
 export type EditKey = Exclude<keyof ToothEdit, "held" | "kept">;
 /** Build 312: where each dot of a tooth stands on it, as shares of its width (mesial +), its thickness (labial 0, palatal -1) and its length (edge 0, neck -1). */
-export type ToothDot = "edge" | "mesial" | "distal" | "middle" | "palatal" | "neck" | "palatalM" | "palatalD" | "labialM" | "labialD" | "flareM" | "flareD";
+export type ToothDot = "edge" | "mesial" | "distal" | "middle" | "palatal" | "neck" | "palatalM" | "palatalD" | "labialM" | "labialD" | "flareM" | "flareD" | "cervM" | "cervD";
 export const TOOTH_DOTS: Record<ToothDot, P3> = {
   edge: [0, -0.15, 0], mesial: [0.5, -0.4, -0.4], distal: [-0.5, -0.4, -0.4], middle: [0, -0.45, -0.35], palatal: [0, -1, -0.6], neck: [0, -0.1, -0.92],
   palatalM: [0.32, -0.9, -0.55], palatalD: [-0.32, -0.9, -0.55], labialM: [0.32, -0.08, -0.55], labialD: [-0.32, -0.08, -0.55],
   flareM: [0.5, -0.3, -0.1], flareD: [-0.5, -0.3, -0.1],
+  cervM: [0.4, -0.4, -0.8], cervD: [-0.4, -0.4, -0.8],
 };
 /** Build 312: more spots at the neck that a locked dot's bend leaves alone, so the neck stays on the gum line all round. */
 const NECK_PINS: P3[] = [[0.4, -0.5, -0.97], [-0.4, -0.5, -0.97], [0, -0.75, -1]];
 
-export const NO_EDIT: ToothEdit = { length: 0, mesial: 0, distal: 0, spread: 0, thickness: 0, palatal: 0, palatalM: 0, palatalD: 0, labialM: 0, labialD: 0, flareM: 0, flareD: 0, moveMesial: 0, moveOut: 0, moveUp: 0, rotate: 0, tip: 0, torque: 0 };
+export const NO_EDIT: ToothEdit = { length: 0, mesial: 0, distal: 0, spread: 0, thickness: 0, palatal: 0, palatalM: 0, palatalD: 0, labialM: 0, labialD: 0, flareM: 0, flareD: 0, cervM: 0, cervD: 0, moveMesial: 0, moveOut: 0, moveUp: 0, rotate: 0, tip: 0, torque: 0 };
 
 /** The ranges offered, mm and degrees. */
 // Build 308 (Rakesh: "we need complete freedom of movement of teeth - if the marked teeth and the automatic placement
@@ -88,7 +97,7 @@ export const NO_EDIT: ToothEdit = { length: 0, mesial: 0, distal: 0, spread: 0, 
 // of sight). Its shape still is: a library tooth stretched beyond these is no longer that tooth.
 export const EDIT_RANGES: Record<EditKey, readonly [number, number]> = {
   length: [-3, 4], mesial: [-2.5, 2.5], distal: [-2.5, 2.5], spread: [-2, 3], thickness: [-1, 1.5], palatal: [-1, 3],
-  palatalM: [-1.5, 2], palatalD: [-1.5, 2], labialM: [-1.5, 2], labialD: [-1.5, 2], flareM: [-1.5, 2], flareD: [-1.5, 2],
+  palatalM: [-1.5, 2], palatalD: [-1.5, 2], labialM: [-1.5, 2], labialD: [-1.5, 2], flareM: [-1.5, 2], flareD: [-1.5, 2], cervM: [-2, 1.5], cervD: [-2, 1.5],
   moveMesial: [-60, 60], moveOut: [-60, 60], moveUp: [-60, 60], rotate: [-180, 180], tip: [-90, 90], torque: [-90, 90],
 };
 /**
@@ -135,6 +144,10 @@ const EDGE_FADE = 0.25;
  */
 const FLARE_FROM = 0.03;
 const FLARE_BOW = 0.7;
+/** Build 325: the cervical side's change is whole up to this share of the crown from the neck, and gone by CERV_TO; across the tooth it is whole from CERV_REACH of the half width out (the neck is narrower than the crown). */
+const CERV_FULL = 0.12;
+const CERV_TO = 0.6;
+const CERV_REACH = 0.7;
 const smooth = (x: number) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
 
 /** The rigid part of an edit (turns about the cervical-third pivot, then the moves) as a matrix, scene coordinates. */
@@ -176,6 +189,10 @@ function shaper(width: number, length: number, edit: ToothEdit, palatal: number)
     // Build 311: the incisal corners - the full amount at the edge, nothing at the neck, the side's curve kept between.
     const flare = a >= 0 ? edit.flareM ?? 0 : edit.flareD ?? 0;
     if (flare) a += Math.sign(a) * flare * Math.min(1, Math.abs(a) / half) * Math.pow(Math.min(1, Math.max(0, (share - FLARE_FROM) / (1 - FLARE_FROM))), FLARE_BOW);
+    // Build 325: the cervical third's side - the full amount up to CERV_FULL of the crown from the neck, fading to
+    // nothing by CERV_TO (the contact), so the side curves in below the contact and the contact and edge stay.
+    const cerv = a >= 0 ? edit.cervM ?? 0 : edit.cervD ?? 0;
+    if (cerv) a += Math.sign(a) * cerv * Math.min(1, Math.abs(a) / (CERV_REACH * half)) * (1 - smooth((share - CERV_FULL) / (CERV_TO - CERV_FULL)));
     b += edit.thickness * Math.min(1, Math.max(0, (b - depth) / -depth)) * keepNeck;
     // Build 293 (Rakesh: "pull the tooth on the palatal so it becomes wider bucco-palatal without affecting the buccal
     // surface"): the palatal surface out, more the further palatal, nothing at the labial face - all the way to the

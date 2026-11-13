@@ -2332,4 +2332,7 @@ html[data-theme="dark"] .dental-studio-panel .dental-picture-tiles button { back
 .wax-mark-gum span.missing { color: #94a3b8; }
 
 /* Build 311: the two incisal corner dots - small, the contacts' colour. */
+/* Build 325: the cervical side dots (the papillary space) - violet, a little smaller than the contact dots. */
+.wax-dot-cervM, .wax-dot-cervD { width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px; background: #7c3aed; }
+.wax-dot-cervM:hover, .wax-dot-cervD:hover, .wax-dot-cervM.held, .wax-dot-cervD.held { background: #8b5cf6; }
 .wax-dot-flareM, .wax-dot-flareD { width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px; border-width: 2px; background: #134e4a; }
