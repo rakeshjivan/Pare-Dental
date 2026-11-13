@@ -780,7 +780,8 @@ export async function loadMessages(language) {
     return module[`MESSAGES_${code.toUpperCase()}`];
   };
   const english = await load("en");
-  return language === "en" ? english : { ...english, ...(await load(language)) };
+  // Pare Dental is English only: every language reads the English sentences.
+  return english;
 }
 
 /**

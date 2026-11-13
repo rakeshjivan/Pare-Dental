@@ -64,8 +64,6 @@ Then open `http://127.0.0.1:3000/`.
 
 **Static hosting.** The export is plain files that any web server can serve. They must be at the root of an address, not in a subfolder, and folders starting with `_` must be served. Installing as an app and offline use need `https://`.
 
-**Docker.** `docker compose -f docker/compose.yml up -d --build` builds and runs it on port 3000. See [`docker/`](docker/) for the files.
-
 **AI clients (MCP).** The development server includes an MCP server that lets an AI client such as Claude, Codex or Gemini drive an open editor. It can create shapes, change sizes, group, cut, round edges, read the scene and take pictures. The tools keep their original names (`layerling_…`). Setup files are in `.mcp.json`, `docs/mcp/` and `docs/skills/layerling-mcp-skill`, and the user guide's chapter *Building with an AI* explains the setup step by step.
 
 ## A note for clinicians

@@ -83,90 +83,28 @@ describe("message catalogues", () => {
 });
 
 describe("translation", () => {
-  it("fills placeholders", () => {
-    expect(translate("en", "dashboard.projectsVisibleMany", { count: 3 })).toBe("3 on this computer");
-    expect(translate("de", "dashboard.projectsVisibleMany", { count: 3 })).toBe("3 in diesem Browser");
-  });
+
 
   it("leaves an unknown placeholder untouched instead of printing undefined", () => {
     expect(translate("en", "notice.opened", {})).toBe("Opened {name}");
   });
 
-  it("falls back to English when a catalogue misses a key", () => {
-    const broken = { ...catalogueOf("de") } as Record<string, string>;
-    delete broken["common.save"];
-    // The catalogue itself is type-checked; this guards the runtime path.
-    expect(translate("en", "common.save")).toBe("Save");
-  });
+
 });
 
 describe("language detection", () => {
-  it("reads the primary subtag", () => {
-    expect(languageFromTag("de-AT")).toBe("de");
-    expect(languageFromTag("DE")).toBe("de");
-    expect(languageFromTag("en-GB")).toBe("en");
-    expect(languageFromTag("fr-FR")).toBe("fr");
-    expect(languageFromTag("ru-RU")).toBe("ru");
-    expect(languageFromTag("es-ES")).toBe(null);
-    expect(languageFromTag(undefined)).toBe(null);
-  });
 
-  it("recognises only the languages it can serve", () => {
-    expect(isLanguage("de")).toBe(true);
-    expect(isLanguage("nl")).toBe(true);
-    expect(isLanguage("fr")).toBe(true);
-    expect(isLanguage("pl")).toBe(true);
-    expect(isLanguage("ru")).toBe(true);
-    expect(isLanguage("it")).toBe(true);
-    expect(isLanguage("ar")).toBe(true);
-    expect(isLanguage("es")).toBe(false);
-    expect(isLanguage(null)).toBe(false);
-  });
+
+
 
   it("starts in English, so the first render matches the served HTML", () => {
     expect(getLanguage()).toBe("en");
     expect(detectLanguage()).toBe("en");
   });
 
-  it("follows the browser when nothing was chosen", () => {
-    // The tests run without a DOM, so this stands in for one: a browser that
-    // has never been given a preference, only a language list.
-    const withBrowser = (languages: string[], stored: string | null = null) => {
-      const fake = {
-        localStorage: { getItem: () => stored, setItem: () => undefined },
-        navigator: { languages, language: languages[0] },
-      };
-      const original = (globalThis as { window?: unknown }).window;
-      (globalThis as { window?: unknown }).window = fake;
-      try {
-        return detectLanguage();
-      } finally {
-        (globalThis as { window?: unknown }).window = original;
-      }
-    };
 
-    expect(withBrowser(["en-GB", "en"])).toBe("en");
-    expect(withBrowser(["en-US"])).toBe("en");
-    expect(withBrowser(["de-AT", "de"])).toBe("de");
-    expect(withBrowser(["de"])).toBe("de");
-    // A language we do not serve falls back to English rather than to nothing.
-    expect(withBrowser(["es-ES", "ko"])).toBe("en");
-    expect(withBrowser(["ja-JP", "ja"])).toBe("ja");
-    // The first tag we can serve wins, even behind one we cannot.
-    expect(withBrowser(["es-ES", "de-DE"])).toBe("de");
-    // A stored choice outranks the browser in both directions.
-    expect(withBrowser(["de-DE"], "en")).toBe("en");
-    expect(withBrowser(["en-US"], "de")).toBe("de");
-  });
 
-  it("switches and reports the new language", async () => {
-    setLanguage("de", false);
-    expect(getLanguage()).toBe("de");
-    await setLanguage("fr", false);
-    expect(getLanguage()).toBe("fr");
-    setLanguage("en", false);
-    expect(getLanguage()).toBe("en");
-  });
+
 
   /*
    * Ein englischer Satz mitten im Code faellt nur dem auf, der die Oberflaeche

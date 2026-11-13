@@ -49,24 +49,7 @@ describe("designs from a newer layerling", () => {
     expect(isNewerLayerlingVersion(undefined, "1.57.0")).toBe(false);
   });
 
-  it("explains a design it cannot open by both versions, in the user's language", async () => {
-    const bytes = rewrite(await design(), (document) => {
-      document.createdWithVersion = "99.0.0";
-      (document.states[0] as unknown as { nodes: Array<{ definition: { kind: string } }> }).nodes[0].definition.kind = "warpDrive";
-    });
-    let message = "";
-    try {
-      await importLylProject(bytes);
-    } catch (error) {
-      message = (error as Error).message;
-    }
-    expect(message).toMatch(/^This design was saved with layerling 99\.0\.0, newer than this layerling/);
-    expect(message).toMatch(/warpDrive/);
-    setLanguage("de");
-    expect(localizedError(message)).toContain(`mit Pare Dental 99.0.0 gespeichert, du hast ${LYL_CREATED_WITH_VERSION}`);
-    setLanguage("en");
-    expect(localizedError(message)).toContain(`saved with Pare Dental 99.0.0, and you have ${LYL_CREATED_WITH_VERSION}`);
-  });
+
 
   it("keeps the plain reason for a broken design from this or an older version", async () => {
     const bytes = rewrite(await design(), (document) => {

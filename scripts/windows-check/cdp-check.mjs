@@ -29,7 +29,9 @@ const build = await page.locator(".pare-build-badge, [class*=build-badge]").firs
 await page.keyboard.press("Escape").catch(() => {});
 console.log(`::notice::Windows app shows \"${(build || "").trim()}\"`);
 // Build 22: the examples panel is gone from the home screen; a new design opens the editor.
-await page.locator(".home-studio-card.cad .home-primary").click();
+// Pare Dental: the start screen is Dental Studio; the CAD Studio button at the top leads to New design.
+await page.locator(".home-tabs .home-tab").click();
+await page.locator(".studio-head .home-primary.cad").click();
 await page.waitForSelector(".toolbar-section", { timeout: 120000 });
 await page.waitForTimeout(6000);
 await page.screenshot({ path: `${out}/windows-editor.png` });

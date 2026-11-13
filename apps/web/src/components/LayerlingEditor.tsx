@@ -166,7 +166,6 @@ import { SHELL_SIDES, shellMaxThickness, shellOpeningsFor, shellOpenSides } from
 import { arrayFollowingPivot, arrayGroupsCopies, circleStepDegrees, clampArrayCount, moveAlongRadius, rotateAroundVertical, rowOffset, singleAxisSpacing, type ArraySettings, arrayOffsets } from "@/lib/shapeArray";
 import { bedOverhangs, keepDismissedOverhangs, printerPresetById, shapeBedFootprint, type BedOverhang } from "@/lib/printBed";
 import { SplitPanel, type SplitWorkplaneDirection } from "./workplane/SplitPanel";
-import { ReadyPartsSection } from "./ReadyPartsSection";
 import { MoreShapesSection } from "./MoreShapesSection";
 import { cachedFileSettings, chooseFilesFolder, getFileSettings, saveUserFile } from "@/lib/pareFiles";
 import { withFixedSides } from "@/lib/fixedSides";
@@ -204,8 +203,7 @@ import { arrangeOnPlate, spaceEvenly, spaceWithGap, type Footprint } from "@/lib
 import { addFreehandStroke } from "@/lib/freehandStroke";
 import { placeCustomShape } from "@/lib/customShapePackage";
 import { buildReadyPart } from "@/lib/readyPartsBuild";
-import { mouseEarsPart, type ReadyPart } from "@/lib/readyParts";
-import { MOUSE_EARS_EVENT, type MouseEarsRequest } from "./workplane/MouseEarsCard";
+import { type ReadyPart } from "@/lib/readyParts";
 import { CUT_CONNECTOR_LIMITS, DEFAULT_CUT_CONNECTORS, normalizeCutConnectors, type CutConnectorOptions } from "@/lib/cutConnectors";
 import { NO_SPLIT_ROTATION, modelSplitPlane, snapSplitPositionToVertices, splitOrientationForNormal, splitAxisFromLabel, splitAxisLabel, splitRotationAxes, type SplitRotation } from "@/lib/modelSplit";
 import { GuideModal } from "./workplane/GuideModal";
@@ -6668,31 +6666,6 @@ export function LayerlingEditor({
     }
   }, [carryIds]);
 
-  // Fork: mouse ears under the selected part's sharp bottom corners, asked for from its panel.
-  useEffect(() => {
-    const onMouseEars = (event: Event) => {
-      const { id, diameter } = (event as CustomEvent<MouseEarsRequest>).detail;
-      const shape = shapesRef.current.find((entry) => entry.id === id);
-      if (!shape) return;
-      const vertices = meshForShape(shape).vertices;
-      const bottom = Math.min(...vertices.map(([, y]) => y));
-      if (bottom > 0.5) {
-        setNotice(t("mouseEars.notOnPlate"));
-        return;
-      }
-      const footprint = vertices.filter(([, y]) => y <= bottom + 0.05).map(([x, , z]) => [x, z] as [number, number]);
-      const part = mouseEarsPart(footprint, bottom, diameter, t("mouseEars.name"), shape.color);
-      if (!part) {
-        setNotice(t("mouseEars.noCorners"));
-        return;
-      }
-      void buildReadyPart(part, workspaceSettingsRef.current.booleanTriangleLimit).then((ears) => {
-        commitShapes([...shapesRef.current, ears], [ears.id], t("mouseEars.added", { count: part.shapes.length }));
-      }).catch((error) => setNotice(error instanceof Error ? error.message : String(error)));
-    };
-    window.addEventListener(MOUSE_EARS_EVENT, onMouseEars);
-    return () => window.removeEventListener(MOUSE_EARS_EVENT, onMouseEars);
-  }, [commitShapes]);
 
   // Fork: the lithophane and Voronoi makers.
   const [makerPanel, setMakerPanel] = useState<"lithophane" | "voronoi" | "trace" | null>(null);
@@ -22210,18 +22183,6 @@ export function LayerlingEditor({
         onTrace={() => setMakerPanel((current) => (current === "trace" ? null : "trace"))}
         traceOpen={makerPanel === "trace"}
         voronoiOpen={makerPanel === "voronoi"}
-        renderReadyParts={(close) => (
-          <ReadyPartsSection
-            onInsert={(parts, options) => {
-              close();
-              void insertReadyParts(parts, options).catch(noticeError);
-            }}
-            onMake={(maker) => {
-              close();
-              setMakerPanel(maker);
-            }}
-          />
-        )}
         renderMoreShapes={(close, after, present) => (
           <MoreShapesSection
             after={after}

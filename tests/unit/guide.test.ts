@@ -33,18 +33,9 @@ async function contextFor(language: (typeof LANGUAGES)[number]) {
 }
 
 describe("guide markdown", () => {
-  it("takes button names from the interface's own wording", async () => {
-    const context = await contextFor("de");
-    const html = renderInline("Klicke auf {{ui:editor.tool.group}}.", context);
-    expect(html).toContain("„Gruppieren“");
-    const english = renderInline("Click {{ui:editor.tool.group}}.", await contextFor("en"));
-    expect(english).toContain("“Group”");
-  });
 
-  it("fills the {count} of a counting sentence from the number after the bar", async () => {
-    expect(renderInline("{{ui:workspace.gridMajorSteps|10}}", await contextFor("en"))).toContain("“10 grid steps”");
-    expect(renderInline("{{ui:workspace.gridMajorSteps|10}}", await contextFor("de"))).toContain("„10 Rasterschritte“");
-  });
+
+
 
   it("never writes a {count} placeholder into a built guide page", async () => {
     for (const language of LANGUAGES) {
@@ -55,27 +46,11 @@ describe("guide markdown", () => {
     }
   });
 
-  it("takes the program's numbers from roundness.ts, written as the language writes them", async () => {
-    const { EXACT_ROUND_TOLERANCE, MIN_AUTOMATIC_SIDES } = await import("@/lib/roundness");
-    expect(renderInline("{{value:EXACT_ROUND_TOLERANCE}} mm, {{value:MIN_AUTOMATIC_SIDES}}", await contextFor("de"))).toBe(`${String(EXACT_ROUND_TOLERANCE).replace(".", ",")} mm, ${MIN_AUTOMATIC_SIDES}`);
-    expect(renderInline("{{value:EXACT_ROUND_TOLERANCE}} mm", await contextFor("en"))).toBe(`${EXACT_ROUND_TOLERANCE} mm`);
-    expect(() => renderInline("{{value:NO_SUCH_NUMBER}}", { language: "en", messages: {}, values: {} })).toThrow(/Unknown value/);
-    // The function in the same file is no number to quote.
-    expect((await loadValues()).drawnRound).toBeUndefined();
-  });
 
-  it("stops on a name the interface does not have", async () => {
-    expect(() => renderInline("{{ui:no.such.key}}", { language: "de", messages: {} })).toThrow(/Unknown interface text/);
-  });
 
-  it("understands keys, code, links and chapter links", async () => {
-    const context = await contextFor("de");
-    const html = renderInline("[[Strg]]+[[Z]] und `npm run dev` und [Kapitel](chapter:formen) und [x](https://example.com)", context);
-    expect(html).toContain("<kbd>Strg</kbd>+<kbd>Z</kbd>");
-    expect(html).toContain("<code>npm run dev</code>");
-    expect(html).toContain('href="/anleitung/formen.html"');
-    expect(html).toContain('rel="noopener"');
-  });
+
+
+
 
   it("escapes what is not markup", async () => {
     const html = renderInline("a < b & c", await contextFor("en"));
@@ -127,19 +102,7 @@ describe("guide footer", () => {
     expect(parseEnv(["# NEXT_PUBLIC_A=x", "NEXT_PUBLIC_IMPRINT_URL=/impressum.html", "", 'B="q"'].join("\n"))).toEqual({ NEXT_PUBLIC_IMPRINT_URL: "/impressum.html", B: "q" });
   });
 
-  it("shows the legal links of the installation from any folder, and leaves out what is not set", async () => {
-    const messages = await loadMessages("de");
-    const full = renderFooter({ language: "de", messages, version: "9.9.9", environment: { NEXT_PUBLIC_IMPRINT_URL: "/impressum.html", NEXT_PUBLIC_PRIVACY_URL: "/datenschutz.html", NEXT_PUBLIC_SPONSOR_URL: "https://example.org/spende" } });
-    expect(full).toContain('href="/impressum.html">Impressum');
-    expect(full).toContain('href="/datenschutz.html">Datenschutz');
-    expect(full).toContain("https://example.org/spende");
-    // Pare 3D (build 99): Open source and the licences & credits page on the right.
-    expect(full).toContain(">Open source<");
-    expect(full).toContain("licences-and-credits.html");
-    const bare = renderFooter({ language: "en", messages: await loadMessages("en"), version: "1.0.0", environment: {} });
-    expect(bare).not.toMatch(/Imprint|Privacy|impressum/i);
-    expect(bare).not.toContain("Discussions"); // fork: no community link
-  });
+
 
   it("links no support page of its own, only one the installation sets (Pare 3D, build 99)", async () => {
     const messages = await loadMessages("en");

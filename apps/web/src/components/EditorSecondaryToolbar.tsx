@@ -81,7 +81,7 @@ import { Import, PaintBucket, ScanSearch, Scissors, Settings as LucideSettings, 
 import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { SimpleModeSwitch } from "@/components/SimpleModeSwitch";
 import { ViewLookSwitch } from "@/components/ViewLookSwitch";
-import { libraryShapeAssets, shapeAssetColor, shapeAssetLabel, shapeAssetMenuLabel } from "@/lib/shapeCatalog";
+import { paletteShapeAssets, shapeAssetColor, shapeAssetLabel, shapeAssetMenuLabel } from "@/lib/shapeCatalog";
 import type { CadModifierKind } from "@/lib/cadModifierTypes";
 import type { ShapeAsset, SketchOperation, WorkplaneWorkspaceSettings } from "@/types/layerling";
 import { topTip, type TopPanel } from "@/components/EditorTopActionPanel";
@@ -957,11 +957,6 @@ export function SecondaryToolbar({
     { id: "spaceOut", label: t("distribute.title"), icon: ForkSpaceOutIcon, action: onAlign, enabled: canAlign, active: alignMode },
     { id: "fitCheck", label: t("fitCheck.title"), icon: ScanSearch, action: build33.onFitCheck, enabled: true, active: build33.fitActive },
   ];
-  // Fork: the makers - each opens its own panel.
-  const makeTools = [
-    { id: "readyParts", label: t("readyParts.title"), icon: ForkReadyPartsIcon, action: togglePartsWindow, enabled: !historyViewActive, active: (shapesOpen && shapesTab === "parts") || Boolean(lithophaneOpen || traceOpen || voronoiOpen) },
-    // Fork (build 32): Lithophane, Photo to outline and Voronoi moved into this window, under "Make from a picture".
-  ];
   const sketchClipboardTools = [
     { id: "sketch-copy", label: t("editor.tool.copy"), icon: ToolbarCopyIcon, action: onSketchCopy, enabled: sketchHasSelection },
     { id: "sketch-paste", label: t("editor.tool.paste"), icon: ToolbarPasteIcon, action: onSketchPaste, enabled: sketchHasClipboard },
@@ -1027,7 +1022,7 @@ export function SecondaryToolbar({
       </div>
     );
   };
-  const renderToolButton = (tool: (typeof leftTools)[number] | (typeof visibilityTools)[number] | (typeof combineTools)[number] | (typeof modifyTools)[number] | (typeof arrangeTools)[number] | (typeof makeTools)[number] | (typeof meshTools)[number] | (typeof dentalTools)[number]) => {
+  const renderToolButton = (tool: (typeof leftTools)[number] | (typeof visibilityTools)[number] | (typeof combineTools)[number] | (typeof modifyTools)[number] | (typeof arrangeTools)[number] | (typeof meshTools)[number] | (typeof dentalTools)[number]) => {
     const { id, action, label } = tool;
     // Fork: Pare 3D's own icon where there is one, and a short name under it.
     const Icon = FORK_TOOL_ICONS[id] ?? tool.icon;
@@ -1149,7 +1144,7 @@ export function SecondaryToolbar({
     return [
       ...leftTools.slice(0, 4).map((tool) => fromTool(tool, t("editor.group.clipboard"))),
       ...leftTools.slice(4).map((tool) => fromTool(tool, t("editor.group.history"))),
-      ...libraryShapeAssets.map((shape) => plain(
+      ...paletteShapeAssets.map((shape) => plain(
         `shape-${shape.id}`,
         t("palette.addShape", { shape: shapeAssetMenuLabel(shape) }),
         shapesGroup,
@@ -1267,7 +1262,7 @@ export function SecondaryToolbar({
                 </>
               ) : null}
               <div className="shape-menu-list">
-                {libraryShapeAssets.map((shape) => (
+                {paletteShapeAssets.map((shape) => (
                   <Fragment key={shape.id}>
                   <button
                     className="shape-menu-item"
@@ -1500,10 +1495,6 @@ export function SecondaryToolbar({
             They wait for an imported mesh to be selected. */}
         {renderGroup("mesh", t("editor.group.mesh"), meshTools, () => meshTools.map(renderToolButton), "toolbar-mesh-section")}
         {renderGroup("arrange", t("editor.group.arrange"), arrangeTools, () => arrangeTools.map(renderToolButton))}
-        <div className="toolbar-section" data-group="make">
-          <div className="toolbar-section-label">{t("editor.group.make")}</div>
-          <div className="toolbar-section-tools">{makeTools.map(renderToolButton)}</div>
-        </div>
         {/* Fork (build 47): Dental Studio has a place of its own. Build 104: in CAD Studio it is one button
             beside Export instead. */}
         {onSendToDental ? null : <div className="toolbar-section" data-group="dental">

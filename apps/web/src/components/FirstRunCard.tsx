@@ -4,7 +4,6 @@ import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { t } from "@/lib/i18n";
 import { applySimpleMode } from "@/components/SimpleModeSwitch";
-import { OPEN_TINKERCAD_GUIDE_EVENT } from "@/components/TinkercadGuide";
 import { setToolNames } from "@/lib/toolNames";
 
 const STORAGE_KEY = "pare3d.firstRunAnswered";
@@ -54,7 +53,6 @@ export function FirstRunCard() {
     }
     applySimpleMode(choice === "beginner");
     setToolNames(choice !== "experienced");
-    if (choice === "tinkercad") window.dispatchEvent(new Event(OPEN_TINKERCAD_GUIDE_EVENT));
     setShow(false);
     window.dispatchEvent(new Event(ANSWERED_EVENT));
   };
@@ -67,7 +65,6 @@ export function FirstRunCard() {
       </div>
       <div className="first-run-actions">
         <button type="button" className="primary" onClick={() => answer("beginner")}>{t("firstRun.beginner")}</button>
-        <button type="button" onClick={() => answer("tinkercad")}>{t("firstRun.tinkercad")}</button>
         <button type="button" onClick={() => answer("experienced")}>{t("firstRun.experienced")}</button>
       </div>
     </section>

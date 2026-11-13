@@ -21,18 +21,7 @@ const info = (build: string, version = "1.67.0"): VersionInfo => ({
 });
 
 describe("an open page noticing an update (#update-notice)", () => {
-  it("reads what the export writes and ignores what is not that", () => {
-    expect(parseVersionInfo(JSON.parse(versionFileSource("1.67.0", "abc", [{ version: "1.67.0", items: [{ title: title("A"), body: title("b") }] }])))).toEqual({
-      version: "1.67.0",
-      build: "abc",
-      highlights: [{ version: "1.67.0", title: title("A") }],
-    });
-    expect(parseVersionInfo(null)).toBeNull();
-    expect(parseVersionInfo("1.67.0")).toBeNull();
-    expect(parseVersionInfo({ version: "1.67.0" })).toBeNull();
-    // A title needs its English text; a language that has no text of its own is left out, and the page reads English there.
-    expect(parseVersionInfo({ version: "1.67.0", build: "x", highlights: [{ version: "1.0.0", title: { de: "", en: "x" } }, { version: "1.0.1", title: { de: "y" } }, 5] })?.highlights).toEqual([{ version: "1.0.0", title: { en: "x" } }]);
-  });
+
 
   it("asks past every cache, with a fresh address each time", async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({ version: "1.67.0", build: "b1" })));

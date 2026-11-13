@@ -330,6 +330,13 @@ export const qrCodeAsset: ToolbarShapeAsset = {
 export const libraryShapeAssets: ToolbarShapeAsset[] = toolbarShapeAssets.flatMap((asset) => (asset.id === "text" ? [asset, nameTagAsset, iconTagAsset, qrCodeAsset] : asset.id === "doubleCountersink" ? [] : [asset]));
 
 /**
+ * Pare Dental: CAD-only generators the dental studios do not use are not offered in the shape menu.
+ * Their code still builds shapes already in a design; it goes when the geometry core is rewritten.
+ */
+export const PARE_DENTAL_HIDDEN_SHAPES: ReadonlySet<string> = new Set(["vase", "thread", "spring", "gridfinity", "gear"]);
+export const paletteShapeAssets: ToolbarShapeAsset[] = libraryShapeAssets.filter((asset) => !PARE_DENTAL_HIDDEN_SHAPES.has(asset.id));
+
+/**
  * The colour a new shape of this asset starts with: the asset's own, unless the shape
  * defaults saved for its kind name another. The library shows the same colour beside each
  * entry, so the list tells what will land on the workplane.

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { MESSAGES_DE } from "@/lib/messages.de";
 import { MESSAGES_EN } from "@/lib/messages.en";
 import {
   computeSectionPlaneVector,
@@ -186,8 +185,5 @@ describe("section axis letters", () => {
     expect(MESSAGES_EN["camera.sectionAxisX"]).toBe("X (width)");
     expect(MESSAGES_EN["camera.sectionAxisY"]).toBe("Y (depth)");
     expect(MESSAGES_EN["camera.sectionAxisZ"]).toBe("Z (height)");
-    expect(MESSAGES_DE["camera.sectionAxisX"]).toBe("X (Breite)");
-    expect(MESSAGES_DE["camera.sectionAxisY"]).toBe("Y (Tiefe)");
-    expect(MESSAGES_DE["camera.sectionAxisZ"]).toBe("Z (Höhe)");
   });
 });

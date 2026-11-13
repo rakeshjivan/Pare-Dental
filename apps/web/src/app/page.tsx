@@ -15,7 +15,6 @@ import { OPEN_WHATS_NEW_EVENT, WhatsNew } from "@/components/WhatsNew";
 import { starterParts, type StarterId } from "@/lib/starterDesigns";
 import { buildReadyPart } from "@/lib/readyPartsBuild";
 import { placeCustomShape } from "@/lib/customShapePackage";
-import { OPEN_TINKERCAD_GUIDE_EVENT, TinkercadGuide } from "@/components/TinkercadGuide";
 import { AUTO_BACKUP_INTERVAL_MS, getAutoBackupStatus, initAutoBackup, subscribeAutoBackup, writeAutoBackup } from "@/lib/autoBackup";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { useAppUpdate } from "@/lib/useAppUpdate";
@@ -2955,7 +2954,6 @@ export default function Home() {
 
   return (
     <>
-      <TinkercadGuide />
       <pre data-codex-projects hidden>
         {JSON.stringify(projectDebugSummary)}
       </pre>
@@ -3713,7 +3711,6 @@ function Dashboard({
             <a href="/guide/index.html" target="_blank" rel="noreferrer" onClick={close}>{t("home.userGuide")}</a>
             <a href="/guide/dental-studio.html" target="_blank" rel="noreferrer" onClick={close}>{t("home.dentalGuide")}</a>
             <a href="/guide/shortcuts.html" target="_blank" rel="noreferrer" onClick={close}>{t("home.shortcutsGuide")}</a>
-            <button type="button" onClick={() => { close(); window.dispatchEvent(new Event(OPEN_TINKERCAD_GUIDE_EVENT)); }}>{t("home.fromTinkercad")}</button>
             <button type="button" onClick={() => { close(); window.dispatchEvent(new Event(OPEN_WHATS_NEW_EVENT)); }}>{t("helpMenu.whatsNew")}</button>
             {/* Build 108: what the footer held, here - the start pages end with their content. The source stays a click away, as AGPL-3.0 section 13 asks. */}
             <hr className="home-menu-rule" />
@@ -4053,12 +4050,6 @@ function Dashboard({
                 onHome={() => onPlace("home")}
                 onNew={() => onCreateIn(pageStudio)}
                 onImport={onImportFile}
-                extra={pageStudio === "cad" ? (
-                  <button type="button" className="studio-head-link" onClick={() => window.dispatchEvent(new Event(OPEN_TINKERCAD_GUIDE_EVENT))}>
-                    <GraduationCap size={16} aria-hidden="true" />
-                    {t("home.fromTinkercadLong")}
-                  </button>
-                ) : null}
               />
               {dashboardNotice ? (
                 <div className="dashboard-import-notice" role="status">
@@ -4912,12 +4903,6 @@ function StaticIntro() {
         <h2>{translate("en", "welcome.teaserTitle")}</h2>
         <WelcomeGuideBody tr={(key) => translate("en", key)} />
       </section>
-      <noscript>
-        <section lang="de">
-          <h2>{translate("de", "welcome.teaserTitle")}</h2>
-          <WelcomeGuideBody tr={(key) => translate("de", key)} />
-        </section>
-      </noscript>
     </main>
   );
 }

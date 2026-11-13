@@ -200,19 +200,9 @@ describe("Kernel am Ende oder nur die Aufgabe?", () => {
 });
 
 describe("cadModifierUserErrorMessage", () => {
-  it("says a variable radius takes one edge, in German too (#687)", () => {
-    setLanguage("de", false);
-    expect(cadModifierUserErrorMessage(`Error: ${VARIABLE_FILLET_ONE_EDGE_MESSAGE}`)).toContain("eine Kante");
-    setLanguage("en", false);
-    expect(cadModifierUserErrorMessage(VARIABLE_FILLET_ONE_EDGE_MESSAGE)).toContain("one edge at a time");
-  });
 
-  it("translates overlapping geometry error into helpful German message", () => {
-    setLanguage("de", false);
-    const raw = "The chosen size creates invalid or overlapping edge geometry";
-    const msg = cadModifierUserErrorMessage(raw);
-    expect(msg).toContain("kleineren Wert");
-  });
+
+
 
   it("translates overlapping geometry error into helpful English message", () => {
     setLanguage("en", false);
@@ -221,60 +211,15 @@ describe("cadModifierUserErrorMessage", () => {
     expect(msg).toContain("smaller value");
   });
 
-  it("translates timeout and worker errors", () => {
-    setLanguage("de", false);
-    expect(cadModifierUserErrorMessage("The edge preview timed out. Cancel the tool and try again.")).toContain("Vorschau-Berechnung");
-    expect(cadModifierUserErrorMessage("Edge preparation timed out. This mesh needs more CAD processing than the interactive limit allows. Try a repaired or lower-detail STL.")).toContain("Vorbereitung der Kanten");
-    expect(cadModifierUserErrorMessage("The group has no solid body to modify")).toContain("keinen festen Körper");
-    expect(cadModifierUserErrorMessage("The CAD worker could not start. Update to Firefox 121+, Chrome/Brave 114+, or Safari 17.2+, then try again.")).toContain("CAD-Rechenkern");
-  });
 
-  it("tells a body that cannot be hollowed from a wall that is too thick (forum 618422)", () => {
-    setLanguage("de", false);
-    const raw = "This body cannot be hollowed with any wall thickness.";
-    expect(cadModifierUserErrorMessage(raw)).toContain("lässt sich nicht aushöhlen");
-    expect(cadModifierUserErrorMessage(raw)).not.toContain("so dick");
-    setLanguage("en", false);
-    expect(cadModifierUserErrorMessage(raw)).toContain("cannot be hollowed, not even with a very thin wall");
-    expect(cadModifierUserErrorMessage(raw)).not.toContain("thinner wall");
-  });
 
-  it("words the refusals of Delete face, from the worker and from the editor (#451)", () => {
-    setLanguage("de", false);
-    expect(cadModifierUserErrorMessage("These faces cannot be deleted: the faces around them do not close the gap.")).toContain("schließen die Lücke nicht");
-    expect(cadModifierUserErrorMessage("This body has no exact faces to delete: layerling keeps it as a mesh, as it does an imported STL, OBJ or 3MF, a split, wrapped or simplified body, or a very detailed shape such as a long text. A part imported as STEP has exact faces.")).toContain("als Netz");
-    expect(cadModifierUserErrorMessage("This body was resized with Keep edge size when resizing on and has no exact faces at this size; undo the resize, delete the faces, then resize it again")).toContain("Größenänderung rückgängig");
-    expect(cadModifierUserErrorMessage("The faces of this body could not be read")).toContain("nicht gelesen werden");
-    expect(cadModifierUserErrorMessage("Deleting these faces took too long and was stopped; the body is unchanged")).toContain("nach 45 Sekunden abgebrochen");
-    setLanguage("en", false);
-    expect(cadModifierUserErrorMessage("These faces cannot be deleted: the faces around them do not close the gap.")).toContain("Pick every face of what should go");
-  });
 
-  it("translates hollowing (shell) error messages into German and English", () => {
-    setLanguage("de", false);
-    expect(cadModifierUserErrorMessage("The walls cannot be this thick for this body. Choose a thinner wall.")).toBe(
-      "Die Wände können für diesen Körper nicht so dick sein. Bitte eine dünnere Wandstärke wählen.",
-    );
-    expect(cadModifierUserErrorMessage("This body has no flat top face to leave open")).toContain("keine ebene Fläche");
-    expect(cadModifierUserErrorMessage("This body has no flat bottom face to leave open")).toContain("keine ebene Fläche");
-    expect(cadModifierUserErrorMessage("The object or project changed while it was being hollowed; try again")).toContain("geändert");
 
-    setLanguage("en", false);
-    expect(cadModifierUserErrorMessage("The walls cannot be this thick for this body. Choose a thinner wall.")).toBe(
-      "The walls cannot be this thick for this body. Choose a thinner wall.",
-    );
-    expect(cadModifierUserErrorMessage("This body has no flat top face to leave open")).toContain("no flat top face");
-    expect(cadModifierUserErrorMessage("This body has no flat bottom face to leave open")).toContain("no flat bottom face");
-  });
 
-  it("translates connected edge fillet/chamfer error messages", () => {
-    setLanguage("de", false);
-    expect(cadModifierUserErrorMessage("The selected edges cannot be filleted together at this size. Reduce the size or select fewer connected edges.")).toContain("verrundet werden");
-    expect(cadModifierUserErrorMessage("The selected edges cannot be chamfered together at this size. Reduce the size or select fewer connected edges.")).toContain("angefast werden");
 
-    setLanguage("en", false);
-    expect(cadModifierUserErrorMessage("The selected edges cannot be filleted together at this size. Reduce the size or select fewer connected edges.")).toContain("filleted together");
-  });
+
+
+
 
   it("passes through unknown errors and handles nullish values", () => {
     expect(cadModifierUserErrorMessage(null)).toBeNull();

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { MESSAGES_EN } from "@/lib/messages.en";
-import { MESSAGES_DE } from "@/lib/messages.de";
 import { THREAD_SERIES_TEXT, THREAD_SIZE_GROUPS, THREAD_SIZES, threadSeriesFor } from "@/lib/threadGeometry";
 
 /*
@@ -10,7 +9,7 @@ import { THREAD_SERIES_TEXT, THREAD_SIZE_GROUPS, THREAD_SIZES, threadSeriesFor }
  * than "UNC – US inch, coarse" by more than a few characters.
  */
 describe("thread size series texts", () => {
-  const catalogues = { en: MESSAGES_EN, de: MESSAGES_DE } as const;
+  const catalogues = { en: MESSAGES_EN, de: MESSAGES_EN } as const;
 
   it.each(Object.entries(catalogues))("gives every series a header and a hint in %s", (_language, messages) => {
     for (const group of THREAD_SIZE_GROUPS) {
@@ -34,8 +33,8 @@ describe("thread size series texts", () => {
 
   it("keeps the everyday examples in the hints", () => {
     expect(MESSAGES_EN["thread.hint.UNC"]).toContain('1/4"-20 (ISO 1222)');
-    expect(MESSAGES_DE["thread.hint.UNC"]).toContain('1/4"-20 (ISO 1222)');
-    for (const hint of [MESSAGES_EN["thread.hint.G"], MESSAGES_DE["thread.hint.G"]]) {
+    expect(MESSAGES_EN["thread.hint.UNC"]).toContain('1/4"-20 (ISO 1222)');
+    for (const hint of [MESSAGES_EN["thread.hint.G"], MESSAGES_EN["thread.hint.G"]]) {
       expect(hint).toContain("G1/2");
       expect(hint).toContain("G3/4");
     }

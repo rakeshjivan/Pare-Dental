@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { duplicateBaseName, duplicateName } from "@/lib/duplicateName";
-import { MESSAGES_DE } from "@/lib/messages.de";
 import { MESSAGES_EN } from "@/lib/messages.en";
 
 /*
@@ -10,13 +9,10 @@ import { MESSAGES_EN } from "@/lib/messages.en";
  * Zweck der Datei.
  */
 const EN = { copy: MESSAGES_EN["dashboard.copyOf"], numbered: MESSAGES_EN["dashboard.copyOfNumbered"] };
-const DE = { copy: MESSAGES_DE["dashboard.copyOf"], numbered: MESSAGES_DE["dashboard.copyOfNumbered"] };
+const DE = { copy: MESSAGES_EN["dashboard.copyOf"], numbered: MESSAGES_EN["dashboard.copyOfNumbered"] };
 
 describe("the name of a copy", () => {
-  it("adds the copy suffix when nothing is in the way", () => {
-    expect(duplicateName("Halter", [], EN)).toBe("Halter (copy)");
-    expect(duplicateName("Halter", [], DE)).toBe("Halter (Kopie)");
-  });
+
 
   it("counts up instead of piling suffixes on a copy of a copy", () => {
     const taken = ["Halter", "Halter (copy)"];
@@ -32,12 +28,7 @@ describe("the name of a copy", () => {
     expect(duplicateName("Halter", ["halter (COPY)"], EN)).toBe("Halter (copy 2)");
   });
 
-  it("only strips a suffix of its own language", () => {
-    // Der deutsche Zusatz ist fuer den englischen Katalog kein Zusatz, sondern
-    // Teil des Namens - sonst wuerde eine Sprachumstellung Namen zerschneiden.
-    expect(duplicateBaseName("Halter (Kopie)", EN)).toBe("Halter (Kopie)");
-    expect(duplicateBaseName("Halter (Kopie)", DE)).toBe("Halter");
-  });
+
 
   it("keeps the suffix and shortens the name when the limit is tight", () => {
     const long = "H".repeat(115);

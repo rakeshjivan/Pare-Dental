@@ -148,20 +148,9 @@ describe("what the guide says about a name", () => {
     expect(lookupHelp(index, "wall THICKNESS", "en").best?.entry.u).toBe("/guide/shapes.html#settings");
   });
 
-  it("matches ae and ue for the umlauts of German", () => {
-    const german = guidePrepare([{ c: "Auswählen", h: "Teile ändern", u: "/anleitung/a.html#aendern", t: "Ändere die Teile über die Griffe." }]);
-    expect(lookupHelp(german, "Teile aendern", "de").best?.entry.u).toBe("/anleitung/a.html#aendern");
-    // English does not do that.
-    expect(lookupHelp(german, "Teile aendern", "en").best).toBeNull();
-  });
 
-  it("uses the quotation marks of the language", () => {
-    const german = guidePrepare([
-      { c: "Körper", h: "Verbinden", u: "/anleitung/k.html#v", t: "Mit „Gruppieren“ wird aus Teilen eins." },
-      { c: "Körper", h: "Anderes", u: "/anleitung/k.html#a", t: "Gruppieren ist auch im Menü. Gruppieren, gruppieren." },
-    ]);
-    expect(lookupHelp(german, "Gruppieren", "de").best?.entry.u).toBe("/anleitung/k.html#v");
-  });
+
+
 
   it("summarises with the sentence that mentions the name", () => {
     const entry = entries[1];

@@ -4,7 +4,6 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { GridEyeIcon } from "@/components/GridEyeIcon";
-import { MESSAGES_DE } from "@/lib/messages.de";
 import { MESSAGES_EN } from "@/lib/messages.en";
 
 const read = (relative: string) => readFileSync(fileURLToPath(new URL(`../../${relative}`, import.meta.url)), "utf8");
@@ -88,7 +87,7 @@ describe("hiding the workplane from the camera bar", () => {
 
 describe("workplane visibility labels and guide", () => {
   it("names the two eyes differently in every language", () => {
-    for (const messages of [MESSAGES_EN, MESSAGES_DE]) {
+    for (const messages of [MESSAGES_EN, MESSAGES_EN]) {
       const names = [
         messages["camera.hideWorkplane"],
         messages["camera.showWorkplane"],

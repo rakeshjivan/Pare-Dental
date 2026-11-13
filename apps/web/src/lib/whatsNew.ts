@@ -101,12 +101,8 @@ export function isText(value: unknown): value is WhatsNewText {
 
 /** The English text and every other language's text that is a real string, nothing else. */
 export function cleanText(value: WhatsNewText): WhatsNewText {
-  const cleaned: WhatsNewText = { en: value.en };
-  for (const language of LANGUAGES) {
-    const text = (value as Partial<Record<Language, unknown>>)[language];
-    if (language !== "en" && typeof text === "string" && text.trim() !== "") cleaned[language] = text;
-  }
-  return cleaned;
+  // Pare Dental is English only.
+  return { en: value.en };
 }
 
 /**

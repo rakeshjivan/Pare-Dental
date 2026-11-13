@@ -170,12 +170,6 @@ export function localizedError(raw: string): string {
     const match = text.match(rule.pattern);
     if (match) return t(rule.key, rule.values?.(match));
   }
-  const language = getLanguage();
-  if (language === "de") {
-    if (ENGLISH_HINT.test(text) && !GERMAN_HINT.test(text)) return t("error.unknown", { detail: text });
-  } else if (language !== "en" && looksEnglish(text) && !isInterfaceSentence(text, language)) {
-    // Any other language: a raw English text still gets a sentence in the person's language around it.
-    return t("error.unknown", { detail: text });
-  }
+  // Pare Dental is English only, so a raw English text is shown as it is.
   return text;
 }

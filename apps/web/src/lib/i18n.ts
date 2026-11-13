@@ -1,4 +1,3 @@
-import { MESSAGES_DE } from "@/lib/messages.de";
 import { MESSAGES_EN, type MessageKey } from "@/lib/messages.en";
 import {
   DEFAULT_LANGUAGE,
@@ -78,24 +77,9 @@ export function createCatalogueStore(
 }
 
 /** Fetching a further language: one line per language that is not built in, `() => import("@/lib/messages.xx").then((module) => module.MESSAGES_XX)`. */
-const LOADERS: Partial<Record<Language, CatalogueLoader>> = {
-  cs: () => import("@/lib/messages.cs").then((module) => module.MESSAGES_CS),
-  nl: () => import("@/lib/messages.nl").then((module) => module.MESSAGES_NL),
-  da: () => import("@/lib/messages.da").then((module) => module.MESSAGES_DA),
-  fr: () => import("@/lib/messages.fr").then((module) => module.MESSAGES_FR),
-  // Polish is a separate chunk: only browsers that pick Polish download it.
-  pl: () => import("@/lib/messages.pl").then((module) => module.MESSAGES_PL),
-  // Russian is a separate chunk as well: the fork adds it, the author has no Russian.
-  ru: () => import("@/lib/messages.ru").then((module) => module.MESSAGES_RU),
-  sl: () => import("@/lib/messages.sl").then((module) => module.MESSAGES_SL),
-  tr: () => import("@/lib/messages.tr").then((module) => module.MESSAGES_TR),
-  hu: () => import("@/lib/messages.hu").then((module) => module.MESSAGES_HU),
-  it: () => import("@/lib/messages.it").then((module) => module.MESSAGES_IT),
-  ar: () => import("@/lib/messages.ar").then((module) => module.MESSAGES_AR),
-  ja: () => import("@/lib/messages.ja").then((module) => module.MESSAGES_JA),
-};
+const LOADERS: Partial<Record<Language, CatalogueLoader>> = {};
 
-const catalogues = createCatalogueStore({ en: MESSAGES_EN, de: MESSAGES_DE }, LOADERS);
+const catalogues = createCatalogueStore({ en: MESSAGES_EN }, LOADERS);
 
 /**
  * The current language lives in a module-level store rather than in React
@@ -137,7 +121,7 @@ function applyLanguage(language: Language, persist: boolean) {
   // server always renders "en", so a stored German choice has to correct it
   // here, once, on the one path every language change already takes.
   if (typeof document !== "undefined") {
-    document.documentElement.lang = LANGUAGE_INFO[language].htmlLang;
+    document.documentElement.lang = (LANGUAGE_INFO as Readonly<Record<string, { htmlLang: string }>>)[language]?.htmlLang ?? "en";
   }
   listeners.forEach((listener) => listener());
 }
