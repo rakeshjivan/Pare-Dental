@@ -55,17 +55,36 @@ describe("the Design step's guide lines (build 331)", () => {
     for (const p of longer) expect(p[2]).toBeCloseTo(-1, 6);
   });
 
-  it("runs the zenith line straight from one canine's gum mark to the other's, the laterals' marks short of it", () => {
-    const run = line(arch(), GUIDE_DEFAULTS, "zenith");
-    for (const p of run) expect(p[2]).toBeCloseTo(10.5, 6);
-    const moved = line(arch(), { ...GUIDE_DEFAULTS, zenith: 1 }, "zenith");
-    for (const p of moved) expect(p[2]).toBeCloseTo(9.5, 6);
+  it("draws only what the marks allow, and nothing without a way across", () => {
+    expect(guideLines(arch(), GUIDE_DEFAULTS).map((one) => one.key)).toEqual(["midline", "incisal"]);
+    expect(guideLines({ ...arch(), canines: [[0, -10, 1], [0, -10, 1]] }, GUIDE_DEFAULTS)).toEqual([]);
+  });
+});
+
+describe("the incisal curve as one curve the teeth are set to (build 333)", () => {
+  const run = (set = GUIDE_DEFAULTS) => guideLines(arch(), set).find((one) => one.key === "incisal")!.points;
+  const y = (x: number) => 0.03 * x * x - 10;
+
+  it("runs round the even arch through the marked contacts, seen from the occlusal", () => {
+    for (const p of run()) expect(Math.abs(p[1] - y(p[0]))).toBeLessThan(0.3);
   });
 
-  it("leaves the zenith line out where the canines have no gum mark, and still draws the others", () => {
-    const anchors = arch();
-    anchors.gum![0] = null;
-    expect(guideLines(anchors, GUIDE_DEFAULTS).map((one) => one.key)).toEqual(["midline", "incisal"]);
+  it("is moved towards the lip or the palate with its slider, square to the arch", () => {
+    const base = run(), out = run({ ...GUIDE_DEFAULTS, labial: 1.5 });
+    out.forEach((p, i) => {
+      expect(Math.hypot(p[0] - base[i][0], p[1] - base[i][1])).toBeCloseTo(1.5, 6);
+      expect(p[2]).toBeCloseTo(base[i][2], 6);
+      // Labial: forwards (-y), and away from the middle at the sides.
+      expect(p[1]).toBeLessThan(base[i][1]);
+      if (Math.abs(p[0]) > 6) expect(Math.abs(p[0])).toBeGreaterThan(Math.abs(base[i][0]));
+    });
+    const [a] = guideLines(arch(), { ...GUIDE_DEFAULTS, labial: 1.5 })[0].points;
+    expect(a[1]).toBeCloseTo(-11.5, 6);
+  });
+
+  it("takes a deeper curve than before, and a reverse one", () => {
+    for (const p of run({ ...GUIDE_DEFAULTS, arc: 10 })) expect(p[2]).toBeCloseTo(10 * (p[0] / 15.5) ** 2, 6);
+    for (const p of run({ ...GUIDE_DEFAULTS, arc: -4 })) expect(p[2]).toBeCloseTo(-4 * (p[0] / 15.5) ** 2, 6);
   });
 });
 
@@ -99,8 +118,8 @@ describe("a tooth measured as with a caliper (build 331)", () => {
 
 describe("each guide line hidden on its own (build 332)", () => {
   it("leaves out only the lines unticked", () => {
-    expect(guideLines(arch(), { ...GUIDE_DEFAULTS, hide: { zenith: true } }).map((one) => one.key)).toEqual(["midline", "incisal"]);
-    expect(guideLines(arch(), { ...GUIDE_DEFAULTS, hide: { midline: true, incisal: true } }).map((one) => one.key)).toEqual(["zenith"]);
-    expect(guideLines(arch(), { ...GUIDE_DEFAULTS, hide: { caliper: true } }).map((one) => one.key)).toEqual(["midline", "incisal", "zenith"]);
+    expect(guideLines(arch(), { ...GUIDE_DEFAULTS, hide: { incisal: true } }).map((one) => one.key)).toEqual(["midline"]);
+    expect(guideLines(arch(), { ...GUIDE_DEFAULTS, hide: { midline: true } }).map((one) => one.key)).toEqual(["incisal"]);
+    expect(guideLines(arch(), { ...GUIDE_DEFAULTS, hide: { caliper: true } }).map((one) => one.key)).toEqual(["midline", "incisal"]);
   });
 });

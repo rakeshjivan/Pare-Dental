@@ -842,8 +842,8 @@ function GuidePanel({ set, workspace, onChange }: { set: NonNullable<WaxupView["
   const r = GUIDE_RANGES;
   const tenth = (x: number) => Math.round(x * 10) / 10;
   const arc = tenth(set.arc ?? set.arcMarked);
-  const moved = set.midline !== 0 || set.incisal !== 0 || set.zenith !== 0 || set.arc !== null;
-  const line = (key: "midline" | "incisal" | "zenith", label: MessageKey, hint: MessageKey) => (
+  const moved = set.midline !== 0 || set.incisal !== 0 || set.arc !== null || (set.labial ?? 0) !== 0;
+  const line = (key: "midline" | "incisal", label: MessageKey, hint: MessageKey) => (
     <EdgeModifierSlider label={t(label)} title={t(hint)} value={set[key]} min={r[key][0]} max={r[key][1]} step={0.1} workspace={workspace} length onChange={(value) => onChange({ [key]: tenth(value) })} />
   );
   const part = (key: GuidePart, label: MessageKey) => (
@@ -867,9 +867,8 @@ function GuidePanel({ set, workspace, onChange }: { set: NonNullable<WaxupView["
         {set.hide?.incisal ? null : (<>
           {line("incisal", "waxup.guides.incisal", "waxup.guides.incisalHint")}
           <EdgeModifierSlider label={t("waxup.guides.arc")} title={t("waxup.guides.arcHint")} value={Math.min(r.arc[1], Math.max(r.arc[0], arc))} min={r.arc[0]} max={r.arc[1]} step={0.1} workspace={workspace} length onChange={(value) => onChange({ arc: tenth(value) })} />
+          <EdgeModifierSlider label={t("waxup.guides.labial")} title={t("waxup.guides.labialHint")} value={set.labial ?? 0} min={r.labial[0]} max={r.labial[1]} step={0.1} workspace={workspace} length onChange={(value) => onChange({ labial: tenth(value) })} />
         </>)}
-        {part("zenith", "waxup.guides.keyZenith")}
-        {set.hide?.zenith ? null : line("zenith", "waxup.guides.zenith", "waxup.guides.zenithHint")}
         {part("caliper", "waxup.guides.keyCaliper")}
         <div className="dental-trim-buttons">
           <button type="button" className="secondary" disabled={!moved} title={t("waxup.guides.resetHint")} onClick={() => onChange(null)}>{t("waxup.guides.reset")}</button>

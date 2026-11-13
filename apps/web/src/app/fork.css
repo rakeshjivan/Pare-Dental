@@ -2298,7 +2298,6 @@ html[data-theme="dark"] .dental-studio-panel .dental-picture-tiles button { back
 .wax-guide-line { stroke-width: 1.6; filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.9)); }
 .wax-guide-midline { stroke: #2563eb; stroke-dasharray: 7 4; }
 .wax-guide-incisal { stroke: #f59e0b; }
-.wax-guide-zenith { stroke: #ec4899; }
 .wax-guide-caliper { stroke: #0f172a; stroke-width: 1.3; stroke-dasharray: 2 3; }
 .wax-guide-label { font: 600 11px/1 system-ui, sans-serif; fill: #334155; paint-order: stroke; stroke: rgba(255, 255, 255, 0.92); stroke-width: 3px; }
 .wax-guide-label.strong { font-size: 12.5px; fill: #0f172a; }
@@ -2310,7 +2309,6 @@ html[data-theme="dark"] .dental-studio-panel .dental-picture-tiles button { back
 .wax-guide-swatch { display: inline-block; width: 16px; height: 0; border-top: 2.5px solid #2563eb; }
 .wax-guide-swatch.midline { border-top-style: dashed; }
 .wax-guide-swatch.incisal { border-top-color: #f59e0b; }
-.wax-guide-swatch.zenith { border-top-color: #ec4899; }
 .wax-tooth-across { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0 4px; }
 .wax-tooth-across button { white-space: nowrap; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; background: #ffffff; font: 600 12.5px/1.2 system-ui, sans-serif; color: #0f172a; cursor: pointer; }
 .wax-tooth-across button:hover:not(:disabled) { border-color: #0a786c; color: #0a786c; }

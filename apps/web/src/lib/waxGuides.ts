@@ -3,16 +3,24 @@
  * length, W/L %)"; "the markers also need to be user adjustable with the use of sliders along with a show hide
  * button"): the lines a wax-up is designed to, drawn over the teeth in Design, and each tooth measured.
  *
- * The lines start from the dentist's own marks, not from the wax teeth - a guide that followed the teeth would say
- * nothing about them:
+ * The lines' heights come from the dentist's own marks, not from the wax teeth - a guide that followed the teeth
+ * would say nothing about them:
  *  - the midline: upright through the marked midline;
- *  - the incisal curve: through the marked midline's edge level, falling away to the canine tips as marked;
- *  - the zenith line: from one canine's gum mark to the other's (the centrals' zeniths lie on it, the laterals'
- *    about 1 mm short of it).
+ *  - the incisal curve: at the marked midline's edge level, falling away to the canine tips as marked.
  * Each is then moved with its slider (mm), the incisal curve's depth too.
+ *
+ * Build 333 (Rakesh, of the incisal curve: "it stays static when rotating the model"; it should look "at the tips
+ * from the front" and, the model turned, be seen "running through the centre of the teeth" - as the line of
+ * occlusion does - so the teeth can be set to it from any view; more curve than -2 to 5 mm; the zenith line "isn't
+ * helping much so it can be removed"): the incisal curve is one curve in space the teeth are set to - round the
+ * arch on the even arch through the marked contacts (lib/waxSmileSet idealArch: where the set is first laid), moved
+ * labially or palatally with its own slider; its height as before. It does not follow the wax teeth (a line that
+ * did would always look right). The zenith line is gone.
  *
  * All in the scene's coordinates (as the set's anchors are).
  */
+import { idealArch } from "@/lib/waxSmileSet";
+
 type Vec3 = [number, number, number];
 
 /** How the guides stand: shown or not, and each line's own change from where the marks put it, mm. */
@@ -24,17 +32,17 @@ export type GuideSet = {
   incisal: number;
   /** How far the incisal curve has fallen away gingivally at the canine tips; null: as the canine tips were marked. */
   arc: number | null;
-  /** The zenith line moved incisally (+) or gingivally (-). */
-  zenith: number;
+  /** Build 333: the incisal curve moved labially (+) or palatally (-) from the arch through the marked contacts. */
+  labial?: number;
   /**
-   * Build 332 (Rakesh: "we do need to have the individual zenith and curve lines to be able to hide and show each
+   * Build 332 (Rakesh: "we do need to have the individual ... curve lines to be able to hide and show each
    * separately"): the lines - and the teeth's measurements - put out of view one by one, the rest still shown.
    */
   hide?: Partial<Record<GuidePart, boolean>>;
 };
-export type GuidePart = "midline" | "incisal" | "zenith" | "caliper";
-export const GUIDE_DEFAULTS: GuideSet = { show: true, midline: 0, incisal: 0, arc: null, zenith: 0 };
-export const GUIDE_RANGES = { midline: [-4, 4], incisal: [-4, 4], arc: [-2, 5], zenith: [-4, 4] } as const;
+export type GuidePart = "midline" | "incisal" | "caliper";
+export const GUIDE_DEFAULTS: GuideSet = { show: true, midline: 0, incisal: 0, arc: null };
+export const GUIDE_RANGES = { midline: [-4, 4], incisal: [-6, 6], arc: [-6, 12], labial: [-4, 4] } as const;
 /** How far the midline runs past the incisal edge and past the gum line, mm. */
 const MIDLINE_PAST = 2.5;
 /** The crown length taken where no gum mark says, mm. */
@@ -43,7 +51,7 @@ const CROWN_GUESS = 10.5;
 export type GuideAnchors = { midline: Vec3; canines: [Vec3, Vec3]; up: Vec3; out: Vec3; contacts?: Vec3[]; gum?: Array<Vec3 | null> };
 /** The frame the guides are laid in: the marked midline; across towards the patient's left; up towards the incisal. */
 export type GuideFrame = { origin: Vec3; across: Vec3; up: Vec3 };
-export type GuideLine = { key: "midline" | "incisal" | "zenith"; points: Vec3[] };
+export type GuideLine = { key: "midline" | "incisal"; points: Vec3[] };
 
 const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -92,35 +100,36 @@ export function guideLines(anchors: GuideAnchors, set: GuideSet): GuideLine[] {
   const level = (p: Vec3) => dot(sub(p, origin), up), side = (p: Vec3) => dot(sub(p, origin), across);
   /** A point brought to a level along up. */
   const atLevel = (p: Vec3, h: number) => add(p, up, h - level(p));
-  const all: GuideLine[] = [], out = { push: (line: GuideLine) => { if (!set.hide?.[line.key]) all.push(line); } };
-  const gums = (anchors.gum ?? []).map((g) => g ?? null);
-  const gumLevels = gums.filter(Boolean).map((g) => level(g as Vec3));
+  const out: GuideLine[] = [];
+  const hidden = (key: GuidePart) => set.hide?.[key] === true;
+  const gumLevels = (anchors.gum ?? []).filter(Boolean).map((g) => level(g as Vec3));
   const neck = gumLevels.length ? gumLevels.reduce((a, b) => a + b, 0) / gumLevels.length : -CROWN_GUESS;
+  /** Level with the arch (no part along up), as a unit vector. */
+  const flat = (a: Vec3): Vec3 | null => unit(add(a, up, -dot(a, up)));
+  const labial = flat(anchors.out) ?? [0, 0, 0], shift = set.labial ?? 0;
 
   // The midline: upright, from past the edge to past the gum line.
-  const base = add(origin, across, set.midline);
-  out.push({ key: "midline", points: [add(base, up, MIDLINE_PAST), add(base, up, neck - MIDLINE_PAST)] });
+  if (!hidden("midline")) {
+    const base = add(add(origin, across, set.midline), labial, shift);
+    out.push({ key: "midline", points: [add(base, up, MIDLINE_PAST), add(base, up, neck - MIDLINE_PAST)] });
+  }
 
-  // The incisal curve: round the arch as the contacts were marked, level at the midline, fallen away by `arc` at the canine tips.
-  const contacts = anchors.contacts?.length === 7 ? anchors.contacts : [anchors.canines[0], anchors.midline, anchors.canines[1]];
+  // The incisal curve: round the even arch through the marked contacts, level at the midline, fallen away by `arc` at the canine tips.
   const half = (Math.abs(side(anchors.canines[0])) + Math.abs(side(anchors.canines[1]))) / 2;
-  if (half > 1) {
+  if (!hidden("incisal") && half > 1) {
     const arc = set.arc ?? markedArc(anchors);
-    const run = smooth(contacts).map((p) => atLevel(p, set.incisal - arc * (side(p) / half) ** 2));
-    out.push({ key: "incisal", points: run });
-  }
-
-  // The zenith line: from one canine's gum mark to the other's, round the gum as marked.
-  const first = gums[0], last = gums[gums.length - 1];
-  if (gums.length === 6 && first && last && Math.abs(side(last) - side(first)) > 1) {
-    const marked = gums.filter(Boolean) as Vec3[];
-    const run = smooth(marked).map((p) => {
-      const f = (side(p) - side(first)) / (side(last) - side(first));
-      return atLevel(p, level(first) + (level(last) - level(first)) * f + set.zenith);
+    const marked = anchors.contacts?.length === 7 ? idealArch(anchors.contacts, anchors.up, anchors.out) : [anchors.canines[0], anchors.midline, anchors.canines[1]];
+    const run = smooth(marked);
+    const points = run.map((p, i) => {
+      // Out of the arch here: square to the way the curve runs, on the labial side.
+      const along = sub(run[Math.min(run.length - 1, i + 1)], run[Math.max(0, i - 1)]);
+      let way = flat([along[1] * up[2] - along[2] * up[1], along[2] * up[0] - along[0] * up[2], along[0] * up[1] - along[1] * up[0]]) ?? labial;
+      if (dot(way, labial) < 0) way = [-way[0], -way[1], -way[2]];
+      return add(atLevel(p, set.incisal - arc * (side(p) / half) ** 2), way, shift);
     });
-    out.push({ key: "zenith", points: run });
+    out.push({ key: "incisal", points });
   }
-  return all;
+  return out;
 }
 
 export type Caliper = {
