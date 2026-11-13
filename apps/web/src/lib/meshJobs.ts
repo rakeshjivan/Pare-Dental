@@ -318,7 +318,9 @@ export type DentalMakeProgress = { share: number; stage: DentalStage; arch?: "up
  * upper - not side by side. Side by side both workers' mesh engines are at their largest at once, and that is the
  * most memory the app ever takes; one after the other it is about half, for a Make that takes a little longer.
  */
-export const MAKE_ONE_AT_A_TIME_FROM = 600_000;
+// Build 329: 250,000, not 600,000 - an ordinary pair of intraoral scans (270,000 and 170,000 triangles) was still made
+// side by side, and that is the case that ran the Mac app out of memory while the models were made.
+export const MAKE_ONE_AT_A_TIME_FROM = 250_000;
 export function makesOneAtATime(input: DentalStudioInput): boolean {
   const forced = typeof window !== "undefined" ? (window as unknown as { layerlingMakeOneAtATime?: boolean }).layerlingMakeOneAtATime : undefined;
   if (typeof forced === "boolean") return forced;

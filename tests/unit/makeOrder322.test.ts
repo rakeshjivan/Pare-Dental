@@ -6,8 +6,11 @@ import type { DentalStudioInput } from "@/lib/dentalModel";
 const pair = (upper: number, lower: number) => ({ arches: [{ id: "u", positions: new Float32Array(upper * 9) }, { id: "l", positions: new Float32Array(lower * 9) }], bite: null }) as unknown as DentalStudioInput;
 
 describe("the order a pair of models is made in", () => {
-  it("side by side for ordinary scans", () => {
-    expect(makesOneAtATime(pair(270_000, 170_000))).toBe(false);
+  it("side by side for small scans", () => {
+    expect(makesOneAtATime(pair(120_000, 100_000))).toBe(false);
+  });
+  it("one after the other for an ordinary pair of intraoral scans", () => {
+    expect(makesOneAtATime(pair(270_000, 170_000))).toBe(true);
   });
   it("one after the other from the limit up, counted over both scans together", () => {
     expect(makesOneAtATime(pair(MAKE_ONE_AT_A_TIME_FROM / 2, MAKE_ONE_AT_A_TIME_FROM / 2))).toBe(true);
