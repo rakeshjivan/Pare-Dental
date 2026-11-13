@@ -31,7 +31,7 @@ import { CONTACT_STOPS, contactGradient } from "@/lib/biteContacts";
 import { t } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/messages.en";
 import { SET_DEFAULTS, SET_RANGES, type SetControls } from "@/lib/waxSmileSet";
-import { GUIDE_RANGES, type GuidePart, type GuideSet } from "@/lib/waxGuides";
+import { ARCH_SHAPE, GUIDE_RANGES, type GuidePart, type GuideSet } from "@/lib/waxGuides";
 import { EDIT_RANGES, EDIT_SLIDERS, NO_EDIT, type ToothEdit, type EditKey } from "@/lib/waxToothEdit";
 import { type SmileCheck, type ToothAdjust, type ToothNudge } from "@/lib/dentalWaxup";
 import type { WorkplaneWorkspaceSettings } from "@/types/layerling";
@@ -842,7 +842,7 @@ function GuidePanel({ set, workspace, onChange }: { set: NonNullable<WaxupView["
   const r = GUIDE_RANGES;
   const tenth = (x: number) => Math.round(x * 10) / 10;
   const arc = tenth(set.arc ?? set.arcMarked);
-  const moved = set.midline !== 0 || set.incisal !== 0 || set.arc !== null || (set.labial ?? 0) !== 0;
+  const moved = set.midline !== 0 || set.incisal !== 0 || set.arc !== null || (set.labial ?? 0) !== 0 || (set.width ?? 0) !== 0 || (set.shape ?? ARCH_SHAPE) !== ARCH_SHAPE;
   const line = (key: "midline" | "incisal", label: MessageKey, hint: MessageKey) => (
     <EdgeModifierSlider label={t(label)} title={t(hint)} value={set[key]} min={r[key][0]} max={r[key][1]} step={0.1} workspace={workspace} length onChange={(value) => onChange({ [key]: tenth(value) })} />
   );
@@ -868,6 +868,8 @@ function GuidePanel({ set, workspace, onChange }: { set: NonNullable<WaxupView["
           {line("incisal", "waxup.guides.incisal", "waxup.guides.incisalHint")}
           <EdgeModifierSlider label={t("waxup.guides.arc")} title={t("waxup.guides.arcHint")} value={Math.min(r.arc[1], Math.max(r.arc[0], arc))} min={r.arc[0]} max={r.arc[1]} step={0.1} workspace={workspace} length onChange={(value) => onChange({ arc: tenth(value) })} />
           <EdgeModifierSlider label={t("waxup.guides.labial")} title={t("waxup.guides.labialHint")} value={set.labial ?? 0} min={r.labial[0]} max={r.labial[1]} step={0.1} workspace={workspace} length onChange={(value) => onChange({ labial: tenth(value) })} />
+          <EdgeModifierSlider label={t("waxup.guides.width")} title={t("waxup.guides.widthHint")} value={set.width ?? 0} min={r.width[0]} max={r.width[1]} step={0.1} workspace={workspace} length onChange={(value) => onChange({ width: tenth(value) })} />
+          <EdgeModifierSlider label={t("waxup.guides.shape")} title={t("waxup.guides.shapeHint")} value={set.shape ?? ARCH_SHAPE} min={r.shape[0]} max={r.shape[1]} step={0.1} workspace={workspace} onChange={(value) => onChange({ shape: tenth(value) })} />
         </>)}
         {part("caliper", "waxup.guides.keyCaliper")}
         <div className="dental-trim-buttons">

@@ -17,10 +17,15 @@
  * labially or palatally with its own slider; its height as before. It does not follow the wax teeth (a line that
  * did would always look right). The zenith line is gone.
  *
+ * Build 334 (Rakesh: "our current line is also slightly V shaped and we are looking for a smooth curve"; continued,
+ * it should run on "along the buccal cusp tips"; the canine tips cannot set it - "there are times where there is no
+ * canine tip or the canines are out of line"): seen from the occlusal the incisal curve is one smooth arch,
+ * y = a - D (|x| / W)^p, fitted to all seven contacts together (no one tooth sets it), with its width (W) and its
+ * shape (p: tapered, ovoid, square) on sliders - and it is drawn on past the canines, fainter, so it can be seen to
+ * run along the back teeth's buccal cusps.
+ *
  * All in the scene's coordinates (as the set's anchors are).
  */
-import { idealArch } from "@/lib/waxSmileSet";
-
 type Vec3 = [number, number, number];
 
 /** How the guides stand: shown or not, and each line's own change from where the marks put it, mm. */
@@ -34,6 +39,10 @@ export type GuideSet = {
   arc: number | null;
   /** Build 333: the incisal curve moved labially (+) or palatally (-) from the arch through the marked contacts. */
   labial?: number;
+  /** Build 334: the arch made wider (+) or narrower (-) at the canines' distal contacts, each side, mm. */
+  width?: number;
+  /** Build 334: the arch's shape seen from the occlusal - the power its sides fall back by: 2 ovoid (a parabola), less tapered, more square. */
+  shape?: number;
   /**
    * Build 332 (Rakesh: "we do need to have the individual ... curve lines to be able to hide and show each
    * separately"): the lines - and the teeth's measurements - put out of view one by one, the rest still shown.
@@ -42,7 +51,13 @@ export type GuideSet = {
 };
 export type GuidePart = "midline" | "incisal" | "caliper";
 export const GUIDE_DEFAULTS: GuideSet = { show: true, midline: 0, incisal: 0, arc: null };
-export const GUIDE_RANGES = { midline: [-4, 4], incisal: [-6, 6], arc: [-6, 12], labial: [-4, 4] } as const;
+export const GUIDE_RANGES = { midline: [-4, 4], incisal: [-6, 6], arc: [-6, 12], labial: [-4, 4], width: [-6, 6], shape: [1.5, 4] } as const;
+/** The arch's shape where none is set: a parabola. */
+export const ARCH_SHAPE = 2;
+/** How far past the canines' distal contacts the incisal curve is drawn on, as a share of the arch's half width. */
+const ARCH_ON = 0.75;
+/** A contact palatal of the arch (a tooth tucked behind) counts this much in fitting it. */
+const ARCH_INSIDE = 0.1;
 /** How far the midline runs past the incisal edge and past the gum line, mm. */
 const MIDLINE_PAST = 2.5;
 /** The crown length taken where no gum mark says, mm. */
@@ -51,7 +66,7 @@ const CROWN_GUESS = 10.5;
 export type GuideAnchors = { midline: Vec3; canines: [Vec3, Vec3]; up: Vec3; out: Vec3; contacts?: Vec3[]; gum?: Array<Vec3 | null> };
 /** The frame the guides are laid in: the marked midline; across towards the patient's left; up towards the incisal. */
 export type GuideFrame = { origin: Vec3; across: Vec3; up: Vec3 };
-export type GuideLine = { key: "midline" | "incisal"; points: Vec3[] };
+export type GuideLine = { key: "midline" | "incisal"; points: Vec3[]; /** Build 334: a part of the line drawn fainter (the incisal curve carried on past the canines), and which. */ more?: "right" | "left" };
 
 const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -68,21 +83,6 @@ export function guideFrame(anchors: GuideAnchors): GuideFrame | null {
   const span = sub(anchors.canines[1], anchors.canines[0]);
   const across = unit(add(span, up, -dot(span, up)));
   return across ? { origin: anchors.midline, across, up } : null;
-}
-
-/** A smooth run through points (Catmull-Rom), `per` steps between each pair. */
-function smooth(points: Vec3[], per = 6): Vec3[] {
-  if (points.length < 3) return points.slice();
-  const out: Vec3[] = [];
-  for (let i = 0; i + 1 < points.length; i += 1) {
-    const p0 = points[Math.max(0, i - 1)], p1 = points[i], p2 = points[i + 1], p3 = points[Math.min(points.length - 1, i + 2)];
-    for (let k = 0; k < per; k += 1) {
-      const t = k / per, t2 = t * t, t3 = t2 * t;
-      out.push([0, 1, 2].map((a) => 0.5 * (2 * p1[a] + (p2[a] - p0[a]) * t + (2 * p0[a] - 5 * p1[a] + 4 * p2[a] - p3[a]) * t2 + (3 * p1[a] - p0[a] - 3 * p2[a] + p3[a]) * t3)) as Vec3);
-    }
-  }
-  out.push(points[points.length - 1]);
-  return out;
 }
 
 /** How far the canine tips, as marked, stand gingival of the midline's edge level (the incisal curve's own depth), mm. */
@@ -114,20 +114,45 @@ export function guideLines(anchors: GuideAnchors, set: GuideSet): GuideLine[] {
     out.push({ key: "midline", points: [add(base, up, MIDLINE_PAST), add(base, up, neck - MIDLINE_PAST)] });
   }
 
-  // The incisal curve: round the even arch through the marked contacts, level at the midline, fallen away by `arc` at the canine tips.
+  // The incisal curve: one smooth arch through the marked contacts, level at the midline, fallen away by `arc` at the canine tips.
   const half = (Math.abs(side(anchors.canines[0])) + Math.abs(side(anchors.canines[1]))) / 2;
-  if (!hidden("incisal") && half > 1) {
+  const forward = flat([up[1] * across[2] - up[2] * across[1], up[2] * across[0] - up[0] * across[2], up[0] * across[1] - up[1] * across[0]]);
+  if (!hidden("incisal") && half > 1 && forward) {
+    const ahead: Vec3 = dot(forward, labial) < 0 ? [-forward[0], -forward[1], -forward[2]] : forward;
     const arc = set.arc ?? markedArc(anchors);
-    const marked = anchors.contacts?.length === 7 ? idealArch(anchors.contacts, anchors.up, anchors.out) : [anchors.canines[0], anchors.midline, anchors.canines[1]];
-    const run = smooth(marked);
-    const points = run.map((p, i) => {
-      // Out of the arch here: square to the way the curve runs, on the labial side.
-      const along = sub(run[Math.min(run.length - 1, i + 1)], run[Math.max(0, i - 1)]);
-      let way = flat([along[1] * up[2] - along[2] * up[1], along[2] * up[0] - along[0] * up[2], along[0] * up[1] - along[1] * up[0]]) ?? labial;
-      if (dot(way, labial) < 0) way = [-way[0], -way[1], -way[2]];
-      return add(atLevel(p, set.incisal - arc * (side(p) / half) ** 2), way, shift);
-    });
-    out.push({ key: "incisal", points });
+    const marked = anchors.contacts?.length === 7 ? anchors.contacts : [anchors.canines[0], anchors.midline, anchors.canines[1]];
+    const xs = marked.map(side), ys = marked.map((p) => dot(sub(p, origin), ahead));
+    // y = a + b x^2 through them all, by least squares - a contact palatal of the arch counting little (as lib/waxSmileSet idealArch).
+    let a = 0, b = 0;
+    const weight = marked.map(() => 1);
+    for (let round = 0; round < 8; round += 1) {
+      let s0 = 0, s2 = 0, s4 = 0, t0 = 0, t2 = 0;
+      xs.forEach((x, i) => { const w = weight[i], q = x * x; s0 += w; s2 += w * q; s4 += w * q * q; t0 += w * ys[i]; t2 += w * q * ys[i]; });
+      const det = s0 * s4 - s2 * s2;
+      if (Math.abs(det) < 1e-9) break;
+      a = (t0 * s4 - t2 * s2) / det; b = (s0 * t2 - s2 * t0) / det;
+      xs.forEach((x, i) => { weight[i] = ys[i] - (a + b * x * x) >= -0.05 ? 1 : ARCH_INSIDE; });
+    }
+    const ends = (Math.abs(xs[0]) + Math.abs(xs[xs.length - 1])) / 2;
+    if (ends > 1 && b < 0) {
+      // The arch: as deep at the ends as the fit, its ends moved apart by `width`, its sides falling back by the power `shape`.
+      const deep = -b * ends * ends, wide = Math.max(4, ends + (set.width ?? 0)), power = set.shape ?? ARCH_SHAPE;
+      const at = (x: number): Vec3 => add(add(origin, across, x), ahead, a - deep * (Math.abs(x) / wide) ** power);
+      const run = (from: number, to: number): Vec3[] => {
+        const n = Math.max(2, Math.ceil(Math.abs(to - from) / 0.5)), list: Vec3[] = [];
+        for (let k = 0; k <= n; k += 1) {
+          const x = from + ((to - from) * k) / n, here = at(x), along = sub(at(x + 0.05), at(x - 0.05));
+          // Out of the arch here: square to the way the curve runs, on the labial side.
+          let way = flat([along[1] * up[2] - along[2] * up[1], along[2] * up[0] - along[0] * up[2], along[0] * up[1] - along[1] * up[0]]) ?? ahead;
+          if (dot(way, ahead) < 0) way = [-way[0], -way[1], -way[2]];
+          list.push(add(atLevel(here, set.incisal - arc * (x / half) ** 2), way, shift));
+        }
+        return list;
+      };
+      out.push({ key: "incisal", points: run(-wide, wide) });
+      out.push({ key: "incisal", more: "right", points: run(-wide * (1 + ARCH_ON), -wide) });
+      out.push({ key: "incisal", more: "left", points: run(wide, wide * (1 + ARCH_ON)) });
+    }
   }
   return out;
 }

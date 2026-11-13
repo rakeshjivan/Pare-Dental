@@ -16044,7 +16044,7 @@ export function LayerlingEditor({
     waxCalipers.current.set(tris, { gum: gumKey, caliper });
     return caliper;
   };
-  const waxGuideLines: GuideDrawn[] = waxGuidesHere && waxGuideSet.show && waxDirectSmile ? guideLines(waxDirectSmile.anchors, waxGuideSet).map((line) => ({ key: line.key, points: line.points, className: `wax-guide-line wax-guide-${line.key}` })) : [];
+  const waxGuideLines: GuideDrawn[] = waxGuidesHere && waxGuideSet.show && waxDirectSmile ? guideLines(waxDirectSmile.anchors, waxGuideSet).map((line) => ({ key: line.more ? `${line.key}-${line.more}` : line.key, points: line.points, className: `wax-guide-line wax-guide-${line.key}${line.more ? " more" : ""}` })) : [];
   const waxGuideLabels: GuideLabel[] = waxGuidesHere && waxGuideSet.show && !waxGuideSet.hide?.caliper ? waxDirectTeeth.flatMap((tooth) => {
     const c = waxCaliperOf(tooth);
     if (!c) return [];

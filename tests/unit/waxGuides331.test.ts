@@ -56,7 +56,7 @@ describe("the Design step's guide lines (build 331)", () => {
   });
 
   it("draws only what the marks allow, and nothing without a way across", () => {
-    expect(guideLines(arch(), GUIDE_DEFAULTS).map((one) => one.key)).toEqual(["midline", "incisal"]);
+    expect(guideLines(arch(), GUIDE_DEFAULTS).map((one) => one.key)).toEqual(["midline", "incisal", "incisal", "incisal"]);
     expect(guideLines({ ...arch(), canines: [[0, -10, 1], [0, -10, 1]] }, GUIDE_DEFAULTS)).toEqual([]);
   });
 });
@@ -85,6 +85,53 @@ describe("the incisal curve as one curve the teeth are set to (build 333)", () =
   it("takes a deeper curve than before, and a reverse one", () => {
     for (const p of run({ ...GUIDE_DEFAULTS, arc: 10 })) expect(p[2]).toBeCloseTo(10 * (p[0] / 15.5) ** 2, 6);
     for (const p of run({ ...GUIDE_DEFAULTS, arc: -4 })) expect(p[2]).toBeCloseTo(-4 * (p[0] / 15.5) ** 2, 6);
+  });
+});
+
+describe("the incisal curve as one smooth arch (build 334)", () => {
+  const lines = (set = GUIDE_DEFAULTS, anchors = arch()) => guideLines(anchors, set).filter((one) => one.key === "incisal");
+  const main = (set = GUIDE_DEFAULTS, anchors = arch()) => lines(set, anchors).find((one) => !one.more)!.points;
+
+  it("has no corner at the midline, even where the marks make a V", () => {
+    // Contacts on a V: straight lines back from the midline.
+    const anchors = arch();
+    anchors.contacts = [-19, -12, -8.5, 0, 8.5, 12, 19].map((x) => [x, -10 + 0.55 * Math.abs(x), 0] as [number, number, number]);
+    const run = main(GUIDE_DEFAULTS, anchors);
+    // The turn from one step to the next is small and even all the way round (a corner would be one big turn).
+    const turns: number[] = [];
+    for (let i = 1; i + 1 < run.length; i += 1) {
+      const a = Math.atan2(run[i][1] - run[i - 1][1], run[i][0] - run[i - 1][0]), b = Math.atan2(run[i + 1][1] - run[i][1], run[i + 1][0] - run[i][0]);
+      turns.push(Math.abs(b - a));
+    }
+    expect(Math.max(...turns)).toBeLessThan(0.05);
+  });
+
+  it("is not thrown by one canine out of line", () => {
+    const anchors = arch();
+    anchors.contacts![0] = [-19, anchors.contacts![0][1] + 3, 0];
+    const run = main(GUIDE_DEFAULTS, anchors);
+    const y = (x: number) => 0.03 * x * x - 10;
+    for (const p of run) expect(Math.abs(p[1] - y(p[0]))).toBeLessThan(0.8);
+  });
+
+  it("is made wider or narrower, and more tapered or more square, with its sliders", () => {
+    const base = main(), wide = main({ ...GUIDE_DEFAULTS, width: 3 }), square = main({ ...GUIDE_DEFAULTS, shape: 4 }), tapered = main({ ...GUIDE_DEFAULTS, shape: 1.5 });
+    expect(wide[wide.length - 1][0]).toBeCloseTo(base[base.length - 1][0] + 3, 6);
+    // As deep at its ends, whatever the width or the shape.
+    for (const run of [wide, square, tapered]) expect(run[run.length - 1][1]).toBeCloseTo(base[base.length - 1][1], 6);
+    // Halfway out a square arch has hardly fallen back, a tapered one more than the parabola.
+    const halfway = (run: number[][]) => run[Math.round((run.length - 1) * 0.75)][1];
+    expect(halfway(square)).toBeLessThan(halfway(base));
+    expect(halfway(tapered)).toBeGreaterThan(halfway(base));
+  });
+
+  it("is drawn on past the canines each side, fainter, on the same curve", () => {
+    const all = lines();
+    expect(all.map((one) => one.more)).toEqual([undefined, "right", "left"]);
+    const y = (x: number) => 0.03 * x * x - 10;
+    const left = all[2].points;
+    expect(left[0][0]).toBeCloseTo(19, 6); expect(left[left.length - 1][0]).toBeCloseTo(19 * 1.75, 6);
+    for (const p of [...all[1].points, ...left]) expect(Math.abs(p[1] - y(p[0]))).toBeLessThan(0.3);
   });
 });
 
@@ -119,7 +166,7 @@ describe("a tooth measured as with a caliper (build 331)", () => {
 describe("each guide line hidden on its own (build 332)", () => {
   it("leaves out only the lines unticked", () => {
     expect(guideLines(arch(), { ...GUIDE_DEFAULTS, hide: { incisal: true } }).map((one) => one.key)).toEqual(["midline"]);
-    expect(guideLines(arch(), { ...GUIDE_DEFAULTS, hide: { midline: true } }).map((one) => one.key)).toEqual(["incisal"]);
-    expect(guideLines(arch(), { ...GUIDE_DEFAULTS, hide: { caliper: true } }).map((one) => one.key)).toEqual(["midline", "incisal"]);
+    expect(guideLines(arch(), { ...GUIDE_DEFAULTS, hide: { midline: true } }).some((one) => one.key === "midline")).toBe(false);
+    expect(guideLines(arch(), { ...GUIDE_DEFAULTS, hide: { caliper: true } }).length).toBe(4);
   });
 });
