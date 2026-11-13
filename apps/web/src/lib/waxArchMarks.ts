@@ -71,13 +71,19 @@ export function markedWidths(slot: "upper" | "lower", marks: ReadonlyArray<Vec3 
  * nothing said. Each problem names the dots to look at (their numbers as shown, from 1).
  *  - width: a tooth between two contacts narrower than MARK_NARROW or wider than MARK_WIDE;
  *  - order: the contacts double back on themselves at a dot (it was clicked out of turn, or on the wrong tooth);
- *  - tip: a canine tip further than MARK_TIP_FAR from the canine its contacts mark.
+ *  - tip: a canine tip further than MARK_TIP_FAR from the canine its contacts mark;
+ *  - tipAtContact (build 318): a canine's contact within MARK_TIP_NEAR of its tip (Find for me put the canines'
+ *    distal dots on their cusp tips on the hard case);
+ *  - canineNarrow (build 318): a canine more than MARK_CANINE_SHORT narrower than the lateral beside it (a
+ *    canine squeezed between its dots).
  */
 export const MARK_NARROW = 2.5;
 export const MARK_WIDE = 13;
 export const MARK_TIP_FAR = 9;
 export const MARK_TURN_BACK = -0.6;
-export type ArchMarkProblem = { kind: "width"; fdi: number; mm: number; dots: [number, number] } | { kind: "order"; dots: [number] } | { kind: "tip"; fdi: number; dots: [number] };
+export const MARK_TIP_NEAR = 2;
+export const MARK_CANINE_SHORT = 1;
+export type ArchMarkProblem = { kind: "width"; fdi: number; mm: number; dots: [number, number] } | { kind: "order"; dots: [number] } | { kind: "tip"; fdi: number; dots: [number] } | { kind: "tipAtContact"; fdi: number; dots: [number, number] } | { kind: "canineNarrow"; fdi: number; mm: number; lateral: number; dots: [number, number] };
 export function archMarkProblems(slot: "upper" | "lower", marks: ReadonlyArray<Vec3 | null | undefined> | undefined): ArchMarkProblem[] {
   const out: ArchMarkProblem[] = [];
   if (!marks) return out;
@@ -102,7 +108,16 @@ export function archMarkProblems(slot: "upper" | "lower", marks: ReadonlyArray<V
     const p = marks[tip], a = marks[contact], b = marks[contact + 1];
     if (!p || !a || !b) return;
     const mid: Vec3 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
-    if (far(p, mid) > MARK_TIP_FAR) out.push({ kind: "tip", fdi, dots: [tip + 1] });
+    if (far(p, mid) > MARK_TIP_FAR) { out.push({ kind: "tip", fdi, dots: [tip + 1] }); return; }
+    const near = far(p, a) < far(p, b) ? contact : contact + 1;
+    if (far(p, marks[near]!) < MARK_TIP_NEAR) out.push({ kind: "tipAtContact", fdi, dots: [near + 1, tip + 1] });
+  });
+  // The canines (0 and 5 of the six) against the laterals beside them (1 and 4).
+  ([[0, 1], [5, 4]] as const).forEach(([canine, lateral]) => {
+    const a = marks[canine], b = marks[canine + 1], c = marks[lateral], d = marks[lateral + 1];
+    if (!a || !b || !c || !d) return;
+    const mm = far(a, b), beside = far(c, d);
+    if (mm >= MARK_NARROW && mm < beside - MARK_CANINE_SHORT) out.push({ kind: "canineNarrow", fdi: teeth[canine], mm, lateral: teeth[lateral], dots: [canine + 1, canine + 2] });
   });
   return out;
 }

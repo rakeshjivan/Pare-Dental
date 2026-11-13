@@ -24,6 +24,12 @@ const CENTRE_BACK = 30;
 const SWEEP = (75 * Math.PI) / 180;
 /** The labial outline is taken from the crowns' incisal part: this far below the edge nearby, mm. */
 const BAND = 3.5;
+/**
+ * Build 318: ...but from no higher than this above the edge right there, mm. A canine's tip stands well above its
+ * shoulders, and the edge nearby taken from it left the shoulders out of the band: the outline fell away there and
+ * read as a dip, and both of a canine's contacts were drawn in towards its tip (the canine squeezed).
+ */
+const BAND_LIFT = 2.5;
 /** The midline mark takes the height of the centrals' edges within this reach of it, mm. */
 const EDGE_REACH = 4;
 /** A dip is measured against the outline bridged over this reach either side, mm. */
@@ -36,6 +42,12 @@ const WIDTHS: Record<"upper" | "lower", [Width, Width, Width]> = {
 };
 /** How far the midline may sit from the middle of the arch before it counts against a fit, mm. */
 const MIDLINE_OFF = 2.5;
+/** Build 318: a canine's cusp tip is looked for at least this share of its width in from either contact... */
+const TIP_INSIDE = 0.3;
+/** ...the fit losing up to this much when the highest point is at a contact... */
+const TIP_WEIGHT = 3;
+/** ...in full once the tip stands this far above the lower of its contacts, mm. */
+const TIP_RISE = 1;
 /** The least total score for the marks to be offered at all (below it the dentist clicks them, as before). */
 export const AUTO_MARKS_MIN = 3.5;
 
@@ -103,7 +115,7 @@ export function autoMarksInArchFrame(v: ArrayLike<number>, rightAtPlus: boolean,
   const radius = new Float64Array(bins).fill(-Infinity), radiusAt = new Int32Array(bins).fill(-1);
   for (let i = 0; i < count; i += 1) {
     const b = binOf[i];
-    if (b < 0 || !(v[i * 3 + 2] > edgeNear[b] - BAND)) continue;
+    if (b < 0 || !(v[i * 3 + 2] > Math.min(edgeNear[b], edge[b] + BAND_LIFT) - BAND)) continue;
     const r = Math.hypot(v[i * 3] - cx, -v[i * 3 + 1] - cf);
     if (r > radius[b]) { radius[b] = r; radiusAt[b] = i; }
   }
@@ -150,14 +162,25 @@ export function autoMarksInArchFrame(v: ArrayLike<number>, rightAtPlus: boolean,
       for (let b = steps[1].lo; b <= steps[1].hi; b += 1) {
         const i2 = i1 + sign * b;
         if (i2 < 0 || i2 >= n) break;
+        // The canine's cusp tip: the highest point of the edge from its mesial contact on, kept up as the canine grows.
+        let peak = i2;
+        for (let k = i2; k !== i2 + sign * steps[2].lo && k >= 0 && k < n; k += sign) if (Hs[k] > Hs[peak]) peak = k;
         for (let c = steps[2].lo; c <= steps[2].hi; c += 1) {
           const i3 = i2 + sign * c;
           if (i3 < 0 || i3 >= n) break;
+          if (Hs[i3] > Hs[peak]) peak = i3;
           const wc = a * STEP, wl = b * STEP, wk = c * STEP;
           let off = ((wc - widths[0].mean) / widths[0].spread) ** 2 + ((wl - widths[1].mean) / widths[1].spread) ** 2 + ((wk - widths[2].mean) / widths[2].spread) ** 2;
           // An upper lateral is narrower than its central.
           if (slot === "upper" && wl > wc) off += ((wl - wc) / 0.5) ** 2;
-          const value = score[i1] + score[i2] + 0.7 * score[i3] - 0.15 * off;
+          // Build 318 (Rakesh, of Find for me on the hard case: the canines' distal dots on their cusp tips, the canines
+          // squeezed): a canine's tip stands well inside it, not at one of its contacts. The nearer the highest point of
+          // its edge comes to either contact, the less the fit is worth - by how far the tip stands up (a worn, flat
+          // canine has no tip to go by).
+          const along = Math.abs(peak - i2) / c, rise = Hs[peak] - Math.min(Hs[i2], Hs[i3]);
+          const atEnd = Math.max(0, along - (1 - TIP_INSIDE), TIP_INSIDE - along) / TIP_INSIDE;
+          const tipOff = TIP_WEIGHT * Math.min(1, rise / TIP_RISE) * atEnd * atEnd;
+          const value = score[i1] + score[i2] + 0.7 * score[i3] - 0.15 * off - tipOff;
           if (best.length === KEEP && value <= best[KEEP - 1].value) continue;
           let p = best.length;
           while (p > 0 && best[p - 1].value < value) p -= 1;

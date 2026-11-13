@@ -5862,6 +5862,8 @@ export const MESSAGES_EN = {
   "waxup.markProblem.wide": "Tooth {fdi} comes out {mm} mm wide: check dots {a} and {b}.",
   "waxup.markProblem.order": "The contacts double back at dot {a}: it may be on the wrong tooth, or clicked out of turn.",
   "waxup.markProblem.tip": "Dot {a} (the tip of {fdi}) is a long way from the canine its contacts mark.",
+  "waxup.markProblem.tipAtContact": "Dot {a} is almost on the cusp tip of {fdi} (dot {b}): a contact sits lower, where {fdi} meets its neighbour.",
+  "waxup.markProblem.canineNarrow": "Canine {fdi} comes out {mm} mm wide, narrower than {lateral}: check dots {a} and {b}.",
   "waxup.markProblemsHint": "Drag those dots to where they belong, or press Place again beside them. Teeth laid on dots like these will not sit on the arch.",
   "waxup.markCentrals": "{a} and {b} differ by {diff} mm.",
   "waxup.markStart": "Start marking",

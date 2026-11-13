@@ -943,7 +943,7 @@ export function DentalStudioPanel({
           {problems.length ? (
             <div className="wax-mark-problems" role="alert">
               <strong>{t("waxup.markProblems")}</strong>
-              <ul>{problems.map((p, k) => <li key={k}>{p.kind === "width" ? t(p.mm < 5 ? "waxup.markProblem.narrow" : "waxup.markProblem.wide", { fdi: p.fdi, mm: p.mm.toFixed(1), a: p.dots[0], b: p.dots[1] }) : p.kind === "order" ? t("waxup.markProblem.order", { a: p.dots[0] }) : t("waxup.markProblem.tip", { fdi: p.fdi, a: p.dots[0] })}</li>)}</ul>
+              <ul>{problems.map((p, k) => <li key={k}>{p.kind === "width" ? t(p.mm < 5 ? "waxup.markProblem.narrow" : "waxup.markProblem.wide", { fdi: p.fdi, mm: p.mm.toFixed(1), a: p.dots[0], b: p.dots[1] }) : p.kind === "order" ? t("waxup.markProblem.order", { a: p.dots[0] }) : p.kind === "tipAtContact" ? t("waxup.markProblem.tipAtContact", { fdi: p.fdi, a: p.dots[0], b: p.dots[1] }) : p.kind === "canineNarrow" ? t("waxup.markProblem.canineNarrow", { fdi: p.fdi, mm: p.mm.toFixed(1), lateral: p.lateral, a: p.dots[0], b: p.dots[1] }) : t("waxup.markProblem.tip", { fdi: p.fdi, a: p.dots[0] })}</li>)}</ul>
               <p className="blend-hint">{t("waxup.markProblemsHint")}</p>
             </div>
           ) : null}
