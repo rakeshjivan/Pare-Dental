@@ -41,7 +41,7 @@ const SAME: Row[] = [
 const NEW: Row[] = [
   { tinkercad: "Fillet and chamfer", pare: "Round or bevel any edge, and take it off again later", keys: "B / Shift+B" },
   { tinkercad: "Hollow and split", pare: "Shell a body with an even wall, or cut it in two with a plane (under More)" },
-  { tinkercad: "Cut with connectors", pare: "Split a part too big for the plate and add plugs or dowels, with a print-fit clearance; place them yourself or let Pare 3D spread them" },
+  { tinkercad: "Cut with connectors", pare: "Split a part too big for the plate and add plugs or dowels, with a print-fit clearance; place them yourself or let Pare Dental spread them" },
   { tinkercad: "Ready-made parts", pare: "Heat-set insert holes and nut traps (M2 to M5) and a box with a lid that fits, in Ready-made parts (Make group)" },
   { tinkercad: "Text on a face", pare: "Ready-made parts: type it, choose Raised or Cut in, click a face, then Group it with the part" },
   { tinkercad: "Snap-fit clip, living hinge", pare: "Ready-made parts: a hook with its slot (it tells you if it will bend safely in PLA), and a hinge that folds at a thin web" },
@@ -59,7 +59,7 @@ const NEW: Row[] = [
 ];
 
 const MISSING: Row[] = [
-  { tinkercad: "Codeblocks, Circuits, Sim Lab", pare: "Not part of Pare 3D" },
+  { tinkercad: "Codeblocks, Circuits, Sim Lab", pare: "Not part of Pare Dental" },
   { tinkercad: "Cloud saving and classes", pare: "No account: designs live on this computer; use backups or save files (.lyl) to share" },
   { tinkercad: "Opening .tinkercad designs", pare: "Export from Tinkercad as OBJ or STL (colours: OBJ) and import here" },
 ];
@@ -70,7 +70,7 @@ function Table({ rows, first }: { rows: Row[]; first: string }) {
       <thead>
         <tr>
           <th>{first}</th>
-          <th>In Pare 3D</th>
+          <th>In Pare Dental</th>
           <th>Keys</th>
         </tr>
       </thead>
@@ -114,7 +114,7 @@ export function TinkercadGuide() {
             <X size={18} />
           </button>
         </header>
-        <p className="tc-guide-intro">Pare 3D works the way you already know: the plate, the shapes, solids and holes, group and align, the same mouse and most of the same keys. Here is where everything is. On a Mac, ⌘ works wherever it says Ctrl.</p>
+        <p className="tc-guide-intro">Pare Dental works the way you already know: the plate, the shapes, solids and holes, group and align, the same mouse and most of the same keys. Here is where everything is. On a Mac, ⌘ works wherever it says Ctrl.</p>
         <div className="tc-guide-tabs" role="tablist">
           <button type="button" role="tab" aria-selected={tab === "same"} onClick={() => setTab("same")}>Where things are</button>
           <button type="button" role="tab" aria-selected={tab === "new"} onClick={() => setTab("new")}>What's new</button>
@@ -125,7 +125,7 @@ export function TinkercadGuide() {
           {tab === "new" ? <Table rows={NEW} first="New for you" /> : null}
           {tab === "missing" ? <Table rows={MISSING} first="In Tinkercad" /> : null}
         </div>
-        <footer>Tinkercad is a trademark of Autodesk, Inc. Pare 3D is an independent project, not connected with Autodesk.</footer>
+        <footer>Tinkercad is a trademark of Autodesk, Inc. Pare Dental is an independent project, not connected with Autodesk.</footer>
       </div>
     </div>
   );

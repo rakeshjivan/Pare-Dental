@@ -1,6 +1,6 @@
 # The user guide
 
-Pare 3D's guide is in English only (build 26 removed the other languages; the interface is English only too). It is
+Pare Dental's guide is in English only (build 26 removed the other languages; the interface is English only too). It is
 written here and built into plain static pages under `apps/web/public/guide`; it ships with the program, and
 `npm run export` and `npm run dev` build it. The build also writes a `search-index.json` (one entry per section of
 every chapter), which the search box in the header of each page reads.

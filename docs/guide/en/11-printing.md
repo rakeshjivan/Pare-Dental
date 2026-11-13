@@ -13,7 +13,7 @@ Three things happen:
 
 - The workplane takes the size of the print bed.
 - In the corner of the workplane appear the printer's name and its build volume. If the writing gets in the way, switch it off with {{ui:workspace.showPlateLabels}} under {{ui:workspace.workplane}}; that also goes for the design's name at the front left.
-- Pare 3D **warns** when something does not fit.
+- Pare Dental **warns** when something does not fit.
 
 The printer profiles come from OrcaSlicer, so they are the same ones your slicer knows. If you would rather work without a printer, choose {{ui:workspace.printerNone}}. You can also set the size of the workplane by hand.
 
@@ -46,11 +46,11 @@ A few rules of thumb for direction:
 
 In the menu next to the eye ({{ui:editor.group.visibility}}), **Show overhangs** switches the overhangs on. Every face that points down more steeply than 45° is then hatched red and white - that is where the printer would need supports. What rests on the plate stays clear. So you see while designing whether a sphere, an arch or a horizontal hole prints without supports; the [teardrop hole](chapter:threads-and-mechanics) is made for exactly that. Turn the part or lay it on another face with {{ui:editor.tool.layFlat}}, and the hatching follows at once.
 
-How steep your printer manages is set in the settings under {{ui:workspace.appearance}}: from 30° (careful) to 70° (for printers with good part cooling). A face resting on another body is still marked - Pare 3D only looks at the face itself.
+How steep your printer manages is set in the settings under {{ui:workspace.appearance}}: from 30° (careful) to 70° (for printers with good part cooling). A face resting on another body is still marked - Pare Dental only looks at the face itself.
 
 ## Cut below the bed
 
-Sometimes you sink a part partly below the plate on purpose, to give a round or uneven part a flat base. The slicer cuts off whatever is below the plate. {{ui:cutBelowBed.button}} does the same in Pare 3D, so you see what will print: each part that sinks below the plate is grouped with a hole box filling everything under the plate beneath it. With nothing selected, every part is cut; otherwise the selected ones. It stays an ordinary group - {{ui:editor.tool.ungroup}} takes the cut back. Find it in {{ui:printCheck.title}}, or search for it with [[Ctrl]]+[[K]].
+Sometimes you sink a part partly below the plate on purpose, to give a round or uneven part a flat base. The slicer cuts off whatever is below the plate. {{ui:cutBelowBed.button}} does the same in Pare Dental, so you see what will print: each part that sinks below the plate is grouped with a hole box filling everything under the plate beneath it. With nothing selected, every part is cut; otherwise the selected ones. It stays an ordinary group - {{ui:editor.tool.ungroup}} takes the cut back. Find it in {{ui:printCheck.title}}, or search for it with [[Ctrl]]+[[K]].
 
 ## Fit check: overlaps and tight gaps
 
@@ -76,7 +76,7 @@ As a rule of thumb:
 
 Every printer is a little different. {{ui:fitTest.title}} in **Ready-made parts** finds yours: {{ui:fitTest.make}} puts a strip of holes, each a little bigger than the last, and a peg on the plate. Print both and try the peg in each hole: the tightest one it slides into without forcing tells you the clearance your printer needs.
 
-Brims and mouse ears against warping are set in the slicer too, so Pare 3D leaves them to it.
+Brims and mouse ears against warping are set in the slicer too, so Pare Dental leaves them to it.
 
 ## Ready to print?
 

@@ -3,7 +3,7 @@ title: Solids and holes
 summary: How simple shapes become bores, slots and pockets, and how to change a group again later.
 ---
 
-This is the most important idea in Pare 3D, and it is quickly learned: **Every shape is either a solid or a hole.** A solid stays. A hole is a tool that takes material away.
+This is the most important idea in Pare Dental, and it is quickly learned: **Every shape is either a solid or a hole.** A solid stays. A hole is a tool that takes material away.
 
 ## Solid or hole
 
@@ -28,7 +28,7 @@ This is how you get:
 
 If several solids are in the group, they are joined. Two solids that touch become a single part.
 
-With large meshes, such as an imported STL with hundreds of thousands of triangles, the cut takes a few seconds. Pare 3D then works in the background and shows "{{ui:status.computing}}"; meanwhile you can turn the view and use the interface. If you change the scene in that time, the result is dropped and Pare 3D tells you so. The same goes for {{ui:editor.tool.split}}.
+With large meshes, such as an imported STL with hundreds of thousands of triangles, the cut takes a few seconds. Pare Dental then works in the background and shows "{{ui:status.computing}}"; meanwhile you can turn the view and use the interface. If you change the scene in that time, the result is dropped and Pare Dental tells you so. The same goes for {{ui:editor.tool.split}}.
 
 You can treat a group like a shape: move, rotate, colour, group again. {{ui:editor.tool.ungroup}} ([[Ctrl]]+[[Shift]]+[[G]]) dissolves it and the individual parts are back.
 
@@ -59,7 +59,7 @@ Sometimes parts should only stay together without becoming one - a white logo on
 
 1. Place the two parts where they should be, with a gap between them. Both must be solid parts.
 2. Select both and click {{ui:blend.title}} in the {{ui:editor.group.combine}} group of the toolbar.
-3. Pare 3D finds the flat faces that face each other - the top of the lower cylinder and the bottom of the upper one, say - and shows the piece between them as a preview. To use another flat face, click it; a curved face cannot be used.
+3. Pare Dental finds the flat faces that face each other - the top of the lower cylinder and the bottom of the upper one, say - and shows the piece between them as a preview. To use another flat face, click it; a curved face cannot be used.
 4. Set the {{ui:blend.smoothness}}: 0 is a straight taper from one face to the other; 100 leaves both faces square and flares smoothly in between, like a hose adapter. The parts need not sit in line: the piece curves from one face to the other. Switch off {{ui:blend.linkEnds}} to set each end on its own - like the tangency weight of a loft in Fusion: flare out square from the wide part and ease gently into the narrow one, say.
 5. Joining two round parts offset sideways, like a drain pipe's S-bend? Switch on {{ui:blend.keepDiameter}}: every slice then stands square to the path, like a pipe, so the piece stays as thick as the parts all the way, without thinning in the bend. A pipe can only bend so tightly for its size: if the parts are too close for that, the window says how many millimetres further apart along their length they need to be.
 6. If the piece looks twisted - a square running into a hexagon, say - {{ui:blend.twist}} turns one outline a step against the other until the corners line up.
@@ -118,7 +118,7 @@ A note: fillets and chamfers you had put on the **whole** group are lost on rebu
 
 The halves are plain meshes: settings such as a cylinder's sides or a text's lettering are gone, so set those first. [[Ctrl]]+[[Z]] brings the original back in one step. Locked and hidden objects cannot be split.
 
-An imported mesh needs a closed surface to be split, grouped or cut. If it has openings, such as the eyes of a figure left open or a crack in a scan, Pare 3D closes them with a flat cap first and says how many it closed. It closes small openings and flat ones of any size; a large opening whose rim bends is left to you, and the message says so. Close it in the program the model comes from, or with a mesh repair tool, and import it again.
+An imported mesh needs a closed surface to be split, grouped or cut. If it has openings, such as the eyes of a figure left open or a crack in a scan, Pare Dental closes them with a flat cap first and says how many it closed. It closes small openings and flat ones of any size; a large opening whose rim bends is left to you, and the message says so. Close it in the program the model comes from, or with a mesh repair tool, and import it again.
 
 ## Separating parts
 

@@ -8,7 +8,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
     items: [
       "A cleaner screen: the strip of links along the bottom of the start pages and of CAD Studio is gone, so the work goes right to the bottom of the window.",
       "Its links moved into the menus: on the start pages, the Learn (book) menu now ends with Report a problem / suggest, Open source and Licences & credits; in CAD Studio they are in the Help menu.",
-      "The build you are using is shown beside the Pare 3D name at the top left of the start pages.",
+      "The build you are using is shown beside the Pare Dental name at the top left of the start pages.",
       "CAD Studio no longer has a Send to Dental Studio button - it opened the old Dental Studio screen. To take a design across, use Send to Dental Studio in its ⋮ menu on CAD Studio's page.",
       "The Digital Wax-Up card says what the first version will cover: the six front teeth, canine to canine.",
     ],
@@ -32,7 +32,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
     build: 104,
     items: [
       "A new Home: CAD Studio and Dental Studio side by side; your designs and cases are in their studios. One bar across the top holds search (Ctrl or ⌘ + K), the guides, notifications (updates, backups) and settings.",
-      "Each studio has its own page. CAD Studio lists your designs and folders. Dental Studio lists your cases and has a place to drop the scans - Pare 3D sorts upper, lower and bite and opens the case with Model Builder ready.",
+      "Each studio has its own page. CAD Studio lists your designs and folders. Dental Studio lists your cases and has a place to drop the scans - Pare Dental sorts upper, lower and bite and opens the case with Model Builder ready.",
       "Send a design to the other studio from its menu (⋮). Designs from earlier builds are sorted for you: the ones with dental work go to Dental Studio, the rest to CAD Studio.",
       "Dental Studio has its own workspace, laid out like Meshmixer: a slim bar on top (Home, Undo, Redo, Send to CAD Studio, Export), a column of tools down the left - Import, Model Builder, Sculpt, Edit (plane cut, make solid, fill holes, smooth, hollow, reduce, mirror), Analysis (bite contacts, print check), Objects and Export - and the open tool's settings docked beside it. It is dark, as Meshmixer is; CAD Studio keeps your own theme.",
       "CAD Studio no longer shows the dental tools; its Dental button sends the design to Dental Studio, and Dental Studio's Send to CAD Studio brings it back with all its parts and undo history.",
@@ -102,7 +102,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
     items: [
       "A gimbal, as in Meshmixer, Medit and Bambu Studio: switch Box / Gimbal beside Snap Grid. Gimbal gives three arrows to move a part along (red, green up, blue) and three rings to turn it on, about its middle - no box, sizes or distances on the part. Box keeps Tinkercad's handles. Your choice is remembered.",
       "With the gimbal, Dental Studio and Wax-up Studio show it too (the scans themselves stay held in the bite); with the box, the studio keeps its handles put away.",
-      "The user guide in Pare 3D's own blue look, light and dark, with a new Licences and credits page: where the code comes from (layerling and SketchForge, AGPL-3.0), the tooth libraries, the tooth finder and the open-source libraries. The footer now reads Open source · Licences & credits.",
+      "The user guide in Pare Dental's own blue look, light and dark, with a new Licences and credits page: where the code comes from (layerling and SketchForge, AGPL-3.0), the tooth libraries, the tooth finder and the open-source libraries. The footer now reads Open source · Licences & credits.",
     ],
   },
   {
@@ -140,7 +140,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
     build: 94,
     items: [
       "Wax-up Studio (preview), beside Dental Studio on the toolbar: the same steps from scans to models, with the diagnostic wax-up in them, and a choice at the top of a wax-up only or the IMT workflow, on one arch or both.",
-      "The tooth finder marks and numbers every tooth on a scan in about ten seconds, on your own computer: choose the teeth to wax up by number, and the midline and canine tips are set from them - no clicking. Its trained network (CrossTooth) is not part of Pare 3D: you load its file once.",
+      "The tooth finder marks and numbers every tooth on a scan in about ten seconds, on your own computer: choose the teeth to wax up by number, and the midline and canine tips are set from them - no clicking. Its trained network (CrossTooth) is not part of Pare Dental: you load its file once.",
       "With IMT, Make also makes the pre-op model and the alternate-tooth wax-up (series 1 index) for each arch waxed, beside the full wax-up (series 2 index).",
       "On the patient's teeth: each library tooth fitted to the patient's own crown (surface registration: tip, torque, rotation and position), the wax 0.3 mm proud everywhere and the contacts closed - front and back teeth.",
       "Smile design: a slider takes the front teeth from the patient's own to a designed smile - level edges, an upright midline, a symmetric arch, natural width steps or the RED proportion, the smile arc - with smile checks (Kokich's symmetry thresholds, width/length, axial inclinations).",
@@ -184,7 +184,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
     items: [
       "Freeze in Sculpt (Meshmixer's mask): paint over what the brushes must leave alone and it turns blue - no brush moves it and refining leaves its triangles be. Ctrl frees it again; Freeze selection, Invert freeze and Clear freeze in the panel.",
       "Pinch matched to Meshmixer: it draws a ridge in gently and keeps its height (it took away half a ridge's width at 50 before).",
-      "The resize and turn handles, sizes and their lines are put away while Sculpt is open, so a scan cannot be resized by accident, and come back when it closes. Right-click → Hide handles and sizes does the same for the mesh tools (until Pare 3D is opened again).",
+      "The resize and turn handles, sizes and their lines are put away while Sculpt is open, so a scan cannot be resized by accident, and come back when it closes. Right-click → Hide handles and sizes does the same for the mesh tools (until Pare Dental is opened again).",
       "Right-click a scan or other mesh → Sculpt… opens Sculpt with its brushes straight away (it was under Surface ›).",
       "The Shapes panel opens by itself when a design opens only while it is pinned; unpinned, it stays closed until you click Shapes.",
     ],
@@ -281,7 +281,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
       "Dental Studio has a digital diagnostic wax-up (step 3, optional): library teeth set over the front teeth, canine to canine, and joined to the model when you make it. Wax only adds, so a mock-up from the printed model seats over the teeth without preparing any.",
       "The wax-up follows the order smile design does: you click the midline and the two canine tips; the incisal edges come first (the laterals 0.5 mm shorter, the canine tips following the patient's own smile arc); widths from the space between the midline and the canines; lengths from the central's width-to-length ratio (80%, adjustable). Each tooth stands at least 0.3 mm proud of the patient's.",
       "A table gives every wax tooth's width, length and ratio, and where the design reaches above the gum: the crown lengthening it asks for. Select a tooth to move it in or out, along the arch, longer or shorter, wider or narrower, or turn it, in 0.25 mm and 2 degree steps - the same tooth on the other side follows unless you turn that off.",
-      "Nine anterior tooth sets come with Pare 3D (credited on the Licences & credits page); you can load your own sets too (OBJ or STL, a Meshmixer part, or one file per tooth).",
+      "Nine anterior tooth sets come with Pare Dental (credited on the Licences & credits page); you can load your own sets too (OBJ or STL, a Meshmixer part, or one file per tooth).",
       "Every crown point of the scan outside the wax is still checked to the micrometre when the model is made; the points under the wax are counted apart.",
       "The wax-up blends rather than sitting on the teeth: the contacts are closed without changing any tooth's width, and each tooth's cervical third is feathered into the patient's tooth and gum, with no step, as a technician finishes wax.",
       "For injection moulding (GC IMT): the table shows how far each design edge stands past the patient's own; the panel warns where unsupported composite would exceed 0.5 mm, and where the patient's edge would show through (reduction needed). An alternate-tooth model (12, 21, 23 first, as GC's sequence) can be made beside the full model for the two-index technique.",
@@ -371,7 +371,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
   {
     build: 72,
     items: [
-      "The Export window's slicers can always be chosen. Where the app could not say which slicers are installed - in a web browser, or in a Pare 3D app older than its pages - build 71 greyed them all out. Now the window says which it is: in a browser the file is downloaded for the slicer you pick; an older app is asked to be downloaded again once.",
+      "The Export window's slicers can always be chosen. Where the app could not say which slicers are installed - in a web browser, or in a Pare Dental app older than its pages - build 71 greyed them all out. Now the window says which it is: in a browser the file is downloaded for the slicer you pick; an older app is asked to be downloaded again once.",
       "Export has a Parts choice for 3MF and STL: Separate (one file; parts that touch become one, the rest stay apart - the default), Joined (one body) or A file per part (an upper and a lower model as two files, say).",
       "Dental models placed In occlusion export as two bodies again. The upper and lower touch there - cusps between cusps, the incisal pin on its table - and the export joined touching parts of one colour, so a 3MF or STL held the pair as one solid. Models made in Dental Studio are now never joined with each other; a part you put on a model (a label, say) still joins that model.",
     ],
@@ -395,7 +395,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
       "Send to your slicer, not only Bambu Studio: the menu beside the Send button now picks OrcaSlicer or PrusaSlicer for filament, or PreForm (Formlabs), CHITUBOX or Lychee Slicer for resin. The button says where it sends, and a slicer that is not on this computer is marked. (An app installed before this build sends only to Bambu Studio - download it again once.)",
       "Dental models from scans: a new tile on the home page opens a new design with Dental Studio ready to import the scans.",
       "Dental Studio's Make models button is always on screen now; on a smaller window it was below the bottom edge.",
-      "The right-click menu scrolls on a short window instead of running off the bottom, Escape closes Text on a surface from its text box, command search (Ctrl+K) finds Dental Studio, Sculpt and sending by the words you would type (articulator, PreForm, resin...), sizes in the selection card are no longer cut off, and the footer shows Pare 3D's build number.",
+      "The right-click menu scrolls on a short window instead of running off the bottom, Escape closes Text on a surface from its text box, command search (Ctrl+K) finds Dental Studio, Sculpt and sending by the words you would type (articulator, PreForm, resin...), sizes in the selection card are no longer cut off, and the footer shows Pare Dental's build number.",
     ],
   },
   {
@@ -421,7 +421,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
       "Placing and measuring: a new shape snaps to the middle of a face (hold Alt not to), Center on workplane works on a face, Align faces lines up holes on one axis, the right-click menu can select a body hidden behind another, a length typed in the tape measure moves the body, a stood-up ruler measures along itself, and Up and Down (Shift larger, Alt finer) change the number in a field.",
       "Also new: Curve through points in a sketch, Alt and the lift arrow makes a copy upwards, a pattern can group its pieces, a multi-colour SVG comes in as one body per colour, a start view of your own (Settings), a search in the keyboard shortcuts, Shift+N shows or hides notes, and Paste in the middle.",
       "Gridfinity: wall thickness, a chamfer on the stacking lip, sides opened fully or partly, and baseplates padded, fitted to a drawer and with rounded or square corners.",
-      "Safer when Pare 3D is hosted on a web server: the store folder refuses direct requests and every saved file is checked.",
+      "Safer when Pare Dental is hosted on a web server: the store folder refuses direct requests and every saved file is checked.",
     ],
   },
   {
@@ -442,7 +442,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
     build: 64,
     items: [
       "Dental Studio shows the model's height in one place: a small picture of the teeth (always kept), the gum below them and the base, with the size of each and the whole model's height. Gum below the teeth and the base are set right there, for both arches at once, instead of under Adjust the settings.",
-      "Dental Studio has its own chapter in the guide, step by step with pictures: the short way, each of the four steps, the model height, the articulator and its joints, and what Pare 3D always does. The question mark in the panel opens it.",
+      "Dental Studio has its own chapter in the guide, step by step with pictures: the short way, each of the four steps, the model height, the articulator and its joints, and what Pare Dental always does. The question mark in the panel opens it.",
     ],
   },
   {
@@ -541,7 +541,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
   {
     build: 53,
     items: [
-      "Dental Studio's Margin step can now edit the tooth area, the way Medit's model builder does: Pare 3D picks the teeth and tints them orange on the scan; paint more on, erase tissue it took for teeth, or lasso areas in or out, turning the view between strokes.",
+      "Dental Studio's Margin step can now edit the tooth area, the way Medit's model builder does: Pare Dental picks the teeth and tints them orange on the scan; paint more on, erase tissue it took for teeth, or lasso areas in or out, turning the view between strokes.",
       "The model keeps exactly the area you approved plus a band of gum round it (Expand into the gum, 3 mm by default), and cuts the scan smoothly along the band's edge. Back to automatic starts the area again.",
       "The Mesh tools (Repair, Fill hole, Simplify, Cut below, Round) sit on the toolbar as their own buttons instead of in a menu; Repair, Fill hole and Simplify are for imported meshes; Round works on any one solid part, and Cut below on any solid parts, or on every part when nothing is selected.",
       "Cut below the workplane is also in the right-click menu on empty space, where it trims every part.",
@@ -551,7 +551,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
     build: 52,
     items: [
       "Dental Studio cuts the gum along a smooth margin: the edge of the band to keep is smoothed along the surface and the scan is cut exactly on it (triangles split there), so the model's margin is clean instead of ragged. The teeth are never cut.",
-      "Step 2 is now Margin: Automatic (Pare 3D finds a smooth margin through the gum and cuts exactly on it) or Draw by hand (you draw the margin; the scan is cut smoothly along your line and nothing more is taken).",
+      "Step 2 is now Margin: Automatic (Pare Dental finds a smooth margin through the gum and cuts exactly on it) or Draw by hand (you draw the margin; the scan is cut smoothly along your line and nothing more is taken).",
       "Trimming by hand cuts exactly along the line you draw, smoothed: no jagged edge of whole triangles left behind.",
     ],
   },
@@ -607,15 +607,15 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
   {
     build: 46,
     items: [
-      "New: Dental model turns a raw intraoral scan into a printable model in two steps. Import the scan (STL, OBJ, PLY or 3MF) and click Dental model on the card that appears, or in the Mesh group. Pare 3D cleans the scan, fills its small holes and turns it teeth up; then choose Study model, Aligner / tray or Crown & bridge and click Make model.",
-      "The teeth and gum you keep are the scan itself, untouched; Pare 3D adds straight walls down to a flat base, an optional plate across the arch, and hollows study models with walls of the thickness you set, open underneath so no resin is trapped.",
+      "New: Dental model turns a raw intraoral scan into a printable model in two steps. Import the scan (STL, OBJ, PLY or 3MF) and click Dental model on the card that appears, or in the Mesh group. Pare Dental cleans the scan, fills its small holes and turns it teeth up; then choose Study model, Aligner / tray or Crown & bridge and click Make model.",
+      "The teeth and gum you keep are the scan itself, untouched; Pare Dental adds straight walls down to a flat base, an optional plate across the arch, and hollows study models with walls of the thickness you set, open underneath so no resin is trapped.",
       "PLY files can be imported.",
     ],
   },
   {
     build: 45,
     items: [
-      "The best of layerling 1.100 to 1.103, picked for Pare 3D: the view cube turns the view smoothly instead of jumping, the shape library shows each shape in the colour it will be added in, and the sketch reads and types in your unit (inches too).",
+      "The best of layerling 1.100 to 1.103, picked for Pare Dental: the view cube turns the view smoothly instead of jumping, the shape library shows each shape in the colour it will be added in, and the sketch reads and types in your unit (inches too).",
       "Push/pull face: As a body of its own (not grouped) leaves the new part beside the body, ready to resize, move or use as a hole.",
       "Scale by percent works from the keyboard (Ctrl+K, the number, Enter), and the export window works out the material estimate only when you click Calculate, so it opens at once.",
       "Fixes: a cone keeps its radius after ungrouping a resized group, a star keeps its shape when scaled, a text's height no longer changes its letters with Keep proportions on, STEP export includes groups, a turned hollow body and a bent tube keep their stretch, the mouse wheel zooms properly in Firefox and Edge, a fillet no longer leaves a strip over a bay of an imported part or shifts a tapered and leaned body, and OBJ files are written much faster.",
@@ -624,7 +624,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
   {
     build: 44,
     items: [
-      "Brought across from layerling 1.96 to 1.99, on top of everything Pare 3D adds: Shift+7, 8, 9 or 0 saves the view, and 7, 8, 9 or 0 brings it back.",
+      "Brought across from layerling 1.96 to 1.99, on top of everything Pare Dental adds: Shift+7, 8, 9 or 0 saves the view, and 7, 8, 9 or 0 brings it back.",
       "Sketches: change a sketch between extrude, revolve and sweep from the badge at the top; close a gap by dragging one open end onto the other; Separate Parts splits a sketch body by its outlines; Esc puts the drawing tool down first.",
       "Key ring holes on name and icon tags can sit on a tab of their own (Free) and be fixed to the tag where you put it, or slide along their side.",
       "Hollow has a Closed (cavity inside) button; holes can be shown more clearly (Settings, Appearance); the history view steps with the mouse wheel; SVG export can write just the footprint on the plate; hinges have an opening angle; gears go up to 500 teeth.",
@@ -674,7 +674,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
   {
     build: 37,
     items: [
-      "Thank you for testing Pare 3D! Please try everything - and when something breaks or could be better, use Report a problem / suggest (bottom left, in the Help menu, or the button that appears when a tool shows an error). It goes straight to the person who makes Pare 3D.",
+      "Thank you for testing Pare Dental! Please try everything - and when something breaks or could be better, use Report a problem / suggest (bottom left, in the Help menu, or the button that appears when a tool shows an error). It goes straight to the person who makes Pare Dental.",
       "Parameters (title row, next to Export): name a size - wall = 2, width = 60 - and type the name into any number field, alone or in a sum (width - 2 * wall). Change it once and every part that uses it follows.",
       "Draft angle (Modify): pick side walls and lean them in by a few degrees, so a part comes out of a mould or a press cleanly.",
       "More sketch rules: hold the angle between two lines, keep a point on a line, and keep two points mirrored about a line.",
@@ -759,7 +759,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
       "Change a blend later: select it and click Blend again - its settings and faces come back; change them and click Update.",
       "Smoothness per end: switch off \"Same at both ends\" to flare out square from one part and ease gently into the other, like the tangency weight of a Fusion loft.",
       "Join into one part, or keep the piece separate (Fusion's Join / New body).",
-      "Opening Pare 3D after installing a new download no longer shows an older build: an older copy still running in the background is replaced. (If an app from before build 29 shows an old build, restart your computer once.)",
+      "Opening Pare Dental after installing a new download no longer shows an older build: an older copy still running in the background is replaced. (If an app from before build 29 shows an old build, restart your computer once.)",
     ],
   },
   {
@@ -782,7 +782,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
   {
     build: 26,
     items: [
-      "Pare 3D is now English only: the language menu is gone, and the app and its guide speak one language.",
+      "Pare Dental is now English only: the language menu is gone, and the app and its guide speak one language.",
       "The user guide (in Help) is rewritten for every tool: push/pull by dragging, Blend, Pattern by dragging, fillet and hollow on faces, Space out, Ready-made parts, Lithophane, Voronoi, Photo to outline, Ready to print?, Print fit and the fit test, Send to Bambu Studio, and where files and backups go.",
       "The ? in the Blend, Lithophane, Voronoi and Photo to outline windows opens the part of the guide about them.",
     ],
@@ -814,7 +814,7 @@ export const WHATS_NEW: ReadonlyArray<{ build: number; items: readonly string[] 
     build: 22,
     items: [
       "A calmer home screen: the backup box is now one quiet line, and the examples panel is gone.",
-      "Choose where exports and backups are saved (Settings > Files), or have Pare 3D ask each time. After a save, \"Show in folder\" takes you there.",
+      "Choose where exports and backups are saved (Settings > Files), or have Pare Dental ask each time. After a save, \"Show in folder\" takes you there.",
       "The Shapes panel is open whenever a design opens.",
       "Round shapes start with \"Sides follow the size\" off, so the Sides slider works straight away for smoother curves.",
     ],

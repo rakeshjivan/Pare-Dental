@@ -22,7 +22,9 @@ const STYLE: Record<DentalStudioOptions["baseStyle"], { code: string; word: stri
 };
 
 /** The header's notice, kept first - shortened from Build 122's so the settings fit beside it. */
-export const SETTINGS_NOTICE = "Pare 3D lab/diagnostic use only";
+export const SETTINGS_NOTICE = "Pare Dental lab/diagnostic use only";
+/** Models saved by Pare 3D before Pare Dental split off carry this notice instead; they still read. */
+const OLDER_NOTICE = "Pare 3D lab/diagnostic use only";
 const HEADER_BYTES = 80;
 
 export function dentalSettings(input: DentalSettingsInput): { code: string; parts: string[] } {
@@ -66,5 +68,8 @@ export function settingsHeader(code: string): Uint8Array {
 export function readSettingsCode(buffer: ArrayBuffer): string | null {
   if (buffer.byteLength < HEADER_BYTES) return null;
   const text = new TextDecoder().decode(new Uint8Array(buffer, 0, HEADER_BYTES));
-  return text.startsWith(`${SETTINGS_NOTICE};`) ? text.slice(SETTINGS_NOTICE.length + 1).trim() : null;
+  for (const notice of [SETTINGS_NOTICE, OLDER_NOTICE]) {
+    if (text.startsWith(`${notice};`)) return text.slice(notice.length + 1).trim();
+  }
+  return null;
 }

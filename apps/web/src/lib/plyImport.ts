@@ -17,7 +17,7 @@ export function plyToStlBytes(buffer: ArrayBuffer): Uint8Array {
   const triangles = Math.floor(position.count / 3);
   const bytes = new Uint8Array(84 + triangles * 50);
   const view = new DataView(bytes.buffer);
-  const header = new TextEncoder().encode("Pare 3D from PLY");
+  const header = new TextEncoder().encode("Pare Dental from PLY");
   bytes.set(header.subarray(0, 80), 0);
   view.setUint32(80, triangles, true);
   for (let t = 0; t < triangles; t += 1) {

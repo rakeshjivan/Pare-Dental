@@ -3718,7 +3718,7 @@ function Dashboard({
             {/* Build 108: what the footer held, here - the start pages end with their content. The source stays a click away, as AGPL-3.0 section 13 asks. */}
             <hr className="home-menu-rule" />
             <button type="button" onClick={() => { close(); openFeedback(); }}>{t("feedback.footer")}</button>
-            <a href={SOURCE_CODE_URL} target="_blank" rel="noreferrer" onClick={close} title={`Pare 3D's source code (AGPL-3.0) - based on layerling ${LYL_CREATED_WITH_VERSION}`}>{t("home.openSource")}</a>
+            <a href={SOURCE_CODE_URL} target="_blank" rel="noreferrer" onClick={close} title={`Pare Dental's source code (AGPL-3.0) - based on layerling ${LYL_CREATED_WITH_VERSION}`}>{t("home.openSource")}</a>
             <a href="/guide/licences-and-credits.html" target="_blank" rel="noreferrer" onClick={close}>{t("home.licences")}</a>
           </div>
         )}

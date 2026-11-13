@@ -392,7 +392,7 @@ export function dxfToSvg(source: string): DxfImport {
   if (!closed.length) {
     throw new Error(outlines.length
       ? "The DXF has lines but no closed outline to build a body from. Join the outline into a closed shape and save it again."
-      : "The DXF has no lines, arcs, circles or polylines Pare 3D can read.");
+      : "The DXF has no lines, arcs, circles or polylines Pare Dental can read.");
   }
   let minX = Number.POSITIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;

@@ -60,11 +60,11 @@ export async function sendFeedback(form: FeedbackForm, fetcher: typeof fetch = f
   } catch {
     design = {};
   }
-  const subject = `Pare 3D ${KIND_LABEL[form.kind]}${form.tool ? `: ${form.tool}` : ""} (build ${environment.build})`;
+  const subject = `Pare Dental ${KIND_LABEL[form.kind]}${form.tool ? `: ${form.tool}` : ""} (build ${environment.build})`;
   const body: Record<string, string> = {
     access_key: WEB3FORMS_ACCESS_KEY,
     subject,
-    from_name: "Pare 3D feedback",
+    from_name: "Pare Dental feedback",
     Type: KIND_LABEL[form.kind],
     Tool: form.tool || "-",
     Message: form.message,

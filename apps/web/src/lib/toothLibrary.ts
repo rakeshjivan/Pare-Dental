@@ -63,7 +63,7 @@ export function encodeToothSet(shells: Array<{ vertices: Float32Array; triangles
 export function decodeToothSet(data: ArrayBuffer | Uint8Array): Float32Array[] {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (bytes.byteLength < 8 || view.getUint32(0, true) !== MAGIC) throw new Error("Not a Pare 3D tooth set");
+  if (bytes.byteLength < 8 || view.getUint32(0, true) !== MAGIC) throw new Error("Not a Pare Dental tooth set");
   const shells: Float32Array[] = [];
   let at = 8;
   for (let s = view.getUint32(4, true); s > 0; s -= 1) {

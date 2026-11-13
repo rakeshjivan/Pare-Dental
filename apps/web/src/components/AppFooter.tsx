@@ -138,8 +138,8 @@ export function AppFooter({
       <div className="dashboard-legal-group">
         {/* Build 99: Pare 3D's own name and build; the licence's notices (where the code comes from, AGPL-3.0)
             on the Licences & credits page, a click away, and the source as section 13 asks. */}
-        <span className="footer-build">{PARE_BUILD ? `Pare 3D build ${PARE_BUILD}` : "Pare 3D"}</span>
-        <a href={SOURCE_CODE_URL} target="_blank" rel="noreferrer" title={`Pare 3D's source code (AGPL-3.0) - based on layerling ${version}`}>Open source</a>
+        <span className="footer-build">{PARE_BUILD ? `Pare Dental build ${PARE_BUILD}` : "Pare Dental"}</span>
+        <a href={SOURCE_CODE_URL} target="_blank" rel="noreferrer" title={`Pare Dental's source code (AGPL-3.0) - based on layerling ${version}`}>Open source</a>
         <a href={t("welcome.guideUrl").replace(/[^/]*$/, "licences-and-credits.html")} target="_blank" rel="noreferrer">Licences &amp; credits</a>
       </div>
     </footer>}

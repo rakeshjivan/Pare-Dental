@@ -15,7 +15,7 @@ const STORE = "handles";
 const KEY = "folder";
 export const AUTO_BACKUP_INTERVAL_MS = 5 * 60 * 1000;
 const KEEP_DAYS = 14;
-const FILE_PREFIX = "Pare 3D backup ";
+const FILE_PREFIX = "Pare Dental backup ";
 
 type DirectoryHandle = FileSystemDirectoryHandle & {
   queryPermission?: (descriptor: { mode: "readwrite" }) => Promise<PermissionState>;
@@ -34,7 +34,7 @@ export type AutoBackupStatus =
  * no folder has to be picked and it works in any browser engine. On by default there.
  */
 const SERVER_SETTING_KEY = "pare3d.autoBackupServer";
-let SERVER_FOLDER_LABEL = "Documents › Pare 3D Backups";
+let SERVER_FOLDER_LABEL = "Documents › Pare Dental Backups";
 let serverMode = false;
 
 async function serverBackupAvailable(): Promise<boolean> {

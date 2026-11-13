@@ -1773,9 +1773,9 @@ export function SecondaryToolbar({
         {/* The brand, in the same corner as on the start page. Not a link:
             leaving the editor is not something to trigger by accident. */}
         <div className="toolbar-brand">
-          <img src="/assets/pare3d/pare3d-icon.svg" alt="Pare 3D" />
+          <img src="/assets/pare3d/pare3d-icon.svg" alt="Pare Dental" />
           <span className="toolbar-brand-text">
-            <span className="toolbar-brand-name">Pare 3D</span>
+            <span className="toolbar-brand-name">Pare Dental</span>
             <span className="toolbar-brand-tagline">{t("brand.tagline")} <PareBuildBadge /></span>
           </span>
         </div>
