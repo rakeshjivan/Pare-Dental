@@ -1,7 +1,7 @@
-// Tiny local web server for Pare 3D. No packages needed (runs under Node or Bun).
+// Tiny local web server for Pare Dental. No packages needed (runs under Node or Bun).
 //  - Serves the static app from ./app.
-//  - /__pare3d answers "pare3d", so the launcher knows the server on the port is ours.
-//  - POST /__send-to-bambu saves an exported file in Documents/Pare 3D Exports and
+//  - /__pare3d answers "paredental", so the launcher knows the server on the port is ours.
+//  - POST /__send-to-bambu saves an exported file in Documents/Pare Dental Exports and
 //    opens it in Bambu Studio. Runtime 6 (build 70): POST /__send-to-slicer?app=... does the same
 //    for OrcaSlicer, PrusaSlicer, PreForm, CHITUBOX and Lychee Slicer; GET /__slicers says which
 //    of them are installed.
@@ -21,7 +21,7 @@ import { basename, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const bundledRoot = join(fileURLToPath(new URL(".", import.meta.url)), "app");
-const port = Number(process.env.PORT || 47177);
+const port = Number(process.env.PORT || 47187);
 /** Raise when the launcher or this server change in a way new app files depend on. */
 // 4 (build 29): /__pare3d/quit, and launchers replace a server older than themselves.
 // 5 (build 32): /__designs keeps the designs on disk. App files still work with 4 (they fall back
@@ -29,26 +29,26 @@ const port = Number(process.env.PORT || 47177);
 // 6 (build 70): /__send-to-slicer and /__slicers. App files fall back to /__send-to-bambu (or a
 // download) on an older server, so minRuntime stays 4.
 const RUNTIME_VERSION = 6;
-const RELEASES_API = process.env.PARE3D_RELEASES_API || "https://api.github.com/repos/rakeshjivan/pare-3d/releases/latest";
+const RELEASES_API = process.env.PARE3D_RELEASES_API || "https://api.github.com/repos/rakeshjivan/pare-dental/releases/latest";
 // Build 103: a test build (its app files carry pare-preview.txt) follows the test builds, never the
 // public release - which would take features in testing away - and the newest of them wins.
-const PREVIEWS_API = process.env.PARE3D_RELEASES_API || "https://api.github.com/repos/rakeshjivan/pare-3d/releases?per_page=30";
+const PREVIEWS_API = process.env.PARE3D_RELEASES_API || "https://api.github.com/repos/rakeshjivan/pare-dental/releases?per_page=30";
 // Only for the automated tests: lets a local test server stand in for GitHub.
 const TEST_ORIGIN = process.env.PARE3D_TEST_ORIGIN || "";
 const UPDATE_EVERY_MS = 6 * 60 * 60 * 1000;
 const DATA_DIR = platform() === "win32"
-  ? join(process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local"), "Pare 3D")
+  ? join(process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local"), "Pare Dental")
   : platform() === "darwin"
-    ? join(homedir(), "Library", "Application Support", "Pare 3D")
-    : join(homedir(), ".pare3d");
+    ? join(homedir(), "Library", "Application Support", "Pare Dental")
+    : join(homedir(), ".paredental");
 const UPDATES_DIR = join(DATA_DIR, "updates");
 const DESIGNS_DIR = join(DATA_DIR, "designs");
 /** Files are looked up here in order: the newest app files first, the ones before as a fallback. */
 let roots = [bundledRoot];
 // serving, bundled and ready are build numbers; a test build's rank adds its test number (servingRank, readyRank).
 const updateState = { serving: 0, bundled: 0, ready: 0, needsReinstall: 0, checking: false, error: "", preview: 0, servingPreview: 0, readyPreview: 0 };
-const EXPORT_DIR = join(homedir(), "Documents", "Pare 3D Exports");
-const BACKUP_DIR = join(homedir(), "Documents", "Pare 3D Backups");
+const EXPORT_DIR = join(homedir(), "Documents", "Pare Dental Exports");
+const BACKUP_DIR = join(homedir(), "Documents", "Pare Dental Backups");
 const BACKUP_KEEP_DAYS = 14;
 const MAX_UPLOAD = 512 * 1024 * 1024;
 const types = {
@@ -281,7 +281,7 @@ function allowedLocalWrite(req) {
 
 /**
  * Automatic backup: the page hands over the same ZIP "Back up all" makes; it is kept as one file
- * per day in Documents/Pare 3D Backups, the newest BACKUP_KEEP_DAYS days.
+ * per day in Documents/Pare Dental Backups, the newest BACKUP_KEEP_DAYS days.
  */
 async function writeBackup(req, res) {
   if (!allowedLocalWrite(req)) {
@@ -295,10 +295,10 @@ async function writeBackup(req, res) {
     await mkdir(backupDir, { recursive: true });
     const now = new Date();
     const pad = (value) => String(value).padStart(2, "0");
-    const name = `Pare 3D backup ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.zip`;
+    const name = `Pare Dental backup ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.zip`;
     const file = join(backupDir, name);
     await writeFile(file, body);
-    const old = (await readdir(backupDir)).filter((entry) => /^Pare 3D backup \d{4}-\d{2}-\d{2}\.zip$/.test(entry)).sort().reverse().slice(BACKUP_KEEP_DAYS);
+    const old = (await readdir(backupDir)).filter((entry) => /^Pare Dental backup \d{4}-\d{2}-\d{2}\.zip$/.test(entry)).sort().reverse().slice(BACKUP_KEEP_DAYS);
     for (const entry of old) await rm(join(backupDir, entry), { force: true }).catch(() => {});
     json(res, 200, { path: file, folder: backupDir, at: now.getTime() });
   } catch (error) {
@@ -390,7 +390,7 @@ async function sendToBambu(req, res, url, slicerId = "bambu") {
     json(res, 400, { error: "unknown slicer" });
     return;
   }
-  const requested = basename(url.searchParams.get("name") || "Pare 3D design.stl");
+  const requested = basename(url.searchParams.get("name") || "Pare Dental design.stl");
   const extension = extname(requested).toLowerCase();
   if (extension !== ".stl" && extension !== ".3mf") {
     json(res, 400, { error: "only STL or 3MF" });
@@ -400,7 +400,7 @@ async function sendToBambu(req, res, url, slicerId = "bambu") {
   try {
     const body = await readBody(req);
     // Build 71: from the Export window the file goes in the folder chosen for exports, under a
-    // name of its own, and opens from there; otherwise it is the slicer's copy in Pare 3D Exports.
+    // name of its own, and opens from there; otherwise it is the slicer's copy in Pare Dental Exports.
     let file;
     if (url.searchParams.get("save") === "1") {
       const folder = (await readFileSettings()).exports;
@@ -503,8 +503,8 @@ async function checkForUpdate() {
     const release = await releaseToFollow();
     if (!release) return;
     const asset = (name) => (release.assets || []).find((entry) => entry.name === name)?.browser_download_url;
-    const manifestUrl = asset("pare3d-update.json");
-    const packageUrl = asset("Pare-3D-app.tar.gz");
+    const manifestUrl = asset("paredental-update.json");
+    const packageUrl = asset("Pare-Dental-app.tar.gz");
     if (!manifestUrl || !packageUrl) return;
     const manifest = JSON.parse((await download(manifestUrl)).toString("utf8"));
     const build = Number(manifest.build);
@@ -557,7 +557,7 @@ async function checkForUpdate() {
 }
 
 /*
- * Where files go (runtime 3). Exports go to Downloads and backups to Documents/Pare 3D Backups until
+ * Where files go (runtime 3). Exports go to Downloads and backups to Documents/Pare Dental Backups until
  * the person picks other folders; the choice is kept in the app's data folder. The pickers are the
  * system's own (macOS through osascript, Windows through PowerShell), so they look like every other
  * app's. Text for them travels in environment variables, never inside the script.
@@ -643,7 +643,7 @@ function chooseSaveFile(prompt, start, name) {
 /** A file name from the page, made safe: no folders, no characters the systems refuse. */
 function safeFileName(raw) {
   const name = basename(String(raw || "")).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").trim().slice(0, 180);
-  return name && name !== "." && name !== ".." ? name : "Pare 3D export";
+  return name && name !== "." && name !== ".." ? name : "Pare Dental export";
 }
 
 async function freeName(folder, name) {
@@ -681,7 +681,7 @@ async function handleFiles(req, res, url) {
     if (action === "/choose") {
       const which = url.searchParams.get("which") === "backups" ? "backups" : "exports";
       const current = await readFileSettings();
-      const prompt = url.searchParams.get("prompt") || (which === "backups" ? "Choose where Pare 3D keeps backups" : "Choose where Pare 3D saves exports");
+      const prompt = url.searchParams.get("prompt") || (which === "backups" ? "Choose where Pare Dental keeps backups" : "Choose where Pare Dental saves exports");
       const chosen = await chooseFolder(prompt, current[which]);
       json(res, 200, chosen ? { ...(await writeFileSettings({ [which]: chosen })), chosen: true } : { ...current, chosen: false });
       return;
@@ -739,7 +739,7 @@ createServer(async (req, res) => {
   const path = url.pathname;
   if (path === "/__pare3d") {
     res.writeHead(200, { "content-type": "text/plain", "x-pare3d": "1" });
-    res.end("pare3d");
+    res.end("paredental");
     return;
   }
   // Fork (build 29): a newer app asks an older server still running in the background to make way.
@@ -794,7 +794,7 @@ createServer(async (req, res) => {
     "x-pare3d": "1",
   });
   res.end(await readFile(file));
-}).listen(port, "127.0.0.1", () => console.log(`Pare 3D running at http://localhost:${port}/  (close this window to stop)`));
+}).listen(port, "127.0.0.1", () => console.log(`Pare Dental running at http://localhost:${port}/  (close this window to stop)`));
 
 setTimeout(() => void checkForUpdate(), 5000);
 // Build 104: a test build looks for a newer test build every half hour (they come often); a public

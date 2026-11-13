@@ -1,8 +1,8 @@
-# Builds the Pare 3D downloads and publishes them as a GitHub release.
+# Builds the Pare Dental downloads and publishes them as a GitHub release.
 # Start it by pushing to the "release" branch. The build number is in the PARE_BUILD
 # file (raise it for each release); the release is tagged pare-<build>, and the
 # installed app compares that number to tell you an update is out.
-name: Pare 3D release
+name: Pare Dental release
 
 on:
   push:
@@ -62,7 +62,7 @@ jobs:
           retention-days: 14
 
   # The Windows download, tried on a real Windows machine: its server, its updater, and
-  # "Pare 3D.exe" opening the app in its window (scripts/windows-check). A release waits for it.
+  # "Pare Dental.exe" opening the app in its window (scripts/windows-check). A release waits for it.
   windows-check:
     needs: build
     runs-on: windows-latest
@@ -113,15 +113,15 @@ jobs:
           target_commitish: ${{ github.sha }}
           prerelease: true
           make_latest: false
-          name: Pare 3D test build ${{ github.run_number }}
+          name: Pare Dental test build ${{ github.run_number }}
           # The app files and their manifest too: an installed test build updates itself to the newest
           # test build from them (mac/serve.mjs). Without them every test build had to be downloaded again.
           files: |
-            dist/Pare-3D-Mac.zip
-            dist/Pare-3D-Windows.zip
-            dist/Pare-3D-Linux.tar.gz
-            dist/Pare-3D-app.tar.gz
-            dist/pare3d-update.json
+            dist/Pare-Dental-Mac.zip
+            dist/Pare-Dental-Windows.zip
+            dist/Pare-Dental-Linux.tar.gz
+            dist/Pare-Dental-app.tar.gz
+            dist/paredental-update.json
           body: Test build for checking before release. Installed test builds update themselves to it; the public release does not.
       - uses: softprops/action-gh-release@v2
         if: github.ref_name == 'release'
@@ -129,24 +129,24 @@ jobs:
           tag_name: pare-${{ needs.build.outputs.number }}
           target_commitish: ${{ github.sha }}
           make_latest: true
-          name: Pare 3D build ${{ needs.build.outputs.number }}
+          name: Pare Dental build ${{ needs.build.outputs.number }}
           files: |
-            dist/Pare-3D-Mac.zip
-            dist/Pare-3D-Windows.zip
-            dist/Pare-3D-Linux.tar.gz
-            dist/Pare-3D-app.tar.gz
-            dist/pare3d-update.json
+            dist/Pare-Dental-Mac.zip
+            dist/Pare-Dental-Windows.zip
+            dist/Pare-Dental-Linux.tar.gz
+            dist/Pare-Dental-app.tar.gz
+            dist/paredental-update.json
           body: |
-            **Download:** `Pare-3D-Mac.zip` for a Mac (Apple silicon or Intel), `Pare-3D-Windows.zip` for Windows 10/11, `Pare-3D-Linux.tar.gz` for 64-bit Linux.
+            **Download:** `Pare-Dental-Mac.zip` for a Mac (Apple silicon or Intel), `Pare-Dental-Windows.zip` for Windows 10/11, `Pare-Dental-Linux.tar.gz` for 64-bit Linux.
 
-            **Mac:** unzip, drag Pare 3D into Applications, open it. The first time, go to System Settings → Privacy & Security → Open Anyway.
-            **Windows:** extract the folder, double-click "Pare 3D.exe". If SmartScreen warns, choose More info → Run anyway. If the window does not start, double-click "Pare 3D (browser).vbs" instead and please report it.
-            **Linux:** unpack the folder, run `./pare3d` (and once `./pare3d --install` to add it to the applications menu). Chrome or Chromium gives it its own window.
-            Chrome or Edge gives Pare 3D its own window and automatic backup.
+            **Mac:** unzip, drag Pare Dental into Applications, open it. The first time, go to System Settings → Privacy & Security → Open Anyway.
+            **Windows:** extract the folder, double-click "Pare Dental.exe". If SmartScreen warns, choose More info → Run anyway. If the window does not start, double-click "Pare Dental (browser).vbs" instead and please report it.
+            **Linux:** unpack the folder, run `./paredental` (and once `./paredental --install` to add it to the applications menu). Chrome or Chromium gives it its own window.
+            Chrome or Edge gives Pare Dental its own window and automatic backup.
             Already installed (build 2 or later)? It updates itself: the next time you open it, or when it asks you to reload.
             **Installed a new download but it still shows an older build?** Restart your computer once (an older copy was still running in the background). From build 29 on, the app replaces an older copy by itself.
 
-            Pare 3D is based on [layerling](https://github.com/henmedia/layerling) (AGPL-3.0-only); this release's source is this repository at this tag.
+            Pare Dental is based on [layerling](https://github.com/henmedia/layerling) (AGPL-3.0-only); this release's source is this repository at this tag.
       # Only the newest build (and the newest test build) is kept on the releases page; older
       # builds and test builds are removed (the page also lists tags as text, pare-9 before pare-21).
       # Their tags stay, so every build's source is still in the repository.

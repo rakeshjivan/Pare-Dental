@@ -47,11 +47,11 @@ describe("the app server's send to a slicer", () => {
     expect(answer.names.preform).toBe("PreForm");
   });
 
-  it("saves the file in Pare 3D Exports and opens it in the chosen slicer", async () => {
+  it("saves the file in Pare Dental Exports and opens it in the chosen slicer", async () => {
     const stl = new Uint8Array([1, 2, 3, 4, 5]);
     const answer = await (await fetch(`${base}/__send-to-slicer?app=chitubox&name=Upper%20model.stl`, { method: "POST", headers: send, body: stl })).json();
     expect(answer.opened).toBe(true);
-    const file = join(home, "Documents", "Pare 3D Exports", "Upper model.stl");
+    const file = join(home, "Documents", "Pare Dental Exports", "Upper model.stl");
     expect(answer.path).toBe(file);
     expect(new Uint8Array(readFileSync(file))).toEqual(stl);
     for (let attempt = 0; attempt < 50 && !existsSync(opened); attempt += 1) await new Promise((done) => setTimeout(done, 50));

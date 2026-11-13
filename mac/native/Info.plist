@@ -2,12 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Pare 3D</string>
-  <key>CFBundleDisplayName</key><string>Pare 3D</string>
-  <key>CFBundleIdentifier</key><string>app.parepdf.pare3d</string>
+  <key>CFBundleName</key><string>Pare Dental</string>
+  <key>CFBundleDisplayName</key><string>Pare Dental</string>
+  <key>CFBundleIdentifier</key><string>app.parepdf.paredental</string>
   <key>CFBundleVersion</key><string>__BUILD__</string>
   <key>CFBundleShortVersionString</key><string>__VERSION__</string>
-  <key>CFBundleExecutable</key><string>Pare 3D</string>
+  <key>CFBundleExecutable</key><string>Pare Dental</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>

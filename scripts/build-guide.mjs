@@ -15,7 +15,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const guideSource = join(root, "docs", "guide");
 const publicDirectory = join(root, "apps", "web", "public");
-// Pare 3D: the guide's own web address, once it has one (PARE_SITE_URL); without it no canonical links,
+// Pare Dental: the guide's own web address, once it has one (PARE_SITE_URL); without it no canonical links,
 // share picture or sitemap point anywhere else.
 const SITE = (process.env.PARE_SITE_URL ?? "").replace(/\/$/, "");
 
@@ -29,12 +29,12 @@ export const LANGUAGE_INFO = registry.LANGUAGE_INFO;
 export const GUIDE_LANGUAGES = Object.fromEntries(
   LANGUAGE_CODES.map((code) => {
     const info = LANGUAGE_INFO[code];
-    return [code, { dir: info.guideDir, htmlLang: info.htmlLang, quotes: info.quotes, forumUrl: "https://github.com/rakeshjivan/pare-3d/issues", /* fork: Pare 3D feedback, not layerling's forum */ ...LANGUAGE_INFO.en.guide, ...info.guide }];
+    return [code, { dir: info.guideDir, htmlLang: info.htmlLang, quotes: info.quotes, forumUrl: "https://github.com/rakeshjivan/pare-dental/issues", /* fork: Pare Dental feedback, not layerling's forum */ ...LANGUAGE_INFO.en.guide, ...info.guide }];
   }),
 );
 
 /**
- * Fork (Pare 3D build 26): the guide is written and kept in English only. The program's other
+ * Fork (Pare Dental build 26): the guide is written and kept in English only. The program's other
  * languages open the English guide; its pages offer no language menu.
  */
 export const GUIDE_BUILD_LANGUAGES = ["en"];
@@ -72,7 +72,7 @@ function printLink(strings, className = "") {
 /** The page with every chapter in a row, for printing; one in each guide folder. */
 export const PRINT_ALL_PAGE = "print-all.html";
 
-const SOURCE_CODE = "https://github.com/rakeshjivan/pare-3d"; // fork; upstream is henmedia/layerling
+const SOURCE_CODE = "https://github.com/rakeshjivan/pare-dental"; // fork; upstream is henmedia/layerling
 
 /**
  * The footer of the program, for the guide's pages: the same links from the
@@ -89,7 +89,7 @@ export function renderFooter({ language, messages, environment, version }) {
   // the project's support page, unless NEXT_PUBLIC_SUPPORT_HINT=off.
   const ownSponsorUrl = environment.NEXT_PUBLIC_SPONSOR_URL?.trim();
   const supportOff = environment.NEXT_PUBLIC_SUPPORT_HINT?.trim().toLowerCase() === "off";
-  // Pare 3D: no support page of its own yet - only an operator's own address shows.
+  // Pare Dental: no support page of its own yet - only an operator's own address shows.
   void supportOff;
   const sponsorUrl = ownSponsorUrl || "";
   const sponsorNeedsLang = !ownSponsorUrl || sponsorUrl.startsWith("/");
@@ -100,7 +100,7 @@ export function renderFooter({ language, messages, environment, version }) {
   if (privacyUrl) left.push(link(privacyUrl, environment.NEXT_PUBLIC_PRIVACY_LABEL?.trim() || fallback.privacy));
   // Trimmed build: only the source link the AGPL asks for.
   void version;
-  // Pare 3D: open source, and the licences and credits (AGPL-3.0's notices) a click away.
+  // Pare Dental: open source, and the licences and credits (AGPL-3.0's notices) a click away.
   const right = [link(SOURCE_CODE, "Open source", external), link(`/${LANGUAGE_INFO[language].guideDir ?? "guide"}/licences-and-credits.html`, "Licences & credits")];
   const group = (items) => `<div>${items.join('<span class="dot" aria-hidden="true">&middot;</span>')}</div>`;
   const trademark = messages["footer.trademark"] ? `<p class="trademark">${escapeHtml(messages["footer.trademark"])}</p>` : "";
@@ -379,7 +379,7 @@ export function renderShortcuts(groups, messages, language) {
 }
 
 export const STYLE = `
-/* Pare 3D's own look: the program's blue (#1766ba) on cool greys, light and dark. */
+/* Pare Dental's own look: the program's blue (#1766ba) on cool greys, light and dark. */
 :root {
   color-scheme: light;
   --ground: #f4f6f9; --card: #ffffff; --ink: #1d2630; --muted: #5b6573; --edge: #dce2e9;
@@ -695,7 +695,7 @@ function pageShell({ language, title, description, path, alternates, chapters, c
   </head>
   <body${bodyClass ? ` class="${bodyClass}"` : ""}>
     <header class="bar"><div class="bar-inner">
-      <a class="brand" href="/${strings.dir}/index.html"><img src="/assets/pare3d/pare3d-icon.svg" alt=""><span class="brand-text"><b>Pare 3D</b><span class="brand-note">${escapeHtml(strings.home)}</span></span></a>
+      <a class="brand" href="/${strings.dir}/index.html"><img src="/assets/pare3d/pare3d-icon.svg" alt=""><span class="brand-text"><b>Pare Dental</b><span class="brand-note">${escapeHtml(strings.home)}</span></span></a>
       ${searchForm(strings, language)}
       ${languageMenu(languageLinks, language, strings)}
       <a class="button" id="open-editor" href="/">${escapeHtml(strings.openEditor)}</a>

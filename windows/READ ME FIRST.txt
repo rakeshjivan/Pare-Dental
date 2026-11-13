@@ -1,11 +1,11 @@
-Pare 3D for Windows
+Pare Dental for Windows
 
 1. Extract this whole folder somewhere permanent, e.g. Documents.
-2. Double-click "Pare 3D.exe". Pare 3D opens in its own window; closing it quits.
+2. Double-click "Pare Dental.exe". Pare Dental opens in its own window; closing it quits.
 3. If Windows SmartScreen warns you, choose More info > Run anyway.
 
-Tip: right-click "Pare 3D.exe" > Pin to Start, or Send to > Desktop (create shortcut).
-Automatic backups go to Documents\Pare 3D Backups; exports for Bambu Studio to Documents\Pare 3D Exports.
+Tip: right-click "Pare Dental.exe" > Pin to Start, or Send to > Desktop (create shortcut).
+Automatic backups go to Documents\Pare Dental Backups; exports for Bambu Studio to Documents\Pare Dental Exports.
 
-If "Pare 3D.exe" will not start, "Pare 3D (browser).vbs" opens Pare 3D in an Edge window instead
+If "Pare Dental.exe" will not start, "Pare Dental (browser).vbs" opens Pare Dental in an Edge window instead
 (your designs there are kept separately).

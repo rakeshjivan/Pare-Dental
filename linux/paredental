@@ -1,39 +1,39 @@
 #!/usr/bin/env bash
-# Pare 3D for Linux (build 32): starts the bundled local server, opens the app in its own browser
-# window, and stops the server when that window closes. Designs are kept in ~/.pare3d/designs.
-#   ./pare3d            start Pare 3D
-#   ./pare3d --install  add Pare 3D to the applications menu (and remove the old entry first)
-#   ./pare3d --uninstall
+# Pare Dental for Linux (build 32): starts the bundled local server, opens the app in its own browser
+# window, and stops the server when that window closes. Designs are kept in ~/.paredental/designs.
+#   ./paredental            start Pare Dental
+#   ./paredental --install  add Pare Dental to the applications menu (and remove the old entry first)
+#   ./paredental --uninstall
 set -u
 HERE="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-DATA="$HOME/.pare3d"
+DATA="$HOME/.paredental"
 PROFILE="$DATA/browser-profile"
 LOG="$DATA/launcher.log"
 mkdir -p "$PROFILE"
 
-DESKTOP="$HOME/.local/share/applications/pare3d.desktop"
+DESKTOP="$HOME/.local/share/applications/paredental.desktop"
 ICON_DIR="$HOME/.local/share/icons/hicolor/256x256/apps"
 if [ "${1:-}" = "--install" ]; then
   mkdir -p "$(dirname "$DESKTOP")" "$ICON_DIR"
-  cp "$HERE/pare3d.png" "$ICON_DIR/pare3d.png" 2>/dev/null || true
+  cp "$HERE/paredental.png" "$ICON_DIR/paredental.png" 2>/dev/null || true
   cat > "$DESKTOP" <<DESK
 [Desktop Entry]
 Type=Application
-Name=Pare 3D
+Name=Pare Dental
 Comment=3D design for 3D printing
-Exec="$HERE/pare3d"
-Icon=pare3d
+Exec="$HERE/paredental"
+Icon=paredental
 Terminal=false
 Categories=Graphics;3DGraphics;Engineering;
-StartupWMClass=Pare 3D
+StartupWMClass=Pare Dental
 DESK
   command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$(dirname "$DESKTOP")" >/dev/null 2>&1
-  echo "Pare 3D is in your applications menu now."
+  echo "Pare Dental is in your applications menu now."
   exit 0
 fi
 if [ "${1:-}" = "--uninstall" ]; then
-  rm -f "$DESKTOP" "$ICON_DIR/pare3d.png"
-  echo "Removed Pare 3D from the applications menu. Your designs stay in $DATA/designs."
+  rm -f "$DESKTOP" "$ICON_DIR/paredental.png"
+  echo "Removed Pare Dental from the applications menu. Your designs stay in $DATA/designs."
   exit 0
 fi
 
@@ -47,12 +47,12 @@ esac
 
 say() { # a message the person sees even without a terminal
   echo "$1"
-  if command -v notify-send >/dev/null 2>&1; then notify-send "Pare 3D" "$1"
-  elif command -v zenity >/dev/null 2>&1; then zenity --info --title="Pare 3D" --text="$1" &
+  if command -v notify-send >/dev/null 2>&1; then notify-send "Pare Dental" "$1"
+  elif command -v zenity >/dev/null 2>&1; then zenity --info --title="Pare Dental" --text="$1" &
   fi
 }
 fetch() { if command -v curl >/dev/null 2>&1; then curl -s --max-time 1 "$@"; else wget -q -T 1 -O - "$@"; fi; }
-is_ours() { [ "$(fetch "http://localhost:$1/__pare3d")" = "pare3d" ]; }
+is_ours() { [ "$(fetch "http://localhost:$1/__pare3d")" = "paredental" ]; }
 OWN_RUNTIME=6
 OWN_BUILD="$(tr -dc '0-9' < "$HERE/app/pare-build.txt" 2>/dev/null)"; OWN_BUILD="${OWN_BUILD:-0}"
 is_current() {
@@ -70,10 +70,10 @@ stop_server() {
 
 PORT=""
 SERVER=""
-for CANDIDATE in 47177 47178 47179 47180 47181; do
+for CANDIDATE in 47187 47188 47189 47190 47191; do
   if is_ours "$CANDIDATE"; then
-    if is_current "$CANDIDATE"; then PORT=$CANDIDATE; echo "reusing Pare 3D server on $PORT"; break; fi
-    echo "replacing an older Pare 3D server on $CANDIDATE"; stop_server "$CANDIDATE"
+    if is_current "$CANDIDATE"; then PORT=$CANDIDATE; echo "reusing Pare Dental server on $PORT"; break; fi
+    echo "replacing an older Pare Dental server on $CANDIDATE"; stop_server "$CANDIDATE"
   fi
   if ! port_busy "$CANDIDATE"; then
     PORT=$CANDIDATE "$BUN" "$HERE/serve.mjs" &
@@ -86,7 +86,7 @@ for CANDIDATE in 47177 47178 47179 47180 47181; do
   fi
 done
 if [ -z "$PORT" ]; then
-  say "Pare 3D could not start: its local server did not start. Details are in $LOG"
+  say "Pare Dental could not start: its local server did not start. Details are in $LOG"
   exit 1
 fi
 URL="http://localhost:$PORT/"
@@ -98,7 +98,7 @@ trap cleanup EXIT
 for BROWSER in google-chrome google-chrome-stable chromium chromium-browser microsoft-edge microsoft-edge-stable brave-browser vivaldi; do
   if command -v "$BROWSER" >/dev/null 2>&1; then
     echo "using $BROWSER at $URL"
-    "$BROWSER" --app="$URL" --user-data-dir="$PROFILE" --class="Pare 3D" \
+    "$BROWSER" --app="$URL" --user-data-dir="$PROFILE" --class="Pare Dental" \
       --no-first-run --no-default-browser-check --disable-session-crashed-bubble --window-size=1440,900
     exit 0
   fi
@@ -115,6 +115,6 @@ if command -v flatpak >/dev/null 2>&1; then
 fi
 
 echo "no Chromium browser, using the default at $URL"
-say "Opened in your browser. Chrome or Chromium gives Pare 3D its own window."
+say "Opened in your browser. Chrome or Chromium gives Pare Dental its own window."
 xdg-open "$URL" >/dev/null 2>&1 || true
 [ -n "$SERVER" ] && wait "$SERVER"

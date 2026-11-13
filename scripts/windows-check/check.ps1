@@ -1,7 +1,7 @@
-# Pare 3D Windows check, run on a GitHub Windows machine after the downloads are built.
+# Pare Dental Windows check, run on a GitHub Windows machine after the downloads are built.
 #   1. the bundled server serves the app;
 #   2. the updater downloads and unpacks an update (with Windows' own tar);
-#   3. "Pare 3D.exe" opens its window, starts the server, loads the app (checked through
+#   3. "Pare Dental.exe" opens its window, starts the server, loads the app (checked through
 #      WebView2's debugging port) and stops the server when the window closes.
 param([string]$Dist = "dist", [string]$Out = "windows-check-output", [string]$Exe = "")
 $ErrorActionPreference = "Stop"
@@ -9,14 +9,14 @@ $ErrorActionPreference = "Stop"
 trap {
   $where = $_.InvocationInfo.ScriptLineNumber
   Write-Host "::error::Windows check failed at line ${where}: $($_.Exception.Message)"
-  $log = Join-Path $env:LOCALAPPDATA "Pare 3D\launcher.log"
+  $log = Join-Path $env:LOCALAPPDATA "Pare Dental\launcher.log"
   if (Test-Path $log) { Write-Host "::warning::launcher.log: $((Get-Content $log -Tail 8) -join ' | ')" }
   exit 1
 }
 New-Item -ItemType Directory -Force -Path $Out | Out-Null
 $Out = (Resolve-Path $Out).Path
 $Dist = (Resolve-Path $Dist).Path
-$Build = (Get-Content (Join-Path $Dist "pare3d-update.json") | ConvertFrom-Json).build
+$Build = (Get-Content (Join-Path $Dist "paredental-update.json") | ConvertFrom-Json).build
 Write-Host "Checking build $Build"
 
 function Get-Text($url) {
@@ -30,20 +30,20 @@ function Wait-For($what, $seconds, [scriptblock]$test) {
 
 $Root = "C:\pare3d-check"
 Remove-Item -Recurse -Force $Root -ErrorAction SilentlyContinue
-Expand-Archive -Path (Join-Path $Dist "Pare-3D-Windows.zip") -DestinationPath $Root
-$App = Join-Path $Root "Pare 3D"
-if ($Exe) { Copy-Item -Force $Exe (Join-Path $App "Pare 3D.exe"); Write-Host "using the window program from $Exe" }
+Expand-Archive -Path (Join-Path $Dist "Pare-Dental-Windows.zip") -DestinationPath $Root
+$App = Join-Path $Root "Pare Dental"
+if ($Exe) { Copy-Item -Force $Exe (Join-Path $App "Pare Dental.exe"); Write-Host "using the window program from $Exe" }
 Get-ChildItem $App | Format-Table Name, Length | Out-String | Write-Host
-foreach ($name in @("Pare 3D.exe", "bun.exe", "serve.mjs", "app\index.html", "app\pare-build.txt", "LICENSE.txt", "Pare 3D (browser).vbs")) {
+foreach ($name in @("Pare Dental.exe", "bun.exe", "serve.mjs", "app\index.html", "app\pare-build.txt", "LICENSE.txt", "Pare Dental (browser).vbs")) {
   if (-not (Test-Path (Join-Path $App $name))) { throw "missing from the download: $name" }
 }
 
 # 1. The server on its own.
 $env:PORT = "47290"
 $server = Start-Process -FilePath (Join-Path $App "bun.exe") -ArgumentList "`"$(Join-Path $App 'serve.mjs')`"" -WorkingDirectory $App -PassThru -WindowStyle Hidden
-Wait-For "server answers" 30 { (Get-Text "http://127.0.0.1:47290/__pare3d") -eq "pare3d" }
+Wait-For "server answers" 30 { (Get-Text "http://127.0.0.1:47290/__pare3d") -eq "paredental" }
 $homePage = Get-Text "http://127.0.0.1:47290/"
-if ($homePage -notmatch "Pare 3D") { throw "the home page does not look like Pare 3D" }
+if ($homePage -notmatch "Pare Dental") { throw "the home page does not look like Pare Dental" }
 $state = Get-Text "http://127.0.0.1:47290/__pare3d/update" | ConvertFrom-Json
 if ($state.bundled -ne $Build) { throw "the server reports build $($state.bundled), expected $Build" }
 $chunk = [regex]::Match($homePage, '/_next/static/[^"]+\.js').Value
@@ -74,7 +74,7 @@ $env:PORT = "47292"
 $serveFile = Join-Path $PSScriptRoot "..\..\mac\serve.mjs"
 if (-not (Test-Path $serveFile)) { $serveFile = Join-Path $App "serve.mjs" }
 $server = Start-Process -FilePath (Join-Path $App "bun.exe") -ArgumentList "`"$serveFile`"" -WorkingDirectory $App -PassThru -WindowStyle Hidden
-Wait-For "server answers" 30 { (Get-Text "http://127.0.0.1:47292/__pare3d") -eq "pare3d" }
+Wait-For "server answers" 30 { (Get-Text "http://127.0.0.1:47292/__pare3d") -eq "paredental" }
 Remove-Item Env:PARE3D_PROGRAM_ROOTS
 $slicersText = Get-Text "http://127.0.0.1:47292/__slicers?debug=1"
 $slicers = $slicersText | ConvertFrom-Json
@@ -102,7 +102,7 @@ $env:PORT = "47291"
 $env:PARE3D_RELEASES_API = "http://127.0.0.1:47300/latest"
 $env:PARE3D_TEST_ORIGIN = "http://127.0.0.1:47300"
 $old = Start-Process -FilePath (Join-Path $OldApp "bun.exe") -ArgumentList "`"$(Join-Path $OldApp 'serve.mjs')`"" -WorkingDirectory $OldApp -PassThru -WindowStyle Hidden
-Wait-For "old copy answers" 30 { (Get-Text "http://127.0.0.1:47291/__pare3d") -eq "pare3d" }
+Wait-For "old copy answers" 30 { (Get-Text "http://127.0.0.1:47291/__pare3d") -eq "paredental" }
 Wait-For "update downloaded and unpacked" 120 {
   $s = Get-Text "http://127.0.0.1:47291/__pare3d/update" | ConvertFrom-Json
   if ($s.error) { throw "update failed: $($s.error)" }
@@ -123,8 +123,8 @@ if (-not $webview) {
 }
 Remove-Item Env:PORT
 $env:PARE3D_DEBUG_PORT = "9222"
-$appProcess = Start-Process -FilePath (Join-Path $App "Pare 3D.exe") -WorkingDirectory $App -PassThru
-Wait-For "the app started its server" 90 { (Get-Text "http://127.0.0.1:47177/__pare3d") -eq "pare3d" }
+$appProcess = Start-Process -FilePath (Join-Path $App "Pare Dental.exe") -WorkingDirectory $App -PassThru
+Wait-For "the app started its server" 90 { (Get-Text "http://127.0.0.1:47187/__pare3d") -eq "paredental" }
 Wait-For "the window's debugging port is open" 60 { (Get-Text "http://127.0.0.1:9222/json/version") -ne $null }
 $tools = if ($env:PARE_CHECK_TOOLS) { $env:PARE_CHECK_TOOLS } else { $PSScriptRoot }
 node (Join-Path $tools "cdp-check.mjs") $Out
@@ -136,8 +136,8 @@ $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
 $bitmap.Save((Join-Path $Out "windows-desktop.png"))
 $null = $appProcess.CloseMainWindow()
 Wait-For "the window closed" 30 { $appProcess.HasExited }
-Wait-For "the server stopped with it" 15 { (Get-Text "http://127.0.0.1:47177/__pare3d") -eq $null }
-Write-Host "::notice::PASS 3: the app window opens Pare 3D and closes cleanly"
-$log = Join-Path $env:LOCALAPPDATA "Pare 3D\launcher.log"
+Wait-For "the server stopped with it" 15 { (Get-Text "http://127.0.0.1:47187/__pare3d") -eq $null }
+Write-Host "::notice::PASS 3: the app window opens Pare Dental and closes cleanly"
+$log = Join-Path $env:LOCALAPPDATA "Pare Dental\launcher.log"
 if (Test-Path $log) { Copy-Item $log $Out }
 Write-Host "::notice::All Windows checks passed for build $Build"

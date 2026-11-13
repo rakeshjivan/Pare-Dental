@@ -14,7 +14,7 @@ createServer(async (req, res) => {
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({
       tag_name: "pare-test",
-      assets: ["pare3d-update.json", "Pare-3D-app.tar.gz"].map((name) => ({ name, browser_download_url: `${origin}/files/${name}` })),
+      assets: ["paredental-update.json", "Pare-Dental-app.tar.gz"].map((name) => ({ name, browser_download_url: `${origin}/files/${name}` })),
     }));
     return;
   }

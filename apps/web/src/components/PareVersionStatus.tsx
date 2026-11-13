@@ -66,7 +66,7 @@ export function PareVersionStatus({ compact = false }: { compact?: boolean } = {
       if (!next) {
         // Not the app (a plain browser): ask GitHub directly.
         try {
-          const response = await fetch("https://api.github.com/repos/rakeshjivan/pare-3d/releases/latest", { headers: { accept: "application/vnd.github+json" }, signal: AbortSignal.timeout(8000) });
+          const response = await fetch("https://api.github.com/repos/rakeshjivan/pare-dental/releases/latest", { headers: { accept: "application/vnd.github+json" }, signal: AbortSignal.timeout(8000) });
           const build = response.ok ? parseBuildTag(((await response.json()) as { tag_name?: string }).tag_name) : null;
           next = build === null ? { kind: "offline" } : build > PARE_BUILD ? { kind: "download", build } : { kind: "current" };
         } catch {

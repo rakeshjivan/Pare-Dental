@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Builds the Pare 3D downloads from the static export (run `node scripts/build-static-export.mjs` first):
-#   dist/Pare-3D-Mac.zip       Pare 3D.app for Apple silicon and Intel Macs
-#   dist/Pare-3D-Windows.zip   a folder with "Pare 3D.vbs" for Windows 10/11 (64-bit)
-#   dist/Pare-3D-Linux.tar.gz  a folder with the ./pare3d launcher for 64-bit Linux (Intel/AMD or ARM)
-#   dist/Pare-3D-app.tar.gz    just the app files, which installed copies update themselves from
-#   dist/pare3d-update.json    the build number and checksum of that package
+# Builds the Pare Dental downloads from the static export (run `node scripts/build-static-export.mjs` first):
+#   dist/Pare-Dental-Mac.zip       Pare Dental.app for Apple silicon and Intel Macs
+#   dist/Pare-Dental-Windows.zip   a folder with "Pare Dental.vbs" for Windows 10/11 (64-bit)
+#   dist/Pare-Dental-Linux.tar.gz  a folder with the ./paredental launcher for 64-bit Linux (Intel/AMD or ARM)
+#   dist/Pare-Dental-app.tar.gz    just the app files, which installed copies update themselves from
+#   dist/paredental-update.json    the build number and checksum of that package
 # The JavaScript runtime (Bun) comes from npm, so nothing else needs installing.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -38,19 +38,19 @@ rm -rf "$OUT" && mkdir -p "$OUT"
 # Mac. On a Mac the native window (mac/native/main.swift) is compiled for Apple silicon and Intel;
 # elsewhere the script launcher (mac/Pare3D), which opens the app in Chrome or Edge, stands in.
 VERSION=$(node -p "require('$ROOT/package.json').version")
-APP="$WORK/mac/Pare 3D.app/Contents"
+APP="$WORK/mac/Pare Dental.app/Contents"
 mkdir -p "$APP/MacOS" "$APP/Resources"
 NATIVE=0
 if [ "$(uname -s)" = "Darwin" ] && command -v swiftc >/dev/null 2>&1; then
   NATIVE=1
   for arch in arm64 x86_64; do
-    if ! swiftc -O -target "$arch-apple-macos12" "$ROOT/mac/native/main.swift" -o "$WORK/pare3d-$arch" > "$WORK/swift-$arch.log" 2>&1; then
+    if ! swiftc -O -target "$arch-apple-macos12" "$ROOT/mac/native/main.swift" -o "$WORK/paredental-$arch" > "$WORK/swift-$arch.log" 2>&1; then
       # As annotations, so the failure is readable on GitHub.
       sed 's/^/::error::/' "$WORK/swift-$arch.log" | head -60
       exit 1
     fi
   done
-  lipo -create "$WORK/pare3d-arm64" "$WORK/pare3d-x86_64" -output "$APP/MacOS/Pare 3D"
+  lipo -create "$WORK/paredental-arm64" "$WORK/paredental-x86_64" -output "$APP/MacOS/Pare Dental"
   sed -e "s/__BUILD__/$BUILD/" -e "s/__VERSION__/$VERSION/" "$ROOT/mac/native/Info.plist" > "$APP/Info.plist"
 else
   cp "$ROOT/mac/Info.plist" "$APP/"
@@ -64,49 +64,49 @@ chmod +x "$APP/Resources/bun-arm64" "$APP/Resources/bun-x64"
 copy_app "$APP/Resources/app"
 if [ "$NATIVE" = 1 ]; then
   # An ad-hoc signature holds the bundle together (Apple silicon needs one); still "Open Anyway" once.
-  codesign --force --deep --sign - "$WORK/mac/Pare 3D.app"
-  (cd "$WORK/mac" && ditto -c -k --keepParent "Pare 3D.app" "$OUT/Pare-3D-Mac.zip")
+  codesign --force --deep --sign - "$WORK/mac/Pare Dental.app"
+  (cd "$WORK/mac" && ditto -c -k --keepParent "Pare Dental.app" "$OUT/Pare-Dental-Mac.zip")
 else
-  (cd "$WORK/mac" && zip -qry -9 "$OUT/Pare-3D-Mac.zip" "Pare 3D.app")
+  (cd "$WORK/mac" && zip -qry -9 "$OUT/Pare-Dental-Mac.zip" "Pare Dental.app")
 fi
 
 # Windows. With the .NET SDK at hand the native window (windows/Program.cs) is built; the
-# browser launcher ("Pare 3D (browser).vbs", which opens Edge) always comes along as a fallback.
-WIN="$WORK/win/Pare 3D"
+# browser launcher ("Pare Dental (browser).vbs", which opens Edge) always comes along as a fallback.
+WIN="$WORK/win/Pare Dental"
 mkdir -p "$WIN"
 cp "$ROOT/mac/serve.mjs" "$ROOT/mac/launch.mjs" "$ROOT/mac/NOTICE.txt" "$WIN/"
-cp "$ROOT/mac/Pare 3D.vbs" "$WIN/Pare 3D (browser).vbs"
+cp "$ROOT/mac/Pare Dental.vbs" "$WIN/Pare Dental (browser).vbs"
 cp "$ROOT/windows/READ ME FIRST.txt" "$WIN/"
 if command -v dotnet >/dev/null 2>&1; then
   if ! dotnet publish "$ROOT/windows/Pare3D.csproj" -c Release -o "$WORK/winbuild" > "$WORK/dotnet.log" 2>&1; then
     grep -E "error|Error" "$WORK/dotnet.log" | sed 's/^/::error::/' | head -60
     exit 1
   fi
-  cp "$WORK/winbuild/Pare3D.exe" "$WIN/Pare 3D.exe"
+  cp "$WORK/winbuild/Pare3D.exe" "$WIN/Pare Dental.exe"
   cp "$ROOT/windows/Pare3D.ico" "$WIN/"
 fi
 cp "$ROOT/LICENSE" "$WIN/LICENSE.txt"
 cp "$(fetch_bun bun-windows-x64)/bun.exe" "$WIN/"
 copy_app "$WIN/app"
-(cd "$WORK/win" && zip -qr -9 "$OUT/Pare-3D-Windows.zip" "Pare 3D")
+(cd "$WORK/win" && zip -qr -9 "$OUT/Pare-Dental-Windows.zip" "Pare Dental")
 
 # Linux (build 32). The launcher opens the app in Chrome or Chromium as its own window, like the
-# Mac script launcher; ./pare3d --install adds it to the applications menu.
-LNX="$WORK/linux/Pare 3D"
+# Mac script launcher; ./paredental --install adds it to the applications menu.
+LNX="$WORK/linux/Pare Dental"
 mkdir -p "$LNX"
-cp "$ROOT/mac/serve.mjs" "$ROOT/mac/NOTICE.txt" "$ROOT/linux/pare3d" "$ROOT/linux/pare3d.png" "$ROOT/linux/READ ME FIRST.txt" "$LNX/"
+cp "$ROOT/mac/serve.mjs" "$ROOT/mac/NOTICE.txt" "$ROOT/linux/paredental" "$ROOT/linux/paredental.png" "$ROOT/linux/READ ME FIRST.txt" "$LNX/"
 cp "$ROOT/LICENSE" "$LNX/LICENSE.txt"
 cp "$(fetch_bun bun-linux-x64)/bun" "$LNX/bun-x64"
 cp "$(fetch_bun bun-linux-aarch64)/bun" "$LNX/bun-arm64"
-chmod +x "$LNX/pare3d" "$LNX/bun-x64" "$LNX/bun-arm64"
+chmod +x "$LNX/paredental" "$LNX/bun-x64" "$LNX/bun-arm64"
 copy_app "$LNX/app"
-tar -czf "$OUT/Pare-3D-Linux.tar.gz" -C "$WORK/linux" "Pare 3D"
+tar -czf "$OUT/Pare-Dental-Linux.tar.gz" -C "$WORK/linux" "Pare Dental"
 
 # Update package: the app folder's contents at the top of the archive.
 copy_app "$WORK/update"
-COPYFILE_DISABLE=1 tar -czf "$OUT/Pare-3D-app.tar.gz" -C "$WORK/update" .
-if command -v sha256sum >/dev/null 2>&1; then SHA=$(sha256sum "$OUT/Pare-3D-app.tar.gz" | cut -d' ' -f1); else SHA=$(shasum -a 256 "$OUT/Pare-3D-app.tar.gz" | cut -d' ' -f1); fi
-printf '{"build":%s,"preview":%s,"version":"%s","minRuntime":%s,"sha256":"%s"}\n' "$BUILD" "${PARE_PREVIEW:-0}" "$VERSION" "$MIN_RUNTIME" "$SHA" > "$OUT/pare3d-update.json"
-cat "$OUT/pare3d-update.json"
+COPYFILE_DISABLE=1 tar -czf "$OUT/Pare-Dental-app.tar.gz" -C "$WORK/update" .
+if command -v sha256sum >/dev/null 2>&1; then SHA=$(sha256sum "$OUT/Pare-Dental-app.tar.gz" | cut -d' ' -f1); else SHA=$(shasum -a 256 "$OUT/Pare-Dental-app.tar.gz" | cut -d' ' -f1); fi
+printf '{"build":%s,"preview":%s,"version":"%s","minRuntime":%s,"sha256":"%s"}\n' "$BUILD" "${PARE_PREVIEW:-0}" "$VERSION" "$MIN_RUNTIME" "$SHA" > "$OUT/paredental-update.json"
+cat "$OUT/paredental-update.json"
 
 ls -lh "$OUT"

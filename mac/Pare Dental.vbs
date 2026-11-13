@@ -1,4 +1,4 @@
-' Double-click to start Pare 3D (no console window).
+' Double-click to start Pare Dental (no console window).
 Set shell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 dir = fso.GetParentFolderName(WScript.ScriptFullName)

@@ -20,8 +20,8 @@ import { SHAPE_COLORS_BOOT_SCRIPT } from "@/lib/shapeColors";
 import { TOOLBAR_SIZE_BOOT_SCRIPT } from "@/lib/toolbarSize";
 import { VIEW_CUBE_POSITION_BOOT_SCRIPT } from "@/lib/viewCubePosition";
 
-const NAME = "Pare 3D";
-const TITLE = "Pare 3D";
+const NAME = "Pare Dental";
+const TITLE = "Pare Dental";
 const DESCRIPTION = "Easy 3D design for 3D printing, with dental studios for scans, models and wax-ups. Runs on your own computer. Open source (AGPL-3.0).";
 
 // Tells search engines what layerling is: a free web application, not an

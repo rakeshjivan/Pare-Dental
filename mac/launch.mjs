@@ -1,4 +1,4 @@
-// Pare 3D launcher for Windows (run by the bundled bun.exe from "Pare 3D.vbs").
+// Pare Dental launcher for Windows (run by the bundled bun.exe from "Pare Dental.vbs").
 // Finds or starts the local server, then opens the app in Edge or Chrome as its
 // own window with its own profile; falls back to the default browser.
 import { spawn } from "node:child_process";
@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const dataDir = join(process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local"), "Pare 3D");
+const dataDir = join(process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local"), "Pare Dental");
 const profile = join(dataDir, "browser-profile");
 mkdirSync(profile, { recursive: true });
 const log = (line) => {
@@ -18,7 +18,7 @@ const log = (line) => {
 async function isOurs(port) {
   try {
     const response = await fetch(`http://localhost:${port}/__pare3d`, { signal: AbortSignal.timeout(800) });
-    return (await response.text()) === "pare3d";
+    return (await response.text()) === "paredental";
   } catch {
     return false;
   }
@@ -52,7 +52,7 @@ async function stopServer(port) {
 
 let port = null;
 let server = null;
-for (const candidate of [47177, 47178, 47179, 47180, 47181]) {
+for (const candidate of [47187, 47188, 47189, 47190, 47191]) {
   if (await isOurs(candidate)) {
     if (await isCurrent(candidate)) { port = candidate; log(`reusing server on ${port}`); break; }
     log(`replacing an older server on ${candidate}`);

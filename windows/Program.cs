@@ -1,4 +1,4 @@
-// Pare 3D for Windows - a native window around the app.
+// Pare Dental for Windows - a native window around the app.
 //
 // Starts the bundled local server (bun.exe running serve.mjs), shows the app in its own
 // window (WebView2, the Edge engine built into Windows) with its own taskbar icon, and stops
@@ -25,19 +25,19 @@ static class Program
 sealed class MainForm : Form
 {
     static readonly string AppDir = AppContext.BaseDirectory;
-    static readonly string DataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Pare 3D");
+    static readonly string DataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Pare Dental");
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMilliseconds(800) };
 
-    const string WaitingHtml = "<html><body style=\"margin:0;display:flex;align-items:center;justify-content:center;height:100vh;font:600 15px 'Segoe UI',sans-serif;color:#5b6778;background:#f8f9fb\">Starting Pare 3D…</body></html>";
+    const string WaitingHtml = "<html><body style=\"margin:0;display:flex;align-items:center;justify-content:center;height:100vh;font:600 15px 'Segoe UI',sans-serif;color:#5b6778;background:#f8f9fb\">Starting Pare Dental…</body></html>";
 
     readonly WebView2 web = new() { Dock = DockStyle.Fill };
     Process? server;
-    int port = 47177;
+    int port = 47187;
     bool readyToClose;
 
     public MainForm()
     {
-        Text = "Pare 3D";
+        Text = "Pare Dental";
         Width = 1440;
         Height = 900;
         MinimumSize = new Size(1000, 640);
@@ -84,7 +84,7 @@ sealed class MainForm : Form
     /// The runtime of the serve.mjs this app carries (RUNTIME_VERSION there).
     const int OwnRuntime = 6;
 
-    /// Fork (build 29): a Pare 3D server already on the port is reused only when it is at least as new as
+    /// Fork (build 29): a Pare Dental server already on the port is reused only when it is at least as new as
     /// this app; one left running by an older app is replaced on the same port (designs are kept per address).
     static async Task<bool> ServerIsCurrentAsync(int candidate)
     {
@@ -106,7 +106,7 @@ sealed class MainForm : Form
         }
     }
 
-    /// Stops the Pare 3D server on the port: politely if it knows how, otherwise by the process listening there.
+    /// Stops the Pare Dental server on the port: politely if it knows how, otherwise by the process listening there.
     static async Task StopServerAsync(int candidate)
     {
         try { using var _ = await Http.PostAsync($"http://127.0.0.1:{candidate}/__pare3d/quit", null); } catch { }
@@ -135,17 +135,17 @@ sealed class MainForm : Form
     /// The designs are stored per address, so the same port is used every time when it can be.
     async Task<bool> StartServerAsync()
     {
-        foreach (var candidate in new[] { 47177, 47178, 47179, 47180, 47181 })
+        foreach (var candidate in new[] { 47187, 47188, 47189, 47190, 47191 })
         {
-            if (await Ask(candidate, "/__pare3d") == "pare3d")
+            if (await Ask(candidate, "/__pare3d") == "paredental")
             {
                 if (await ServerIsCurrentAsync(candidate))
                 {
                     port = candidate;
-                    Log($"reusing the Pare 3D server on {candidate}");
+                    Log($"reusing the Pare Dental server on {candidate}");
                     return true;
                 }
-                Log($"replacing an older Pare 3D server on {candidate}");
+                Log($"replacing an older Pare Dental server on {candidate}");
                 await StopServerAsync(candidate);
             }
             if (await Ask(candidate, "/") != null)
@@ -172,7 +172,7 @@ sealed class MainForm : Form
             }
             for (var i = 0; i < 100; i++)
             {
-                if (await Ask(candidate, "/__pare3d") == "pare3d")
+                if (await Ask(candidate, "/__pare3d") == "paredental")
                 {
                     server = process;
                     port = candidate;
@@ -211,8 +211,8 @@ sealed class MainForm : Form
         {
             Log("WebView2 is missing: " + error.Message);
             var answer = MessageBox.Show(
-                "Pare 3D needs the Microsoft Edge WebView2 Runtime. It comes with Windows 11 and most Windows 10 PCs.\n\nOpen the download page now?",
-                "Pare 3D",
+                "Pare Dental needs the Microsoft Edge WebView2 Runtime. It comes with Windows 11 and most Windows 10 PCs.\n\nOpen the download page now?",
+                "Pare Dental",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Information);
             if (answer == DialogResult.Yes) OpenExternal("https://developer.microsoft.com/microsoft-edge/webview2/");
@@ -246,7 +246,7 @@ sealed class MainForm : Form
         {
             var downloads = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
             var name = Path.GetFileName(e.ResultFilePath);
-            e.ResultFilePath = UniquePath(Path.Combine(downloads, string.IsNullOrWhiteSpace(name) ? "Pare 3D download" : name));
+            e.ResultFilePath = UniquePath(Path.Combine(downloads, string.IsNullOrWhiteSpace(name) ? "Pare Dental download" : name));
             e.Handled = true;
             Log("download to " + e.ResultFilePath);
         };
@@ -264,8 +264,8 @@ sealed class MainForm : Form
         else
         {
             MessageBox.Show(
-                "Pare 3D could not start its local server. Details are in %LOCALAPPDATA%\\Pare 3D\\launcher.log",
-                "Pare 3D",
+                "Pare Dental could not start its local server. Details are in %LOCALAPPDATA%\\Pare Dental\\launcher.log",
+                "Pare Dental",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
             readyToClose = true;

@@ -1,4 +1,4 @@
-// Pare 3D for Mac - a native window around the app.
+// Pare Dental for Mac - a native window around the app.
 //
 // Starts the bundled local server (Bun running serve.mjs), shows the app in its own
 // window (WebKit, the engine Safari uses) with its own Dock icon and menu, and stops the
@@ -14,13 +14,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private var window: NSWindow!
     private var webView: WKWebView!
     private var server: Process?
-    private var port = 47177
+    private var port = 47187
     private var readyToQuit = false
     private let resources = Bundle.main.resourceURL!
 
     private lazy var supportDirectory: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let folder = base.appendingPathComponent("Pare 3D", isDirectory: true)
+        let folder = base.appendingPathComponent("Pare Dental", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder
     }()
@@ -78,7 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             backing: .buffered,
             defer: false
         )
-        window.title = "Pare 3D"
+        window.title = "Pare Dental"
         window.minSize = NSSize(width: 1000, height: 640)
         window.contentView = webView
         window.delegate = self
@@ -89,7 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
         let waiting = """
         <html><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;\
-        font:600 15px -apple-system,sans-serif;color:#5b6778;background:#f8f9fb">Starting Pare 3D…</body></html>
+        font:600 15px -apple-system,sans-serif;color:#5b6778;background:#f8f9fb">Starting Pare Dental…</body></html>
         """
         webView.loadHTMLString(waiting, baseURL: nil)
     }
@@ -113,13 +113,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
 
     private func isPare3D(_ port: Int, timeout: TimeInterval = 0.8) -> Bool {
-        ask(port, "/__pare3d", timeout: timeout)?.body == "pare3d"
+        ask(port, "/__pare3d", timeout: timeout)?.body == "paredental"
     }
 
     /// The runtime of the serve.mjs this app carries (RUNTIME_VERSION there).
     private let ownRuntime = 6
 
-    /// Fork (build 29): a Pare 3D server already on the port is reused only when it is at least as new as
+    /// Fork (build 29): a Pare Dental server already on the port is reused only when it is at least as new as
     /// this app - its runtime and the build it serves. One left running by an older app is replaced,
     /// on the same port, so the designs (kept per address) stay where they are.
     private func serverIsCurrent(_ port: Int) -> Bool {
@@ -133,7 +133,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         return runtime >= ownRuntime && serving >= bundled
     }
 
-    /// Stops the Pare 3D server on the port: politely if it knows how, otherwise by its process.
+    /// Stops the Pare Dental server on the port: politely if it knows how, otherwise by its process.
     private func stopServer(on port: Int) {
         if let url = URL(string: "http://127.0.0.1:\(port)/__pare3d/quit") {
             var request = URLRequest(url: url)
@@ -168,14 +168,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         #else
         let bun = resources.appendingPathComponent("bun-x64")
         #endif
-        for candidate in [47177, 47178, 47179, 47180, 47181] {
+        for candidate in [47187, 47188, 47189, 47190, 47191] {
             if isPare3D(candidate) {
                 if serverIsCurrent(candidate) {
                     port = candidate
-                    log("reusing the Pare 3D server on \(candidate)")
+                    log("reusing the Pare Dental server on \(candidate)")
                     return true
                 }
-                log("replacing an older Pare 3D server on \(candidate)")
+                log("replacing an older Pare Dental server on \(candidate)")
                 stopServer(on: candidate)
             }
             if ask(candidate, "/") != nil {
@@ -213,8 +213,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     private func showStartFailure() {
         let alert = NSAlert()
-        alert.messageText = "Pare 3D could not start"
-        alert.informativeText = "Its local server did not start. Details are in ~/Library/Application Support/Pare 3D/launcher.log"
+        alert.messageText = "Pare Dental could not start"
+        alert.informativeText = "Its local server did not start. Details are in ~/Library/Application Support/Pare Dental/launcher.log"
         alert.addButton(withTitle: "Quit")
         alert.runModal()
         NSApp.terminate(nil)
@@ -252,13 +252,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "About Pare 3D", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "About Pare Dental", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Hide Pare 3D", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(withTitle: "Hide Pare Dental", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         let hideOthers = appMenu.addItem(withTitle: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
         hideOthers.keyEquivalentModifierMask = [.command, .option]
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit Pare 3D", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "Quit Pare Dental", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         mainMenu.addItem(appItem)
 
@@ -338,7 +338,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     /// Exports and backups go to Downloads, as a browser would put them; a name already taken gets a number.
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
         let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
-        let name = suggestedFilename.isEmpty ? "Pare 3D download" : suggestedFilename
+        let name = suggestedFilename.isEmpty ? "Pare Dental download" : suggestedFilename
         var target = downloads.appendingPathComponent(name)
         let base = target.deletingPathExtension().lastPathComponent
         let ext = target.pathExtension

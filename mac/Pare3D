@@ -1,8 +1,8 @@
 #!/bin/bash
-# Pare 3D launcher: starts the bundled local server, opens the app in its own
+# Pare Dental launcher: starts the bundled local server, opens the app in its own
 # browser window, and stops the server when that browser instance quits.
 RES="$(cd "$(dirname "$0")/../Resources" && pwd)"
-SUPPORT="$HOME/Library/Application Support/Pare 3D"
+SUPPORT="$HOME/Library/Application Support/Pare Dental"
 PROFILE="$SUPPORT/browser-profile"
 mkdir -p "$PROFILE"
 LOG="$SUPPORT/launcher.log"
@@ -13,7 +13,7 @@ echo "--- $(date) starting from $RES"
 if [ "$(/usr/bin/uname -m)" = "arm64" ]; then BUN="$RES/bun-arm64"; else BUN="$RES/bun-x64"; fi
 [ -x "$BUN" ] || BUN="$RES/bun"
 
-is_ours() { [ "$(/usr/bin/curl -s --max-time 1 "http://localhost:$1/__pare3d")" = "pare3d" ]; }
+is_ours() { [ "$(/usr/bin/curl -s --max-time 1 "http://localhost:$1/__pare3d")" = "paredental" ]; }
 # Build 29: a server left running by an older app is replaced, not reused (runtime and served build).
 OWN_RUNTIME=5
 OWN_BUILD="$(tr -dc '0-9' < "$RES/app/pare-build.txt" 2>/dev/null)"; OWN_BUILD="${OWN_BUILD:-0}"
@@ -35,10 +35,10 @@ port_busy() { /usr/bin/curl -s -o /dev/null --max-time 1 "http://localhost:$1/";
 # Our own port, well away from common ones. If something else holds it, try the next few.
 PORT=""
 SERVER=""
-for CANDIDATE in 47177 47178 47179 47180 47181; do
+for CANDIDATE in 47187 47188 47189 47190 47191; do
   if is_ours "$CANDIDATE"; then
-    if is_current "$CANDIDATE"; then PORT=$CANDIDATE; echo "reusing Pare 3D server on $PORT"; break; fi
-    echo "replacing an older Pare 3D server on $CANDIDATE"; stop_server "$CANDIDATE"
+    if is_current "$CANDIDATE"; then PORT=$CANDIDATE; echo "reusing Pare Dental server on $PORT"; break; fi
+    echo "replacing an older Pare Dental server on $CANDIDATE"; stop_server "$CANDIDATE"
   fi
   if ! port_busy "$CANDIDATE"; then
     PORT=$CANDIDATE "$BUN" "$RES/serve.mjs" &
@@ -51,7 +51,7 @@ for CANDIDATE in 47177 47178 47179 47180 47181; do
   fi
 done
 if [ -z "$PORT" ]; then
-  /usr/bin/osascript -e 'display alert "Pare 3D could not start" message "Its local server did not start. See ~/Library/Application Support/Pare 3D/launcher.log"'
+  /usr/bin/osascript -e 'display alert "Pare Dental could not start" message "Its local server did not start. See ~/Library/Application Support/Pare Dental/launcher.log"'
   exit 1
 fi
 URL="http://localhost:$PORT/"
@@ -67,7 +67,7 @@ for BROWSER in "Google Chrome" "Microsoft Edge" "Brave Browser" "Chromium" "Viva
       EXE="$(/usr/bin/defaults read "$APPDIR/Contents/Info" CFBundleExecutable 2>/dev/null || echo "$BROWSER")"
       echo "using $BROWSER at $URL"
       # Started directly, not through "open": that also sends the browser a "reopen" event,
-      # which made it add an empty New Tab window beside Pare 3D. Waiting on the process
+      # which made it add an empty New Tab window beside Pare Dental. Waiting on the process
       # means the server stops when this browser instance quits.
       "$APPDIR/Contents/MacOS/$EXE" \
         --app="$URL" --user-data-dir="$PROFILE" \
@@ -79,6 +79,6 @@ for BROWSER in "Google Chrome" "Microsoft Edge" "Brave Browser" "Chromium" "Viva
 done
 
 echo "no Chromium browser, using default at $URL"
-/usr/bin/osascript -e 'display notification "Opened in your browser. Chrome or Edge gives Pare 3D its own window and automatic backup." with title "Pare 3D"' || true
+/usr/bin/osascript -e 'display notification "Opened in your browser. Chrome or Edge gives Pare Dental its own window and automatic backup." with title "Pare Dental"' || true
 /usr/bin/open "$URL"
 [ -n "$SERVER" ] && wait "$SERVER"

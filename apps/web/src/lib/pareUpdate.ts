@@ -1,5 +1,5 @@
 /**
- * Fork: tells the installed Pare 3D app when a newer build is published as a
+ * Fork: tells the installed Pare Dental app when a newer build is published as a
  * GitHub release (tags "pare-<build>", made by .github/workflows/pare3d-release.yml).
  * Asks GitHub at most every six hours; a build of 0 (a local build) never asks.
  */
@@ -10,8 +10,8 @@ export const PARE_PREVIEW = Number(process.env.NEXT_PUBLIC_PARE_PREVIEW || 0) ||
 export const pareRank = (build: number, preview = 0) => build * 100000 + (preview || 0);
 /** "103", or "103 (test build 118)". */
 export const pareBuildLabel = (build: number, preview = 0) => (preview ? `${build} (test build ${preview})` : String(build));
-const RELEASES_API = "https://api.github.com/repos/rakeshjivan/pare-3d/releases/latest";
-export const RELEASES_PAGE = "https://github.com/rakeshjivan/pare-3d/releases/latest";
+const RELEASES_API = "https://api.github.com/repos/rakeshjivan/pare-dental/releases/latest";
+export const RELEASES_PAGE = "https://github.com/rakeshjivan/pare-dental/releases/latest";
 const CACHE_KEY = "pare3d.updateCheck";
 const DISMISS_KEY = "pare3d.updateDismissed";
 const CACHE_MS = 6 * 60 * 60 * 1000;
@@ -24,8 +24,8 @@ export function parseBuildTag(tag: unknown): number | null {
 }
 
 /**
- * Running from the Pare 3D app, its server updates the app files by itself; the page is told only
- * when an update needs a fresh download (a newer launcher). Returns undefined when no Pare 3D
+ * Running from the Pare Dental app, its server updates the app files by itself; the page is told only
+ * when an update needs a fresh download (a newer launcher). Returns undefined when no Pare Dental
  * server answers (a plain browser or a hosted copy), so the GitHub check below takes over.
  */
 async function serverUpdateState(fetchFn: typeof fetch): Promise<PareUpdate | null | undefined> {

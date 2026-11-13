@@ -27,6 +27,6 @@ echo "slicers: $SLICERS"
 echo "$SLICERS" | grep -q '"installed":\[[^]]*"preform"' || { echo "::error::Send to a slicer did not find PreForm.app in ~/Applications"; exit 1; }
 SENT="$(printf 'abc' | curl -fs -X POST -H 'x-pare3d-send: 1' -H 'content-type: application/octet-stream' --data-binary @- "http://127.0.0.1:47295/__send-to-slicer?app=preform&name=check.stl")"
 echo "sent: $SENT"
-[ -f "$FAKE_HOME/Documents/Pare 3D Exports/check.stl" ] || { echo "::error::the file sent to PreForm was not saved"; exit 1; }
+[ -f "$FAKE_HOME/Documents/Pare Dental Exports/check.stl" ] || { echo "::error::the file sent to PreForm was not saved"; exit 1; }
 echo "$SENT" | grep -q '"opened":true' || echo "::warning::open -a did not start the stand-in PreForm.app on this machine: $SENT"
 echo "Send to a slicer: ok on macOS"
