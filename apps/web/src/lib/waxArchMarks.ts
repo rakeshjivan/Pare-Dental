@@ -72,9 +72,9 @@ export function markedWidths(slot: "upper" | "lower", marks: ReadonlyArray<Vec3 
  *  - width: a tooth between two contacts narrower than MARK_NARROW or wider than MARK_WIDE;
  *  - order: the contacts double back on themselves at a dot (it was clicked out of turn, or on the wrong tooth);
  *  - tip: a canine tip further than MARK_TIP_FAR from the canine its contacts mark;
- *  - tipAtContact (build 318): a canine's contact within MARK_TIP_NEAR of its tip (Find for me put the canines'
+ *  - tipAtContact (build 330): a canine's contact within MARK_TIP_NEAR of its tip (Find for me put the canines'
  *    distal dots on their cusp tips on the hard case);
- *  - canineNarrow (build 318): a canine more than MARK_CANINE_SHORT narrower than the lateral beside it (a
+ *  - canineNarrow (build 330): a canine more than MARK_CANINE_SHORT narrower than the lateral beside it (a
  *    canine squeezed between its dots).
  */
 export const MARK_NARROW = 2.5;

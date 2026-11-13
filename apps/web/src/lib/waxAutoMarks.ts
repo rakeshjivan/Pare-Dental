@@ -25,7 +25,7 @@ const SWEEP = (75 * Math.PI) / 180;
 /** The labial outline is taken from the crowns' incisal part: this far below the edge nearby, mm. */
 const BAND = 3.5;
 /**
- * Build 318: ...but from no higher than this above the edge right there, mm. A canine's tip stands well above its
+ * Build 330: ...but from no higher than this above the edge right there, mm. A canine's tip stands well above its
  * shoulders, and the edge nearby taken from it left the shoulders out of the band: the outline fell away there and
  * read as a dip, and both of a canine's contacts were drawn in towards its tip (the canine squeezed).
  */
@@ -42,7 +42,7 @@ const WIDTHS: Record<"upper" | "lower", [Width, Width, Width]> = {
 };
 /** How far the midline may sit from the middle of the arch before it counts against a fit, mm. */
 const MIDLINE_OFF = 2.5;
-/** Build 318: a canine's cusp tip is looked for at least this share of its width in from either contact... */
+/** Build 330: a canine's cusp tip is looked for at least this share of its width in from either contact... */
 const TIP_INSIDE = 0.3;
 /** ...the fit losing up to this much when the highest point is at a contact... */
 const TIP_WEIGHT = 3;
@@ -173,7 +173,7 @@ export function autoMarksInArchFrame(v: ArrayLike<number>, rightAtPlus: boolean,
           let off = ((wc - widths[0].mean) / widths[0].spread) ** 2 + ((wl - widths[1].mean) / widths[1].spread) ** 2 + ((wk - widths[2].mean) / widths[2].spread) ** 2;
           // An upper lateral is narrower than its central.
           if (slot === "upper" && wl > wc) off += ((wl - wc) / 0.5) ** 2;
-          // Build 318 (Rakesh, of Find for me on the hard case: the canines' distal dots on their cusp tips, the canines
+          // Build 330 (Rakesh, of Find for me on the hard case: the canines' distal dots on their cusp tips, the canines
           // squeezed): a canine's tip stands well inside it, not at one of its contacts. The nearer the highest point of
           // its edge comes to either contact, the less the fit is worth - by how far the tip stands up (a worn, flat
           // canine has no tip to go by).

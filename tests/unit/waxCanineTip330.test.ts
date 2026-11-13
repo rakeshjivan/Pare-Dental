@@ -3,7 +3,7 @@ import { autoMarksInArchFrame } from "@/lib/waxAutoMarks";
 import { archMarkProblems } from "@/lib/waxArchMarks";
 
 /**
- * Build 318: Find for me put the canines' distal dots in towards their cusp tips (the canines squeezed). A made-up
+ * Build 330: Find for me put the canines' distal dots in towards their cusp tips (the canines squeezed). A made-up
  * arch in the arch frame (teeth up along z, front at -y) as in waxAutoMarks285, but with pointed canines whose
  * tips stand well above their shoulders.
  */
@@ -35,7 +35,7 @@ function arch(cusp: number): Float32Array {
   return Float32Array.from(out);
 }
 
-describe("Find for me on pointed canines (build 318)", () => {
+describe("Find for me on pointed canines (build 330)", () => {
   for (const cusp of [2, 3]) {
     it(`finds each canine's contacts where it meets its neighbours, not in towards its tip (tip ${cusp} mm up)`, () => {
       const found = autoMarksInArchFrame(arch(cusp), true)!;
@@ -59,7 +59,7 @@ const marks = (widths: number[]): V[] => {
   return [...contacts, tip(contacts[0], contacts[1]), tip(contacts[5], contacts[6])];
 };
 
-describe("the warning box catches a squeezed canine (build 318)", () => {
+describe("the warning box catches a squeezed canine (build 330)", () => {
   it("a canine's distal dot on its cusp tip is told, with that dot and the tip's", () => {
     const m = marks([8, 7, 8.5, 8.5, 7, 8]);
     m[0] = [m[7][0] - 0.5, 0, 1.6];

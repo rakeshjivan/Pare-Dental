@@ -31,6 +31,7 @@ import { CONTACT_STOPS, contactGradient } from "@/lib/biteContacts";
 import { t } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/messages.en";
 import { SET_DEFAULTS, SET_RANGES, type SetControls } from "@/lib/waxSmileSet";
+import { GUIDE_RANGES, type GuideSet } from "@/lib/waxGuides";
 import { EDIT_RANGES, EDIT_SLIDERS, NO_EDIT, type ToothEdit, type EditKey } from "@/lib/waxToothEdit";
 import { type SmileCheck, type ToothAdjust, type ToothNudge } from "@/lib/dentalWaxup";
 import type { WorkplaneWorkspaceSettings } from "@/types/layerling";
@@ -45,7 +46,9 @@ export type WaxupView = {
   /** Build 277: the front teeth as one set on the arch - its controls and what they make (null: none for this arch). */
   smileSet?: { marked?: boolean; controls: SetControls; centralWidth: number; centralLength: number; red: number | null } | null;
   /** Build 277 (phase 3): the one front tooth chosen in the set, with its own changes. */
-  toothEdit?: { fdi: number; edit: ToothEdit; mirror: boolean; give?: boolean; width: number; length: number; live?: boolean } | null;
+  toothEdit?: { fdi: number; edit: ToothEdit; mirror: boolean; give?: boolean; width: number; length: number; live?: boolean; /** Build 331: the tooth as measured in the view (its crown, from its edge to its gum mark), mm. */ measured?: { width: number; length: number } } | null;
+  /** Build 331: the Design step's guide lines on this arch (null: none to show here), and the incisal curve's depth as the canine tips were marked. */
+  guideSet?: (GuideSet & { arcMarked: number }) | null;
   /** Build 278 (step 1, Mark): this arch's nine marks (null: not placed), each front tooth's width from them (mm, by FDI), and the arches fully marked. */
   archMarkList?: Array<[number, number, number] | null>;
   /** Build 285: the marks were found on the scan for the dentist to check ("failed": looked for, not made out). */
@@ -183,6 +186,8 @@ export type WaxupView = {
 export type WaxupActions = {
   /** Build 277: a whole-set control changed. */
   onSmile?: (controls: SetControls) => void;
+  /** Build 331: the guide lines changed (null: put back where the marks have them). */
+  onGuides?: (patch: Partial<GuideSet> | null) => void;
   /** Build 318: the set's teeth made to cover the patient's teeth (lib/waxCover). */
   onSmileCover?: () => void;
   /** Build 277: one tooth's own changes; and whether its partner across the midline follows. */
@@ -562,6 +567,7 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
             {view.smileSet && actions.onSmile ? (
               <SmileSetPanel set={view.smileSet} workspace={workspace} disabled={working} onChange={actions.onSmile} onCover={actions.onSmileCover} shapes={{ sets: view.builtIn.filter((entry) => entry.arch === view.slot), chosen: view.setIds?.[view.slot] ?? view.setId ?? null, best: view.setRank?.[view.slot]?.[0] ?? null, onPick: actions.onBuiltIn }} />
             ) : null}
+            {view.guideSet && actions.onGuides ? <GuidePanel set={view.guideSet} workspace={workspace} onChange={actions.onGuides} /> : null}
             {(view.selected && !view.selectedAll) || (view.smileSet && actions.onSmile) ? (
               <>
                 {view.smileSet && actions.onSmile ? <span className="waxup-shape-label">{t("waxup.oneToothRow")}</span> : null}
@@ -828,6 +834,43 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
  * (RED), the smile arc, labial fullness; then, under More, the cant, the laterals' step and the curve.
  * Every value shown as a number; both sides change together and the teeth stay in contact.
  */
+/**
+ * Build 331 (Rakesh: "the markers also need to be user adjustable with the use of sliders along with a show hide
+ * button"): the guide lines drawn over the teeth - shown or hidden, and each moved with its own slider.
+ */
+function GuidePanel({ set, workspace, onChange }: { set: NonNullable<WaxupView["guideSet"]>; workspace: WorkplaneWorkspaceSettings; onChange: (patch: Partial<GuideSet> | null) => void }) {
+  const r = GUIDE_RANGES;
+  const tenth = (x: number) => Math.round(x * 10) / 10;
+  const arc = tenth(set.arc ?? set.arcMarked);
+  const moved = set.midline !== 0 || set.incisal !== 0 || set.zenith !== 0 || set.arc !== null;
+  const line = (key: "midline" | "incisal" | "zenith", label: MessageKey, hint: MessageKey) => (
+    <EdgeModifierSlider label={t(label)} title={t(hint)} value={set[key]} min={r[key][0]} max={r[key][1]} step={0.1} workspace={workspace} length onChange={(value) => onChange({ [key]: tenth(value) })} />
+  );
+  return (
+    <div className="wax-guide-panel">
+      <div className="wax-guide-head">
+        <span className="waxup-shape-label">{t("waxup.guides.title")}</span>
+        <button type="button" className="secondary" aria-pressed={set.show} title={t("waxup.guides.showHint")} onClick={() => onChange({ show: !set.show })}>{t(set.show ? "waxup.guides.hide" : "waxup.guides.show")}</button>
+      </div>
+      {set.show ? (<>
+        <ul className="wax-guide-key">
+          <li><i className="wax-guide-swatch midline" />{t("waxup.guides.keyMidline")}</li>
+          <li><i className="wax-guide-swatch incisal" />{t("waxup.guides.keyIncisal")}</li>
+          <li><i className="wax-guide-swatch zenith" />{t("waxup.guides.keyZenith")}</li>
+        </ul>
+        {line("midline", "waxup.guides.midline", "waxup.guides.midlineHint")}
+        {line("incisal", "waxup.guides.incisal", "waxup.guides.incisalHint")}
+        <EdgeModifierSlider label={t("waxup.guides.arc")} title={t("waxup.guides.arcHint")} value={Math.min(r.arc[1], Math.max(r.arc[0], arc))} min={r.arc[0]} max={r.arc[1]} step={0.1} workspace={workspace} length onChange={(value) => onChange({ arc: tenth(value) })} />
+        {line("zenith", "waxup.guides.zenith", "waxup.guides.zenithHint")}
+        <div className="dental-trim-buttons">
+          <button type="button" className="secondary" disabled={!moved} title={t("waxup.guides.resetHint")} onClick={() => onChange(null)}>{t("waxup.guides.reset")}</button>
+        </div>
+        <p className="blend-hint">{t("waxup.guides.hint")}</p>
+      </>) : null}
+    </div>
+  );
+}
+
 function SmileSetPanel({ set, workspace, disabled, onChange, onCover, shapes }: { set: NonNullable<WaxupView["smileSet"]>; workspace: WorkplaneWorkspaceSettings; disabled: boolean; onChange: (controls: SetControls) => void; onCover?: () => void; shapes?: { sets: Array<{ id: string; name: string }>; chosen: string | null; best: string | null; onPick: (id: string) => void } }) {
   const [more, setMore] = useState(false);
   const c = set.controls;
@@ -966,7 +1009,7 @@ function ToothEditPanel({ tooth, workspace, disabled, onChange, onStep, onMirror
           <span>{t("waxup.toothMoreDots")}</span>
         </label>
       ) : null}
-      <p className="blend-hint wax-tooth-size" role="status">{t("waxup.toothSize", { width: tooth.width.toFixed(1), length: tooth.length.toFixed(1), ratio: Math.round((tooth.width / Math.max(0.1, tooth.length)) * 100) })}</p>
+      <p className="blend-hint wax-tooth-size" role="status">{t("waxup.toothSize", { width: (tooth.measured?.width ?? tooth.width).toFixed(1), length: (tooth.measured?.length ?? tooth.length).toFixed(1), ratio: Math.round(((tooth.measured?.width ?? tooth.width) / Math.max(0.1, tooth.measured?.length ?? tooth.length)) * 100) })}</p>
       {/* Build 290 (Rakesh): one tooth changes alone unless asked; a tooth that is right can be copied across once. */}
       {onMirror && live ? (
         <div className="wax-tooth-across">

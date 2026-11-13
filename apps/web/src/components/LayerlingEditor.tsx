@@ -120,6 +120,8 @@ import { coverChange, coverNeed } from "@/lib/waxCover";
 import { cutterBox, proudOfWax, sweptSurface } from "@/lib/waxReduce";
 import { ARCH_MARK_CONTACTS, ARCH_MARK_GUM, ARCH_MARK_GUMS, archMarkLabel, frontTeeth, gumMarks, markedWidths, nextArchMark, orderArchMarks } from "@/lib/waxArchMarks";
 import { autoArchMarks } from "@/lib/waxAutoMarks";
+import { GUIDE_DEFAULTS, guideLines, markedArc, toothCaliper, type Caliper, type GuideSet } from "@/lib/waxGuides";
+import { WaxGuides, type GuideDrawn, type GuideLabel } from "@/components/workplane/WaxGuides";
 import { extendNeck } from "@/lib/waxNeck";
 import { affineBetween, clampControls, crownMargins, labialProfile, layoutSmileSet, restFrames, SCULPTED_MISS, SET_DEFAULTS, type SetControls, type SetTooth, type SmileRecord } from "@/lib/waxSmileSet";
 import { StudioShell } from "./workplane/StudioShell";
@@ -12269,6 +12271,8 @@ export function LayerlingEditor({
     smile: Partial<Record<"upper" | "lower", SmileRecord>>;
     /** Build 278 (step 1, Mark): each arch's nine marks (lib/waxArchMarks), scene coordinates; and the mark being clicked. */
     archMarks: Partial<Record<"upper" | "lower", Array<[number, number, number] | null>>>; archMarkPick: number | null;
+    /** Build 331: the Design step's guide lines, by arch (lib/waxGuides): shown or not, and each line's own change. */
+    guides?: Partial<Record<"upper" | "lower", GuideSet>>;
     /** Build 285: whether an arch's marks were found on the scan for the dentist to check ("failed": looked for and not made out). */
     archMarksAuto?: Partial<Record<"upper" | "lower", "found" | "failed">>;
     /** Build 279: the teeth (FDI) whose scan is cut back flush with the wax on the wax-up model, by arch; and how far each scan tooth stands proud of its wax tooth (mm). */
@@ -16025,6 +16029,29 @@ export function LayerlingEditor({
   const waxDirectOn = waxDirectSmile?.anchors.contacts?.length === 7;
   const waxDirectTeeth = waxDirectOn ? waxDragAll.filter((tooth) => Boolean(waxDirectSmile?.rest[tooth.fdi])) : [];
   const waxDragTeeth: DragTooth[] = waxDirectOn ? waxDragAll.filter((tooth) => !waxDirectTeeth.includes(tooth)) : waxDragAll;
+  // Build 331 (Rakesh: guide lines in view with a caliper readout, moved with sliders, shown or hidden): the midline,
+  // incisal curve and zenith line from the dentist's marks (lib/waxGuides), and each tooth of the set measured.
+  const waxGuideSet: GuideSet = { ...GUIDE_DEFAULTS, ...(waxup.guides?.[waxup.slot] ?? {}) };
+  const waxGuidesHere = Boolean(dentalStudio?.waxStudio) && studioWaxStep === "place" && Boolean(waxDirectSmile) && waxup.stage === "position";
+  const waxCalipers = useRef(new WeakMap<Float32Array, { gum: string; caliper: Caliper | null }>());
+  const waxCaliperOf = (tooth: { fdi: number; frame: Parameters<typeof toothCaliper>[1]; triangles: () => Float32Array }): Caliper | null => {
+    const gum = waxDirectSmile?.anchors.gum?.[frontTeeth(waxup.slot).indexOf(tooth.fdi)] ?? null, gumKey = gum ? gum.join(",") : "";
+    let tris: Float32Array;
+    try { tris = tooth.triangles(); } catch { return null; }
+    const known = waxCalipers.current.get(tris);
+    if (known && known.gum === gumKey) return known.caliper;
+    const caliper = toothCaliper(tris, tooth.frame, gum);
+    waxCalipers.current.set(tris, { gum: gumKey, caliper });
+    return caliper;
+  };
+  const waxGuideLines: GuideDrawn[] = waxGuidesHere && waxGuideSet.show && waxDirectSmile ? guideLines(waxDirectSmile.anchors, waxGuideSet).map((line) => ({ key: line.key, points: line.points, className: `wax-guide-line wax-guide-${line.key}` })) : [];
+  const waxGuideLabels: GuideLabel[] = waxGuidesHere && waxGuideSet.show ? waxDirectTeeth.flatMap((tooth) => {
+    const c = waxCaliperOf(tooth);
+    if (!c) return [];
+    const picked = selectedIds.length === 1 && selectedIds[0] === tooth.id;
+    // The tooth picked: its width, length and proportion, with the two spans they were taken across; the others their proportion only.
+    return [{ key: tooth.id, at: c.label, strong: picked, text: picked ? t("waxup.guides.caliper", { width: c.width.toFixed(1), length: c.length.toFixed(1), ratio: Math.round(c.ratio) }) : `${Math.round(c.ratio)}%`, bars: picked ? [c.span, [c.edge, c.neck]] as Array<[[number, number, number], [number, number, number]]> : undefined }];
+  }) : [];
   const waxPlacedNow = waxup.placed.filter((tooth) => shapes.some((shape) => shape.id === tooth.id && shape.dental === "wax" && !shape.hidden));
   // Build 108: the Gum line step - the wax teeth coloured to show the patient's gum line on them (and, with the
   // even line, the gum that goes and the new margin); cleared on leaving it.
@@ -16055,7 +16082,9 @@ export function LayerlingEditor({
     const shape = shapes.find((candidate) => candidate.id === selectedIds[0]);
     const fdi = shape?.waxTooth?.fdi;
     if (!fdi || !smileNow.rest[fdi]) return null;
-    return { fdi, edit: smileNow.pending?.[fdi] ?? smileNow.own?.[fdi] ?? NO_EDIT, mirror: smileNow.mirror === true, give: smileNow.give === true, width: shape!.waxTooth!.width, length: shape!.waxTooth!.length, live: true };
+    // Build 331: the size said in the panel is the one measured in the view (the crown, from its edge to its gum mark).
+    const direct = waxDirectTeeth.find((tooth) => tooth.id === shape!.id), measured = waxGuidesHere && direct ? waxCaliperOf(direct) : null;
+    return { fdi, edit: smileNow.pending?.[fdi] ?? smileNow.own?.[fdi] ?? NO_EDIT, mirror: smileNow.mirror === true, give: smileNow.give === true, width: shape!.waxTooth!.width, length: shape!.waxTooth!.length, live: true, measured: measured ? { width: measured.width, length: measured.length } : undefined };
   })();
   // Build 281 (Rakesh: the gimbal was his biggest problem): any other wax tooth chosen (not in a set laid from the
   // marks, or reshaped with the brushes) is stepped directly - the totals shown are what was stepped since it was chosen.
@@ -16069,6 +16098,7 @@ export function LayerlingEditor({
   const waxupView: WaxupView = {
     ...waxup,
     toothEdit: stepTooth,
+    guideSet: waxGuidesHere && waxDirectSmile ? { ...waxGuideSet, arcMarked: markedArc(waxDirectSmile.anchors) } : null,
     archMarkList: waxup.archMarks?.[waxup.slot] ?? [],
     archMarksFound: waxup.archMarksAuto?.[waxup.slot],
     proudTeeth: Object.entries(waxup.proud ?? {}).map(([fdi, depth]) => ({ fdi: Number(fdi), depth, reduce: (waxup.reduce?.[waxup.slot] ?? []).includes(Number(fdi)) })).sort((a, b) => frontTeeth(waxup.slot).indexOf(a.fdi) - frontTeeth(waxup.slot).indexOf(b.fdi)),
@@ -23079,6 +23109,7 @@ export function LayerlingEditor({
       {dentalStudio?.waxStudio && waxup.stage === "position" && waxup.placed.length && waxup.picking === null && !marksEditing && !waxSculptBrush ? (
         <WaxToothDrag teeth={waxDragTeeth} restrict={waxup.restrict} onLibrary={cycleWaxSet} onSelect={(id) => selectShape(id, "replace")} onPreview={previewWaxTooth} onCommit={adjustWaxToothBy} onDouble={(id) => confirmWaxTooth(id, false)} />
       ) : null}
+      {waxGuideLines.length || waxGuideLabels.length ? <WaxGuides lines={waxGuideLines} labels={waxGuideLabels} /> : null}
       {dentalStudio?.waxStudio && waxDirectTeeth.length && !marksEditing && !waxSculptBrush && !waxup.boundaryPick && ((waxup.stage === "position" && waxup.picking === null) || studioWaxSculpt) ? (
         <WaxToothDirect teeth={waxDirectTeeth} selected={selectedIds.length === 1 ? selectedIds[0] : null} onSelect={(id) => selectShape(id, "replace")} onBegin={beginWaxDirect} onDrag={(_id, change) => dragWaxDirect(change)} onEnd={() => { waxDirectBase.current = null; const held = waxLive.current; if (held) { window.clearTimeout(held.timer); held.finish(); } }} />
       ) : null}
@@ -23394,6 +23425,7 @@ export function LayerlingEditor({
               onSculptTool: (tool: WaxSculptTool) => pickWaxSculptTool(tool),
               onSetCurve: (curve: number) => bendWaxSet(curve),
               onSmile: (controls: SetControls) => layWaxSmile(controls),
+              onGuides: (patch: Partial<GuideSet> | null) => setWaxup((now) => { const next = { ...now, guides: { ...(now.guides ?? {}), [now.slot]: patch ? { ...GUIDE_DEFAULTS, ...(now.guides?.[now.slot] ?? {}), ...patch } : { ...GUIDE_DEFAULTS, show: now.guides?.[now.slot]?.show ?? true } } }; waxupRef.current = next; return next; }),
               onSmileCover: () => { waxCoverSet(true); },
               onToothEdit: (fdi: number, edit: ToothEdit) => editWaxTooth(fdi, edit),
               onToothStep: (key: EditKey, delta: number) => stepWaxTooth(key, delta),
