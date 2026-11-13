@@ -12369,7 +12369,7 @@ export function LayerlingEditor({
       return { strayArrays, strayMillions: strayNumbers / 1e6, readOnlyMeshes: readOnlyMeshes.size, shapes: shapesRef.current.length, shownMillions: shown / 1e6, historySteps: history.length, historyIndex: historyIndexRef.current, historyOnlyMillions: history.map((n) => +(n / 1e6).toFixed(1)), biteCopies: madeBiteRef.current.size, biteMillions: bite / 1e6 };
     };
   }, []);
-  useEffect(() => { (window as unknown as { layerlingWaxupState?: () => unknown }).layerlingWaxupState =() => { const w = waxupRef.current; return { slot: w.slot, setRank: w.setRank, rankInfo: waxRankInfo.current, setId: w.setId, setIds: w.setIds, setName: w.setName, single: w.single, placed: w.placed.length, busy: w.busy, error: w.error, archMarks: w.archMarks?.[w.slot] ?? [], marksKept: waxMarksAtImport.current.get(w.slot)?.length ?? 0, marksTried: waxMarksTried.current.size, toothReads: waxSmileFitCalls.current }; }; }, []);
+  useEffect(() => { (window as unknown as { layerlingWaxupState?: () => unknown }).layerlingWaxupState =() => { const w = waxupRef.current; return { slot: w.slot, bite: w.bite ? { raise: w.bite.raise, busy: w.bite.busy, hinge: Boolean(w.bite.hinge) } : null, setRank: w.setRank, rankInfo: waxRankInfo.current, setId: w.setId, setIds: w.setIds, setName: w.setName, single: w.single, placed: w.placed.length, busy: w.busy, error: w.error, archMarks: w.archMarks?.[w.slot] ?? [], marksKept: waxMarksAtImport.current.get(w.slot)?.length ?? 0, marksTried: waxMarksTried.current.size, toothReads: waxSmileFitCalls.current }; }; }, []);
   /**
    * Build 101: Wax-up Studio's own Undo and Redo - every step (placing, the sliders, nudges, the teeth
    * chosen, the set, the occlusion) records the wax-up's settings with the design's place in its history;
@@ -15011,6 +15011,8 @@ export function LayerlingEditor({
     commitShapes(shapesRef.current.map((shape) => moved.get(shape.id) ?? shape), [], t("waxup.biteOpened", { mm: raise.toFixed(1) }));
     setWaxup((latest) => ({ ...latest, bite: { raise, busy: false, hinge } }));
   };
+  // For the checks: Open bite's opening set from a script.
+  if (typeof window !== "undefined") (window as unknown as { layerlingOpenBite?: (mm: number) => Promise<void> }).layerlingOpenBite = openWaxBite;
   /**
    * Build 108: the Gum line step - each wax tooth of an arch with its frame (world), its soup, and how it lies
    * against the patient's scan (corner by corner: in front of it, or under the gum). Kept per version of the parts.
@@ -15828,8 +15830,19 @@ export function LayerlingEditor({
     }
   }, [commitShapes]); // eslint-disable-line react-hooks/exhaustive-deps
   const waxFingerprint = () => projectShapesFingerprint(shapesRef.current.filter((shape) => shape.dental === "wax" && !shape.hidden));
+  /**
+   * Build 327 (Rakesh: "after the bite has been opened and the wax-up is in place, asking the bite to be
+   * auto-adjusted adjusts the bite to the original unopened OVD"): the opening Fit to the bite works at - the one set
+   * in Open bite where the bite was opened there, else the occlusion's own. The scans go to the fit closed, as
+   * scanned (wherever the lower stands in the scene), and the fit used only its own opening, which Open bite never
+   * set: the wax was carved to where the opposing teeth meet it at the patient's closed bite.
+   */
+  const fitRaise = () => { const bite = waxupRef.current.bite; return bite?.hinge && bite.raise > 0 ? bite.raise : waxupRef.current.occlusion.raise; };
   const workOcclusion = useCallback(async (): Promise<{ lowerPose?: number[]; raise: number } | null> => {
     waxRecordRef.current();
+    // (A test can ask for another opening: window.layerlingFitRaise.)
+    const asked = (window as unknown as { layerlingFitRaise?: number }).layerlingFitRaise;
+    const raise = typeof asked === "number" ? asked : fitRaise();
     const state = dentalStudioRef.current;
     if (!state?.slots.upper || !state.slots.lower) return null;
     const input = dentalInput(state);
@@ -15861,9 +15874,22 @@ export function LayerlingEditor({
     const up = arch("upper"), low = arch("lower");
     if (!up || !low) return null;
     const current = waxupRef.current.occlusion;
+    // For the checks: how far the lower as handed to the fit stands from the lower as it stands in the scene (0 when
+    // it goes in opened as shown; about the opening at the incisors when it goes in closed, as scanned).
+    {
+      const upperWorld = localToWorld(up.shape), sceneLower = Float32Array.from(worldTriangles(low.shape));
+      const toFit = upperWorld ? up.toInput.clone() : null;
+      let most = 0;
+      if (toFit && sceneLower.length === low.soup.length) {
+        const v = new THREE.Vector3();
+        for (let i = 0; i + 2 < sceneLower.length; i += 300) { v.set(sceneLower[i], sceneLower[i + 1], sceneLower[i + 2]).applyMatrix4(toFit); most = Math.max(most, Math.hypot(v.x - low.soup[i], v.y - low.soup[i + 1], v.z - low.soup[i + 2])); }
+      } else most = -1;
+      (window as unknown as { layerlingFitProbe?: unknown }).layerlingFitProbe = { raise, bite: waxupRef.current.bite?.raise ?? 0, own: current.raise, lowerInputFromScene: Math.round(most * 100) / 100 };
+    }
     setWaxup((latest) => ({ ...latest, occlusion: { ...latest.occlusion, busy: true }, error: null }));
     try {
-      const result = await occlusionInBackground({ upperScan: up.soup, upperFdi: up.fdi, lowerScan: low.soup, lowerFdi: low.fdi, upperWax: up.waxSoups, lowerWax: low.waxSoups, upperCuts: up.cuts, lowerCuts: low.cuts, raise: current.raise, scheme: current.scheme, articulator: { ...AVERAGE_ARTICULATOR, condylarGuidance: current.guidance, bennett: current.bennett } });
+      const result = await occlusionInBackground({ upperScan: up.soup, upperFdi: up.fdi, lowerScan: low.soup, lowerFdi: low.fdi, upperWax: up.waxSoups, lowerWax: low.waxSoups, upperCuts: up.cuts, lowerCuts: low.cuts, raise, scheme: current.scheme, articulator: { ...AVERAGE_ARTICULATOR, condylarGuidance: current.guidance, bennett: current.bennett } });
+      { const w = window as unknown as { layerlingFitProbe?: Record<string, unknown> }; w.layerlingFitProbe = { ...(w.layerlingFitProbe ?? {}), carved: result.carved, fitted: result.fitted, openings: result.openings, done: true }; }
       // The wax teeth as worked out, back into the scene.
       const changed = new Map<string, WorkplaneShape>();
       for (const [side, list] of [[up, result.upperWax], [low, result.lowerWax]] as const) {
@@ -15886,8 +15912,8 @@ export function LayerlingEditor({
         entry.count += 1;
         sums.set(text, entry);
       }
-      setWaxup((latest) => ({ ...latest, occlusion: { ...latest.occlusion, busy: false, result: { rest: result.rest.map((r) => ({ fdi: r.fdi, gap: r.gap })), openings: result.openings, findings: [...sums.values()], carved: result.carved, fitted: result.fitted, missing: result.sweep.guidanceMissing.length, lowerPose: result.lowerPose, raise: current.raise, waxKey } } }));
-      return { lowerPose: result.lowerPose, raise: current.raise };
+      setWaxup((latest) => ({ ...latest, occlusion: { ...latest.occlusion, busy: false, result: { rest: result.rest.map((r) => ({ fdi: r.fdi, gap: r.gap })), openings: result.openings, findings: [...sums.values()], carved: result.carved, fitted: result.fitted, missing: result.sweep.guidanceMissing.length, lowerPose: result.lowerPose, raise, waxKey } } }));
+      return { lowerPose: result.lowerPose, raise };
     } catch (error) {
       setWaxup((latest) => ({ ...latest, occlusion: { ...latest.occlusion, busy: false }, error: error instanceof Error ? localizedError(error.message) : String(error) }));
       return null;
@@ -15902,7 +15928,7 @@ export function LayerlingEditor({
     const occlusion = waxupRef.current.occlusion;
     const waxed = shapesRef.current.some((shape) => shape.dental === "wax" && !shape.hidden);
     if (state?.waxStudio && state.slots.upper && state.slots.lower && waxed) {
-      const fresh = occlusion.result && occlusion.result.raise === occlusion.raise && occlusion.result.waxKey === waxFingerprint();
+      const fresh = occlusion.result && occlusion.result.raise === fitRaise() && occlusion.result.waxKey === waxFingerprint();
       if (!fresh) {
         setNotice(t("waxup.fittingBite"));
         const worked = await workOcclusion();
@@ -16057,7 +16083,7 @@ export function LayerlingEditor({
     selectedAll: waxPlacedNow.length > 1 && waxPlacedNow.every((tooth) => selectedIds.includes(tooth.id)),
     sculptTool: studioWaxSculpt ? waxSculptTool : undefined,
     pairForBite: Boolean(dentalStudio?.slots.upper && dentalStudio?.slots.lower),
-    biteFitFresh: Boolean(waxup.occlusion.result && waxup.occlusion.result.raise === waxup.occlusion.raise && waxup.occlusion.result.waxKey === projectShapesFingerprint(shapes.filter((shape) => shape.dental === "wax" && !shape.hidden))),
+    biteFitFresh: Boolean(waxup.occlusion.result && waxup.occlusion.result.raise === (waxup.bite?.hinge && waxup.bite.raise > 0 ? waxup.bite.raise : waxup.occlusion.raise) && waxup.occlusion.result.waxKey === projectShapesFingerprint(shapes.filter((shape) => shape.dental === "wax" && !shape.hidden))),
     confirmed: Object.keys(waxup.locks).map(Number),
     manual: waxup.manual,
     colourful: studioWax ? waxColourful : undefined,
