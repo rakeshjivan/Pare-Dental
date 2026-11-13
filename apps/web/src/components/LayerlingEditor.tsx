@@ -9755,6 +9755,8 @@ export function LayerlingEditor({
   const sculptTarget = () => {
     const tool = sculptTool;
     const shape = tool ? shapesRef.current.find((candidate) => candidate.id === tool.shapeId) : undefined;
+    // Build 326: a locked wax tooth is not brushed either.
+    if (shape?.waxTooth && waxupRef.current.locks[shape.waxTooth.fdi]) return null;
     return tool && shape ? { tool, shape, state: sculptMeshFor(shape) } : null;
   };
   /** Build 117: Trim's "Delete as I select" - on, each selection is cut away as soon as it is made. */
@@ -14332,7 +14334,7 @@ export function LayerlingEditor({
           rest: Object.fromEntries(front.flatMap((tooth) => { const f = frames.get(tooth.fdi); return f ? [[tooth.fdi, f]] : []; })),
           laid: Object.fromEntries(front.map((tooth) => [tooth.fdi, identity])),
         };
-        for (const tooth of front) waxSmileRest.current.set(tooth.shape.id, tooth.soup);
+        for (const tooth of front) { waxSmileRest.current.set(tooth.shape.id, tooth.soup); waxSmileFirst.current.set(tooth.shape.id, tooth.soup); }
         waxupRef.current = { ...waxupRef.current, smile: { ...(waxupRef.current.smile ?? {}), [arch.slot]: record } };
         setWaxup((latest) => ({ ...latest, smile: { ...(latest.smile ?? {}), [arch.slot]: record } }));
         // The first proposal: the set laid on the arch with the default controls.
@@ -14367,6 +14369,8 @@ export function LayerlingEditor({
   /** Build 277: each front tooth's rest soup (as dropped, scene coordinates), and its palatal depth, by its part's id. */
   const waxSmileRest = useRef(new Map<string, Float32Array>());
   const waxSmilePalatal = useRef(new Map<string, number>());
+  /** Build 326: each tooth of the set as the library has it (at rest), kept so a tooth can be put back to it (Reset). Not saved with the design: a design opened again has none, and Reset then only undoes the tooth's own changes. */
+  const waxSmileFirst = useRef(new Map<string, Float32Array>());
   /** Build 319: how many times a tooth has been read back from the scene (for the checks: it should not grow while teeth are only dragged). */
   const waxSmileFitCalls = useRef(0);
   const waxSmileDragged = useRef(new Map<string, { shape: WorkplaneShape; laidKey: string; rest: Float32Array; dragged: ReturnType<typeof affineBetween> }>());
@@ -14578,6 +14582,47 @@ export function LayerlingEditor({
     }));
   };
   commitWaxSmileRef.current = commitWaxSmile;
+  /**
+   * Build 326 (Rakesh: "a reset to original, so if a tooth has become badly deformed it returns to the original
+   * proposal tooth"): one tooth back to the library tooth where the set lays it - its own changes (dots, sliders,
+   * moves and turns) and everything brushed onto it gone; the other teeth are not touched. One step of undo.
+   */
+  const resetWaxTooth = (id: string) => {
+    if (sculptToolRef.current) { flushSculptRef.current(); setSculptTool(null); }
+    const current = waxupRef.current, slot = current.slot, record = current.smile?.[slot];
+    const shape = shapesRef.current.find((candidate) => candidate.id === id);
+    const tooth = shape?.waxTooth;
+    if (!record || !shape || !tooth || current.busy || current.locks[tooth.fdi]) return;
+    const fdi = tooth.fdi, rest = record.rest[fdi], first = waxSmileFirst.current.get(id);
+    if (!rest) return;
+    const edits = { ...(record.pending ?? record.own ?? {}) };
+    delete edits[fdi];
+    // A design opened again has no library tooth kept: the tooth's own changes are undone (what was brushed stays).
+    if (!first) { commitWaxSmile(record.controls, true, edits); return; }
+    const was = new THREE.Matrix4().fromArray(record.laid[fdi] ?? new THREE.Matrix4().toArray());
+    waxRecordRef.current(true);
+    const rebuilt = shapeWithWorldPositions(shape, Array.from(transformSoup(first, was)));
+    const back = localToWorld(rebuilt);
+    const o = new THREE.Vector3(...rest.frame.origin), m = new THREE.Vector3(...rest.frame.mesial).normalize(), u = new THREE.Vector3(...rest.frame.up).normalize();
+    const width = o.clone().addScaledVector(m, rest.width / 2).applyMatrix4(was).distanceTo(o.clone().addScaledVector(m, -rest.width / 2).applyMatrix4(was));
+    const length = o.clone().applyMatrix4(was).distanceTo(o.clone().addScaledVector(u, -rest.length).applyMatrix4(was));
+    const next = canonicalizeShape(back ? { ...rebuilt, waxTooth: { ...tooth, width, length, frame: moveFrame(moveFrame(rest.frame, was), back.clone().invert()) } } : rebuilt);
+    waxSmileRest.current.set(id, first);
+    waxSmilePalatal.current.delete(id);
+    waxSmileDragged.current.delete(id);
+    waxLiveShape.current.delete(id);
+    waxStepLiveSeen.current.delete(id);
+    const kept: SmileRecord = { ...record, own: edits, pending: undefined };
+    waxupRef.current = { ...waxupRef.current, smile: { ...(waxupRef.current.smile ?? {}), [slot]: kept } };
+    commitShapes(shapesRef.current.map((one) => (one.id === id ? next : one)), selectedIdsRef.current, t("waxup.toothResetDone"));
+    setWaxup((latest) => ({
+      ...latest,
+      smile: { ...(latest.smile ?? {}), [slot]: kept },
+      placed: latest.placed.map((entry) => (entry.id === id ? { ...entry, width, length, clearance: null } : entry)),
+    }));
+  };
+  const resetWaxToothRef = useRef(resetWaxTooth);
+  resetWaxToothRef.current = resetWaxTooth;
   /** Build 282: a control's shown value updated at most once a frame (the editor redrawn once, not on every event). */
   const waxStateNext = useRef(new Map<string, () => void>());
   const waxStateFrameId = useRef(0);
@@ -21659,6 +21704,7 @@ export function LayerlingEditor({
       if (dentalStudio?.waxStudio && tooth?.waxTooth && dentalStudio.stage !== "made" && !studioWaxSculpt) {
         const confirmed = Boolean(waxup.locks[tooth.waxTooth.fdi]);
         items.push({ key: "waxConfirm", label: t(confirmed ? "dentalMenu.waxRelease" : "dentalMenu.waxConfirm"), shortcut: confirmed ? undefined : "Enter", separated: true, onSelect: () => confirmWaxTooth(tooth.id, !confirmed) });
+        if (!confirmed) items.push({ key: "waxReset", label: t("dentalMenu.waxReset"), onSelect: () => resetWaxToothRef.current(tooth.id) });
       }
       if (dentalStudio?.stage === "made" && shapes.some((shape) => shape.dentalBite && dentalStudio.made?.includes(shape.id))) {
         items.push(studioOccView
@@ -22966,7 +23012,7 @@ export function LayerlingEditor({
         <WaxupPointOverlay hint={t(waxup.boundaryPick.points.length ? "waxup.boundary.next" : "waxup.boundary.first", { fdi: waxup.boundaryPick.fdi })} onPick={pickBoundaryPoint} onHover={hoverBoundary} onCancel={cancelBoundary} onUndo={undoBoundaryPoint} onDone={finishBoundary} />
       ) : null}
       {/* Build 110: Keep & erase - the brush on the wax teeth (presses that miss them turn the view). */}
-      {studioWaxSculpt && waxWheel ? <WaxToolWheel x={waxWheel.x} y={waxWheel.y} current={waxSculptTool} locked={(() => { const picked = selectedIds.length === 1 ? shapes.find((shape) => shape.id === selectedIds[0]) : undefined; return Boolean(picked?.waxTooth && waxup.locks[picked.waxTooth.fdi]); })()} onClose={() => setWaxWheel(null)} onPick={(tool) => { setWaxWheel(null); if (tool === "mirror") mirrorWaxShapeRef.current(); else if (tool === "lock") { const picked = selectedIdsRef.current.length === 1 ? shapesRef.current.find((shape) => shape.id === selectedIdsRef.current[0]) : undefined; if (picked?.waxTooth) confirmWaxTooth(picked.id, !waxupRef.current.locks[picked.waxTooth.fdi]); } else pickWaxSculptTool(tool); }} /> : null}
+      {studioWaxSculpt && waxWheel ? <WaxToolWheel x={waxWheel.x} y={waxWheel.y} current={waxSculptTool} locked={(() => { const picked = selectedIds.length === 1 ? shapes.find((shape) => shape.id === selectedIds[0]) : undefined; return Boolean(picked?.waxTooth && waxup.locks[picked.waxTooth.fdi]); })()} onClose={() => setWaxWheel(null)} onPick={(tool) => { setWaxWheel(null); if (tool === "mirror") mirrorWaxShapeRef.current(); else if (tool === "reset") { if (selectedIdsRef.current.length === 1) resetWaxToothRef.current(selectedIdsRef.current[0]); } else if (tool === "lock") { const picked = selectedIdsRef.current.length === 1 ? shapesRef.current.find((shape) => shape.id === selectedIdsRef.current[0]) : undefined; if (picked?.waxTooth) confirmWaxTooth(picked.id, !waxupRef.current.locks[picked.waxTooth.fdi]); } else pickWaxSculptTool(tool); }} /> : null}
       {keepStep ? <WaxPaintBrush hit={(x, y) => Boolean(waxPaintHit(x, y))} onPaint={paintAt} /> : null}
       {dentalStudio && waxup.toothPick ? (
         <WaxupPointOverlay hint={waxup.toothPick.queue[0] === ARCH_STEP ? t("waxup.archPoint", { point: t(`waxup.archDot.${ARCH_DOT_ORDER[Math.min(2, waxup.toothPick.points.length)]}`, { fdi: canineOf(waxup.slot, waxup.toothPick.points.length === 1 ? "right" : "left") }), n: Math.min(3, waxup.toothPick.points.length + 1) }) : t("waxup.anchorPoint", { fdi: waxup.toothPick.queue[0], point: t(`waxup.anchor.${ANCHOR_ORDER[Math.min(2, waxup.toothPick.points.length)]}`), n: Math.min(3, waxup.toothPick.points.length + 1) })} onPick={pickToothPoint} onCancel={stopToothMarks} onUndo={undoToothPoint} />

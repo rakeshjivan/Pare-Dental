@@ -399,6 +399,9 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
         event.preventDefault();
         event.stopPropagation();
         wheelDone();
+        // Build 326 (Rakesh: "the lock function must also lock every control point"): a locked tooth's dots all show
+        // locked and none of them can be dragged or let go until the tooth is unlocked.
+        if (tooth.locked) { say(event.clientX, event.clientY, t("waxup.direct.toothLocked", { fdi: tooth.fdi })); return; }
         // A second press on the same dot, at once and in the same place: locked, or let go.
         const again = pressed.key === key && event.timeStamp - pressed.at < 400 && Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) < 6;
         pressed = again ? { key: "", at: 0, x: 0, y: 0 } : { key, at: event.timeStamp, x: event.clientX, y: event.clientY };
@@ -411,7 +414,7 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
         live.current.onBegin(tooth.id);
       });
       el.addEventListener("pointermove", (event) => {
-        if (!dotDrag || dotDrag.key !== key || event.pointerId !== dotDrag.pointer) { if (!dotDrag) { const tooth = live.current.teeth.find((candidate) => candidate.id === live.current.selected); if (tooth) say(event.clientX, event.clientY, dotName(key, tooth.fdi)); } return; }
+        if (!dotDrag || dotDrag.key !== key || event.pointerId !== dotDrag.pointer) { if (!dotDrag) { const tooth = live.current.teeth.find((candidate) => candidate.id === live.current.selected); if (tooth) say(event.clientX, event.clientY, tooth.locked ? t("waxup.direct.toothLocked", { fdi: tooth.fdi }) : dotName(key, tooth.fdi)); } return; }
         event.preventDefault();
         const p = planePoint(event.clientX, event.clientY, dotDrag.point, dotDrag.normal);
         if (!p) return;
@@ -487,7 +490,7 @@ export function WaxToothDirect({ teeth, selected, onSelect, onBegin, onDrag, onE
         const inside = offered && !hiddenFace(key) && x > host.left + 6 && x < host.right - 6 && y > host.top + 6 && y < host.bottom - 6;
         // While one dot is held the others wait where they are (the tooth is changing under them).
         el.style.display = inside && !dotDrag ? "block" : dotDrag ? el.style.display : "none";
-        if (!dotDrag) { el.style.left = `${x}px`; el.style.top = `${y}px`; el.classList.toggle("locked", lockedOf(tooth.id).has(key)); }
+        if (!dotDrag) { el.style.left = `${x}px`; el.style.top = `${y}px`; el.classList.toggle("locked", tooth.locked || lockedOf(tooth.id).has(key)); }
       });
     };
     frame = window.requestAnimationFrame(place);

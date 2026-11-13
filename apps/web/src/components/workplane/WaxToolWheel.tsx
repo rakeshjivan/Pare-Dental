@@ -11,10 +11,11 @@ import { t } from "@/lib/i18n";
 export type WheelTool = "position" | "scale" | "add" | "remove" | "smooth" | "move";
 // Build 281: no Scale - sizing is in Shape & place's step buttons (the gimbal is gone).
 // Build 324 (Rakesh): and Lock - the tooth held in place while the others are worked on; over a locked tooth it is Unlock.
-const ITEMS: Array<WheelTool | "mirror" | "lock"> = ["position", "add", "remove", "smooth", "move", "mirror", "lock"];
+// Build 326 (Rakesh): and Reset - a tooth that has become badly deformed goes back to the tooth first proposed.
+const ITEMS: Array<WheelTool | "mirror" | "lock" | "reset"> = ["position", "add", "remove", "smooth", "move", "mirror", "lock", "reset"];
 const RADIUS = 86;
 
-export function WaxToolWheel({ x, y, current, locked, onPick, onClose }: { x: number; y: number; current: WheelTool; locked?: boolean; onPick: (tool: WheelTool | "mirror" | "lock") => void; onClose: () => void }) {
+export function WaxToolWheel({ x, y, current, locked, onPick, onClose }: { x: number; y: number; current: WheelTool; locked?: boolean; onPick: (tool: WheelTool | "mirror" | "lock" | "reset") => void; onClose: () => void }) {
   const live = useRef({ onClose });
   live.current = { onClose };
   useEffect(() => {
@@ -33,7 +34,7 @@ export function WaxToolWheel({ x, y, current, locked, onPick, onClose }: { x: nu
         const a = (i / ITEMS.length) * Math.PI * 2;
         return (
           <button key={item} type="button" role="menuitem" className={item === current ? "active" : ""} style={{ left: Math.sin(a) * RADIUS, top: -Math.cos(a) * RADIUS }} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onPick(item); }}>
-            {t(item === "lock" ? (locked ? "waxup.wheel.unlock" : "waxup.wheel.lock") : item === "mirror" ? "waxup.wheel.mirror" : item === "position" ? "waxup.brush.shape" : `waxup.brush.${item}`)}
+            {t(item === "reset" ? "waxup.wheel.reset" : item === "lock" ? (locked ? "waxup.wheel.unlock" : "waxup.wheel.lock") : item === "mirror" ? "waxup.wheel.mirror" : item === "position" ? "waxup.brush.shape" : `waxup.brush.${item}`)}
           </button>
         );
       })}
