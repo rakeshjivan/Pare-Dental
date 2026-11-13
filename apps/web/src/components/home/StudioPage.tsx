@@ -29,11 +29,14 @@ export function StudioHeader({
     <div className={`studio-head ${studio}`}>
       <div className="studio-head-inner">
         <div className="studio-head-text">
-          <nav className="studio-crumbs" aria-label={t("home.breadcrumb")}>
-            <button type="button" onClick={onHome}>{t("home.tabHome")}</button>
-            <span aria-hidden="true">/</span>
-            <span>{cad ? t("home.cadStudio") : t("home.dentalStudio")}</span>
-          </nav>
+          {/* Pare Dental: Dental Studio is the home page, so only CAD Studio has a way back to it. */}
+          {cad ? (
+            <nav className="studio-crumbs" aria-label={t("home.breadcrumb")}>
+              <button type="button" onClick={onHome}>{t("home.dentalStudio")}</button>
+              <span aria-hidden="true">/</span>
+              <span>{t("home.cadStudio")}</span>
+            </nav>
+          ) : null}
           <h1><span className={`home-studio-mark ${studio}`} aria-hidden="true" />{cad ? t("home.cadStudio") : t("home.dentalStudio")}</h1>
           <p>{cad ? t("home.cadPageSummary") : t("home.dentalPageSummary")}</p>
           {extra}

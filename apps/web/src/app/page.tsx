@@ -92,7 +92,7 @@ import type { GridSize, ProjectAsset, WorkplaneShape, WorkplaneWorkspaceSettings
 import { saveUserFile } from "@/lib/pareFiles";
 import { BackupStrip } from "@/components/BackupStrip";
 import { SavedFileToast } from "@/components/SavedFileToast";
-import { dentalStudioAvailable, dentalWorkIn, isDentalCaseSummary, isPareStudio, studioOfShapes, type DentalCaseSummary, type PareStudio } from "@/lib/pareStudio";
+import { HOME_STUDIO, dentalStudioAvailable, dentalWorkIn, isDentalCaseSummary, isPareStudio, studioOfShapes, type DentalCaseSummary, type PareStudio } from "@/lib/pareStudio";
 import { HomeTopBar, type HomePlace } from "@/components/home/HomeTopBar";
 import { HomeLauncher } from "@/components/home/HomeLauncher";
 import { DentalStart, StudioHeader } from "@/components/home/StudioPage";
@@ -1111,7 +1111,7 @@ export default function Home() {
   const [designFolders, setDesignFolders] = useState<DesignFolder[]>([]);
   const [openFolderId, setOpenFolderId] = useState<string | null>(null);
   const designFoldersJsonRef = useRef<string | null>(null);
-  const [dashboardSection, setDashboardSection] = useState<DashboardSection>("home");
+  const [dashboardSection, setDashboardSection] = useState<DashboardSection>(HOME_STUDIO);
   // Build 104: the studio whose page is open; new designs and imports made there belong to it.
   const sectionStudio: PareStudio | null = dashboardSection === "cad" || dashboardSection === "dental" ? dashboardSection : null;
   const importStudioRef = useRef<PareStudio | null>(null);
@@ -2993,7 +2993,8 @@ export default function Home() {
           dashboardSection={dashboardSection}
           allProjects={localDesigns}
           onPlace={(place) => {
-            setDashboardSection(place);
+            // Pare Dental: "Home" is Dental Studio's page.
+            setDashboardSection(place === "home" ? HOME_STUDIO : place);
             setDashboardNotice("");
             setOpenFolderId(null);
           }}
@@ -3073,7 +3074,7 @@ export default function Home() {
           onRenameProject={renameProject}
           onRefreshSharedProjects={() => void refreshSharedProjects()}
           onLocalProjects={() => {
-            setDashboardSection("home");
+            setDashboardSection(HOME_STUDIO);
             setDashboardNotice("");
           }}
           onSharedProjects={() => {

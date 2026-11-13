@@ -101,8 +101,7 @@ export function HomeTopBar({
   const tab = (id: HomePlace, label: string, dot?: PareStudio) => (
     <button
       type="button"
-      className={`home-tab${place === id ? " active" : ""}`}
-      aria-current={place === id ? "page" : undefined}
+      className="home-tab"
       onClick={() => onPlace(id)}
     >
       {dot ? <span className={`home-studio-dot ${dot}`} aria-hidden="true" /> : null}
@@ -113,14 +112,14 @@ export function HomeTopBar({
     <header className="home-bar">
       <button type="button" className="home-brand" onClick={() => onPlace("home")} aria-label={t("brand.home")}>
         <img src="/assets/pare3d/pare3d-icon.svg" alt="" width={28} height={28} />
-        <span>Pare 3D</span>
+        <span>Pare Dental</span>
         {/* Build 108: the build in use, by the name (it was in the footer). */}
         {PARE_BUILD ? <span className="home-brand-build">{PARE_PREVIEW ? t("home.testBuildNumber", { build: PARE_BUILD, test: PARE_PREVIEW }) : t("home.buildNumber", { build: PARE_BUILD })}</span> : null}
       </button>
+      {/* Pare Dental: one button. Dental Studio is the home page; the button opens CAD Studio, and
+          from CAD Studio it leads back. */}
       <nav className="home-tabs" aria-label={t("home.places")}>
-        {tab("home", t("home.tabHome"))}
-        {tab("cad", t("home.cadStudio"), "cad")}
-        {dentalAvailable ? tab("dental", t("home.dentalStudio"), "dental") : null}
+        {place === "cad" ? tab("dental", t("home.dentalStudio"), "dental") : tab("cad", t("home.cadStudio"), "cad")}
       </nav>
       <div className="home-bar-spacer" />
       <label className="home-search">

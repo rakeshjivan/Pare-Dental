@@ -21,6 +21,12 @@ export function isDentalCaseSummary(value: unknown): value is DentalCaseSummary 
   return Boolean(v && (v.flow === "model" || v.flow === "wax") && typeof v.made === "boolean");
 }
 
+/**
+ * Pare Dental: the start screen is Dental Studio's page. CAD Studio is still there, behind the one
+ * CAD Studio button in the top bar; the old Home page with both studios side by side is not shown.
+ */
+export const HOME_STUDIO: PareStudio = "dental";
+
 export const PARE_STUDIOS: readonly PareStudio[] = ["cad", "dental"];
 
 export function isPareStudio(value: unknown): value is PareStudio {
