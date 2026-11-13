@@ -550,16 +550,28 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
                 <span>{t("waxup.dropHint")}</span>
               </div>
             )}
+            {/* Build 328 (Rakesh: "we need the position and sculpt to all be done on the same step rather than splitting
+                into two steps"): a set on the arch has no Whole set / One tooth switch - the whole set's controls and
+                the picked tooth's dots, sliders and brushes are in the one panel. (A set dropped whole keeps the switch.) */}
+            {view.smileSet && actions.onSmile ? null : (
             <div className="studio-mm-choice two" role="radiogroup" aria-label={t("waxup.dropMove")}>
               <button type="button" role="radio" aria-checked={!view.selected || view.selectedAll === true} className={!view.selected || view.selectedAll ? "active" : ""} disabled={working} onClick={() => actions.onSelectSet?.()}>{t("waxup.dropWholeSet")}</button>
               <button type="button" role="radio" aria-checked={Boolean(view.selected) && !view.selectedAll} className={view.selected && !view.selectedAll ? "active" : ""} disabled={working} onClick={() => { const first = [...view.placed].sort((a, b) => a.fdi - b.fdi)[0]; if (first) actions.onSelect(first.id); }}>{t("waxup.dropOneTooth")}</button>
             </div>
-            {view.selected && !view.selectedAll ? (
-              <div className="waxup-teeth" role="group" aria-label={t("waxup.teeth")}>
-                {[...view.placed].sort((a, b) => a.fdi - b.fdi).map((tooth) => (
-                  <button key={tooth.id} type="button" className={`waxup-tooth${view.selected === tooth.id ? " active" : ""}`} disabled={view.hiddenIds?.includes(tooth.id)} title={view.hiddenIds?.includes(tooth.id) ? t("waxup.toothHidden") : undefined} onClick={() => actions.onSelect(tooth.id)}>{tooth.fdi}</button>
-                ))}
-              </div>
+            )}
+            {view.smileSet && actions.onSmile ? (
+              <SmileSetPanel set={view.smileSet} workspace={workspace} disabled={working} onChange={actions.onSmile} onCover={actions.onSmileCover} shapes={{ sets: view.builtIn.filter((entry) => entry.arch === view.slot), chosen: view.setIds?.[view.slot] ?? view.setId ?? null, best: view.setRank?.[view.slot]?.[0] ?? null, onPick: actions.onBuiltIn }} />
+            ) : null}
+            {(view.selected && !view.selectedAll) || (view.smileSet && actions.onSmile) ? (
+              <>
+                {view.smileSet && actions.onSmile ? <span className="waxup-shape-label">{t("waxup.oneToothRow")}</span> : null}
+                <div className="waxup-teeth" role="group" aria-label={t("waxup.teeth")}>
+                  {view.smileSet && actions.onSmile ? <button type="button" className={`waxup-tooth${!view.selected || view.selectedAll ? " active" : ""}`} disabled={working} title={t("waxup.allTeethHint")} onClick={() => actions.onSelectSet?.()}>{t("waxup.allTeeth")}</button> : null}
+                  {[...view.placed].sort((a, b) => a.fdi - b.fdi).map((tooth) => (
+                    <button key={tooth.id} type="button" className={`waxup-tooth${view.selected === tooth.id && !view.selectedAll ? " active" : ""}`} disabled={view.hiddenIds?.includes(tooth.id)} title={view.hiddenIds?.includes(tooth.id) ? t("waxup.toothHidden") : undefined} onClick={() => actions.onSelect(tooth.id)}>{tooth.fdi}</button>
+                  ))}
+                </div>
+              </>
             ) : null}
             {/* Build 277 (roadmap phase 2): the front teeth as one set on the arch, from whole-set controls. */}
             {view.smileSet && actions.onSmile ? (
@@ -583,9 +595,7 @@ export function WaxupCard({ view, actions, slots, busy, workspace, imt = false, 
                   </>
                 ) : view.toothEdit && actions.onToothEdit ? (
                   <ToothEditPanel tooth={view.toothEdit} workspace={workspace} disabled={working} onChange={actions.onToothEdit} onStep={actions.onToothStep} onMirror={actions.onToothMirror} onCopyAcross={actions.onToothCopyAcross} onGive={actions.onToothGive} />
-                ) : (
-                  <SmileSetPanel set={view.smileSet} workspace={workspace} disabled={working} onChange={actions.onSmile} onCover={actions.onSmileCover} shapes={{ sets: view.builtIn.filter((entry) => entry.arch === view.slot), chosen: view.setIds?.[view.slot] ?? view.setId ?? null, best: view.setRank?.[view.slot]?.[0] ?? null, onPick: actions.onBuiltIn }} />
-                )}
+                ) : null}
                 {/* Build 304 (Rakesh: the wax teeth adjusted to the patient's bite, then smoothed): Fit to the bite, here in
                     Design with both arches loaded - the palatal (and every surface the opposing teeth reach) trimmed back
                     to clear them at the opening set in Open bite, and the trimmed face evened out. */}
