@@ -25,7 +25,85 @@ export const NECK_PALATAL = 0.75;
  * `up` (towards its incisal edge) and `out` (labial), in the soup's coordinates. A new soup; the crown's corners are
  * the very same numbers.
  */
-export function extendNeck(soup: ArrayLike<number>, frame: { origin: ArrayLike<number>; up: ArrayLike<number>; out: ArrayLike<number> }, reach = NECK_REACH): Float32Array {
+/** Pare Dental: the longest a neck is drawn out to reach under the palatal gum, mm; the leans tried (palatal per mm gumwards),
+ * the usual first - less where the gum falls away palatally, more where it stands out. */
+export const NECK_REACH_MOST = 9;
+export const NECK_LEANS = [0.3, 0.15, 0, 0.6, 1];
+/** How deep under the patient's surface the end of the neck must be, mm; and the share of its end that must be there. */
+export const NECK_UNDER = 0.3;
+export const NECK_UNDER_SHARE = 0.95;
+
+/**
+ * Pare Dental (Rakesh: "the buccal gingival margin correctly masks over the wax-up tooth, so the tooth appears to
+ * grow from the gum line - the palatal doesn't"): a fixed reach and lean can leave the drawn-out palatal neck lying
+ * over the palatal gum where it slopes away into the palate. With `under` (the height of a point above the patient's
+ * surface, negative under it), each tooth takes the least reach - and the least lean - that puts the end of its
+ * palatal neck under the gum, so the gum hides it there as it does labially.
+ */
+export function extendNeck(soup: ArrayLike<number>, frame: { origin: ArrayLike<number>; up: ArrayLike<number>; out: ArrayLike<number> }, reach = NECK_REACH, under?: (x: number, y: number, z: number) => number): Float32Array {
+  if (under) {
+    const fit = neckFit(soup, frame, reach, under);
+    return drawNeck(soup, frame, fit.reach, fit.lean);
+  }
+  return drawNeck(soup, frame, reach, NECK_LEAN);
+}
+
+/** The reach and lean that take the end of the tooth's palatal neck under the patient's surface (the most tried if none does). */
+export function neckFit(soup: ArrayLike<number>, frame: { origin: ArrayLike<number>; up: ArrayLike<number>; out: ArrayLike<number> }, reach: number, under: (x: number, y: number, z: number) => number): { reach: number; lean: number; under: number } {
+  const ends = neckEnds(soup, frame);
+  if (!ends.length) return { reach, lean: NECK_LEAN, under: 1 };
+  const norm = (v: ArrayLike<number>): Vec3 => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+  const up = norm(frame.up), labial = norm(frame.out);
+  let best = { reach: NECK_REACH_MOST, lean: NECK_LEANS[NECK_LEANS.length - 1], under: 0 };
+  for (let r = reach; r <= NECK_REACH_MOST + 1e-9; r += 0.5) {
+    for (const lean of NECK_LEANS) {
+      let hidden = 0;
+      for (const [x, y, z, w] of ends) {
+        const by = r * w;
+        if (under(x - (up[0] + labial[0] * lean) * by, y - (up[1] + labial[1] * lean) * by, z - (up[2] + labial[2] * lean) * by) < -NECK_UNDER) hidden += 1;
+      }
+      const share = hidden / ends.length;
+      if (share >= NECK_UNDER_SHARE) return { reach: r, lean, under: share };
+      if (share > best.under) best = { reach: r, lean, under: share };
+    }
+  }
+  return best;
+}
+
+/** The corners at the end of the palatal neck (well into it and well palatal), each with its share of the move. */
+function neckEnds(soup: ArrayLike<number>, frame: { origin: ArrayLike<number>; up: ArrayLike<number>; out: ArrayLike<number> }): Array<[number, number, number, number]> {
+  const ends: Array<[number, number, number, number]> = [];
+  neckWalk(soup, frame, (i, s, palatal) => { if (s > 0.85 && palatal > 0.85) ends.push([soup[i], soup[i + 1], soup[i + 2], s * s * palatal]); });
+  return ends;
+}
+
+/** Each corner of the neck, with how far into the neck it is (s, 0 to 1) and how palatal (0 to 1). */
+function neckWalk(soup: ArrayLike<number>, frame: { origin: ArrayLike<number>; up: ArrayLike<number>; out: ArrayLike<number> }, visit: (i: number, s: number, palatal: number) => void) {
+  const norm = (v: ArrayLike<number>): Vec3 => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+  const up = norm(frame.up), labial = norm(frame.out), o = frame.origin;
+  let length = 0;
+  for (let i = 0; i + 2 < soup.length; i += 3) length = Math.max(length, (o[0] - soup[i]) * up[0] + (o[1] - soup[i + 1]) * up[1] + (o[2] - soup[i + 2]) * up[2]);
+  if (length < 2) return;
+  let front = -Infinity, back = Infinity;
+  for (let i = 0; i + 2 < soup.length; i += 3) {
+    const depth = (o[0] - soup[i]) * up[0] + (o[1] - soup[i + 1]) * up[1] + (o[2] - soup[i + 2]) * up[2];
+    if (depth < length * NECK_FROM) continue;
+    const b = (soup[i] - o[0]) * labial[0] + (soup[i + 1] - o[1]) * labial[1] + (soup[i + 2] - o[2]) * labial[2];
+    front = Math.max(front, b); back = Math.min(back, b);
+  }
+  if (!(front - back > 0.5)) return;
+  for (let i = 0; i + 2 < soup.length; i += 3) {
+    const depth = (o[0] - soup[i]) * up[0] + (o[1] - soup[i + 1]) * up[1] + (o[2] - soup[i + 2]) * up[2];
+    const s = (depth / length - NECK_FROM) / (1 - NECK_FROM);
+    if (s <= 0) continue;
+    const across = (front - ((soup[i] - o[0]) * labial[0] + (soup[i + 1] - o[1]) * labial[1] + (soup[i + 2] - o[2]) * labial[2])) / (front - back);
+    const q = Math.min(1, Math.max(0, (across - NECK_LABIAL) / (NECK_PALATAL - NECK_LABIAL)));
+    const palatal = q * q * (3 - 2 * q);
+    if (palatal > 0) visit(i, s, palatal);
+  }
+}
+
+function drawNeck(soup: ArrayLike<number>, frame: { origin: ArrayLike<number>; up: ArrayLike<number>; out: ArrayLike<number> }, reach: number, lean: number): Float32Array {
   const out = Float32Array.from(soup);
   const norm = (v: ArrayLike<number>): Vec3 => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
   const up = norm(frame.up), labial = norm(frame.out), o = frame.origin;
@@ -54,9 +132,9 @@ export function extendNeck(soup: ArrayLike<number>, frame: { origin: ArrayLike<n
     if (palatal <= 0) continue;
     // Eased in from nothing where the neck begins, so the surface carries on smoothly from the crown.
     const by = reach * s * s * palatal;
-    out[i] -= (up[0] + labial[0] * NECK_LEAN) * by;
-    out[i + 1] -= (up[1] + labial[1] * NECK_LEAN) * by;
-    out[i + 2] -= (up[2] + labial[2] * NECK_LEAN) * by;
+    out[i] -= (up[0] + labial[0] * lean) * by;
+    out[i + 1] -= (up[1] + labial[1] * lean) * by;
+    out[i + 2] -= (up[2] + labial[2] * lean) * by;
   }
   return out;
 }

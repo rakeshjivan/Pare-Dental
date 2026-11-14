@@ -21,7 +21,7 @@ import type { ToothFrame } from "@/lib/dentalWaxup";
 
 const CELL = 0.4;
 /** The most a tooth is made fuller palatally to cover, and longer, mm. */
-export const COVER_PALATAL_MOST = 1.5;
+export const COVER_PALATAL_MOST = 2;
 export const COVER_LENGTH_MOST = 1;
 /** A tooth's width stays at least this share of its length. */
 export const COVER_WIDTH_SHARE = 0.7;
@@ -30,7 +30,9 @@ export const COVER_REACH = 2.5;
 /** The cover's margin over the patient's tooth, mm. */
 export const COVER_MARGIN = 0.2;
 /** How much of the crown, from its edge, is looked at palatally (below is the cingulum running into the gum). */
-const COVER_PALATAL_SPAN = 0.6;
+// Pare Dental (Rakesh: "not sized on import to cover the whole tooth"): the cervical part too, down to just short of the
+// gum - the cingulum, where the patient's tooth stood out palatally behind the wax (was 0.6, the incisal part only).
+const COVER_PALATAL_SPAN = 0.9;
 /** The fewest proud points of the scan that count as the tooth showing (fewer: noise, a stray corner). */
 const COVER_FEWEST = 12;
 

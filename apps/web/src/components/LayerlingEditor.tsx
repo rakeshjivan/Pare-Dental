@@ -122,7 +122,7 @@ import { ARCH_MARK_CONTACTS, ARCH_MARK_GUM, ARCH_MARK_GUMS, archMarkLabel, front
 import { autoArchMarks } from "@/lib/waxAutoMarks";
 import { GUIDE_DEFAULTS, guideLines, markedArc, toothCaliper, type Caliper, type GuideSet } from "@/lib/waxGuides";
 import { WaxGuides, type GuideDrawn, type GuideLabel } from "@/components/workplane/WaxGuides";
-import { extendNeck } from "@/lib/waxNeck";
+import { extendNeck, NECK_REACH_MOST } from "@/lib/waxNeck";
 import { affineBetween, clampControls, crownMargins, labialProfile, layoutSmileSet, restFrames, SCULPTED_MISS, SET_DEFAULTS, type SetControls, type SetTooth, type SmileRecord } from "@/lib/waxSmileSet";
 import { StudioShell } from "./workplane/StudioShell";
 import { useStudioSlot } from "@/lib/studioSlots";
@@ -9627,7 +9627,9 @@ export function LayerlingEditor({
     sculptFrozenKept.current = null;
     known?.live.dispose();
     // Build 109: a wax tooth is sculpted as it is shown - blended to its stop line.
-    const live = LiveMesh.fromSoup(shape.dental === "wax" ? Array.from(waxTrianglesOf(shape)) : worldTriangles(shape));
+    // Pare Dental: except one with a margin drawn - the wax past the margin is pushed under the gum, which leaves
+    // triangles several mm long that the brushes' refine shattered; it is sculpted whole, and trimmed again after.
+    const live = LiveMesh.fromSoup(shape.dental === "wax" && !trimmedAtMargin(shape) ? Array.from(waxTrianglesOf(shape)) : worldTriangles(shape));
     if (frozen?.length) live.freezePoints(frozen);
     const box = live.bounds();
     // Build 92: the part as Sculpt first took it, for the deviation map (kept when the copy is made again).
@@ -9635,6 +9637,8 @@ export function LayerlingEditor({
     sculptState.current = { shapeId: shape.id, key, live, original, originalSurface: known && known.shapeId === shape.id ? known.originalSurface : null, baseEdge: averageEdgeOf(live), centre: [(box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2, (box.min[2] + box.max[2]) / 2], selection: null, strokes: 0, lastBrush: null, undo: [], redo: [] };
     return sculptState.current;
   };
+  /** Pare Dental: a wax tooth with a closed margin drawn (sculpted whole; the trim to the margin is not baked into it). */
+  const trimmedAtMargin = (shape: WorkplaneShape) => Boolean(shape.dental === "wax" && eraseFor(shape)?.margin);
   /** The selection works on a welded copy (the selection tools of build 69); made when a selection tool needs it. */
   const sculptSelectionOf = (state: SculptSession) => {
     if (!state.selection || state.selection.stale) {
@@ -9696,7 +9700,7 @@ export function LayerlingEditor({
   /** Puts the sculpted mesh in place of the part, as one step of undo, and keeps the copy in step with it. */
   const commitSculpt = (shape: WorkplaneShape, positions: ArrayLike<number>, message: string, keepCopy: boolean) => {
     // Build 110: a wax tooth sculpted from its erased form keeps that erase (not erased again where it stands).
-    const stop = shape.dental === "wax" ? eraseFor(shape) : null;
+    const stop = shape.dental === "wax" && !trimmedAtMargin(shape) ? eraseFor(shape) : null;
     const rebuilt = canonicalizeShape(shapeWithWorldPositions(shape, Array.from(positions)));
     const next = stop && rebuilt.waxTooth ? { ...rebuilt, waxTooth: { ...rebuilt.waxTooth, stopBaked: bakedKey(stop.base) } } : rebuilt;
     commitShapes(shapesRef.current.map((candidate) => (candidate.id === shape.id ? next : candidate)), next.id, message);
@@ -11031,10 +11035,25 @@ export function LayerlingEditor({
       const move = toInput.clone().multiply(world.clone().invert());
       // Build 289: in Wax-up Studio each tooth's neck is drawn out into a short root for the model (lib/waxNeck), so its
       // end is hidden in the gum and the tooth meets the patient's gum line all round - the palatal too.
+      // Pare Dental: and drawn out until its end is under the patient's palatal gum (lib/waxNeck neckFit), so the gum hides
+      // it palatally as it does labially.
+      const scanWorld = dentalStudioRef.current?.waxStudio ? Float32Array.from(worldTriangles(shape)) : null;
       const soups = teeth.map((tooth) => {
         const soup = waxTrianglesOf(tooth);
         const toothWorld = dentalStudioRef.current?.waxStudio && tooth.waxTooth ? localToWorld(tooth) : null;
-        return toothWorld ? extendNeck(soup, moveFrame(tooth.waxTooth!.frame, toothWorld)) : soup;
+        if (!toothWorld) return soup;
+        const axes = toothAxesOf(tooth);
+        let under: ((x: number, y: number, z: number) => number) | undefined;
+        if (scanWorld && axes) {
+          const surface = new NearestSurface(soupWithin(scanWorld, soupBoxOf(Float32Array.from(soup), NECK_REACH_MOST + 3)), 4);
+          const sign = surfaceSign(axes, surface), q = [0, 0, 0], n = [0, 0, 0];
+          under = (x, y, z) => {
+            if (surface.nearest(x, y, z, q) === Infinity || surface.lastTriangle < 0) return 1;
+            surface.triangleNormal(surface.lastTriangle, n);
+            return ((x - q[0]) * n[0] + (y - q[1]) * n[1] + (z - q[2]) * n[2]) * sign;
+          };
+        }
+        return extendNeck(soup, moveFrame(tooth.waxTooth!.frame, toothWorld), undefined, under);
       });
       const out = new Float32Array(soups.reduce((count, soup) => count + soup.length, 0));
       const v = new THREE.Vector3();

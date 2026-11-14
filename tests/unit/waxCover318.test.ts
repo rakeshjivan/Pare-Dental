@@ -25,6 +25,11 @@ describe("what a wax tooth leaves uncovered, and the least that covers it (build
     expect(need.incisal).toBe(0);
   });
 
+  it("a patient's cingulum standing out palatally near the gum is found too (Pare Dental: the whole crown covered)", () => {
+    const scan = new Float32Array(grid(-3, 3, -3, -3, -8.5, -6.5));
+    expect(coverNeed(scan, wax, frame, 8, 10).palatal).toBeGreaterThan(0.9);
+  });
+
   it("a patient's edge 0.6 mm beyond the wax edge is found", () => {
     const scan = new Float32Array(grid(-3, 3, -1.5, -0.5, 0.6, 0.6));
     const need = coverNeed(scan, wax, frame, 8, 10);
@@ -59,7 +64,7 @@ describe("what a wax tooth leaves uncovered, and the least that covers it (build
     expect(big.palatal).toBe(COVER_PALATAL_MOST);
     expect(big.length).toBe(COVER_LENGTH_MOST);
     // What it already has counts against the cap.
-    expect(coverChange({ palatal: 2.4, incisal: 2.4, palatalPoints: 50, incisalPoints: 50 }, 8.5, 10.5, { palatal: 1.2, length: 0.8 })).toEqual({ palatal: 0.3, length: 0.2 });
+    expect(coverChange({ palatal: 2.4, incisal: 2.4, palatalPoints: 50, incisalPoints: 50 }, 8.5, 10.5, { palatal: 1.2, length: 0.8 })).toEqual({ palatal: Math.round((COVER_PALATAL_MOST - 1.2) * 100) / 100, length: 0.2 });
   });
 
   it("a tooth is not lengthened out of proportion: its width stays at least 70% of its length", () => {
