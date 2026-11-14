@@ -337,6 +337,8 @@ export function DentalStudioPanel({
   const [activeCard, setActiveCard] = useState(1);
   // Build 75: a step after the first ticks once it has been worked in - its defaults alone are not a check.
   const [visited, setVisited] = useState<Record<number, boolean>>({});
+  // Pare Dental: the Gum line step's joining choice, shut away until asked for.
+  const [joinOpen, setJoinOpen] = useState(false);
   const arch = trimming?.slot ?? (slots[chosenArch] ? chosenArch : slots.upper ? "upper" : "lower");
   const busy = stage !== "ready";
   const pair = Boolean(slots.upper && slots.lower);
@@ -1054,21 +1056,12 @@ export function DentalStudioPanel({
           ))}
         </div>
         <p className="blend-hint" role="status">{t(`waxup.gum.${wv.gum?.mode ?? "follow"}Hint`)}</p>
-        {/* Build 118: the palatal surface - the library tooth's (the patient's palatal pressed onto it) or the patient's. */}
-        <h4 className="dental-substep-title">{t("waxup.palatalTitle")}</h4>
-        <div className="studio-mm-choice three" role="radiogroup" aria-label={t("waxup.palatalTitle")}>
-          {(["patient", "library", "shell"] as const).map((form) => (
-            <button key={form} type="button" role="radio" aria-checked={(wv.palatal ?? PALATAL_DEFAULT) === form} className={(wv.palatal ?? PALATAL_DEFAULT) === form ? "active" : ""} disabled={busy} onClick={() => waxup.actions.onPalatal?.(form)}>{t(`waxup.palatal.${form}`)}</button>
-          ))}
-        </div>
-        <p className="blend-hint" role="status">{t(`waxup.palatal.${wv.palatal ?? PALATAL_DEFAULT}Hint`)}</p>
         <ul className="waxup-gum-key">
           <li><span style={{ background: "#d6403a" }} /> {t("waxup.gum.keyMargin")}</li>
-          <li><span style={{ background: "#9eb3c7" }} /> {t("waxup.gum.keyCovered")}</li>
           {wv.gum?.mode === "even" ? (<>
             <li><span style={{ background: "#f2b34c" }} /> {t("waxup.gum.keyTrimmed")}</li>
             <li><span style={{ background: "#2e9e5c" }} /> {t("waxup.gum.keyLine")}</li>
-          </>) : null}
+          </>) : <li><span style={{ background: "#9eb3c7" }} /> {t("waxup.gum.keyCovered")}</li>}
         </ul>
         {wv.gum?.mode === "even" ? (<>
           {Object.keys(wv.gum.keep).sort((a, b) => (a.startsWith("upper") === b.startsWith("upper") ? Number(a.slice(-1)) - Number(b.slice(-1)) : a.startsWith("upper") ? -1 : 1)).map((pair) => {
@@ -1077,6 +1070,19 @@ export function DentalStudioPanel({
             return <EdgeModifierSlider key={pair} label={t("waxup.gum.pair", { teeth: label })} title={t("waxup.gum.pairHint")} value={wv.gum!.keep[pair]} min={0} max={14} step={0.1} workspace={workspace} length disabled={busy} onChange={(value) => waxup.actions.onGumKeep?.(pair, value)} />;
           })}
           <div className="dental-trim-buttons"><button type="button" className="secondary" disabled={busy} title={t("waxup.gum.idealHint")} onClick={() => waxup.actions.onGumIdeal?.()}>{t("waxup.gum.ideal")}</button></div>
+        </>) : null}
+        {/* Build 118 / Pare Dental: how the wax teeth are joined to the scan - Whole teeth unless changed; shut away. */}
+        <p className="blend-hint waxup-join-line">
+          {t("waxup.palatalNow", { form: t(`waxup.palatal.${wv.palatal ?? PALATAL_DEFAULT}`) })}{" "}
+          <button type="button" className="link-button" aria-expanded={joinOpen} onClick={() => setJoinOpen((open) => !open)}>{t(joinOpen ? "waxup.palatalDone" : "waxup.palatalChange")}</button>
+        </p>
+        {joinOpen ? (<>
+          <div className="studio-mm-choice three" role="radiogroup" aria-label={t("waxup.palatalTitle")}>
+            {(["patient", "library", "shell"] as const).map((form) => (
+              <button key={form} type="button" role="radio" aria-checked={(wv.palatal ?? PALATAL_DEFAULT) === form} className={(wv.palatal ?? PALATAL_DEFAULT) === form ? "active" : ""} disabled={busy} onClick={() => waxup.actions.onPalatal?.(form)}>{t(`waxup.palatal.${form}`)}</button>
+            ))}
+          </div>
+          <p className="blend-hint" role="status">{t(`waxup.palatal.${wv.palatal ?? PALATAL_DEFAULT}Hint`)}</p>
         </>) : null}
       </>)) : null}
       {inWaxStep("trim") && inMb("prepare") ? card(2, t(framed ? "studio.trimTitle" : "dental.step2Prepare"), scansDone, null, prepareSummary, (<>
