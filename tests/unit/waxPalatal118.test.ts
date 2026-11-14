@@ -77,3 +77,14 @@ describe("pressPalatal never drags the patient's tooth into streaks (Rakesh, bui
     expect(mid).toBeLessThan(full + 1e-6);
   });
 });
+
+/* Pare Dental: with Whole teeth, the patient's palatal pressed in under the incisal edge only, the gum line untouched. */
+describe("pressPalatal, incisal part only", () => {
+  it("presses near the edge, and leaves the cervical part and the gum as scanned", () => {
+    const { positions } = pressPalatal(sheet(-6.4), [tooth], true);
+    // 1.5 mm from the edge of an 8 mm tooth: pressed in.
+    expect(at(positions, 0, -1.5)).toBeCloseTo(-6 + PALATAL_SINK, 1);
+    // 6.5 mm from the edge (past two thirds): as scanned.
+    expect(at(positions, 0, -6.5)).toBeCloseTo(-6.4, 5);
+  });
+});

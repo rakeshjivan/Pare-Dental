@@ -114,7 +114,16 @@ function palatalMap(tooth: PalatalTooth) {
  * edge, say) it is left as scanned, the press fading out over PALATAL_FADE inside the outline.
  * Corners at one point move together, so the soup stays closed. Returns the soup unchanged when nothing moved.
  */
-export function pressPalatal(scan: Float32Array, teeth: PalatalTooth[]): { positions: Float32Array; moved: number } {
+/**
+ * Pare Dental (Rakesh, 15 Nov: under the incisal edge the patient's palatal tooth showed through the wax as a jagged
+ * band): with Whole teeth, the press is made in the incisal part of each tooth only - full to INCISAL_PRESS_TO of its
+ * length from the edge, gone by INCISAL_PRESS_GONE - so the gum line, where pressing all the way left it ragged, is
+ * untouched.
+ */
+export const INCISAL_PRESS_TO = 0.5;
+export const INCISAL_PRESS_GONE = 0.68;
+
+export function pressPalatal(scan: Float32Array, teeth: PalatalTooth[], incisalOnly = false): { positions: Float32Array; moved: number } {
   if (!teeth.length) return { positions: scan, moved: 0 };
   const out = Float32Array.from(scan);
   let moved = 0;
@@ -122,6 +131,10 @@ export function pressPalatal(scan: Float32Array, teeth: PalatalTooth[]): { posit
     const o = tooth.origin;
     const map = palatalMap(tooth);
     if (!Number.isFinite(map.b0)) continue;
+    // The tooth's length from its edge (the origin) to its neck, for the incisal-only press.
+    let length = 0;
+    if (incisalOnly) for (let i = 0; i + 2 < tooth.soup.length; i += 3) length = Math.max(length, -((tooth.soup[i] - o[0]) * tooth.up[0] + (tooth.soup[i + 1] - o[1]) * tooth.up[1] + (tooth.soup[i + 2] - o[2]) * tooth.up[2]));
+    if (incisalOnly && length < 2) continue;
     const seen = new Map<string, number | null>();
     for (let c = 0; c + 2 < out.length; c += 3) {
       const x = out[c], y = out[c + 1], z = out[c + 2];
@@ -139,7 +152,8 @@ export function pressPalatal(scan: Float32Array, teeth: PalatalTooth[]): { posit
           const w = (1 - smooth01((wall - b - (PALATAL_REACH - PALATAL_FADE)) / PALATAL_FADE))
             * smooth01(edge / PALATAL_FADE)
             * (b < map.b0 ? 1 - smooth01((map.b0 - b) / PALATAL_RAMP) : 1);
-          if (w > 1e-3) shift = w * (wall + PALATAL_SINK - b);
+          const incisal = incisalOnly ? 1 - smooth01((-u / length - INCISAL_PRESS_TO) / (INCISAL_PRESS_GONE - INCISAL_PRESS_TO)) : 1;
+          if (w * incisal > 1e-3) shift = w * incisal * (wall + PALATAL_SINK - b);
         }
         seen.set(key, shift);
       }

@@ -11186,7 +11186,9 @@ export function LayerlingEditor({
     };
     // Build 118: the library tooth's palatal form - the patient's surface standing palatal of each wax tooth pressed onto it.
     const palatalOf = (shape: WorkplaneShape, positions: Float32Array) => {
-      if (!dentalStudioRef.current?.waxStudio || (waxupRef.current.palatal ?? PALATAL_DEFAULT) !== "library") return positions;
+      // Pare Dental: with Whole teeth too, in the incisal part only (lib/waxPalatal INCISAL_PRESS_TO) - not with Scan shaped.
+      const form = waxupRef.current.palatal ?? PALATAL_DEFAULT;
+      if (!dentalStudioRef.current?.waxStudio || form === "shell") return positions;
       const toInput = dentalLocalToInput.current.get(shape.id), world = localToWorld(shape);
       if (!toInput || !world) return positions;
       const move = toInput.clone().multiply(world.clone().invert());
@@ -11199,7 +11201,7 @@ export function LayerlingEditor({
         const origin = new THREE.Vector3(f.origin[0], f.origin[1], f.origin[2]).applyMatrix4(move);
         return [{ soup: transformSoup(Float32Array.from(waxTrianglesOf(tooth)), move), origin: [origin.x, origin.y, origin.z], up: dir(f.up), out: dir(f.out), mesial: dir(f.mesial) }];
       });
-      return pressPalatal(positions, teeth).positions;
+      return pressPalatal(positions, teeth, form !== "library").positions;
     };
     return {
       arches: arches.map(({ shape }) => {
