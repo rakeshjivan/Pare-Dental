@@ -29,7 +29,7 @@ describe("build 106: the studio frame", () => {
     const panel = src("components/workplane/DentalStudioPanel.tsx");
     // Build 116: Margins (with the margin line on) and Keep & erase came in between; build 118 takes Keep & erase out again.
     // Build 278: Mark (the nine marks on the scan); build 308: after Trim.
-    expect(panel).toContain('["scans", "trim", "mark", ...(slots.upper && slots.lower ? ["bite" as const] : []), ...(waxup.view.marginOn ? ["margin" as const] : []), "set", "place", "gum", "make"]');
+    expect(panel).toContain('["scans", "trim", "mark", ...(slots.upper && slots.lower ? ["bite" as const] : []), "margin", "set", "place", "gum", "make"]');
     // Build 302: placing and shaping the teeth are one step ("Design") - Sculpt is no longer a step of its own here.
     expect(messages["waxStudio.step.bite" as keyof typeof messages]).toBe("Open bite");
     const names = ["scans", "trim", "mark", "set", "place", "make"].map((id) => messages[`waxStudio.step.${id}` as keyof typeof messages]);
