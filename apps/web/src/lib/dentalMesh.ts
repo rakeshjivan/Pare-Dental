@@ -505,6 +505,38 @@ export function toManifold(runtime: ManifoldRuntime, m: Mesh): ManifoldSolid {
 }
 
 /**
+ * Pare Dental (speed): an id for each triple of numbers (x, y, z read through `get`), numbered in the order the triples
+ * first appear, equal only when all three are equal (-0 counts as 0) - the same answer as a Map keyed by
+ * `${x},${y},${z}`, from a hash table on the doubles' bits instead of a string per entry.
+ */
+export function sameTripleIds(n: number, get: (i: number, k: number) => number): { ids: Int32Array; count: number } {
+  let cap = 1;
+  while (cap < n * 2) cap <<= 1;
+  const mask = cap - 1;
+  const slot = new Int32Array(cap).fill(-1);
+  const slotId = new Int32Array(cap);
+  const ids = new Int32Array(n);
+  const keys = new Float64Array(n * 3);
+  const d = new Float64Array(1), u = new Uint32Array(d.buffer);
+  const mix = (v: number) => { d[0] = v; return Math.imul(u[0], 0x9e3779b1) ^ Math.imul(u[1] + 0x7f4a7c15, 0x85ebca77); };
+  let count = 0;
+  for (let i = 0; i < n; i += 1) {
+    const x = get(i, 0) + 0, y = get(i, 1) + 0, z = get(i, 2) + 0;
+    keys[i * 3] = x; keys[i * 3 + 1] = y; keys[i * 3 + 2] = z;
+    let h = mix(x) ^ Math.imul(mix(y), 0x27d4eb2f) ^ Math.imul(mix(z), 0x165667b1);
+    h ^= h >>> 15;
+    let k = h & mask;
+    for (;;) {
+      const j = slot[k];
+      if (j < 0) { slot[k] = i; slotId[k] = count; ids[i] = count; count += 1; break; }
+      if (keys[j * 3] === x && keys[j * 3 + 1] === y && keys[j * 3 + 2] === z) { ids[i] = slotId[k]; break; }
+      k = (k + 1) & mask;
+    }
+  }
+  return { ids, count };
+}
+
+/**
  * Build 61: which corners are the same point, as 32-bit floats (as an STL file holds them; -0 is 0):
  * an id for each corner, numbered in the order points first appear. A hash table on the floats'
  * bits, in place of a string per corner - the same answer, many times faster.
@@ -835,26 +867,26 @@ export function tidyForFile(soup: Float32Array): Float32Array {
  * tolerance do (Build 275: Manifold can keep corners 0.0000000000003 mm apart, distinct in the file, one point to them).
  */
 export function pinchedEdges(positions: ArrayLike<number>, weld?: number): number {
-  const id = new Map<string, number>();
-  const ids = new Int32Array(Math.floor(positions.length / 3));
+  // Pare Dental (speed): the same count as before (corners joined as their rounded values, edges counted by edgeKey),
+  // from typed tables instead of a string per corner and a Map per edge - the written model is checked twice per try.
+  const n = Math.floor(positions.length / 3);
   const at = weld ? (v: number) => Math.round(Math.fround(v) / weld) : (v: number) => Math.fround(v);
-  for (let i = 0; i < ids.length; i += 1) {
-    const key = `${at(positions[i * 3])},${at(positions[i * 3 + 1])},${at(positions[i * 3 + 2])}`;
-    let n = id.get(key);
-    if (n === undefined) { n = id.size; id.set(key, n); }
-    ids[i] = n;
-  }
-  const counts = new Map<number, number>();
+  const { ids } = sameTripleIds(n, (i, k) => at(positions[i * 3 + k]));
+  const keys = new Float64Array(n);
+  let m = 0;
   for (let t = 0; t + 2 < ids.length; t += 3) {
     const a = ids[t], b = ids[t + 1], c = ids[t + 2];
     if (a === b || b === c || a === c) continue;
-    for (const [x, y] of [[a, b], [b, c], [c, a]]) {
-      const key = edgeKey(x, y);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
+    keys[m++] = edgeKey(a, b); keys[m++] = edgeKey(b, c); keys[m++] = edgeKey(c, a);
   }
+  const sorted = keys.subarray(0, m).sort();
   let bad = 0;
-  counts.forEach((count) => { if (count !== 2) bad += 1; });
+  for (let i = 0; i < m;) {
+    let j = i + 1;
+    while (j < m && sorted[j] === sorted[i]) j += 1;
+    if (j - i !== 2) bad += 1;
+    i = j;
+  }
   return bad;
 }
 
@@ -1207,28 +1239,37 @@ export function cleanStlSoup(positions: Float32Array): Float32Array {
   if (!triangles) return positions;
   const { ids } = samePointIds(positions);
   const keep = new Uint8Array(triangles).fill(1);
-  const keyOf = (a: number, b: number, c: number) => { const s = [a, b, c].sort((x, y) => x - y); return `${s[0]},${s[1]},${s[2]}`; };
-  const byKey = new Map<string, number[]>();
+  // Pare Dental (speed): triangles on the same three points found with a typed table (was a string per triangle).
   for (let t = 0; t < triangles; t += 1) {
     const a = ids[t * 3], b = ids[t * 3 + 1], c = ids[t * 3 + 2];
-    if (a === b || b === c || a === c) { keep[t] = 0; continue; }
-    const k = keyOf(a, b, c);
-    const list = byKey.get(k);
-    if (list) list.push(t); else byKey.set(k, [t]);
+    if (a === b || b === c || a === c) keep[t] = 0;
   }
-  for (const list of byKey.values()) if (list.length > 1) for (const t of list) keep[t] = 0;
+  {
+    const sortedCorner = (t: number, k: number) => {
+      const a = ids[t * 3], b = ids[t * 3 + 1], c = ids[t * 3 + 2];
+      const lo = Math.min(a, b, c), hi = Math.max(a, b, c);
+      return k === 0 ? lo : k === 2 ? hi : a + b + c - lo - hi;
+    };
+    const live: number[] = [];
+    for (let t = 0; t < triangles; t += 1) if (keep[t]) live.push(t);
+    const same = sameTripleIds(live.length, (i, k) => sortedCorner(live[i], k));
+    const uses = new Int32Array(same.count);
+    for (let i = 0; i < live.length; i += 1) uses[same.ids[i]] += 1;
+    for (let i = 0; i < live.length; i += 1) if (uses[same.ids[i]] > 1) keep[live[i]] = 0;
+  }
   // Pieces joined edge to edge; one of no volume (and few triangles) goes.
   const parent = new Int32Array(triangles);
   for (let t = 0; t < triangles; t += 1) parent[t] = t;
   const find = (x: number) => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
   // Build 271 (final check): joined only across edges two triangles share. A sheet of no volume pinched onto the model
   // along an edge (then used four times) was counted as part of it and stayed; on its own it goes.
-  const edgeOf = new Int32Array(triangles * 3).fill(-1), index = new Map<string, number>();
+  // Pare Dental (speed): edges numbered in a typed table keyed by their two corners (was a string per edge).
+  const edgeOf = new Int32Array(triangles * 3).fill(-1), index = new KeyTable(triangles * 2);
   for (let t = 0; t < triangles; t += 1) {
     if (!keep[t]) continue;
     for (let k = 0; k < 3; k += 1) {
       const a = ids[t * 3 + k], b = ids[t * 3 + ((k + 1) % 3)];
-      const name = a < b ? `${a}_${b}` : `${b}_${a}`;
+      const name = a < b ? a * 4294967296 + b : b * 4294967296 + a;
       let e = index.get(name);
       if (e === undefined) { e = index.size; index.set(name, e); }
       edgeOf[t * 3 + k] = e;
@@ -1300,13 +1341,16 @@ export const STL_WELD = 1e-5;
  * then drops the triangles that collapse. Moves no corner by more than `weld`.
  */
 export function snapCorners(positions: Float32Array, weld: number): Float32Array {
-  const first = new Map<string, number>();
+  // Pare Dental (speed): corners grouped by their rounded values in a typed table (was a string per corner); each moved
+  // onto the first corner of its group met, as before.
+  const n = positions.length / 3;
+  const { ids, count } = sameTripleIds(n, (i, k) => Math.round(positions[i * 3 + k] / weld));
+  const first = new Int32Array(count).fill(-1);
   const out = new Float32Array(positions.length);
-  for (let i = 0; i < positions.length; i += 3) {
-    const key = `${Math.round(positions[i] / weld)},${Math.round(positions[i + 1] / weld)},${Math.round(positions[i + 2] / weld)}`;
-    let at = first.get(key);
-    if (at === undefined) { at = i; first.set(key, i); }
-    out[i] = positions[at]; out[i + 1] = positions[at + 1]; out[i + 2] = positions[at + 2];
+  for (let i = 0; i < n; i += 1) {
+    let at = first[ids[i]];
+    if (at < 0) { at = i * 3; first[ids[i]] = at; }
+    out[i * 3] = positions[at]; out[i * 3 + 1] = positions[at + 1]; out[i * 3 + 2] = positions[at + 2];
   }
   return out;
 }
