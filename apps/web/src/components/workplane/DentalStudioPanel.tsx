@@ -428,7 +428,7 @@ export function DentalStudioPanel({
   // Build 118: no Keep & erase step - the whole library tooth is kept and its palatal pressed on (Gum line); boundary lines are in Sculpt.
   // Build 308 (Rakesh: "we should trim the model before the automatic marking step"): Trim comes before Mark - the
   // marks are found on the scan as it will be used, with its tags and excess gum already off.
-  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? ["scans", "trim", "mark", ...(slots.upper && slots.lower ? ["bite" as const] : []), ...(waxup.view.marginOn ? ["margin" as const] : []), "set", "place", "gum", "make"] : null;
+  const waxSteps: WaxStepId[] | null = waxStudio && waxup ? ["scans", "trim", "mark", ...(slots.upper && slots.lower ? ["bite" as const] : []), "margin", "set", "place", "gum", "make"] : null;
   const [waxStepId, setWaxStepId] = useState<WaxStepId>(editing ? "make" : "scans");
   const waxStepName = (id: WaxStepId) => t(`waxStudio.step.${id}` as "waxStudio.step.scans");
   const waxStep = waxSteps ? (waxSteps.includes(waxStepId) ? waxStepId : "make") : null;
@@ -1011,8 +1011,7 @@ export function DentalStudioPanel({
         const teeth = defaultMarkTeeth(wv.slot).slice().sort((a, b) => archOrder(a) - archOrder(b));
         const lines = wv.margins?.[wv.slot]?.lines ?? {};
         const pick = wv.marginPick ?? null;
-        const found = new Set((wv.found ?? []).map((tooth) => tooth.fdi));
-        const done = teeth.filter((fdi) => (lines[fdi]?.length ?? 0) >= 3 || found.has(fdi));
+        const done = teeth.filter((fdi) => (lines[fdi]?.length ?? 0) >= 3);
         // Build 277 (Rakesh): the tooth finder is removed - margins are drawn by hand.
         return (<>
           {bothArches ? (

@@ -11063,11 +11063,11 @@ export function LayerlingEditor({
       });
       return cuts.length ? cuts : undefined;
     };
+    /** Pare Dental (margins): whether the dentist has drawn a closed margin round this tooth on this scan. */
+    const drawnMarginOf = (slot: "upper" | "lower", scanId: string, fdi: number) => { const entry = waxupRef.current.margins?.[slot]; return Boolean(entry && entry.scan === scanId && (entry.lines[fdi]?.length ?? 0) >= 3); };
     // Build 102: the patient's crowns those wax teeth replace, cut back under them on their facial
     // side (the teeth as found on this scan; left out when the scan has changed since they were found).
     const cutsOf = (shape: WorkplaneShape, positions: Float32Array) => {
-      // Build 116: with margins the wax-up is added over the patient's teeth, so their crowns are never cut back.
-      if (dentalStudioRef.current?.waxStudio && waxupRef.current.marginOn) return undefined;
       // Build 279 (Rakesh): the teeth the dentist chose to reduce - the scan cut back flush with the wax tooth
       // (what stands in front of it or beyond its edge, within its reach), on the wax-up model only.
       const slotOfArch = dentalStudioRef.current?.slots.upper === shape.id ? "upper" : dentalStudioRef.current?.slots.lower === shape.id ? "lower" : null;
@@ -11079,7 +11079,8 @@ export function LayerlingEditor({
         const move = toInput.clone().multiply(world.clone().invert());
         const turn = new THREE.Matrix3().setFromMatrix4(move);
         const cuts: NonNullable<DentalStudioInput["arches"][number]["cuts"]> = [];
-        for (const tooth of shapesRef.current.filter((candidate) => candidate.dental === "wax" && candidate.waxFor === shape.id && !candidate.hidden && candidate.waxTooth && (!waxTeeth || waxTeeth(candidate.waxTooth.fdi)) && (WAX_COVER || reduceHere.includes(candidate.waxTooth.fdi)))) {
+        for (const tooth of shapesRef.current.filter((candidate) => candidate.dental === "wax" && candidate.waxFor === shape.id && !candidate.hidden && candidate.waxTooth && (!waxTeeth || waxTeeth(candidate.waxTooth.fdi)) && (reduceHere.includes(candidate.waxTooth.fdi) || (WAX_COVER && !drawnMarginOf(slotOfArch, shape.id, candidate.waxTooth.fdi))))) {
+          // Pare Dental (margins): a tooth with a margin drawn has its wax added over the patient's tooth - not cut back unless ticked to reduce.
           const toothWorld = localToWorld(tooth);
           if (!toothWorld) continue;
           const frame = moveFrame(tooth.waxTooth!.frame, toothWorld);
@@ -13458,12 +13459,12 @@ export function LayerlingEditor({
   const marginForRef = useRef<((tooth: WorkplaneShape) => { region: object } | null) | null>(null);
   const marginFor = (tooth: WorkplaneShape) => {
     const studio = dentalStudioRef.current;
-    if (!waxupRef.current.marginOn || !studio || !tooth.waxTooth || !tooth.waxFor) return null;
+    // Pare Dental: margins apply wherever one is drawn (no switch, and nothing found automatically in its place).
+    if (!studio || !tooth.waxTooth || !tooth.waxFor) return null;
     const slot = studio.slots.upper === tooth.waxFor ? "upper" : studio.slots.lower === tooth.waxFor ? "lower" : null;
     const line = slot ? marginLinesOf(waxupRef.current, slot)[tooth.waxTooth.fdi] : undefined;
     const scan = shapesRef.current.find((shape) => shape.id === tooth.waxFor);
     const toInput = scan ? waxArchInput(scan) : null;
-    if ((!line || line.length < 3) && scan && toInput) return foundMarginFor(tooth.waxTooth.fdi, scan, toInput, tooth);
     if (!line || line.length < 3 || !scan || !toInput) return null;
     const toScene = toInput.clone().invert();
     const curve = marginCurveOf(scan, toScene, line, true);
@@ -15868,9 +15869,11 @@ export function LayerlingEditor({
       const fdi = found && found.input.length === soup.length ? found.fdi : null;
       // Build 102: each wax tooth's crown cut back on its facial side, as Make will cut it.
       const turn = new THREE.Matrix3().setFromMatrix4(toInput);
-      const cuts = fdi && !waxupRef.current.marginOn ? wax.flatMap((w) => {
+      const slotHere = dentalStudioRef.current?.slots.upper === shape.id ? "upper" : dentalStudioRef.current?.slots.lower === shape.id ? "lower" : null;
+      const lined = (n: number) => { const entry = slotHere ? waxupRef.current.margins?.[slotHere] : undefined; return Boolean(entry && entry.scan === shape.id && (entry.lines[n]?.length ?? 0) >= 3); };
+      const cuts = fdi ? wax.flatMap((w) => {
         const n = w.waxTooth!.fdi, toothWorld = localToWorld(w);
-        if (!toothWorld) return [];
+        if (!toothWorld || lined(n)) return [];
         const frame = moveFrame(w.waxTooth!.frame, toothWorld);
         const facing = new THREE.Vector3(...frame.out).applyMatrix3(turn).normalize();
         const up = new THREE.Vector3(...frame.up).applyMatrix3(turn).normalize();
@@ -21678,7 +21681,7 @@ export function LayerlingEditor({
   // (Build 117 tried Position too: working out what the trims need - each tooth's margin and key - as the set moved
   // stalled the page for seconds at a time, so Position shows the whole teeth as before.)
   const eraseShownStep = !studioWaxStep || ["keep", "sculpt", "gum", "make"].includes(studioWaxStep);
-  const erasedViewportShapes = useMemo(() => (dentalStudio?.waxStudio && eraseShownStep && ((waxup.erase && Object.keys(waxup.erase).length) || (waxup.marginOn && (waxup.margins?.upper || waxup.margins?.lower)) || waxup.boundaries?.upper || waxup.boundaries?.lower) ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? erasedShown(shape) : shape)) : viewportShapes), [viewportShapes, waxup.erase, waxup.margins, waxup.boundaries, waxup.marginOn, dentalStudio, eraseTick, eraseShownStep]); // eslint-disable-line react-hooks/exhaustive-deps
+  const erasedViewportShapes = useMemo(() => (dentalStudio?.waxStudio && eraseShownStep && ((waxup.erase && Object.keys(waxup.erase).length) || (waxup.margins?.upper || waxup.margins?.lower) || waxup.boundaries?.upper || waxup.boundaries?.lower) ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? erasedShown(shape) : shape)) : viewportShapes), [viewportShapes, waxup.erase, waxup.margins, waxup.boundaries, waxup.marginOn, dentalStudio, eraseTick, eraseShownStep]); // eslint-disable-line react-hooks/exhaustive-deps
   const heldViewportShapes = historyView.shapes ?? erasedViewportShapes;
   // Build 118: with the library palatal, each wax tooth's palatal drawn whole over the scan - the scan itself never changed.
   // Build 283: the drawn-over palatal is no longer used (the pressed scan is shown instead, as it will be made).
