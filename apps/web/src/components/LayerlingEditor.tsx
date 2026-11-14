@@ -11042,18 +11042,7 @@ export function LayerlingEditor({
         const soup = waxTrianglesOf(tooth);
         const toothWorld = dentalStudioRef.current?.waxStudio && tooth.waxTooth ? localToWorld(tooth) : null;
         if (!toothWorld) return soup;
-        const axes = toothAxesOf(tooth);
-        let under: ((x: number, y: number, z: number) => number) | undefined;
-        if (scanWorld && axes) {
-          const surface = new NearestSurface(soupWithin(scanWorld, soupBoxOf(Float32Array.from(soup), NECK_REACH_MOST + 3)), 4);
-          const sign = surfaceSign(axes, surface), q = [0, 0, 0], n = [0, 0, 0];
-          under = (x, y, z) => {
-            if (surface.nearest(x, y, z, q) === Infinity || surface.lastTriangle < 0) return 1;
-            surface.triangleNormal(surface.lastTriangle, n);
-            return ((x - q[0]) * n[0] + (y - q[1]) * n[1] + (z - q[2]) * n[2]) * sign;
-          };
-        }
-        return extendNeck(soup, moveFrame(tooth.waxTooth!.frame, toothWorld), undefined, under);
+        return extendNeck(soup, moveFrame(tooth.waxTooth!.frame, toothWorld), undefined, scanWorld ? neckUnder(tooth, soup, scanWorld) : undefined);
       });
       const out = new Float32Array(soups.reduce((count, soup) => count + soup.length, 0));
       const v = new THREE.Vector3();
@@ -13713,6 +13702,38 @@ export function LayerlingEditor({
   const waxTrianglesOf = (tooth: WorkplaneShape): ArrayLike<number> => erasedSoup(tooth) ?? worldTriangles(tooth);
   /** As it is drawn just now (its erase if already worked out, else as it is). */
   const shownTrianglesOf = (tooth: WorkplaneShape): ArrayLike<number> => erasedSoup(tooth, false) ?? worldTriangles(tooth);
+  /** Pare Dental: the height of a point above the patient's surface round a wax tooth (negative under it), for lib/waxNeck. */
+  const neckUnder = (tooth: WorkplaneShape, soup: ArrayLike<number>, scanWorld: ArrayLike<number>): ((x: number, y: number, z: number) => number) | undefined => {
+    const axes = toothAxesOf(tooth);
+    if (!axes) return undefined;
+    const surface = new NearestSurface(soupWithin(scanWorld, soupBoxOf(Float32Array.from(soup), NECK_REACH_MOST + 3)), 4);
+    const sign = surfaceSign(axes, surface), q = [0, 0, 0], n = [0, 0, 0];
+    return (x, y, z) => {
+      if (surface.nearest(x, y, z, q) === Infinity || surface.lastTriangle < 0) return 1;
+      surface.triangleNormal(surface.lastTriangle, n);
+      return ((x - q[0]) * n[0] + (y - q[1]) * n[1] + (z - q[2]) * n[2]) * sign;
+    };
+  };
+  /**
+   * Pare Dental (Rakesh: "the palatal is still frustrating"): at Gum line and Export each wax tooth is drawn with its neck as
+   * Make will make it - reaching under the palatal gum - so the palatal gum hides it on screen as the labial gum does
+   * (it was drawn as laid, over the palatal gum, though the model was right). Kept per tooth and scan.
+   */
+  const neckShownCache = useRef(new WeakMap<WorkplaneShape, { scan: WorkplaneShape; base: WorkplaneShape; shape: WorkplaneShape }>());
+  const neckShown = (tooth: WorkplaneShape): WorkplaneShape => {
+    const scan = tooth.waxFor ? shapesRef.current.find((shape) => shape.id === tooth.waxFor) : undefined;
+    const toWorld = tooth.waxTooth ? localToWorld(tooth) : null;
+    if (!scan || !toWorld) return tooth;
+    // The erase may be worked out a moment later (eraseTick): the tooth as drawn now is part of the key.
+    const base = erasedShown(tooth);
+    const known = neckShownCache.current.get(tooth);
+    if (known && known.scan === scan && known.base === base) return known.shape;
+    const soup = worldTriangles(base);
+    const drawn = extendNeck(soup, moveFrame(tooth.waxTooth!.frame, toWorld), undefined, neckUnder(tooth, soup, worldTriangles(scan)));
+    const shape = { ...shapeWithWorldPositions(base, Array.from(drawn)), id: tooth.id };
+    neckShownCache.current.set(tooth, { scan, base, shape });
+    return shape;
+  };
   const erasedShown = (tooth: WorkplaneShape): WorkplaneShape => {
     const soup = erasedSoup(tooth, false);
     if (!soup) return tooth;
@@ -21700,7 +21721,9 @@ export function LayerlingEditor({
   // (Build 117 tried Position too: working out what the trims need - each tooth's margin and key - as the set moved
   // stalled the page for seconds at a time, so Position shows the whole teeth as before.)
   const eraseShownStep = !studioWaxStep || ["keep", "sculpt", "gum", "make"].includes(studioWaxStep);
-  const erasedViewportShapes = useMemo(() => (dentalStudio?.waxStudio && eraseShownStep && ((waxup.erase && Object.keys(waxup.erase).length) || (waxup.margins?.upper || waxup.margins?.lower) || waxup.boundaries?.upper || waxup.boundaries?.lower) ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? erasedShown(shape) : shape)) : viewportShapes), [viewportShapes, waxup.erase, waxup.margins, waxup.boundaries, waxup.marginOn, dentalStudio, eraseTick, eraseShownStep]); // eslint-disable-line react-hooks/exhaustive-deps
+  const neckShownStep = Boolean(dentalStudio?.waxStudio) && dentalStudio?.stage !== "made" && (studioWaxStep === "gum" || studioWaxStep === "make");
+  const erasedViewportShapes = useMemo(() => (dentalStudio?.waxStudio && neckShownStep ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? neckShown(shape) : shape))
+    : dentalStudio?.waxStudio && eraseShownStep && ((waxup.erase && Object.keys(waxup.erase).length) || (waxup.margins?.upper || waxup.margins?.lower) || waxup.boundaries?.upper || waxup.boundaries?.lower) ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? erasedShown(shape) : shape)) : viewportShapes), [viewportShapes, waxup.erase, waxup.margins, waxup.boundaries, waxup.marginOn, dentalStudio, eraseTick, eraseShownStep, neckShownStep]); // eslint-disable-line react-hooks/exhaustive-deps
   const heldViewportShapes = historyView.shapes ?? erasedViewportShapes;
   // Build 118: with the library palatal, each wax tooth's palatal drawn whole over the scan - the scan itself never changed.
   // Build 283: the drawn-over palatal is no longer used (the pressed scan is shown instead, as it will be made).

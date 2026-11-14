@@ -4,8 +4,8 @@ import { eraseTooth, type ToothAxes } from "@/lib/waxErase";
 import type { ClosedMargin } from "@/lib/waxMargin";
 
 /*
- * Pare Dental: a margin drawn by hand round a tooth - the wax stops at it all the way round. Over the gum outside it the
- * wax goes under the gum on the palatal side as well as the labial (Build 117 kept it palatally, over the gum).
+ * Pare Dental: a margin drawn by hand round a tooth. Over the gum outside it the wax goes under the gum on the labial side;
+ * on the palatal it is left (pushing it under there shattered the tooth - the neck reaching under the gum hides it).
  */
 const grid = (z: number, x0: number, x1: number, y0: number, y1: number, step: number) => {
   const out: number[] = [];
@@ -38,7 +38,13 @@ describe("closed margin, palatal side", () => {
     for (let i = 0; i < out.length; i += 3) if (pick(out[i], out[i + 1])) z.push(out[i + 2]);
     return z;
   };
-  for (const [side, out] of [["labial", [0, 0, 1]], ["palatal", [0, 0, -1]]] as const) {
+  it("leaves the wax over the palatal gum where it is (surface facing the palate)", () => {
+    const axes: ToothAxes = { origin: [0, 0, 0], mesial: [1, 0, 0], up: [0, 1, 0], out: [0, 0, -1] };
+    const result = eraseTooth(wax, axes, none, surface, 1, margin, []);
+    const overGum = heights(result ?? wax, (x, y) => Math.max(Math.abs(x), Math.abs(y)) > 2.9);
+    for (const z of overGum) expect(z).toBeGreaterThan(0.3);
+  });
+  for (const [side, out] of [["labial", [0, 0, 1]]] as const) {
     it(`takes the wax over the gum under it, and keeps it on the tooth (surface facing ${side})`, () => {
       // "out" along the surface's normal: the surface faces the lip; against it: the surface faces the palate.
       const axes: ToothAxes = { origin: [0, 0, 0], mesial: [1, 0, 0], up: [0, 1, 0], out: [...out] };

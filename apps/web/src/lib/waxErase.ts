@@ -124,9 +124,12 @@ export function eraseTooth(soup: ArrayLike<number>, axes: ToothAxes, paint: Toot
       // Build 117 (as Meshmixer): only on the labial side - palatally the library tooth's form is kept where it reaches
       // over the gum, running on into the palate (the boundary line limits it where wanted). Eased between by the
       // patient's surface turning from facing the lip to facing the palate.
-      // Pare Dental (Rakesh: "hide the wax behind the palatal gingival margin"): the margin is drawn by hand all the way
-      // round, so the wax stops at it palatally as well as labially - Build 117's palatal keep is no longer applied here.
-      if (at && !at.inside && at.overGum) { erased = 1; tuck = ERASE_TUCK + deep; }
+      // Pare Dental: tried palatally too (14 Nov) - pushing the palatal wax that far under the gum stretched triangles
+      // across the tooth (6 mm and more) and shattered it; the palatal is hidden by the neck reaching under the gum
+      // instead (lib/waxNeck neckFit), so the margin erases on the labial only, as Build 117 had it.
+      const facing = nx * axes.out[0] + ny * axes.out[1] + nz * axes.out[2];
+      const labial = smooth01((facing + PALATAL_KEEP) / PALATAL_EASE);
+      if (at && !at.inside && at.overGum && labial > 1e-3) { erased = labial; tuck = ERASE_TUCK + deep; }
       else if (at && CERVICAL_TAPER) {
         const target = (above > 0 ? softCap(above, taperLimit(at.gum)) : above) - deep;
         if (target < above) capped = (target - above) * kept;
