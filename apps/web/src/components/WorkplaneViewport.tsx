@@ -720,6 +720,8 @@ declare global {
     layerlingHighlight?: (triangles: Float32Array | null, owners?: Array<{ shapeId: string; triangles: number }>) => void;
     /** Build 107: Wax-up's landmark dots - small red balls, moved in place (no new geometry) while one is dragged; null clears them. */
     layerlingMarkDots?: (points: Array<[number, number, number]> | null, radius?: number, look?: { colors?: number[]; sizes?: number[]; /** Build 272: each dot joined to the next by a line, drawn over the scan. */ joined?: boolean }) => void;
+    /** Pare Dental (smooth margin): lines drawn as thin tubes, in sets by `key` (null clears the set) - so the stretch under the pointer is redrawn alone. */
+    layerlingMarkLines?: (key: string, lines: Array<{ points: Array<[number, number, number]>; color: number; radius?: number; closed?: boolean }> | null) => void;
     /** Build 69: Sculpt's working copy of a part (world soup) drawn in its place while it is worked on; null puts the part back. */
     layerlingSculptPreview?: (shapeId: string, triangles: Float32Array | null, color?: string) => void;
     /**
@@ -9968,15 +9970,19 @@ export function WorkplaneViewport({
     window.layerlingMarkDots = (points, radius = 0.45, look) => {
       const state = threeRef.current;
       if (!state || !points || !points.length) { clear(); return; }
-      if (!dots || dots.count !== points.length || dots.userData.radius !== radius) {
+      // Pare Dental (lag-free margin): room kept for more dots than shown, so a dot more or less is not a new mesh.
+      if (!dots || (dots.userData.room as number) < points.length || dots.userData.radius !== radius) {
         clear();
         dotsLook ??= new THREE.MeshBasicMaterial({ color: 0xffffff });
-        dots = new THREE.InstancedMesh(new THREE.SphereGeometry(radius, 16, 12), dotsLook, points.length);
+        const room = Math.max(16, 2 ** Math.ceil(Math.log2(points.length)));
+        dots = new THREE.InstancedMesh(new THREE.SphereGeometry(radius, 16, 12), dotsLook, room);
+        dots.userData.room = room;
         dots.userData.radius = radius;
         dots.renderOrder = 12;
         dots.frustumCulled = false;
         state.scene.add(dots);
       }
+      dots.count = points.length;
       const colour = new THREE.Color();
       points.forEach((point, i) => {
         dummy.position.set(point[0], point[1], point[2]);
@@ -10004,6 +10010,77 @@ export function WorkplaneViewport({
       state.needsRender = true;
     };
     return () => { clear(); dotsLook?.dispose(); dotsLook = null; delete window.layerlingMarkDots; };
+  }, []);
+  // Pare Dental (smooth margin): lines on the scan as thin round tubes, one mesh per set; looks kept by colour.
+  useEffect(() => {
+    const sets = new Map<string, THREE.Group>();
+    const looks = new Map<number, THREE.MeshBasicMaterial>();
+    const SIDES = 8;
+    const tube = (lines: Array<{ points: Array<[number, number, number]>; radius?: number; closed?: boolean }>) => {
+      const pos: number[] = [], index: number[] = [];
+      const t = new THREE.Vector3(), n = new THREE.Vector3(), b = new THREE.Vector3(), a = new THREE.Vector3(), c = new THREE.Vector3(), up = new THREE.Vector3();
+      for (const line of lines) {
+        const pts = line.points.slice();
+        if (line.closed && pts.length > 2) pts.push(pts[0]);
+        if (pts.length < 2) continue;
+        const r = line.radius ?? 0.06;
+        const start = pos.length / 3;
+        n.set(0, 0, 0);
+        for (let i = 0; i < pts.length; i += 1) {
+          a.fromArray(pts[Math.max(0, i - 1)]); c.fromArray(pts[Math.min(pts.length - 1, i + 1)]);
+          t.subVectors(c, a);
+          if (t.lengthSq() < 1e-12) t.set(1, 0, 0);
+          t.normalize();
+          // Carried along from the last ring (so the tube does not twist); started square to the line.
+          if (n.lengthSq() < 0.5) { up.set(Math.abs(t.z) < 0.9 ? 0 : 1, 0, Math.abs(t.z) < 0.9 ? 1 : 0); n.crossVectors(t, up).normalize(); }
+          n.addScaledVector(t, -n.dot(t));
+          if (n.lengthSq() < 1e-9) { up.set(0, 1, 0); n.crossVectors(t, up); }
+          n.normalize();
+          b.crossVectors(t, n);
+          const [x, y, z] = pts[i];
+          for (let k = 0; k < SIDES; k += 1) {
+            const ang = (k / SIDES) * Math.PI * 2, cs = Math.cos(ang) * r, sn = Math.sin(ang) * r;
+            pos.push(x + n.x * cs + b.x * sn, y + n.y * cs + b.y * sn, z + n.z * cs + b.z * sn);
+          }
+          if (i) for (let k = 0; k < SIDES; k += 1) {
+            const p0 = start + (i - 1) * SIDES + k, p1 = start + (i - 1) * SIDES + ((k + 1) % SIDES), q0 = p0 + SIDES, q1 = p1 + SIDES;
+            index.push(p0, q0, p1, p1, q0, q1);
+          }
+        }
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      geometry.setIndex(index);
+      return geometry;
+    };
+    const drop = (key: string) => {
+      const mesh = sets.get(key);
+      if (!mesh) return;
+      mesh.parent?.remove(mesh);
+      (mesh.children as THREE.Mesh[]).forEach((child) => child.geometry.dispose());
+      sets.delete(key);
+    };
+    window.layerlingMarkLines = (key, lines) => {
+      const state = threeRef.current;
+      drop(key);
+      if (state && lines?.length) {
+        const group = new THREE.Group();
+        const byColour = new Map<number, typeof lines>();
+        for (const line of lines) byColour.set(line.color, [...(byColour.get(line.color) ?? []), line]);
+        for (const [color, same] of byColour) {
+          let look = looks.get(color);
+          if (!look) { look = new THREE.MeshBasicMaterial({ color }); looks.set(color, look); }
+          const mesh = new THREE.Mesh(tube(same), look);
+          mesh.renderOrder = 12;
+          mesh.frustumCulled = false;
+          group.add(mesh);
+        }
+        state.scene.add(group);
+        sets.set(key, group);
+      }
+      if (state) state.needsRender = true;
+    };
+    return () => { for (const key of [...sets.keys()]) drop(key); looks.forEach((look) => look.dispose()); delete window.layerlingMarkLines; };
   }, []);
   // Fork (build 53): Dental Studio's tooth area, tinted over the scan while it is being designated.
   useEffect(() => {

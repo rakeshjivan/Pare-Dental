@@ -7,11 +7,17 @@
  * shortest along the patch's edges (Dijkstra), eased with a few passes that keep it on the surface.
  */
 import { NearestSurface, soupWithin } from "@/lib/nearestSurface";
+import { sameTripleIds } from "@/lib/dentalMesh";
 
 export type Vec3 = [number, number, number];
 
 /** How far round a line the scan is taken into the patch, mm. */
-const PATCH_REACH = 9;
+const PATCH_REACH = 12;
+/** Pare Dental (smooth margin): smoothing passes over a whole margin, and over the stretch shown under the pointer. */
+export const MARGIN_SMOOTH_PASSES = 24;
+const PREVIEW_SMOOTH_PASSES = 8;
+/** How freely a placed point moves with the smoothing (1: as the line between): 0 - the line goes through every point placed. */
+const ANCHOR_HOLD = 0;
 
 export class ScanPatch {
   readonly xyz: Float64Array;
@@ -31,18 +37,14 @@ export class ScanPatch {
     this.box = box;
     const soup = soupWithin(scan, box);
     this.surface = new NearestSurface(soup, 3);
-    const weld = new Map<string, number>();
-    const pts: number[] = [];
-    const tri: number[] = [];
-    for (let c = 0; c * 3 + 2 < soup.length; c += 1) {
-      const x = soup[c * 3], y = soup[c * 3 + 1], z = soup[c * 3 + 2];
-      const key = `${Math.round(x * 1e4)},${Math.round(y * 1e4)},${Math.round(z * 1e4)}`;
-      let v = weld.get(key);
-      if (v === undefined) { v = pts.length / 3; weld.set(key, v); pts.push(x, y, z); }
-      tri.push(v);
-    }
-    this.xyz = Float64Array.from(pts);
-    this.tri = Int32Array.from(tri);
+    // Pare Dental (lag-free margin): corners welded at 0.1 micron in a typed table (was a string per corner).
+    const corners = Math.floor(soup.length / 3);
+    const welded = sameTripleIds(corners, (i, k) => Math.round(soup[i * 3 + k] * 1e4));
+    const pts = new Float64Array(welded.count * 3);
+    for (let c = corners - 1; c >= 0; c -= 1) { const v = welded.ids[c]; pts[v * 3] = soup[c * 3]; pts[v * 3 + 1] = soup[c * 3 + 1]; pts[v * 3 + 2] = soup[c * 3 + 2]; }
+    const tri = welded.ids;
+    this.xyz = pts;
+    this.tri = tri;
     const count = pts.length / 3;
     const edges: Array<[number, number]> = [];
     const seen = new Set<number>();
@@ -122,52 +124,117 @@ export class ScanPatch {
     }
     return best;
   }
-  /** The shortest way over the surface from a to b (both on it), as points from a to b. */
-  path(a: Vec3, b: Vec3, magnetic = true): Vec3[] {
-    const s = this.nearestVertex(a), e = this.nearestVertex(b);
-    if (s < 0 || e < 0) return [a, b];
-    if (s === e) return [a, b];
+  /**
+   * Pare Dental (lag-free margin): the shortest ways from one vertex to every other in the patch, kept - so the stretch
+   * from the last point placed to the pointer, worked out again on every move, is only a walk back along this tree.
+   */
+  private treeFrom = -1;
+  private treeMagnetic = true;
+  private treePrev: Int32Array | null = null;
+  private treeOf(s: number, magnetic: boolean): Int32Array {
+    if (this.treePrev && this.treeFrom === s && this.treeMagnetic === magnetic) return this.treePrev;
+    const count = this.xyz.length / 3;
+    const dist = new Float64Array(count).fill(Infinity);
+    const prev = new Int32Array(count).fill(-1);
+    const heap = new MinHeap();
+    dist[s] = 0; heap.push(s, 0);
+    while (heap.size) {
+      const [v, dv] = heap.pop();
+      if (dv > dist[v]) continue;
+      for (let k = this.start[v]; k < this.start[v + 1]; k += 1) {
+        // Build 113 (as exocad's magnetic margin): a step along a crease costs as little as a fifth.
+        const u = this.next[k], d = dv + this.cost[k] * (magnetic ? 1 - 0.8 * this.crease[u] : 1);
+        if (d < dist[u]) { dist[u] = d; prev[u] = v; heap.push(u, d); }
+      }
+    }
+    this.treeFrom = s; this.treeMagnetic = magnetic; this.treePrev = prev;
+    return prev;
+  }
+  /** One way from s to e (A*, aimed at e): for a stretch between two placed points, not worth a whole tree. */
+  private searchTo(s: number, e: number, magnetic: boolean): Int32Array {
     const count = this.xyz.length / 3;
     const dist = new Float64Array(count).fill(Infinity);
     const prev = new Int32Array(count).fill(-1);
     const heap = new MinHeap();
     dist[s] = 0; heap.push(s, 0);
     const ex = this.xyz[e * 3], ey = this.xyz[e * 3 + 1], ez = this.xyz[e * 3 + 2];
-    const h = (v: number) => Math.hypot(this.xyz[v * 3] - ex, this.xyz[v * 3 + 1] - ey, this.xyz[v * 3 + 2] - ez) * (magnetic ? 0.2 : 1);
+    const scale = magnetic ? 0.2 : 1;
     while (heap.size) {
-      const [v] = heap.pop();
+      const [v, f] = heap.pop();
       if (v === e) break;
       const dv = dist[v];
+      if (f - Math.hypot(this.xyz[v * 3] - ex, this.xyz[v * 3 + 1] - ey, this.xyz[v * 3 + 2] - ez) * scale > dv + 1e-9) continue;
       for (let k = this.start[v]; k < this.start[v + 1]; k += 1) {
-        // Build 113 (as exocad's magnetic margin): a step along a crease costs as little as a fifth.
         const u = this.next[k], d = dv + this.cost[k] * (magnetic ? 1 - 0.8 * this.crease[u] : 1);
-        if (d < dist[u]) { dist[u] = d; prev[u] = v; heap.push(u, d + h(u)); }
+        if (d < dist[u]) { dist[u] = d; prev[u] = v; heap.push(u, d + Math.hypot(this.xyz[u * 3] - ex, this.xyz[u * 3 + 1] - ey, this.xyz[u * 3 + 2] - ez) * scale); }
       }
     }
+    return prev;
+  }
+  /** The way over the patch's edges from a to b, unsmoothed (a and b themselves at the ends); `kept`: from the tree kept from a. */
+  private rawPath(a: Vec3, b: Vec3, magnetic: boolean, kept = false): Vec3[] {
+    const s = this.nearestVertex(a), e = this.nearestVertex(b);
+    if (s < 0 || e < 0 || s === e) return [a, b];
+    const prev = kept ? this.treeOf(s, magnetic) : this.searchTo(s, e, magnetic);
     if (prev[e] < 0) return [a, b];
     const verts: number[] = [];
-    for (let v = e; v >= 0; v = prev[v]) verts.push(v);
+    for (let v = e; v >= 0 && v !== s; v = prev[v]) verts.push(v);
     verts.reverse();
-    // Ends at the clicked points themselves; the path between eased (the edges zig-zag) and kept on the surface.
-    let line: Vec3[] = [a, ...verts.slice(1, -1).map((v) => [this.xyz[v * 3], this.xyz[v * 3 + 1], this.xyz[v * 3 + 2]] as Vec3), b];
-    line = resample(line, 0.15);
-    const q = [0, 0, 0];
-    for (let pass = 0; pass < 6; pass += 1) {
-      line = line.map((p, i) => (i === 0 || i === line.length - 1 ? p : [0, 1, 2].map((k) => 0.25 * line[i - 1][k] + 0.5 * p[k] + 0.25 * line[i + 1][k]) as Vec3));
-      line = line.map((p, i) => (i === 0 || i === line.length - 1 || this.surface.nearest(p[0], p[1], p[2], q) === Infinity ? p : [q[0], q[1], q[2]] as Vec3));
-    }
-    return line;
+    return [a, ...verts.slice(0, -1).map((v) => [this.xyz[v * 3], this.xyz[v * 3 + 1], this.xyz[v * 3 + 2]] as Vec3), b];
   }
-  /** The whole line through the clicked points, stretch by stretch (closed: back to the first point too). */
+  /**
+   * Pare Dental (smooth margin): a line smoothed as one curve and kept on the scan - Taubin passes (a step in, a step back
+   * out, so it does not shrink), each point put back on the surface after each pass. `anchors` (the points the dentist
+   * placed) are held more firmly, so the line runs smoothly through them rather than turning a corner at each; an open
+   * line's two ends stay where they are.
+   */
+  smoothOnSurface(line: Vec3[], closed: boolean, anchors: Vec3[] = [], passes = MARGIN_SMOOTH_PASSES): Vec3[] {
+    let pts = resample(withoutHairpins(line, closed, anchors), 0.15);
+    if (closed && pts.length > 2) { const a = pts[0], b = pts[pts.length - 1]; if (Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) < 0.05) pts = pts.slice(0, -1); }
+    const n = pts.length;
+    if (n < 3) return pts;
+    const hold = new Float64Array(n).fill(1);
+    for (const a of anchors) {
+      let best = -1, bestD = Infinity;
+      for (let i = 0; i < n; i += 1) { const d = (pts[i][0] - a[0]) ** 2 + (pts[i][1] - a[1]) ** 2 + (pts[i][2] - a[2]) ** 2; if (d < bestD) { bestD = d; best = i; } }
+      if (best >= 0) { hold[best] = ANCHOR_HOLD; pts[best] = [a[0], a[1], a[2]]; }
+    }
+    if (!closed) { hold[0] = 0; hold[n - 1] = 0; }
+    const xyz = new Float64Array(n * 3), nxt = new Float64Array(n * 3), q = [0, 0, 0];
+    pts.forEach((p, i) => { xyz[i * 3] = p[0]; xyz[i * 3 + 1] = p[1]; xyz[i * 3 + 2] = p[2]; });
+    for (let pass = 0; pass < passes; pass += 1) {
+      for (const factor of [0.5, -0.53]) {
+        for (let i = 0; i < n; i += 1) {
+          const w = hold[i] * factor;
+          const a = closed ? (i - 1 + n) % n : Math.max(0, i - 1), b = closed ? (i + 1) % n : Math.min(n - 1, i + 1);
+          for (let k = 0; k < 3; k += 1) nxt[i * 3 + k] = xyz[i * 3 + k] + w * ((xyz[a * 3 + k] + xyz[b * 3 + k]) / 2 - xyz[i * 3 + k]);
+        }
+        xyz.set(nxt);
+      }
+      for (let i = 0; i < n; i += 1) {
+        if (hold[i] === 0) continue;
+        if (this.surface.nearest(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2], q) !== Infinity) { xyz[i * 3] = q[0]; xyz[i * 3 + 1] = q[1]; xyz[i * 3 + 2] = q[2]; }
+      }
+    }
+    const out: Vec3[] = [];
+    for (let i = 0; i < n; i += 1) out.push([xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2]]);
+    if (closed) out.push(out[0]);
+    return out;
+  }
+  /** The shortest way over the surface from a to b (both on it), as points from a to b, smoothed and on the surface. */
+  path(a: Vec3, b: Vec3, magnetic = true): Vec3[] {
+    return this.smoothOnSurface(this.rawPath(a, b, magnetic, true), false, [], PREVIEW_SMOOTH_PASSES);
+  }
+  /** The whole line through the clicked points (closed: back to the first point too), smoothed as one curve. */
   line(points: Vec3[], closed = false, magnetic = true): Vec3[] {
     if (points.length < 2) return points.slice();
     const out: Vec3[] = [];
     const stops = closed && points.length >= 3 ? [...points, points[0]] : points;
     for (let i = 0; i + 1 < stops.length; i += 1) {
-      const part = this.path(stops[i], stops[i + 1], magnetic);
+      const part = this.rawPath(stops[i], stops[i + 1], magnetic);
       out.push(...(i ? part.slice(1) : part));
     }
-    return out;
+    return this.smoothOnSurface(out, closed && points.length >= 3, points);
   }
   /**
    * Build 113: the patch's triangles inside a closed margin (1), as a flood from the triangle nearest `seed`
@@ -237,6 +304,36 @@ export class ScanPatch {
 const CELL = 0.6;
 const key3 = (ix: number, iy: number, iz: number) => (((ix & 1023) * 1024 + (iy & 1023)) * 1024 + (iz & 1023));
 const cellKey = (x: number, y: number, z: number) => key3(Math.floor(x / CELL), Math.floor(y / CELL), Math.floor(z / CELL));
+
+/**
+ * Pare Dental (smooth margin): the line without its hairpins - where the way over the edges runs a step past a placed
+ * point and comes back (the nearest vertex to a click is often just beyond it), the point that turns back is dropped -
+ * only within 0.4 mm of a placed point, so a stretch the dentist did draw out and back is kept.
+ */
+export function withoutHairpins(line: Vec3[], closed: boolean, anchors: Vec3[]): Vec3[] {
+  const nearClick = (p: Vec3) => anchors.some((a) => (a[0] - p[0]) ** 2 + (a[1] - p[1]) ** 2 + (a[2] - p[2]) ** 2 < 0.16);
+  const isClick = (p: Vec3) => anchors.some((a) => a[0] === p[0] && a[1] === p[1] && a[2] === p[2]);
+  let pts = line.slice();
+  for (let round = 0; round < 8; round += 1) {
+    const keep: Vec3[] = [];
+    let dropped = false;
+    const n = pts.length;
+    for (let i = 0; i < n; i += 1) {
+      const ends = !closed && (i === 0 || i === n - 1);
+      const a = keep.length ? keep[keep.length - 1] : pts[(i - 1 + n) % n], b = pts[i], c = pts[(i + 1) % n];
+      if (!ends && n > 4 && nearClick(b) && !isClick(b)) {
+        const u0 = b[0] - a[0], u1 = b[1] - a[1], u2 = b[2] - a[2], v0 = c[0] - b[0], v1 = c[1] - b[1], v2 = c[2] - b[2];
+        const lu = Math.hypot(u0, u1, u2), lv = Math.hypot(v0, v1, v2);
+        // Turned back by more than 110 degrees (or on top of the last point): not part of the line.
+        if (lu < 1e-4 || (lv > 1e-4 && (u0 * v0 + u1 * v1 + u2 * v2) / (lu * lv) < -0.34)) { dropped = true; continue; }
+      }
+      keep.push(b);
+    }
+    pts = keep;
+    if (!dropped) break;
+  }
+  return pts;
+}
 
 /** A patch box round some points (PATCH_REACH mm beyond them). */
 export function patchBox(points: ArrayLike<number>[]): number[] {

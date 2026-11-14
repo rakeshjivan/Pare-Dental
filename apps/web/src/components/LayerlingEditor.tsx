@@ -13172,36 +13172,47 @@ export function LayerlingEditor({
     return curve;
   };
   const eraseKeyOf = (points: Array<[number, number, number]>) => points.map((p) => p.map((v) => Math.round(v * 100)).join(",")).join(";");
+  const MARGIN_TUBE = 0.06;
   const marginHover = useRef<[number, number, number] | null>(null);
+  type MarkLine = { points: Array<[number, number, number]>; color: number; radius?: number; closed?: boolean };
+  /** Pare Dental (smooth margin): the lines drawn as thin tubes, and only the points the dentist placed as dots. */
   const showMargins = (state: WaxupState) => {
     const arch = waxArch();
     if (!arch) return;
     const back = arch.sceneToInput.clone().invert();
     const points: Array<[number, number, number]> = [], colors: number[] = [], sizes: number[] = [];
     const put = (p: [number, number, number], colour: number, size: number) => { points.push(p); colors.push(colour); sizes.push(size); };
+    const curves: MarkLine[] = [];
     const lines = marginLinesOf(state, arch.slot);
     const pick = state.marginPick;
     for (const [fdi, line] of Object.entries(lines)) {
       if (pick?.fdi === Number(fdi)) continue;
-      for (const p of resample(marginCurveOf(arch.shape, back, line, line.length >= 3), 0.12)) put(p, 0x1f8fe0, 0.22);
-      for (const p of line) put(new THREE.Vector3(...p).applyMatrix4(back).toArray() as [number, number, number], 0x1f8fe0, 0.55);
+      curves.push({ points: marginCurveOf(arch.shape, back, line, line.length >= 3), color: 0x1f8fe0, radius: MARGIN_TUBE });
+      for (const p of line) put(new THREE.Vector3(...p).applyMatrix4(back).toArray() as [number, number, number], 0x1f8fe0, 0.4);
     }
     // Build 114: the margins the tooth finder found (teeth with no margin drawn), in green.
     const toInput = waxArchInput(arch.shape);
     if (toInput && waxupRef.current.marginOn) for (const fdi of marginTeethOf(arch.slot)) {
       if (lines[fdi] || pick?.fdi === fdi) continue;
       const found = foundMarginFor(fdi, arch.shape, toInput);
-      if (found) for (const p of found.region.line) put(p, 0x2fb6a0, 0.16);
+      if (found) curves.push({ points: found.region.line, color: 0x2fb6a0, radius: MARGIN_TUBE * 0.7 });
     }
     if (pick) {
       const scene = pick.points.map((p) => new THREE.Vector3(...p).applyMatrix4(back).toArray() as [number, number, number]);
-      for (const p of resample(marginCurveOf(arch.shape, back, pick.points), 0.12)) put(p, 0xe0322f, 0.22);
-      // The next stretch, from the last point to the pointer, before it is clicked.
-      const hover = marginHover.current;
-      if (hover && scene.length) for (const p of resample(patchFor(arch.shape, [...scene, hover]).path(scene[scene.length - 1], hover), 0.12)) put(p, 0xf29a1f, 0.2);
-      for (const p of scene) put(p, 0xe0322f, 0.7);
+      if (scene.length >= 2) curves.push({ points: marginCurveOf(arch.shape, back, pick.points), color: 0xe0322f, radius: MARGIN_TUBE });
+      for (const p of scene) put(p, 0xe0322f, 0.6);
     }
+    window.layerlingMarkLines?.("margin", curves.length ? curves : null);
     window.layerlingMarkDots?.(points.length ? points : null, 0.35, { colors, sizes });
+    showMarginPreview(state);
+  };
+  /** The next stretch, from the last point placed to the pointer, before it is clicked - redrawn alone as the pointer moves. */
+  const showMarginPreview = (state: WaxupState) => {
+    const arch = waxArch();
+    const pick = state.marginPick, hover = marginHover.current;
+    if (!arch || !pick?.points.length || !hover) { window.layerlingMarkLines?.("margin-next", null); return; }
+    const last = new THREE.Vector3(...pick.points[pick.points.length - 1]).applyMatrix4(arch.sceneToInput.clone().invert()).toArray() as [number, number, number];
+    window.layerlingMarkLines?.("margin-next", [{ points: patchFor(arch.shape, [last, hover]).path(last, hover), color: 0xf29a1f, radius: MARGIN_TUBE * 0.85 }]);
   };
   const showMarginsRef = useRef(showMargins);
   showMarginsRef.current = showMargins;
@@ -13250,11 +13261,25 @@ export function LayerlingEditor({
     setWaxup(next);
     showMargins(next);
   };
-  const hoverMargin = (x: number, y: number) => {
-    if (!waxupRef.current.marginPick?.points.length) return;
-    marginHover.current = markSurfaceAt(x, y);
-    showMarginsRef.current(waxupRef.current);
+  /** Pare Dental (lag-free margin): the pointer's moves gathered to one redraw a screen frame, of the last stretch only. */
+  const hoverFrame = useRef(0);
+  const hoverAt = useRef<[number, number] | null>(null);
+  const hoverOnFrame = (x: number, y: number, run: (x: number, y: number) => void) => {
+    hoverAt.current = [x, y];
+    if (hoverFrame.current) return;
+    hoverFrame.current = window.requestAnimationFrame(() => {
+      hoverFrame.current = 0;
+      const at = hoverAt.current;
+      if (at) run(at[0], at[1]);
+    });
   };
+  const showMarginPreviewRef = useRef(showMarginPreview);
+  showMarginPreviewRef.current = showMarginPreview;
+  const hoverMargin = (x: number, y: number) => hoverOnFrame(x, y, (px, py) => {
+    if (!waxupRef.current.marginPick?.points.length) return;
+    marginHover.current = markSurfaceAt(px, py);
+    showMarginPreviewRef.current(waxupRef.current);
+  });
   const undoMarginPoint = () => {
     const current = waxupRef.current;
     const pick = current.marginPick;
@@ -13307,21 +13332,30 @@ export function LayerlingEditor({
     const arch = waxArch();
     if (!arch) return;
     const back = arch.sceneToInput.clone().invert();
-    const points: Array<[number, number, number]> = [], colors: number[] = [], sizes: number[] = [];
-    const put = (p: [number, number, number], colour: number, size: number) => { points.push(p); colors.push(colour); sizes.push(size); };
+    const curves: MarkLine[] = [];
     for (const lines of Object.values(boundaryLinesOf(state, arch.slot))) for (const line of lines) {
-      for (const p of resample(marginCurveOf(arch.shape, back, line, false), 0.12)) put(p, 0xf28c1f, 0.22);
+      curves.push({ points: marginCurveOf(arch.shape, back, line, false), color: 0xf28c1f, radius: MARGIN_TUBE });
     }
     const pick = state.boundaryPick;
+    const points: Array<[number, number, number]> = [];
     if (pick) {
       const scene = pick.points.map((p) => new THREE.Vector3(...p).applyMatrix4(back).toArray() as [number, number, number]);
-      if (scene.length >= 2) for (const p of resample(marginCurveOf(arch.shape, back, pick.points, false), 0.12)) put(p, 0xe0322f, 0.22);
-      const hover = boundaryHover.current;
-      if (hover && scene.length) for (const p of resample(patchFor(arch.shape, [...scene, hover]).path(scene[scene.length - 1], hover), 0.12)) put(p, 0xf29a1f, 0.2);
-      for (const p of scene) put(p, 0xe0322f, 0.6);
+      if (scene.length >= 2) curves.push({ points: marginCurveOf(arch.shape, back, pick.points, false), color: 0xe0322f, radius: MARGIN_TUBE });
+      points.push(...scene);
     }
-    window.layerlingMarkDots?.(points.length ? points : null, 0.35, { colors, sizes });
+    window.layerlingMarkLines?.("boundary", curves.length ? curves : null);
+    window.layerlingMarkDots?.(points.length ? points : null, 0.35, { colors: points.map(() => 0xe0322f), sizes: points.map(() => 0.6) });
+    showBoundaryPreview(state);
   };
+  const showBoundaryPreview = (state: WaxupState) => {
+    const arch = waxArch();
+    const pick = state.boundaryPick, hover = boundaryHover.current;
+    if (!arch || !pick?.points.length || !hover) { window.layerlingMarkLines?.("boundary-next", null); return; }
+    const last = new THREE.Vector3(...pick.points[pick.points.length - 1]).applyMatrix4(arch.sceneToInput.clone().invert()).toArray() as [number, number, number];
+    window.layerlingMarkLines?.("boundary-next", [{ points: patchFor(arch.shape, [last, hover]).path(last, hover), color: 0xf29a1f, radius: MARGIN_TUBE * 0.85 }]);
+  };
+  const showBoundaryPreviewRef = useRef(showBoundaryPreview);
+  showBoundaryPreviewRef.current = showBoundaryPreview;
   const showBoundariesRef = useRef(showBoundaries);
   showBoundariesRef.current = showBoundaries;
   const pickBoundaryPoint = (x: number, y: number) => {
@@ -13335,11 +13369,11 @@ export function LayerlingEditor({
     setWaxup(next);
     showBoundaries(next);
   };
-  const hoverBoundary = (x: number, y: number) => {
+  const hoverBoundary = (x: number, y: number) => hoverOnFrame(x, y, (px, py) => {
     if (!waxupRef.current.boundaryPick?.points.length) return;
-    boundaryHover.current = markSurfaceAt(x, y);
-    showBoundariesRef.current(waxupRef.current);
-  };
+    boundaryHover.current = markSurfaceAt(px, py);
+    showBoundaryPreviewRef.current(waxupRef.current);
+  });
   const undoBoundaryPoint = () => {
     const current = waxupRef.current;
     const pick = current.boundaryPick;
@@ -13383,7 +13417,7 @@ export function LayerlingEditor({
       return;
     }
     showBoundariesRef.current(waxupRef.current);
-    return () => { window.layerlingMarkDots?.(null, 0.35); };
+    return () => { window.layerlingMarkDots?.(null, 0.35); window.layerlingMarkLines?.("boundary", null); window.layerlingMarkLines?.("boundary-next", null); };
   }, [studioWaxSculpt, waxup.boundaries, waxup.slot]); // eslint-disable-line react-hooks/exhaustive-deps
   const marginDragList = (): DragMark[] => {
     const arch = waxArch();
@@ -13410,7 +13444,7 @@ export function LayerlingEditor({
   // The lines shown in the margin step only, with only the arch being marked in view.
   const marginShown = useRef(false);
   useEffect(() => {
-    if (!marginStep) { if (marginShown.current) { window.layerlingMarkDots?.(null); setDentalHidden([]); } marginShown.current = false; return; }
+    if (!marginStep) { if (marginShown.current) { window.layerlingMarkDots?.(null); window.layerlingMarkLines?.("margin", null); window.layerlingMarkLines?.("margin-next", null); setDentalHidden([]); } marginShown.current = false; return; }
     marginShown.current = true;
     const state = dentalStudioRef.current;
     if (state) {
@@ -14095,7 +14129,7 @@ export function LayerlingEditor({
       window.clearTimeout(timer);
       setDentalHidden([]);
       setWaxSeeThrough(false);
-      window.layerlingHighlight?.(null); window.layerlingMarkDots?.(null);
+      window.layerlingHighlight?.(null); window.layerlingMarkDots?.(null); for (const key of ["margin", "margin-next", "boundary", "boundary-next"]) window.layerlingMarkLines?.(key, null);
       highlightDrawn.current = null;
     };
   }, [marksEditing, dotPicking, waxup.slot]); // eslint-disable-line react-hooks/exhaustive-deps
