@@ -219,6 +219,7 @@ export function DentalStudioPanel({
   waxup,
   waxStudio,
   onEditDesign,
+  madeTouch,
   onMidlinePick,
   midlinePicking = false,
   madeSettings,
@@ -243,6 +244,8 @@ export function DentalStudioPanel({
   makeProgress?: DentalMakeProgress | null;
   /** Build 79: after Make - open the design again, or finish. */
   onEditDesign?: () => void;
+  /** Pare Dental: Finishing touches on the made models - Smooth, Add, Remove. */
+  madeTouch?: { slots: Array<"upper" | "lower">; active: "upper" | "lower" | null; brush: "smooth" | "add" | "remove"; onPick: (slot: "upper" | "lower" | null) => void; onBrush: (brush: "smooth" | "add" | "remove") => void };
   /** Build 117: marking the dental midline on the upper for an articulated pair - start (or stop) marking, and whether it is being marked. */
   onMidlinePick?: (on: boolean) => void;
   /** Build 272: which click of the two the midline marking waits for (false: not marking). */
@@ -842,6 +845,26 @@ export function DentalStudioPanel({
           <p className="dental-status" role="status"><Check size={15} /> {t("dental.madeHere")}{framed ? <HelpTip text={`${t("dental.madeHint")} ${t("export.dentalLayers")}`} /> : null}</p>
           {framed ? null : <p className="blend-hint">{t("dental.madeHint")}</p>}
           {framed ? null : <p className="dental-status warn" role="note">{t("export.dentalLayers")}</p>}
+          {madeTouch && madeTouch.slots.length ? (
+            <div className="dental-made-touch" role="group" aria-label={t("made.touchTitle")}>
+              <p className="studio-sub">{t("made.touchTitle")}</p>
+              <div className="studio-mm-choice" role="radiogroup" aria-label={t("made.touchTitle")}>
+                {madeTouch.slots.map((slot) => (
+                  <button key={slot} type="button" role="radio" aria-checked={madeTouch.active === slot} className={madeTouch.active === slot ? "active" : ""} onClick={() => madeTouch.onPick(madeTouch.active === slot ? null : slot)}>{t(slot === "upper" ? "dental.upper" : "dental.lower")}</button>
+                ))}
+              </div>
+              {madeTouch.active ? (<>
+                <div className="studio-mm-choice three" role="radiogroup" aria-label={t("made.touchTitle")}>
+                  {(["smooth", "add", "remove"] as const).map((brush) => (
+                    <button key={brush} type="button" role="radio" aria-checked={madeTouch.brush === brush} className={madeTouch.brush === brush ? "active" : ""} onClick={() => madeTouch.onBrush(brush)}>{t(`made.touch.${brush}`)}</button>
+                  ))}
+                </div>
+                <p className="blend-hint" role="status">{t(`made.touch.${madeTouch.brush}Hint`)}</p>
+                <div className="studio-tool-slot" ref={toolSlot} />
+                <div className="dental-trim-buttons"><button type="button" className="secondary" onClick={() => madeTouch.onPick(null)}>{t("made.touchDone")}</button></div>
+              </>) : <p className="blend-hint">{t("made.touchHint")}</p>}
+            </div>
+          ) : null}
           <div className="edge-modifier-footer">
             <button type="button" className="secondary" onClick={onEditDesign}>{t("dental.editDesign")}</button>
             <button type="button" className="primary" onClick={onDone}><Check size={17} /> {t("dental.doneButton")}</button>

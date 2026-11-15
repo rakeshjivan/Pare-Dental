@@ -1293,6 +1293,15 @@ export class LiveMesh {
   clearMask() { for (let v = 0; v < this.vCount; v += 1) if (this.mask[v] !== 0) { this.mask[v] = 0; this.maskChanged(v); } }
   /** Frozen becomes free and free frozen. */
   invertMask() { for (let v = 0; v < this.vCount; v += 1) if (this.vAlive[v]) { this.mask[v] = 1 - this.mask[v]; this.maskChanged(v); } }
+  /** Pare Dental: freezes every living corner for which `frozen(x, y, z, v)` is true (the made model's base and inside). */
+  freezeWhere(frozen: (x: number, y: number, z: number, v: number) => boolean) {
+    let count = 0;
+    for (let v = 0; v < this.vCount; v += 1) {
+      if (!this.vAlive[v] || this.mask[v] === 1) continue;
+      if (frozen(this.pos[v * 3], this.pos[v * 3 + 1], this.pos[v * 3 + 2], v)) { this.mask[v] = 1; this.maskChanged(v); count += 1; }
+    }
+    return count;
+  }
   /** Freezes the corners at these points (x y z each; within 1e-4 mm), e.g. a selection's triangles. */
   freezePoints(points: ArrayLike<number>) {
     let count = 0;
