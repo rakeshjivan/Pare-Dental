@@ -880,6 +880,8 @@ export function DentalStudioPanel({
           {/* Build 108: which arches are waxed - asked first, before the scans (none chosen until the dentist picks). */}
           {choice(t("waxStudio.arches"), (archesChosen ? waxStudio.arches : "") as "upper" | "lower" | "both", [["upper", t("dental.upper")], ["lower", t("dental.lower")], ["both", t("waxStudio.both")]], waxStudio.onArches)}
           {!archesChosen ? <p className="dental-status warn" role="status">{t("waxStudio.archesFirst")}</p> : null}
+          {/* Pare Dental (Rakesh: "we need to ask at the start what the case is - veneer only or full wax-up"). */}
+          {waxStudio.flow !== "imt" && waxup?.actions.onVeneer ? choice(t("waxup.veneer.case"), (waxup.view.veneer?.on ? "veneer" : "full") as "full" | "veneer", [["full", t("waxup.veneer.off")], ["veneer", t("waxup.veneer.on")]], (value) => waxup.actions.onVeneer?.({ on: value === "veneer" }), t("waxup.veneer.caseHint")) : null}
           {/* Build 111: two ways of working were tried side by side; build 118 keeps one - Keep & erase, with the library
               tooth's palatal (Gum line) - so there is no Margins choice. A design made with a margin line still opens with it. */}
           <p className="blend-hint">{t(waxStudio.flow === "imt" ? "waxStudio.imtHint" : "waxStudio.waxupHint")}</p>
@@ -1095,15 +1097,10 @@ export function DentalStudioPanel({
           })}
           <div className="dental-trim-buttons"><button type="button" className="secondary" disabled={busy} title={t("waxup.gum.idealHint")} onClick={() => waxup.actions.onGumIdeal?.()}>{t("waxup.gum.ideal")}</button></div>
         </>) : null}
-        {/* Pare Dental: the teeth as full contour or as veneers (labial, and over the edge to a palatal wrap). */}
-        <p className="studio-sub">{t("waxup.veneer.title")}</p>
-        <div className="studio-mm-choice" role="radiogroup" aria-label={t("waxup.veneer.title")}>
-          {([false, true] as const).map((on) => (
-            <button key={String(on)} type="button" role="radio" aria-checked={Boolean(wv.veneer?.on) === on} className={Boolean(wv.veneer?.on) === on ? "active" : ""} disabled={busy} onClick={() => waxup.actions.onVeneer?.({ on })}>{t(on ? "waxup.veneer.on" : "waxup.veneer.off")}</button>
-          ))}
-        </div>
-        <p className="blend-hint" role="status">{t(wv.veneer?.on ? "waxup.veneer.onHint" : "waxup.veneer.offHint")}</p>
+        {/* Pare Dental: a veneer case (chosen at the start) - the wrap and the minimum thickness here. */}
         {wv.veneer?.on ? (<>
+          <p className="studio-sub">{t("waxup.veneer.on")}</p>
+          <p className="blend-hint" role="status">{t("waxup.veneer.onHint")}</p>
           <EdgeModifierSlider label={t("waxup.veneer.wrap")} title={t("waxup.veneer.wrapHint")} value={wv.veneer.wrap} min={VENEER_WRAP_RANGE[0]} max={VENEER_WRAP_RANGE[1]} step={0.1} unit="mm" workspace={workspace} disabled={busy} onChange={(wrap) => waxup.actions.onVeneer?.({ wrap: Math.round(wrap * 10) / 10 })} />
           <EdgeModifierSlider label={t("waxup.veneer.min")} title={t("waxup.veneer.minHint")} value={wv.veneer.min} min={VENEER_MIN_RANGE[0]} max={VENEER_MIN_RANGE[1]} step={0.05} unit="mm" workspace={workspace} disabled={busy} onChange={(min) => waxup.actions.onVeneer?.({ min: Math.round(min * 100) / 100 })} />
         </>) : null}
