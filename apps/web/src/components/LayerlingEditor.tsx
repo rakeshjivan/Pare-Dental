@@ -16024,24 +16024,12 @@ export function LayerlingEditor({
       return null;
     }
   }, [commitShapes, dentalInput, waxFound]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Build 101: Make in Wax-up Studio fits the wax to the bite first, unless that was just done for this
-  // wax and this opening - at the patient's own bite unless the bite was opened on purpose.
+  // Build 101 fitted the wax to the bite here first; Pare Dental takes that out (see below).
   const makeDentalModels = async () => {
     // Build 116: the wax teeth's trims finished first, in the workers, so Make does not work them out on the page.
     if (dentalStudioRef.current?.waxStudio) { try { await eraseAllNow(); } catch { /* worked out on the page as before */ } }
-    const state = dentalStudioRef.current;
-    const occlusion = waxupRef.current.occlusion;
-    const waxed = shapesRef.current.some((shape) => shape.dental === "wax" && !shape.hidden);
-    if (state?.waxStudio && state.slots.upper && state.slots.lower && waxed) {
-      const fresh = occlusion.result && occlusion.result.raise === fitRaise() && occlusion.result.waxKey === waxFingerprint();
-      if (!fresh) {
-        setNotice(t("waxup.fittingBite"));
-        const worked = await workOcclusion();
-        if (!worked) return;
-        applyDentalStudio(worked);
-        return;
-      }
-    }
+    // Pare Dental (Rakesh: "if the bite is automatically fitted at Make, it leaves a very rough surface that will come as
+    // a surprise to the user"): Make no longer fits the wax to the bite - only Fit to the bite in Design does, when asked.
     applyDentalStudio();
   };
   // Build 94: the ghost view - the wax teeth see-through while Wax-up Studio is open.

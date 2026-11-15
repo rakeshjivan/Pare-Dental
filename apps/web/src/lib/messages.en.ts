@@ -5262,7 +5262,7 @@ export const MESSAGES_EN = {
   "waxup.chairside.photo": "The facial midline and the interpupillary line come from the face: Pare Dental uses the dental midline and the occlusal plane until a photo can be registered to the scan.",
   "waxup.occlusionDone": "Wax-up occlusion worked out",
   "waxup.occlusionStep": "Occlusion",
-  "waxup.occlusionHint": "At the patient's bite as scanned, unless you raise the opening to open it on purpose: wax that would be inside the opposing teeth is trimmed back to touch them, the posterior wax brought into even contact (0.02 mm) and the lower front wax to touch the upper's palatal surfaces, then the jaw moved forward and to each side - interferences on posterior wax carved back (up to 0.5 mm), the rest reported. Make does this by itself if the wax has changed since.",
+  "waxup.occlusionHint": "At the patient's bite as scanned, unless you raise the opening to open it on purpose: wax that would be inside the opposing teeth is trimmed back to touch them, the posterior wax brought into even contact (0.02 mm) and the lower front wax to touch the upper's palatal surfaces, then the jaw moved forward and to each side - interferences on posterior wax carved back (up to 0.5 mm), the rest reported. Only when you press it - Make leaves the wax as you designed it.",
   "waxup.raise": "Opening at the incisors (vertical dimension; 0 keeps the bite as scanned)",
   "waxup.scheme": "Guidance",
   "waxup.schemeCanine": "Canine guidance",
