@@ -1,5 +1,6 @@
 "use client";
 
+import { VENEER_MIN_RANGE, VENEER_WRAP_RANGE } from "@/lib/waxVeneer";
 import type { BiteContactStats } from "@/lib/biteContacts";
 import { archMarkLabel, frontTeeth, archMarkProblems } from "@/lib/waxArchMarks";
 import { PALATAL_DEFAULT } from "@/lib/waxPalatal";
@@ -1093,6 +1094,18 @@ export function DentalStudioPanel({
             return <EdgeModifierSlider key={pair} label={t("waxup.gum.pair", { teeth: label })} title={t("waxup.gum.pairHint")} value={wv.gum!.keep[pair]} min={0} max={14} step={0.1} workspace={workspace} length disabled={busy} onChange={(value) => waxup.actions.onGumKeep?.(pair, value)} />;
           })}
           <div className="dental-trim-buttons"><button type="button" className="secondary" disabled={busy} title={t("waxup.gum.idealHint")} onClick={() => waxup.actions.onGumIdeal?.()}>{t("waxup.gum.ideal")}</button></div>
+        </>) : null}
+        {/* Pare Dental: the teeth as full contour or as veneers (labial, and over the edge to a palatal wrap). */}
+        <p className="studio-sub">{t("waxup.veneer.title")}</p>
+        <div className="studio-mm-choice" role="radiogroup" aria-label={t("waxup.veneer.title")}>
+          {([false, true] as const).map((on) => (
+            <button key={String(on)} type="button" role="radio" aria-checked={Boolean(wv.veneer?.on) === on} className={Boolean(wv.veneer?.on) === on ? "active" : ""} disabled={busy} onClick={() => waxup.actions.onVeneer?.({ on })}>{t(on ? "waxup.veneer.on" : "waxup.veneer.off")}</button>
+          ))}
+        </div>
+        <p className="blend-hint" role="status">{t(wv.veneer?.on ? "waxup.veneer.onHint" : "waxup.veneer.offHint")}</p>
+        {wv.veneer?.on ? (<>
+          <EdgeModifierSlider label={t("waxup.veneer.wrap")} title={t("waxup.veneer.wrapHint")} value={wv.veneer.wrap} min={VENEER_WRAP_RANGE[0]} max={VENEER_WRAP_RANGE[1]} step={0.1} unit="mm" workspace={workspace} disabled={busy} onChange={(wrap) => waxup.actions.onVeneer?.({ wrap: Math.round(wrap * 10) / 10 })} />
+          <EdgeModifierSlider label={t("waxup.veneer.min")} title={t("waxup.veneer.minHint")} value={wv.veneer.min} min={VENEER_MIN_RANGE[0]} max={VENEER_MIN_RANGE[1]} step={0.05} unit="mm" workspace={workspace} disabled={busy} onChange={(min) => waxup.actions.onVeneer?.({ min: Math.round(min * 100) / 100 })} />
         </>) : null}
         {/* Build 118 / Pare Dental: how the wax teeth are joined to the scan - Whole teeth unless changed; shut away. */}
         <p className="blend-hint waxup-join-line">

@@ -126,6 +126,7 @@ import { ARCH_MARK_CONTACTS, ARCH_MARK_GUM, ARCH_MARK_GUMS, archMarkLabel, front
 import { autoArchMarks } from "@/lib/waxAutoMarks";
 import { GUIDE_DEFAULTS, guideLines, markedArc, toothCaliper, type Caliper, type GuideSet } from "@/lib/waxGuides";
 import { WaxGuides, type GuideDrawn, type GuideLabel } from "@/components/workplane/WaxGuides";
+import { veneerOf, VENEER_DEFAULT, type PatientSurface } from "@/lib/waxVeneer";
 import { extendNeck, NECK_REACH_MOST } from "@/lib/waxNeck";
 import { affineBetween, clampControls, crownMargins, labialProfile, layoutSmileSet, restFrames, SCULPTED_MISS, SET_DEFAULTS, type SetControls, type SetTooth, type SmileRecord } from "@/lib/waxSmileSet";
 import { StudioShell } from "./workplane/StudioShell";
@@ -11091,7 +11092,7 @@ export function LayerlingEditor({
         const soup = waxTrianglesOf(tooth);
         const toothWorld = dentalStudioRef.current?.waxStudio && tooth.waxTooth ? localToWorld(tooth) : null;
         if (!toothWorld) return soup;
-        return extendNeck(soup, moveFrame(tooth.waxTooth!.frame, toothWorld), undefined, scanWorld ? neckUnder(tooth, soup, scanWorld) : undefined);
+        return madeToothSoup(tooth, soup, scanWorld, toothWorld);
       });
       const out = new Float32Array(soups.reduce((count, soup) => count + soup.length, 0));
       const v = new THREE.Vector3();
@@ -11237,7 +11238,8 @@ export function LayerlingEditor({
     const palatalOf = (shape: WorkplaneShape, positions: Float32Array) => {
       // Pare Dental: with Whole teeth too, in the incisal part only (lib/waxPalatal INCISAL_PRESS_TO) - not with Scan shaped.
       const form = waxupRef.current.palatal ?? PALATAL_DEFAULT;
-      if (!dentalStudioRef.current?.waxStudio || form === "shell") return positions;
+      // Veneers: the patient's palatal is meant to show below the wrap - not pressed onto the library tooth.
+      if (!dentalStudioRef.current?.waxStudio || form === "shell" || waxupRef.current.veneer?.on) return positions;
       const toInput = dentalLocalToInput.current.get(shape.id), world = localToWorld(shape);
       if (!toInput || !world) return positions;
       const move = toInput.clone().multiply(world.clone().invert());
@@ -13753,6 +13755,28 @@ export function LayerlingEditor({
   const waxTrianglesOf = (tooth: WorkplaneShape): ArrayLike<number> => erasedSoup(tooth) ?? worldTriangles(tooth);
   /** As it is drawn just now (its erase if already worked out, else as it is). */
   const shownTrianglesOf = (tooth: WorkplaneShape): ArrayLike<number> => erasedSoup(tooth, false) ?? worldTriangles(tooth);
+  /** Pare Dental: the patient's surface round a wax tooth - nearest point and outward normal - for lib/waxVeneer. */
+  const patientNear = (tooth: WorkplaneShape, soup: ArrayLike<number>, scanWorld: ArrayLike<number>): PatientSurface | null => {
+    const axes = toothAxesOf(tooth);
+    if (!axes) return null;
+    const surface = new NearestSurface(soupWithin(scanWorld, soupBoxOf(Float32Array.from(soup), 4)), 4);
+    const sign = surfaceSign(axes, surface), q = [0, 0, 0], n = [0, 0, 0];
+    return (x, y, z) => {
+      if (surface.nearest(x, y, z, q) === Infinity || surface.lastTriangle < 0) return null;
+      surface.triangleNormal(surface.lastTriangle, n);
+      return { at: [q[0], q[1], q[2]], normal: [n[0] * sign, n[1] * sign, n[2] * sign] };
+    };
+  };
+  /** Pare Dental: a wax tooth as Make makes it - a veneer over the patient's tooth, or with its neck under the palatal gum. */
+  const madeToothSoup = (tooth: WorkplaneShape, soup: ArrayLike<number>, scanWorld: ArrayLike<number> | null, toothWorld: THREE.Matrix4): Float32Array => {
+    const frame = moveFrame(tooth.waxTooth!.frame, toothWorld);
+    const veneer = waxupRef.current.veneer;
+    if (veneer?.on && scanWorld) {
+      const near = patientNear(tooth, soup, scanWorld);
+      if (near) return veneerOf(soup, frame, near, veneer);
+    }
+    return extendNeck(soup, frame, undefined, scanWorld ? neckUnder(tooth, soup, scanWorld) : undefined);
+  };
   /** Pare Dental: the height of a point above the patient's surface round a wax tooth (negative under it), for lib/waxNeck. */
   const neckUnder = (tooth: WorkplaneShape, soup: ArrayLike<number>, scanWorld: ArrayLike<number>): ((x: number, y: number, z: number) => number) | undefined => {
     const axes = toothAxesOf(tooth);
@@ -13770,19 +13794,21 @@ export function LayerlingEditor({
    * Make will make it - reaching under the palatal gum - so the palatal gum hides it on screen as the labial gum does
    * (it was drawn as laid, over the palatal gum, though the model was right). Kept per tooth and scan.
    */
-  const neckShownCache = useRef(new WeakMap<WorkplaneShape, { scan: WorkplaneShape; base: WorkplaneShape; shape: WorkplaneShape }>());
+  const neckShownCache = useRef(new WeakMap<WorkplaneShape, { scan: WorkplaneShape; base: WorkplaneShape; veneerKey: string; shape: WorkplaneShape }>());
   const neckShown = (tooth: WorkplaneShape): WorkplaneShape => {
     const scan = tooth.waxFor ? shapesRef.current.find((shape) => shape.id === tooth.waxFor) : undefined;
     const toWorld = tooth.waxTooth ? localToWorld(tooth) : null;
     if (!scan || !toWorld) return tooth;
     // The erase may be worked out a moment later (eraseTick): the tooth as drawn now is part of the key.
     const base = erasedShown(tooth);
+    const veneer = waxupRef.current.veneer;
+    const veneerKey = veneer?.on ? `${veneer.wrap}/${veneer.min}` : "";
     const known = neckShownCache.current.get(tooth);
-    if (known && known.scan === scan && known.base === base) return known.shape;
+    if (known && known.scan === scan && known.base === base && known.veneerKey === veneerKey) return known.shape;
     const soup = worldTriangles(base);
-    const drawn = extendNeck(soup, moveFrame(tooth.waxTooth!.frame, toWorld), undefined, neckUnder(tooth, soup, worldTriangles(scan)));
+    const drawn = madeToothSoup(tooth, soup, worldTriangles(scan), toWorld);
     const shape = { ...shapeWithWorldPositions(base, Array.from(drawn)), id: tooth.id };
-    neckShownCache.current.set(tooth, { scan, base, shape });
+    neckShownCache.current.set(tooth, { scan, base, veneerKey, shape });
     return shape;
   };
   const erasedShown = (tooth: WorkplaneShape): WorkplaneShape => {
@@ -21768,7 +21794,7 @@ export function LayerlingEditor({
   const eraseShownStep = !studioWaxStep || ["keep", "sculpt", "gum", "make"].includes(studioWaxStep);
   const neckShownStep = Boolean(dentalStudio?.waxStudio) && dentalStudio?.stage !== "made" && (studioWaxStep === "gum" || studioWaxStep === "make");
   const erasedViewportShapes = useMemo(() => (dentalStudio?.waxStudio && neckShownStep ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? neckShown(shape) : shape))
-    : dentalStudio?.waxStudio && eraseShownStep && ((waxup.erase && Object.keys(waxup.erase).length) || (waxup.margins?.upper || waxup.margins?.lower) || waxup.boundaries?.upper || waxup.boundaries?.lower) ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? erasedShown(shape) : shape)) : viewportShapes), [viewportShapes, waxup.erase, waxup.margins, waxup.boundaries, waxup.marginOn, dentalStudio, eraseTick, eraseShownStep, neckShownStep]); // eslint-disable-line react-hooks/exhaustive-deps
+    : dentalStudio?.waxStudio && eraseShownStep && ((waxup.erase && Object.keys(waxup.erase).length) || (waxup.margins?.upper || waxup.margins?.lower) || waxup.boundaries?.upper || waxup.boundaries?.lower) ? viewportShapes.map((shape) => (shape.dental === "wax" && shape.waxTooth ? erasedShown(shape) : shape)) : viewportShapes), [viewportShapes, waxup.erase, waxup.margins, waxup.boundaries, waxup.marginOn, dentalStudio, eraseTick, eraseShownStep, neckShownStep, waxup.veneer]); // eslint-disable-line react-hooks/exhaustive-deps
   const heldViewportShapes = historyView.shapes ?? erasedViewportShapes;
   // Build 118: with the library palatal, each wax tooth's palatal drawn whole over the scan - the scan itself never changed.
   // Build 283: the drawn-over palatal is no longer used (the pressed scan is shown instead, as it will be made).
@@ -23525,6 +23551,7 @@ export function LayerlingEditor({
               onBite: (raise: number) => void openWaxBite(raise),
               onGumMode: (mode: GumMode) => setWaxGumMode(mode),
               onPalatal: (form: PalatalForm) => { waxRecordRef.current(true); setWaxup((latest) => ({ ...latest, palatal: form })); },
+              onVeneer: (patch) => { waxRecordRef.current(true); setWaxup((latest) => ({ ...latest, veneer: { ...(latest.veneer ?? VENEER_DEFAULT), ...patch } })); },
               onGumKeep: (pair: string, keep: number) => setWaxup((latest) => ({ ...latest, gum: { mode: latest.gum?.mode ?? "even", keep: { ...latest.gum?.keep, [pair]: Math.max(0, Math.round(keep * 10) / 10) } } })),
               onGumIdeal: () => waxGumIdeal(),
               onSelectSet: () => {
