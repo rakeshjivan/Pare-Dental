@@ -1105,6 +1105,7 @@ export function DentalStudioPanel({
           <EdgeModifierSlider label={t("waxup.veneer.min")} title={t("waxup.veneer.minHint")} value={wv.veneer.min} min={VENEER_MIN_RANGE[0]} max={VENEER_MIN_RANGE[1]} step={0.05} unit="mm" workspace={workspace} disabled={busy} onChange={(min) => waxup.actions.onVeneer?.({ min: Math.round(min * 100) / 100 })} />
         </>) : null}
         {/* Build 118 / Pare Dental: how the wax teeth are joined to the scan - Whole teeth unless changed; shut away. */}
+        {wv.veneer?.on ? null : (<>
         <p className="blend-hint waxup-join-line">
           {t("waxup.palatalNow", { form: t(`waxup.palatal.${wv.palatal ?? PALATAL_DEFAULT}`) })}{" "}
           <button type="button" className="link-button" aria-expanded={joinOpen} onClick={() => setJoinOpen((open) => !open)}>{t(joinOpen ? "waxup.palatalDone" : "waxup.palatalChange")}</button>
@@ -1117,6 +1118,7 @@ export function DentalStudioPanel({
           </div>
           <p className="blend-hint" role="status">{t(`waxup.palatal.${wv.palatal ?? PALATAL_DEFAULT}Hint`)}</p>
         </>) : null}
+        </>)}
       </>)) : null}
       {inWaxStep("trim") && inMb("prepare") ? card(2, t(framed ? "studio.trimTitle" : "dental.step2Prepare"), scansDone, null, prepareSummary, (<>
         <div className="dental-substep">

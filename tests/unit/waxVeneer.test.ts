@@ -48,3 +48,14 @@ describe("veneerOf", () => {
     expect(zAt(veneerOf(thick, frame, patient, { wrap: 2.5, min: 0.3 }), 0, -2, "labial")).toBeCloseTo(0.8, 5);
   });
 });
+
+describe("veneerOf, the wrap", () => {
+  it("covers the patient's palatal within the wrap where it stood through the wax", () => {
+    // The wax tooth's palatal face at z -5.8: inside the patient's palatal (z -6) by 0.2 mm.
+    const thin = box(-3, 3, -8, 0, -5.8, 0.1);
+    const out = veneerOf(thin, frame, patient, { wrap: 2.5, min: 0.3 });
+    expect(zAt(out, 0, -1, "palatal")).toBeCloseTo(-6.15, 2);
+    // Below the wrap it was already inside the patient's tooth: left there.
+    expect(zAt(out, 0, -5, "palatal")).toBeGreaterThanOrEqual(-6 + VENEER_TUCK - 1e-3);
+  });
+});

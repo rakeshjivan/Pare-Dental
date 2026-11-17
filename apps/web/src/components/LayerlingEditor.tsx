@@ -14654,7 +14654,8 @@ export function LayerlingEditor({
       const total = new THREE.Matrix4().fromArray(smile.laid[fdi]).multiply(editPose(rest.frame, rest.length, depth, edit));
       const level = smile.anchors.margins?.[frontTeeth(slot).indexOf(fdi)];
       const need = coverNeed(scan, worldTriangles(shape), moveFrame(rest.frame, total), rest.width + edit.mesial + edit.distal, rest.length + edit.length, level !== null && level !== undefined ? { up: [upArch.x, upArch.y, upArch.z], level } : undefined);
-      const change = coverChange(need, rest.width + edit.mesial + edit.distal, rest.length, { palatal: edit.palatal, length: edit.length });
+      // Pare Dental: a veneer case gets no palatal fullness - below the wrap its palatal is the patient's (lib/waxVeneer).
+      const change = coverChange(waxupRef.current.veneer?.on ? { ...need, palatal: 0 } : need, rest.width + edit.mesial + edit.distal, rest.length, { palatal: edit.palatal, length: edit.length });
       if (change.palatal < 0.05 && change.length < 0.05) continue;
       own[fdi] = clampEdit({ ...edit, palatal: edit.palatal + change.palatal, length: edit.length + change.length });
       added[fdi] = change;

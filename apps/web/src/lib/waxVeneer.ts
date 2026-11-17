@@ -2,7 +2,8 @@
  * Pare Dental: a wax tooth made as a veneer (Rakesh, 15 Nov). An additive veneer wax-up (Magne & Magne 2006; Gurel's
  * APT technique) keeps the patient's tooth inside it and adds wax labially and over the incisal edge only:
  * - below a palatal chamfer wrap (2-3 mm from the incisal edge, `wrap`), the wax tooth's palatal side goes just inside
- *   the patient's tooth, so the patient's own palatal surface shows there;
+ *   the patient's tooth, so the patient's own palatal surface shows there; within the wrap it covers the patient's
+ *   palatal (half the minimum thickness off it at least), so none of the patient's tooth shows through the chamfer;
  * - on the labial face the wax stands at least `min` mm off the patient's tooth (the veneer's minimum thickness), the
  *   amount easing off towards the cervical third, where a veneer thins to its margin;
  * - nothing else changes: where the wax stands further out it stays as designed, and at the gum the labial gum hides
@@ -15,6 +16,9 @@ type Vec3 = [number, number, number];
 export const VENEER_TUCK = 0.15;
 /** Over how much the wrap eases from wax to the patient's palatal, mm. */
 export const VENEER_WRAP_EASE = 0.6;
+/** The least the wrap stands off the patient's palatal, mm; and how far inside it the wrap reaches out to cover it, mm. */
+export const VENEER_WRAP_LEAST = 0.1;
+export const VENEER_WRAP_REACH = 1.5;
 /** The wrap's default and range (mm from the incisal edge, along the tooth). */
 export const VENEER_WRAP = 2.5;
 export const VENEER_WRAP_RANGE: [number, number] = [1, 4];
@@ -79,6 +83,15 @@ export function veneerOf(soup: ArrayLike<number>, frame: { origin: ArrayLike<num
     if (below > 0 && height > -VENEER_TUCK) {
       const by = (height + VENEER_TUCK) * below;
       moved[v * 3] = x - mx * by; moved[v * 3 + 1] = y - my * by; moved[v * 3 + 2] = z - mz * by;
+      continue;
+    }
+    // Within the wrap: the chamfer covers the patient's palatal (no patient tooth showing through it), at least half the
+    // minimum thickness off it (and VENEER_WRAP_LEAST) - not where the patient's tooth stands far out (that is Reduce).
+    const wrapLeast = Math.max(VENEER_WRAP_LEAST, settings.min / 2);
+    const within = palatal * (1 - smooth01((depth - settings.wrap) / VENEER_WRAP_EASE));
+    if (within > 0 && height < wrapLeast && height > -VENEER_WRAP_REACH) {
+      const by = (wrapLeast - height) * within;
+      moved[v * 3] = x + mx * by; moved[v * 3 + 1] = y + my * by; moved[v * 3 + 2] = z + mz * by;
       continue;
     }
     // The labial face at least the minimum thickness off the patient's tooth (not where the patient's tooth stands out
