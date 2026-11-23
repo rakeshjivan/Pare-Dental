@@ -133,7 +133,7 @@ export function DentalStart({ onStart, onScans, waxupShown }: { onStart: (tool: 
               id={inputId}
               type="file"
               multiple
-              accept=".stl,.ply,.obj,.3mf"
+              accept=".stl,.ply,.obj,.3mf,.dcm,.3oxz"
               hidden
               onChange={(event) => {
                 const files = Array.from(event.currentTarget.files ?? []);

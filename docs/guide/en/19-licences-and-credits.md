@@ -19,7 +19,7 @@ Pare Dental began as a modified version of **layerling** (copyright 2026 layerli
 
 ## Open-source libraries
 
-Pare Dental is built with, among others: [three.js](https://threejs.org) (MIT), [Manifold](https://github.com/elalish/manifold) (Apache-2.0), [OpenCascade](https://dev.opencascade.org) through occt-wasm and brepjs (LGPL-2.1 with exception), [meshoptimizer](https://github.com/zeux/meshoptimizer) (MIT), three-mesh-bvh and three-bvh-csg (MIT), [opentype.js](https://opentype.js.org) (MIT), fflate (MIT), qrcode-generator (MIT), React and Next.js (MIT) and Lucide icons (ISC). Each keeps its own licence; the full list with versions is in the source code's `package.json` and `package-lock.json`.
+Pare Dental is built with, among others: [three.js](https://threejs.org) (MIT), [Manifold](https://github.com/elalish/manifold) (Apache-2.0), [OpenCascade](https://dev.opencascade.org) through occt-wasm and brepjs (LGPL-2.1 with exception), [meshoptimizer](https://github.com/zeux/meshoptimizer) (MIT), three-mesh-bvh and three-bvh-csg (MIT), [opentype.js](https://opentype.js.org) (MIT), fflate (MIT), [hpsdecode](https://github.com/HeadTriXz/hpsdecode) by Lars Knol (MIT; Pare Dental's reader for unlocked .dcm scans is a port of its unencrypted path), qrcode-generator (MIT), React and Next.js (MIT) and Lucide icons (ISC). Each keeps its own licence; the full list with versions is in the source code's `package.json` and `package-lock.json`.
 
 ## Trademarks
 

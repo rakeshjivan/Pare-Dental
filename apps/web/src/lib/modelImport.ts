@@ -4,6 +4,7 @@ import { t } from "@/lib/i18n";
 import { importExtensionSupported } from "@/lib/importExtensions";
 import { attachProjectAsset, projectAssetFromBytes, sourceFormatForFileName } from "@/lib/projectAssets";
 import { isPlyFile, plyAsStlFile } from "@/lib/plyImport";
+import { hpsAsStlFile, hpsKind, isHpsFile, isHpsPackage } from "@/lib/hpsImport";
 import { readKeepSvgPage } from "@/lib/importPreferences";
 import { scaleSvgText } from "@/lib/svgScale";
 import { decodeSvgBytes, importedColourShapesFromSvg, importedShapeFromSvgWithReport, prepareSvgImport } from "@/lib/svgImport";
@@ -29,7 +30,29 @@ export type ImportFailure = { fileName: string; reason: string };
 async function prepareImportFiles(files: readonly File[]) {
   const expanded: File[] = [];
   const failures: ImportFailure[] = [];
+  const notes: string[] = [];
   for (const file of files) {
+    // Build 125: a scan order package is a ZIP of .dcm scans; the open ones come in, the locked ones are counted.
+    if (isHpsPackage(file.name)) {
+      try {
+        const entries = unzipSync(new Uint8Array(await file.arrayBuffer()), { filter: (entry) => isHpsFile(entry.name) && !/(^|\/)__MACOSX\//.test(entry.name) });
+        let locked = 0;
+        const open = Object.entries(entries).filter(([, bytes]) => {
+          const kind = hpsKind(bytes);
+          if (kind === "locked") locked += 1;
+          return kind === "open";
+        });
+        if (!open.length) {
+          failures.push({ fileName: file.name, reason: t(locked ? "status.importDcmPackageLocked" : "status.importDcmPackageEmpty") });
+          continue;
+        }
+        if (locked) notes.push(t("status.importDcmPackageSomeLocked", { name: file.name, count: locked }));
+        expanded.push(...open.map(([name, bytes]) => new File([bytes as BlobPart], name.split("/").pop() || name)));
+      } catch {
+        failures.push({ fileName: file.name, reason: t("status.importZipUnreadable") });
+      }
+      continue;
+    }
     if (!/\.zip$/i.test(file.name)) {
       expanded.push(file);
       continue;
@@ -50,7 +73,7 @@ async function prepareImportFiles(files: readonly File[]) {
   }
   const mtlFiles = expanded.filter((file) => /\.mtl$/i.test(file.name));
   const mtlSources = await Promise.all(mtlFiles.map((file) => file.text()));
-  return { files: expanded.filter((file) => !/\.mtl$/i.test(file.name)), mtlSources, failures };
+  return { files: expanded.filter((file) => !/\.mtl$/i.test(file.name)), mtlSources, failures, notes };
 }
 
 export type ModelImportResult = {
@@ -91,7 +114,7 @@ export async function importModelFiles(
     files,
     importedFileNames: [],
     failures: [...prepared.failures],
-    notes: [],
+    notes: [...prepared.notes],
     mtlOnly: !files.length && prepared.mtlSources.length > 0 && !prepared.failures.length,
   };
   if (result.mtlOnly) {
@@ -103,6 +126,15 @@ export async function importModelFiles(
     // Fork (build 46): a PLY scan comes in as the STL of its triangles.
     let file = files[index];
     if (options.cancelled?.()) return null;
+    // Build 125: an open .dcm scan comes in as the STL of its triangles; a locked one or a DICOM is said so.
+    if (isHpsFile(file.name)) {
+      try {
+        file = await hpsAsStlFile(file, { locked: t("status.importDcmLocked"), dicom: t("status.importDcmDicom"), unknown: t("status.importDcmUnknown") });
+      } catch (error) {
+        result.failures.push({ fileName: file.name, reason: error instanceof Error ? error.message : String(error) });
+        continue;
+      }
+    }
     if (isPlyFile(file.name)) {
       try {
         file = await plyAsStlFile(file);
