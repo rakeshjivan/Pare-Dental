@@ -7,6 +7,7 @@ import { PALATAL_DEFAULT } from "@/lib/waxPalatal";
 import { SNAP_GRIPS, snapGrip } from "@/lib/dentalSnapHinge";
 import { PIN_CLEAR, PIN_GAP_MAX, PIN_MAX, PIN_STEP, PIN_WARN, articulatorPinPatch } from "@/lib/dentalArticulator";
 import { biteOpenings } from "@/lib/waxOcclusion";
+import type { DentalUserPreset } from "@/lib/dentalPresets";
 
 /** Build 78: a bite scan further than this from the scanner's bite (mm RMS) is pointed out. */
 /** Build 79: the bite scan's own error is often 0.2-0.3 mm; only well beyond that is the kept bite questioned. */
@@ -171,6 +172,79 @@ function MidlinePicture({ marked }: { marked: boolean }) {
   );
 }
 
+/**
+ * Build 126 (Rakesh): the dentist's saved Model Builder presets. Pick one to apply it, save the current
+ * settings as a new one, star one as the default (applied to every new case), or remove one. Presets are
+ * device-local and hold no case data - just the model recipe.
+ */
+function DentalUserPresetBar({ presets, active, defaultName, busy, onPick, onSave, onDelete, onSetDefault }: {
+  presets: DentalUserPreset[];
+  active: string | null;
+  defaultName: string | null;
+  busy: boolean;
+  onPick: (name: string) => void;
+  onSave: (name: string) => void;
+  onDelete: (name: string) => void;
+  onSetDefault: (name: string | null) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const commit = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    onSave(trimmed);
+    setName("");
+    setAdding(false);
+  };
+  return (
+    <div className="dental-user-presets">
+      <span className="dental-user-presets-label">{t("dental.myPresets")}</span>
+      {presets.length === 0 && !adding ? <span className="dental-user-presets-none">{t("dental.noPresets")}</span> : null}
+      {presets.map((preset) => {
+        const isDefault = preset.name === defaultName;
+        return (
+          <span key={preset.name} className={`dental-user-preset${preset.name === active ? " active" : ""}`}>
+            <button type="button" className="dental-user-preset-pick" disabled={busy} aria-pressed={preset.name === active} onClick={() => onPick(preset.name)}>
+              {preset.name}
+            </button>
+            <button type="button" className={`dental-user-preset-star${isDefault ? " on" : ""}`} disabled={busy} aria-pressed={isDefault} title={isDefault ? t("dental.presetIsDefault") : t("dental.presetSetDefault")} aria-label={`${isDefault ? t("dental.presetIsDefault") : t("dental.presetSetDefault")} - ${preset.name}`} onClick={() => onSetDefault(isDefault ? null : preset.name)}>
+              {isDefault ? "★" : "☆"}
+            </button>
+            <button type="button" className="dental-user-preset-del" disabled={busy} title={t("dental.presetDelete")} aria-label={`${t("dental.presetDelete")} - ${preset.name}`} onClick={() => onDelete(preset.name)}>
+              <X size={12} aria-hidden="true" />
+            </button>
+          </span>
+        );
+      })}
+      {adding ? (
+        <span className="dental-user-preset-add">
+          <input
+            type="text"
+            value={name}
+            autoFocus
+            maxLength={40}
+            placeholder={t("dental.presetNamePlaceholder")}
+            aria-label={t("dental.presetName")}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") { event.preventDefault(); commit(); }
+              if (event.key === "Escape") { setAdding(false); setName(""); }
+            }}
+          />
+          <button type="button" disabled={busy || !name.trim()} onClick={commit}>{t("dental.presetSave")}</button>
+          <button type="button" className="dental-user-preset-cancel" title={t("common.cancel")} aria-label={t("common.cancel")} onClick={() => { setAdding(false); setName(""); }}>
+            <X size={12} aria-hidden="true" />
+          </button>
+        </span>
+      ) : (
+        <button type="button" className="dental-user-preset-new" disabled={busy} onClick={() => { setName(""); setAdding(true); }}>
+          + {t("dental.presetSaveCurrent")}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function DentalStudioPanel({
   parts,
   slots,
@@ -198,6 +272,13 @@ export function DentalStudioPanel({
   onSlotChange,
   onSwap,
   onPresetChange,
+  userPresets = [],
+  activeUserPreset = null,
+  defaultUserPreset = null,
+  onUserPreset,
+  onSaveUserPreset,
+  onDeleteUserPreset,
+  onSetDefaultUserPreset,
   onOptionsChange,
   onAdvancedChange,
   onApply,
@@ -301,6 +382,14 @@ export function DentalStudioPanel({
   onSlotChange: (slot: DentalSlot, id: string | null) => void;
   onSwap: () => void;
   onPresetChange: (preset: DentalPreset) => void;
+  /** Build 126 (Rakesh): the dentist's saved Model Builder presets, and the one in force / set as default. */
+  userPresets?: DentalUserPreset[];
+  activeUserPreset?: string | null;
+  defaultUserPreset?: string | null;
+  onUserPreset?: (name: string) => void;
+  onSaveUserPreset?: (name: string) => void;
+  onDeleteUserPreset?: (name: string) => void;
+  onSetDefaultUserPreset?: (name: string | null) => void;
   onOptionsChange: (patch: Partial<DentalStudioOptions>) => void;
   onAdvancedChange: (open: boolean) => void;
   onApply: () => void;
@@ -1214,6 +1303,19 @@ export function DentalStudioPanel({
             </button>
           ))}
         </div>
+        {/* Build 126 (Rakesh): the dentist's own saved presets - pick one, save the current settings, set a default. */}
+        {onUserPreset ? (
+          <DentalUserPresetBar
+            presets={userPresets}
+            active={activeUserPreset}
+            defaultName={defaultUserPreset}
+            busy={busy}
+            onPick={onUserPreset}
+            onSave={(name) => onSaveUserPreset?.(name)}
+            onDelete={(name) => onDeleteUserPreset?.(name)}
+            onSetDefault={(name) => onSetDefaultUserPreset?.(name)}
+          />
+        ) : null}
         {/* Build 104: the base's options sit with the model type (its picture already shows the base). */}
         {/* Build 106: in the frame, three buttons that stay pressed while on. */}
         {/* Build 120 (Rakesh): then separate or articulated (a pair) and, separate, the base's height (not an aligner model's). */}

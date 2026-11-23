@@ -135,6 +135,7 @@ import { createPortal } from "react-dom";
 import type { PareStudio } from "@/lib/pareStudio";
 import { applyAppTheme } from "@/lib/appTheme";
 import { DentalStudioPanel, dentalPreset, dentalPresetOf, type DentalAreaTool, type DentalPreset, type DentalSlot, type DentalView } from "./workplane/DentalStudioPanel";
+import { defaultDentalPreset, deleteDentalPreset, findDentalPreset, listDentalPresets, presetOptionsFrom, saveDentalPreset, setDefaultDentalPreset, type DentalUserPreset } from "@/lib/dentalPresets";
 import { ShellPanel } from "./workplane/ShellPanel";
 import { OffsetPanel } from "./workplane/OffsetPanel";
 import { CutOutPanel } from "./workplane/CutOutPanel";
@@ -10776,6 +10777,8 @@ export function LayerlingEditor({
     preset: DentalPreset;
     options: DentalStudioOptions;
     optionsTouched: boolean;
+    /** Build 126 (Rakesh): the user preset in force, if one was picked or is the default; its style settings ride on top of the base preset. */
+    userPreset?: DentalUserPreset | null;
     /** Build 71: the made models keep the patient's details, or lose them. */
     patientDetails: "keep" | "remove";
     advanced: boolean;
@@ -10790,6 +10793,10 @@ export function LayerlingEditor({
     waxStudio?: { flow: "waxup" | "imt"; arches: "upper" | "lower" | "both"; chosen?: boolean };
   };
   const [dentalStudio, setDentalStudio] = useState<DentalStudioState | null>(null);
+  // Build 126 (Rakesh): the saved Model Builder presets; the tick re-reads them after a save or delete.
+  const [presetTick, setPresetTick] = useState(0);
+  const userPresets = useMemo(() => listDentalPresets(), [presetTick]);
+  const defaultPresetName = useMemo(() => defaultDentalPreset()?.name ?? null, [presetTick]);
   // Build 106: Wax-up Studio and Model Builder in the studio frame (Dental Studio, test builds).
   const studioShellOn = STUDIO_SHELL && dentalWorkspace && Boolean(dentalStudio);
   const [studioMbStep, setStudioMbStep] = useState<string | null>(null);
@@ -11479,7 +11486,8 @@ export function LayerlingEditor({
           const pair = Boolean(slots.upper && slots.lower);
           const depth = Math.max(...analysis.arches.map((arch) => arch.depth));
           const above = Math.max(...analysis.arches.map((arch) => arch.above)), teeth = Math.max(...analysis.arches.map((arch) => arch.teeth));
-          return { ...latest, slots, stage: "ready", analysis, ...(laidOut ? { layout: laidOut } : {}), options: latest.optionsTouched ? latest.options : { ...dentalPreset(latest.preset, depth, pair, above, teeth), label: latest.options.label } };
+          // Build 126 (Rakesh): a user preset's style settings ride on top of the scan-fitted base preset.
+          return { ...latest, slots, stage: "ready", analysis, ...(laidOut ? { layout: laidOut } : {}), options: latest.optionsTouched ? latest.options : { ...dentalPreset(latest.userPreset?.base ?? latest.preset, depth, pair, above, teeth), ...(latest.userPreset?.options ?? {}), label: latest.options.label } };
         });
       } catch (error) {
         if (run !== dentalRun.current) return;
@@ -11522,9 +11530,11 @@ export function LayerlingEditor({
     analysis: null,
     rolesChosen,
     // Build 274 (Rakesh): the ABO (orthodontic) base first - the one most models are made on.
-    preset: "ortho",
-    options: dentalPreset("ortho", 15, Boolean(slots.upper && slots.lower)),
+    // Build 126 (Rakesh): unless the dentist has a default preset, which is applied to every new case.
+    preset: defaultDentalPreset()?.base ?? "ortho",
+    options: { ...dentalPreset(defaultDentalPreset()?.base ?? "ortho", 15, Boolean(slots.upper && slots.lower)), ...(defaultDentalPreset()?.options ?? {}) },
     optionsTouched: false,
+    userPreset: defaultDentalPreset(),
     patientDetails: readPatientDetails(),
     advanced: false,
     error: null,
@@ -23406,8 +23416,35 @@ export function LayerlingEditor({
             const above = arches.length ? Math.max(...arches.map((arch) => arch.above)) : 0;
             const teeth = arches.length ? Math.max(...arches.map((arch) => arch.teeth)) : 0;
             // Build 274: the midline, marked at the first step, stays when the base is chosen.
-            return { ...current, preset, optionsTouched: false, options: { ...dentalPreset(preset, depth, Boolean(current.slots.upper && current.slots.lower), above, teeth), label: current.options.label, midlineMark: current.options.midlineMark, midlineScan: current.options.midlineScan }, error: null };
+            // Build 126: picking a built-in base clears any user preset in force (it becomes a custom case).
+            return { ...current, preset, userPreset: null, optionsTouched: false, options: { ...dentalPreset(preset, depth, Boolean(current.slots.upper && current.slots.lower), above, teeth), label: current.options.label, midlineMark: current.options.midlineMark, midlineScan: current.options.midlineScan }, error: null };
           })}
+          userPresets={userPresets}
+          activeUserPreset={dentalStudio?.userPreset?.name ?? null}
+          defaultUserPreset={defaultPresetName}
+          onUserPreset={(name) => setDentalStudio((current) => {
+            if (!current || current.stage !== "ready") return current;
+            const chosen = findDentalPreset(name);
+            if (!chosen) return current;
+            const arches = current.analysis?.arches ?? [];
+            const depth = arches.length ? Math.max(...arches.map((arch) => arch.depth)) : 15;
+            const above = arches.length ? Math.max(...arches.map((arch) => arch.above)) : 0;
+            const teeth = arches.length ? Math.max(...arches.map((arch) => arch.teeth)) : 0;
+            return { ...current, preset: chosen.base, userPreset: chosen, optionsTouched: false, options: { ...dentalPreset(chosen.base, depth, Boolean(current.slots.upper && current.slots.lower), above, teeth), ...chosen.options, label: current.options.label, midlineMark: current.options.midlineMark, midlineScan: current.options.midlineScan }, error: null };
+          })}
+          onSaveUserPreset={(name) => {
+            const current = dentalStudioRef.current;
+            if (!current) return;
+            saveDentalPreset(name, current.preset, presetOptionsFrom(current.options));
+            setPresetTick((tick) => tick + 1);
+            setDentalStudio((state) => state ? { ...state, userPreset: findDentalPreset(name) } : state);
+          }}
+          onDeleteUserPreset={(name) => {
+            deleteDentalPreset(name);
+            setPresetTick((tick) => tick + 1);
+            setDentalStudio((state) => state && state.userPreset?.name === name ? { ...state, userPreset: null } : state);
+          }}
+          onSetDefaultUserPreset={(name) => { setDefaultDentalPreset(name); setPresetTick((tick) => tick + 1); }}
           onOptionsChange={(patch) => setDentalStudio((current) => {
             if (!current) return current;
             // Build 124 (Rakesh): the patient's name is taken at the first step too - before the scans are ready.
