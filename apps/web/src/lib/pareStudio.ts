@@ -14,11 +14,11 @@ export type PareStudio = "cad" | "dental";
  * Build 106: what a Dental Studio case card says about the case - which workflow, whether its models are
  * made (and articulated), the patient's details given for the label, and the step it was left at.
  */
-export type DentalCaseSummary = { flow: "model" | "wax"; made: boolean; articulated?: boolean; patient?: string; step?: string; /** Build 117: a case of finished models (its design is kept in the case they were made in). */ finished?: boolean; /** Build 117: when the models were made (ms since 1970). */ madeOn?: number };
+export type DentalCaseSummary = { flow: "model" | "wax" | "smile"; made: boolean; articulated?: boolean; patient?: string; step?: string; /** Build 117: a case of finished models (its design is kept in the case they were made in). */ finished?: boolean; /** Build 117: when the models were made (ms since 1970). */ madeOn?: number };
 
 export function isDentalCaseSummary(value: unknown): value is DentalCaseSummary {
   const v = value as DentalCaseSummary | null;
-  return Boolean(v && (v.flow === "model" || v.flow === "wax") && typeof v.made === "boolean");
+  return Boolean(v && (v.flow === "model" || v.flow === "wax" || v.flow === "smile") && typeof v.made === "boolean");
 }
 
 /**

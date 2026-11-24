@@ -41,6 +41,8 @@ jobs:
           NEXT_PUBLIC_PARE_BUILD: ${{ steps.build.outputs.number }}
           # Build 80: features in development are on in test builds (native-preview) only.
           NEXT_PUBLIC_PARE_WAXUP: ${{ github.ref_name == 'native-preview' && 'on' || 'off' }}
+          # Build 128: Smile Guide, likewise test builds only (isolated from Model Builder).
+          NEXT_PUBLIC_PARE_SMILE: ${{ github.ref_name == 'native-preview' && 'on' || 'off' }}
           # Build 103: a test build knows its test number (it follows newer test builds only).
           NEXT_PUBLIC_PARE_PREVIEW: ${{ github.ref_name == 'native-preview' && github.run_number || '' }}
           NEXT_PUBLIC_SUPPORT_HINT: "off"

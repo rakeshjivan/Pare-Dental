@@ -9,6 +9,7 @@ import { useState, type DragEvent, type ReactNode } from "react";
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/lib/useLanguage";
 import type { PareStudio } from "@/lib/pareStudio";
+import { SMILE_ENABLED } from "@/lib/pareFeatures";
 
 export function StudioHeader({
   studio,
@@ -150,6 +151,24 @@ export function DentalStart({ onStart, onScans, waxupShown }: { onStart: (tool: 
     <div className="dental-workflows">
       {card("model")}
       {card("wax")}
+      {/* Build 128: Smile Guide, test builds only. A self-contained screen, kept apart from the editor so it
+          cannot affect Model Builder; reached by its own page rather than opening a case in the shared studio. */}
+      {SMILE_ENABLED ? (
+        <section className="home-studio-card dental dental-workflow smile" aria-label="Smile Guide">
+          <div className="home-studio-body">
+            <div className="home-studio-text">
+              <h2>Smile Guide <em className="test-pill">{t("home.testBuild")}</em></h2>
+              <p>Segment the patient&apos;s own teeth, reposition them, and preview the result. An early, isolated preview &mdash; separate from Model Builder.</p>
+            </div>
+            <div className="home-studio-actions">
+              <a className="home-primary dental" href="/smile-guide/">
+                <Plus size={17} strokeWidth={2.4} aria-hidden="true" />
+                Open Smile Guide
+              </a>
+            </div>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
