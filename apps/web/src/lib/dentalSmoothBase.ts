@@ -66,10 +66,10 @@ export const SMOOTH = {
    * so a scalloped or ragged edge never runs down the drape as folds - from above (the highest edge within edgeReach),
    * never lower than the edge itself, so the edge is always buried.
    */
-  edgeSmooth: 3,
+  edgeSmooth: 5,
   edgeReach: 1,
   /** Build 122: over this much of the scan in from its edge, the drape stays at the edge's height, mm. */
-  plateau: 2,
+  plateau: 3,
   /** Build 122: the seam's envelope - how much it is smoothed (sigma) and how far it stands out over the body, mm. */
   seamSmooth: 1,
   seamCover: 0,

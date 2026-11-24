@@ -878,7 +878,7 @@ export function smoothEdge(m: Mesh, rounds: number, keep?: Uint8Array) {
  * cut ran through its triangles; smoothEdge straightens the edge itself, this takes out the folds beside it, so the
  * smooth base meets an even surface, not a ragged lip.
  */
-export function relaxFringe(m: Mesh, reach: number, passes: number, keep?: Uint8Array) {
+export function relaxFringe(m: Mesh, reach: number, passes: number, keep?: Uint8Array, clamp = Infinity) {
   if (passes <= 0 || reach <= 0) return;
   const n = m.v.length / 3;
   const along = distanceFromEdge(m, reach);
@@ -905,6 +905,8 @@ export function relaxFringe(m: Mesh, reach: number, passes: number, keep?: Uint8
     for (const [p, q] of [[a, b], [b, a]]) { all.get(p)?.add(q); if (open) rim.get(p)?.add(q); }
   }
   const lists = moving.map((i) => [...((along[i] === 0 && (rim.get(i)?.size ?? 0) >= 2) ? rim.get(i)! : all.get(i)!)]);
+  // Build 127 (Rakesh): each moving corner's start, so `clamp` can cap how far it ever moves (the margin tolerance).
+  const start = clamp < Infinity ? Float64Array.from(moving.flatMap((i) => [m.v[i * 3], m.v[i * 3 + 1], m.v[i * 3 + 2]])) : null;
   const next = new Float64Array(moving.length * 3);
   for (let pass = 0; pass < passes; pass += 1) {
     for (const factor of [0.5, -0.53]) {
@@ -919,6 +921,12 @@ export function relaxFringe(m: Mesh, reach: number, passes: number, keep?: Uint8
       });
       moving.forEach((i, k) => { for (let axis = 0; axis < 3; axis += 1) m.v[i * 3 + axis] = next[k * 3 + axis]; });
     }
+    // Keep every corner within `clamp` mm of where it began, so the margin never moves more than the tolerance allows.
+    if (start) moving.forEach((i, k) => {
+      const dx = m.v[i * 3] - start[k * 3], dy = m.v[i * 3 + 1] - start[k * 3 + 1], dz = m.v[i * 3 + 2] - start[k * 3 + 2];
+      const d = Math.hypot(dx, dy, dz);
+      if (d > clamp) { const s = clamp / d; m.v[i * 3] = start[k * 3] + dx * s; m.v[i * 3 + 1] = start[k * 3 + 1] + dy * s; m.v[i * 3 + 2] = start[k * 3 + 2] + dz * s; }
+    });
   }
 }
 

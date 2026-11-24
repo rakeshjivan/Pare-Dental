@@ -1,11 +1,12 @@
 import manifoldModule, { type ManifoldToplevel } from "manifold-3d";
 import { beforeAll, describe, expect, it } from "vitest";
-import { EDGE_SMOOTH, makeDentalStudio, type DentalStudioOptions } from "@/lib/dentalModel";
+import { makeDentalStudio, SEAM_RELAX, type DentalStudioOptions } from "@/lib/dentalModel";
 
 /**
- * Build 124 (Rakesh): every bit of the gum the person keeps after the Trim step comes through on the smooth base -
- * only its trimmed edge (the last EDGE_SMOOTH mm) may be smoothed. A quadrant of five teeth on a band of gum, made on
- * each smooth base: of the gum more than EDGE_SMOOTH in from its edge, all must be on the finished model, exactly.
+ * Build 124 (Rakesh): the gum the person keeps after the Trim step comes through on the smooth base.
+ * Build 127 (Rakesh): its trimmed edge may now be ironed within a 0.5 mm margin to give a clean cut (no ragged lip),
+ * but the teeth and the cervical gum are untouched. So of the gum more than SEAM_RELAX mm in from its edge - the core
+ * and cervical region the dentist cares about - all must still be on the finished model, exactly.
  */
 let runtime: ManifoldToplevel;
 beforeAll(async () => {
@@ -38,6 +39,7 @@ describe("the gum the person kept (build 124)", () => {
   it.each(["clean", "ortho", "follow"] as const)("all comes through on the %s smooth base, but its trimmed edge", async (baseStyle) => {
     const made = await makeDentalStudio({ arches: [{ id: "q", positions: quadrant() }] }, { ...base, baseStyle }, runtime as never);
     expect(made.gumKept).toBeDefined();
-    expect(made.gumKept![0][EDGE_SMOOTH]).toBeGreaterThanOrEqual(0.999);
+    // The core and cervical gum (more than the ironed edge strip in from the edge) comes through exactly.
+    expect(made.gumKept![0][SEAM_RELAX]).toBeGreaterThanOrEqual(0.999);
   }, 120_000);
 });

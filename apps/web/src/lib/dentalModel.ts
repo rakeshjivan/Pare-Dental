@@ -755,6 +755,16 @@ export const TRUE_WITHIN = 0.001;
 export const GUM_BANDS = [0, 0.5, 1, 2, 3];
 /** Build 124 (Rakesh): on the smooth base only this much of the kept gum, in from its trimmed edge, is smoothed, mm. */
 export const EDGE_SMOOTH = 1;
+/**
+ * Build 127 (Rakesh): a clean cut without ragged edges. The scan's trimmed edge is often a fringe of slivers, folds and
+ * thin flaps; they run into the base and leave a rough seam. The last SEAM_RELAX mm of the scan in from its edge is
+ * ironed before the base is draped, but no corner moves more than SEAM_MARGIN mm (the tolerance the dentist allows at the
+ * margin), and the teeth and the gum within GUM_SAFETY mm of them (the cervical margin) are never touched - so a scan
+ * trimmed close to the cervical, or one that does not reach well past it, is left as scanned there.
+ */
+export const SEAM_RELAX = 3;
+export const SEAM_MARGIN = 0.5;
+export const GUM_SAFETY = 2.5;
 export function toothTrueness(solid: ManifoldSolid, points: Float64Array, turn: THREE.Matrix4 | null): ToothTrueness {
   const mesh = solid.getMesh();
   const stride = mesh.numProp, props = mesh.vertProperties;
@@ -1117,7 +1127,14 @@ function buildArch(
     edgeClear = Uint8Array.from(teeth, (z, i) => (z && (here[i] > EDGE_SMOOTH || promised[i]) ? 1 : 0));
   }
   smoothEdge(cut, SMOOTH_ROUNDS[options.smooth ?? "high"], edgeClear);
-  if (options.smoothBase) relaxFringe(cut, EDGE_SMOOTH, 8, edgeClear);
+  if (options.smoothBase) {
+    // Build 127 (Rakesh): a cleaner cut. Iron a wider strip of the ragged lower edge so the base meets an even boundary,
+    // but cap every corner's move at SEAM_MARGIN (the margin tolerance) and never touch the teeth or the gum within
+    // GUM_SAFETY of them - the cervical margin stays as scanned, even on a scan trimmed close to it.
+    const fromTeeth = distanceFrom(cut, edgeClear, GUM_SAFETY + 1);
+    const protectSeam = Uint8Array.from(edgeClear, (kept, i) => (kept || fromTeeth[i] < GUM_SAFETY ? 1 : 0));
+    relaxFringe(cut, SEAM_RELAX, 14, protectSeam, SEAM_MARGIN);
+  }
   let closed;
   try {
     closed = closeToFloor(cut, floor, 400, guard, 0);
