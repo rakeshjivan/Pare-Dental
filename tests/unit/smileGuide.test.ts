@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   splitByLabel, centroidOf, toothFrame, moveMatrix, applyMatrix, applyMove, isMoved,
-  buildSmile, capturedShare, hasMovedTeeth, CAPTURED, SYNTHESISED, NO_MOVE,
+  buildSmile, capturedShare, hasMovedTeeth, averageNormal, CAPTURED, SYNTHESISED, NO_MOVE,
   type ToothFrame, type SmileResult, type ToothMove,
 } from "@/lib/smileGuide";
 
@@ -30,6 +30,15 @@ describe("splitByLabel", () => {
     expect([...teeth.keys()].sort((a, b) => a - b)).toEqual([11, 21]);
     expect(teeth.get(11)!.length).toBe(9);
     expect(teeth.get(21)!.length).toBe(9);
+  });
+});
+
+describe("averageNormal", () => {
+  it("is the outward face normal for a CCW triangle (XY plane -> +Z)", () => {
+    const n = averageNormal(tri(0, 0, 0, 1, 0, 0, 0, 1, 0));
+    expect(n[0]).toBeCloseTo(0);
+    expect(n[1]).toBeCloseTo(0);
+    expect(n[2]).toBeCloseTo(1);
   });
 });
 

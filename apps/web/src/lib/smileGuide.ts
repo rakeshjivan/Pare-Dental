@@ -72,14 +72,26 @@ export function centroidOf(scan: ArrayLike<number>): Vec3 {
   return [x / n, y / n, z / n];
 }
 
+/** The area-weighted average face normal of a triangle soup - for a crown, roughly its occlusal/long axis. */
+export function averageNormal(scan: ArrayLike<number>): Vec3 {
+  let x = 0, y = 0, z = 0;
+  for (let i = 0; i + 8 < scan.length; i += 9) {
+    const ux = scan[i + 3] - scan[i], uy = scan[i + 4] - scan[i + 1], uz = scan[i + 5] - scan[i + 2];
+    const wx = scan[i + 6] - scan[i], wy = scan[i + 7] - scan[i + 1], wz = scan[i + 8] - scan[i + 2];
+    x += uy * wz - uz * wy; y += uz * wx - ux * wz; z += ux * wy - uy * wx;
+  }
+  return norm([x, y, z]);
+}
+
 /**
- * A tooth's anatomic frame. `up` is the arch's occlusal direction (teeth up, default +z); `out` (labial) points
- * from the arch centre to the tooth, flattened perpendicular to `up`. With no arch centre, `out` falls back to
- * the tooth's own longest horizontal spread.
+ * A tooth's anatomic frame. `up` is its long axis; when `archUp` is given it is used, otherwise it is taken from
+ * the tooth's own average surface normal (roughly occlusal), so each tooth rotates about its own axis. `out`
+ * (labial) points from the arch centre to the tooth, flattened perpendicular to `up`; with no arch centre it
+ * falls back to the tooth's longest horizontal spread.
  */
-export function toothFrame(toothSoup: ArrayLike<number>, archUp: Vec3 = [0, 0, 1], archCentre?: Vec3): ToothFrame {
+export function toothFrame(toothSoup: ArrayLike<number>, archUp?: Vec3, archCentre?: Vec3): ToothFrame {
   const origin = centroidOf(toothSoup);
-  const up = norm(archUp);
+  const up = norm(archUp ?? averageNormal(toothSoup));
   let out: Vec3;
   if (archCentre) {
     const radial: Vec3 = [origin[0] - archCentre[0], origin[1] - archCentre[1], origin[2] - archCentre[2]];
@@ -190,7 +202,7 @@ export function buildSmile(
   opts: { archUp?: Vec3; archCentre?: Vec3; emergence?: boolean } = {},
 ): SmileResult {
   const { gum, teeth } = splitByLabel(scan, labels);
-  const archUp = opts.archUp ?? [0, 0, 1];
+  const archUp = opts.archUp; // undefined -> each tooth takes its own average-normal long axis
   const archCentre = opts.archCentre ?? centroidOf(scan);
   const emergence = opts.emergence ?? true;
 

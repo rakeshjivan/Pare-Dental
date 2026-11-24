@@ -13,12 +13,76 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { stlSoupOf, stlBinaryOf, soupBounds } from "@/lib/dentalMesh";
-import { buildSmile, capturedShare, hasMovedTeeth, SYNTHESISED, type ToothMove, type SmileResult } from "@/lib/smileGuide";
+import { stlSoupOf, stlBinaryOf, soupBounds, weld } from "@/lib/dentalMesh";
+import { buildSmile, capturedShare, hasMovedTeeth, moveMatrix, toothFrame, isMoved, SYNTHESISED, type ToothMove, type SmileResult } from "@/lib/smileGuide";
 import { SMILE_ENABLED } from "@/lib/pareFeatures";
 
-type Seed = { id: number; point: [number, number, number] };
+type Seed = { id: number; tri: number; point: [number, number, number] };
 const TOOTH_HUES = [12, 40, 90, 150, 200, 260, 310, 340];
+
+/*
+ * Segmentation topology. A tooth is bounded by concave creases - the gingival margin groove and the contacts
+ * between teeth are valleys in the surface. We weld the scan, find each triangle's neighbours, and mark the
+ * shared edges that are concave folds (a crease). Growing a region from a clicked triangle without crossing
+ * those creases fills one tooth and stops at its margin - orientation-independent, no ML. The triangle order is
+ * the scan's own (weld keeps it), so a ray hit's faceIndex is the triangle index straight away.
+ */
+type Topo = { tri: number; nbr: Int32Array; crease: Float32Array; cx: Float32Array; cy: Float32Array; cz: Float32Array };
+
+function buildTopo(scan: ArrayLike<number>): Topo {
+  const m = weld(scan, 1e-4);
+  const V = m.v, F = m.f, T = Math.floor(F.length / 3);
+  const cx = new Float32Array(T), cy = new Float32Array(T), cz = new Float32Array(T);
+  const nx = new Float32Array(T), ny = new Float32Array(T), nz = new Float32Array(T);
+  for (let t = 0; t < T; t += 1) {
+    const a = F[t * 3] * 3, b = F[t * 3 + 1] * 3, c = F[t * 3 + 2] * 3;
+    cx[t] = (V[a] + V[b] + V[c]) / 3; cy[t] = (V[a + 1] + V[b + 1] + V[c + 1]) / 3; cz[t] = (V[a + 2] + V[b + 2] + V[c + 2]) / 3;
+    const ux = V[b] - V[a], uy = V[b + 1] - V[a + 1], uz = V[b + 2] - V[a + 2];
+    const wx = V[c] - V[a], wy = V[c + 1] - V[a + 1], wz = V[c + 2] - V[a + 2];
+    let px = uy * wz - uz * wy, py = uz * wx - ux * wz, pz = ux * wy - uy * wx;
+    const L = Math.hypot(px, py, pz) || 1; nx[t] = px / L; ny[t] = py / L; nz[t] = pz / L;
+  }
+  const nbr = new Int32Array(T * 3).fill(-1);
+  const crease = new Float32Array(T * 3); // per half-edge: how concave the fold is (0 = flat/convex)
+  const seen = new Map<number, number>(); // edge key -> face*3+corner
+  for (let t = 0; t < T; t += 1) {
+    for (let i = 0; i < 3; i += 1) {
+      const va = F[t * 3 + i], vb = F[t * 3 + ((i + 1) % 3)];
+      const k = va < vb ? va * 4294967296 + vb : vb * 4294967296 + va;
+      const prev = seen.get(k);
+      if (prev === undefined) { seen.set(k, t * 3 + i); continue; }
+      const pf = Math.floor(prev / 3), pc = prev % 3;
+      nbr[t * 3 + i] = pf; nbr[pf * 3 + pc] = t;
+      let dx = cx[pf] - cx[t], dy = cy[pf] - cy[t], dz = cz[pf] - cz[t];
+      const dd = Math.hypot(dx, dy, dz) || 1; dx /= dd; dy /= dd; dz /= dd;
+      // Concave fold: the neighbour sits above this face's outward plane (valley). Convex ridges are <= 0.
+      const concave = nx[t] * dx + ny[t] * dy + nz[t] * dz; // ~sin of the fold, +ve concave
+      const ndot = nx[t] * nx[pf] + ny[t] * ny[pf] + nz[t] * nz[pf]; // cos angle between normals
+      const sharp = Math.max(0, 1 - ndot); // 0 flat .. up to 2 for a full fold
+      const c = concave > 0 ? concave * sharp : 0;
+      crease[t * 3 + i] = c; crease[pf * 3 + pc] = c;
+    }
+  }
+  return { tri: T, nbr, crease, cx, cy, cz };
+}
+
+/** Grow one tooth from a seed triangle: flood across neighbours, not crossing creases past `block`, within `radius` mm. */
+function floodTooth(topo: Topo, seedTri: number, seed: [number, number, number], radius: number, block: number): number[] {
+  const out: number[] = []; const vis = new Uint8Array(topo.tri);
+  const stack = [seedTri]; vis[seedTri] = 1; const r2 = radius * radius;
+  while (stack.length) {
+    const t = stack.pop()!; out.push(t);
+    for (let i = 0; i < 3; i += 1) {
+      if (topo.crease[t * 3 + i] > block) continue;
+      const u = topo.nbr[t * 3 + i];
+      if (u < 0 || vis[u]) continue;
+      const dx = topo.cx[u] - seed[0], dy = topo.cy[u] - seed[1], dz = topo.cz[u] - seed[2];
+      if (dx * dx + dy * dy + dz * dz > r2) continue;
+      vis[u] = 1; stack.push(u);
+    }
+  }
+  return out;
+}
 
 function colorsForScan(labels: Uint8Array, idOf: Map<number, number>): Float32Array {
   const out = new Float32Array(labels.length * 9);
@@ -57,36 +121,58 @@ export default function SmileGuidePage() {
   const [honesty, setHonesty] = useState(true);
   const [status, setStatus] = useState<string>("");
 
-  // Gum baseline: teeth assumed to sit above a fraction of the Z span.
-  const baseline = useMemo(() => {
-    if (!scan) return 0;
-    const b = soupBounds(scan);
-    return b.min[2] + 0.45 * (b.max[2] - b.min[2]);
-  }, [scan]);
-
   const idOf = useMemo(() => new Map(seeds.map((s, i) => [s.id, i])), [seeds]);
 
-  // Per-triangle labels: a tooth face (centroid above the baseline) takes its nearest seed; everything else is gum.
+  // How eagerly a region stops at a crease (higher = stops at shallower grooves) and the most a tooth can span
+  // (mm) - both adjustable because real scans vary.
+  const [sensitivity, setSensitivity] = useState(0.5);
+  const [toothSize, setToothSize] = useState(7);
+
+  const topo = useMemo(() => (scan ? buildTopo(scan) : null), [scan]);
+
+  // Per-triangle FDI labels: each seed grows its own tooth from its clicked triangle, bounded by creases; the
+  // first seed to reach a triangle keeps it.
   const labels = useMemo(() => {
-    if (!scan) return new Uint8Array(0);
-    const triangles = Math.floor(scan.length / 9);
-    const out = new Uint8Array(triangles);
-    if (!seeds.length) return out;
-    for (let t = 0; t < triangles; t += 1) {
-      const b = t * 9;
-      const cz = (scan[b + 2] + scan[b + 5] + scan[b + 8]) / 3;
-      if (cz < baseline) continue;
-      const cx = (scan[b] + scan[b + 3] + scan[b + 6]) / 3;
-      const cy = (scan[b + 1] + scan[b + 4] + scan[b + 7]) / 3;
-      let best = -1, bestD = Infinity;
-      for (const s of seeds) {
-        const d = (cx - s.point[0]) ** 2 + (cy - s.point[1]) ** 2 + (cz - s.point[2]) ** 2;
-        if (d < bestD) { bestD = d; best = s.id; }
-      }
-      if (best > 0) out[t] = best;
+    const T = topo?.tri ?? 0;
+    const out = new Uint8Array(T);
+    if (!topo || !seeds.length) return out;
+    const block = 0.06 + (1 - sensitivity) * 0.5; // high sensitivity -> low block -> stops at shallow creases
+    for (const s of seeds) {
+      if (s.tri < 0 || s.tri >= T) continue;
+      for (const t of floodTooth(topo, s.tri, s.point, toothSize, block)) if (out[t] === 0) out[t] = s.id;
     }
     return out;
-  }, [scan, seeds, baseline]);
+  }, [topo, seeds, sensitivity, toothSize]);
+
+  const selectedCount = useMemo(() => {
+    if (selected == null) return 0;
+    let n = 0; for (let i = 0; i < labels.length; i += 1) if (labels[i] === selected) n += 1; return n;
+  }, [labels, selected]);
+
+  // Live preview: each moved tooth's triangles are transformed in place as the sliders change (the gum stays
+  // put), so movement shows before Build runs the full reconcile.
+  const previewSoup = useMemo(() => {
+    if (!scan) return null;
+    let any = false; for (const mv of moves.values()) if (isMoved(mv)) { any = true; break; }
+    if (!any || !labels.length) return scan;
+    const byTooth = new Map<number, number[]>();
+    for (let t = 0; t < labels.length; t += 1) { const id = labels[t]; if (id) { const g = byTooth.get(id); if (g) g.push(t); else byTooth.set(id, [t]); } }
+    const out = scan.slice();
+    for (const [id, tris] of byTooth) {
+      const mv = moves.get(id); if (!mv || !isMoved(mv)) continue;
+      const soupArr: number[] = [];
+      for (const t of tris) for (let k = 0; k < 9; k += 1) soupArr.push(scan[t * 9 + k]);
+      const frame = toothFrame(Float32Array.from(soupArr));
+      const e = moveMatrix(frame, mv).elements;
+      for (const t of tris) for (let c = 0; c < 3; c += 1) {
+        const o = t * 9 + c * 3, x = scan[o], y = scan[o + 1], z = scan[o + 2];
+        out[o] = e[0] * x + e[4] * y + e[8] * z + e[12];
+        out[o + 1] = e[1] * x + e[5] * y + e[9] * z + e[13];
+        out[o + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
+      }
+    }
+    return out;
+  }, [scan, labels, moves]);
 
   const loadFile = useCallback(async (file: File) => {
     try {
@@ -94,8 +180,8 @@ export default function SmileGuidePage() {
       const soup = stlSoupOf(buffer);
       if (!soup || soup.length < 9) { setStatus(`Could not read ${file.name} as an STL.`); return; }
       setScan(soup);
-      setSeeds([]); setSelected(null); setMoves(new Map()); setResult(null); setSeeding(false);
-      setStatus(`Loaded ${file.name} - ${Math.floor(soup.length / 9).toLocaleString()} triangles. Turn on "Seed teeth" and click each tooth.`);
+      setSeeds([]); setSelected(null); setMoves(new Map()); setResult(null); setSeeding(true);
+      setStatus(`Loaded ${file.name} - ${Math.floor(soup.length / 9).toLocaleString()} triangles. Seeding is on - click a tooth to isolate it, then move it with the sliders.`);
     } catch {
       setStatus(`Could not read ${file.name}.`);
     }
@@ -135,7 +221,7 @@ export default function SmileGuidePage() {
   useEffect(() => {
     const ctx = threeRef.current;
     if (!ctx) return;
-    const soup = result ? result.soup : scan;
+    const soup = result ? result.soup : previewSoup;
     if (!soup || soup.length < 9) { ctx.mesh.visible = false; return; }
     ctx.mesh.visible = true;
     const colors = result
@@ -146,7 +232,7 @@ export default function SmileGuidePage() {
     geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
     geo.computeVertexNormals(); geo.computeBoundingSphere(); geo.computeBoundingBox();
     (ctx.mesh.material as THREE.MeshStandardMaterial).vertexColors = true;
-  }, [scan, labels, idOf, result, honesty]);
+  }, [previewSoup, labels, idOf, result, honesty]);
 
   // Frame the camera when a new scan loads.
   useEffect(() => {
@@ -170,12 +256,13 @@ export default function SmileGuidePage() {
     const ndc = new THREE.Vector2(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
     ctx.raycaster.setFromCamera(ndc, ctx.camera);
     const hit = ctx.raycaster.intersectObject(ctx.mesh, false)[0];
-    if (!hit) return;
+    if (!hit || hit.faceIndex == null) return;
     const p: [number, number, number] = [hit.point.x, hit.point.y, hit.point.z];
+    const tri = hit.faceIndex;
     setSeeds((prev) => {
       const id = prev.length + 1;
       setSelected(id);
-      return [...prev, { id, point: p }];
+      return [...prev, { id, tri, point: p }];
     });
   }, [seeding, scan, result]);
 
@@ -190,7 +277,9 @@ export default function SmileGuidePage() {
 
   const run = useCallback(() => {
     if (!scan || !seeds.length) { setStatus("Load a scan and seed at least one tooth first."); return; }
-    const built = buildSmile(scan, labels, moves, { archUp: [0, 0, 1] });
+    let toothTris = 0; for (let i = 0; i < labels.length; i += 1) if (labels[i]) toothTris += 1;
+    if (!toothTris) { setStatus("No teeth were segmented. With seeding on, click on a tooth; if the region stays empty, raise Detail or Tooth size."); return; }
+    const built = buildSmile(scan, labels, moves, {});
     setResult(built);
     const share = Math.round(capturedShare(built) * 100);
     setStatus(`Built. ${share}% of the surface is the patient's own, captured; the rest is synthesised (shown amber).${hasMovedTeeth(built) ? " Teeth moved - this is an appearance goal." : ""}`);
@@ -238,6 +327,20 @@ export default function SmileGuidePage() {
             ))}
           </div>
           {seeds.length ? <button type="button" onClick={() => { setSeeds([]); setSelected(null); setMoves(new Map()); setResult(null); }} style={linkBtn}>Clear teeth</button> : null}
+
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed #d7e0e8" }}>
+            <div style={{ fontSize: 11, color: "#7a8a99", marginBottom: 8 }}>If a region spills onto the gum or a neighbour, lower these; if it stops short, raise them.</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <span style={{ width: 70, fontSize: 12, color: "#5a6b7b" }}>Detail</span>
+              <input type="range" min={0} max={1} step={0.05} value={sensitivity} onChange={(e) => { setSensitivity(Number(e.currentTarget.value)); setResult(null); }} style={{ flex: 1 }} />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 70, fontSize: 12, color: "#5a6b7b" }}>Tooth size</span>
+              <input type="range" min={3} max={12} step={0.5} value={toothSize} onChange={(e) => { setToothSize(Number(e.currentTarget.value)); setResult(null); }} style={{ flex: 1 }} />
+              <span style={{ width: 40, fontSize: 12, textAlign: "right" }}>{toothSize.toFixed(1)}mm</span>
+            </div>
+            {selected != null ? <div style={{ fontSize: 12, color: selectedCount ? "#2f7d43" : "#b04a3a", marginTop: 8 }}>Tooth {selected}: {selectedCount.toLocaleString()} triangles segmented{selectedCount ? "" : " - click on the tooth, or raise Detail/Tooth size"}</div> : null}
+          </div>
 
           {selected != null ? (
             <div style={{ marginTop: 16 }}>
