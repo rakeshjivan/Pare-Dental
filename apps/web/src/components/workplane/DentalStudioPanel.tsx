@@ -327,7 +327,7 @@ export function DentalStudioPanel({
   /** Build 79: after Make - open the design again, or finish. */
   onEditDesign?: () => void;
   /** Pare Dental: Finishing touches on the made models - Smooth, Add, Remove. */
-  madeTouch?: { slots: Array<"upper" | "lower">; active: "upper" | "lower" | null; brush: "smooth" | "add" | "remove" | "blend"; onPick: (slot: "upper" | "lower" | null) => void; onBrush: (brush: "smooth" | "add" | "remove" | "blend") => void };
+  madeTouch?: { slots: Array<"upper" | "lower">; active: "upper" | "lower" | null; brush: "smooth" | "add" | "remove"; onPick: (slot: "upper" | "lower" | null) => void; onBrush: (brush: "smooth" | "add" | "remove") => void };
   /** Build 117: marking the dental midline on the upper for an articulated pair - start (or stop) marking, and whether it is being marked. */
   onMidlinePick?: (on: boolean) => void;
   /** Build 272: which click of the two the midline marking waits for (false: not marking). */
@@ -944,8 +944,8 @@ export function DentalStudioPanel({
                 ))}
               </div>
               {madeTouch.active ? (<>
-                <div className="studio-mm-choice four" role="radiogroup" aria-label={t("made.touchTitle")}>
-                  {(["smooth", "add", "remove", "blend"] as const).map((brush) => (
+                <div className="studio-mm-choice three" role="radiogroup" aria-label={t("made.touchTitle")}>
+                  {(["smooth", "add", "remove"] as const).map((brush) => (
                     <button key={brush} type="button" role="radio" aria-checked={madeTouch.brush === brush} className={madeTouch.brush === brush ? "active" : ""} onClick={() => madeTouch.onBrush(brush)}>{t(`made.touch.${brush}`)}</button>
                   ))}
                 </div>

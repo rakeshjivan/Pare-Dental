@@ -94,7 +94,6 @@ import { WAXUP_LANDMARKS, WAX_BLUE, WAX_CONFIRMED_COLOURS, WAX_PLAIN, WAX_TOOTH_
 import { brushArea, lassoArea, screenTriangles } from "@/lib/dentalArea";
 import { applyToSelection, brushChoice, lassoChoice, type LassoMode, cornerPositions, growChoice, soupFloat32, invertChoice, loosePieces, sculptMeshOf, soupOf, withoutTriangles, type SculptMesh, type SelectReach } from "@/lib/meshSculpt";
 import { remeshRegion, LiveMesh, averageEdgeOf, stampBrush, type LiveBrush, type LivePatch } from "@/lib/liveSculpt";
-import { madeCornerFrozen, MADE_BLEND_MOST, type MadeBrush } from "@/lib/madeFreeze";
 import { defaultRemeshDetail, type RemeshMode } from "@/lib/meshRemesh";
 import { MeshSculptPanel, WAX_SCULPT_TOOLS, type SculptBrushOptions, type SoftTransform, type SculptFreezeAction, type SculptRefine, type SculptSelectionAction, type SculptSymmetry, type SculptTool } from "./workplane/MeshSculptPanel";
 import { DentalBrushOverlay, DentalTrimOverlay, SculptLassoOverlay, trimLineDistance, type TrimPoint } from "./workplane/DentalTrimOverlay";
@@ -107,10 +106,10 @@ type WaxSculptBrush = "add" | "remove" | "smooth" | "move";
 /** Build 317: how near a corner of the scan a kept mark must be to count as still on it, mm. */
 const MARK_ON_SCAN = 3;
 const WAX_BRUSH_TOOL: Record<WaxSculptBrush, SculptTool> = { add: "draw", remove: "draw", smooth: "smooth", move: "move" };
-/** Pare Dental: the most Remove takes at once on a made model (of 1), so it cannot reach through the hollow model's wall. */
+/** Pare Dental: how far above the top of the base a made model is frozen for its finishing touches, mm; and the most Remove takes at once there (of 1), so it cannot reach through the hollow model's wall. */
+const MADE_BASE_CLEAR = 1;
 const MADE_REMOVE_MOST = 0.3;
-/** Build 127 (Rakesh): which brush maps to which sculpt tool on a made model; Blend smooths the scan-edge/base seam. */
-const MADE_BRUSH_TOOL: Record<MadeBrush, SculptTool> = { smooth: "smooth", add: "draw", remove: "draw", blend: "smooth" };
+type MadeBrush = "smooth" | "add" | "remove";
 /** Build 112: Sculpt's tools, as CEREC's Design tools: Position & Rotate and Scale (the tooth's handles), then the brushes. */
 type WaxSculptTool = "position" | "scale" | WaxSculptBrush;
 const WAX_SCULPT_ORDER: WaxSculptTool[] = ["position", "scale", "add", "remove", "smooth", "move"];
@@ -9630,9 +9629,7 @@ export function LayerlingEditor({
     if (known && known.shapeId === shape.id && known.key === key) return known;
     if (known && known.shapeId === shape.id) window.layerlingSculptLive?.(shape.id, null);
     // Build 90: what was frozen stays frozen on the new copy (where those corners still are).
-    // Build 127 (Rakesh): except a made model, whose freeze is set fresh per finishing brush (Blend frees a different region).
-    const isMadeModel = Boolean(dentalStudioRef.current?.made?.includes(shape.id));
-    const frozen = isMadeModel ? null : known && known.shapeId === shape.id ? known.live.frozenPoints() : sculptFrozenKept.current?.shapeId === shape.id ? sculptFrozenKept.current.points : null;
+    const frozen = known && known.shapeId === shape.id ? known.live.frozenPoints() : sculptFrozenKept.current?.shapeId === shape.id ? sculptFrozenKept.current.points : null;
     sculptFrozenKept.current = null;
     known?.live.dispose();
     // Build 109: a wax tooth is sculpted as it is shown - blended to its stop line.
@@ -9649,7 +9646,7 @@ export function LayerlingEditor({
   };
   /**
    * Pare Dental (Rakesh: sculpting on the final models, then a repair check before export): on a made model the base,
-   * the label and the inside of a hollow model are frozen - every corner within MADE_BASE_CLEAR (madeFreeze.ts) of the top of the base,
+   * the label and the inside of a hollow model are frozen - every corner within MADE_BASE_CLEAR of the top of the base,
    * and every one facing down (the roof of the hollow) - so a brush works on the teeth and gum only.
    */
   const freezeMadeBase = (live: LiveMesh, shape: WorkplaneShape) => {
@@ -9660,10 +9657,12 @@ export function LayerlingEditor({
     const p = new THREE.Vector3(), n = new THREE.Vector3();
     let bottom = Infinity;
     for (let v = 0; v < live.vCount; v += 1) if (live.vAlive[v]) bottom = Math.min(bottom, p.set(live.pos[v * 3], live.pos[v * 3 + 1], live.pos[v * 3 + 2]).applyMatrix4(toLocal).z);
-    // Build 127 (Rakesh): the Blend brush freezes a different region (teeth + flat base, seam band free); the rest freeze the base.
-    const baseTopZ = bottom + (dentalStudioRef.current?.options.base ?? 5);
-    const brush = madeSculptRef.current?.brush ?? "smooth";
-    live.freezeWhere((x, y, z, v) => madeCornerFrozen(brush, p.set(x, y, z).applyMatrix4(toLocal).z, baseTopZ, () => live.vertexNormal(v, n).applyMatrix3(turn).normalize().z));
+    const top = bottom + (dentalStudioRef.current?.options.base ?? 5) + MADE_BASE_CLEAR;
+    live.freezeWhere((x, y, z, v) => {
+      if (p.set(x, y, z).applyMatrix4(toLocal).z < top) return true;
+      live.vertexNormal(v, n).applyMatrix3(turn).normalize();
+      return n.z < -0.35;
+    });
   };
   /** Pare Dental: a wax tooth with a closed margin drawn (sculpted whole; the trim to the margin is not baked into it). */
   const trimmedAtMargin = (shape: WorkplaneShape) => Boolean(shape.dental === "wax" && eraseFor(shape)?.margin);
@@ -10937,8 +10936,6 @@ export function LayerlingEditor({
   const madeSculptRef = useRef(madeSculpt);
   madeSculptRef.current = madeSculpt;
   const madeSculptOpen = useRef<string | null>(null);
-  // Build 127 (Rakesh): which finishing brush the open model was frozen for, so switching to/from Blend reopens it.
-  const madeSculptOpenBrush = useRef<MadeBrush | null>(null);
   const studioMadeSculpt = studioShellOn && dentalStudio?.stage === "made" && Boolean(madeSculpt && dentalStudio.madeFor?.[madeSculpt.slot]);
   useEffect(() => { if (dentalStudio?.stage !== "made") setMadeSculpt(null); }, [dentalStudio?.stage]);
   useEffect(() => {
@@ -10949,17 +10946,13 @@ export function LayerlingEditor({
       madeSculptOpen.current = null;
       return;
     }
-    const tool = MADE_BRUSH_TOOL[madeSculpt.brush];
-    const cap = madeSculpt.brush === "remove" ? MADE_REMOVE_MOST : madeSculpt.brush === "blend" ? MADE_BLEND_MOST : 1;
-    const strength = (current: number) => Math.min(current, cap);
-    // Build 127 (Rakesh): Blend freezes a different region, so switching into or out of it has to reopen the model, not just swap the tool.
-    const blendChanged = (madeSculptOpenBrush.current === "blend") !== (madeSculpt.brush === "blend");
-    if (sculptToolRef.current?.shapeId === id && !blendChanged) { madeSculptOpenBrush.current = madeSculpt.brush; setSculptTool((current) => (current ? { ...current, tool, strength: strength(current.strength) } : current)); return; }
+    const tool = WAX_BRUSH_TOOL[madeSculpt.brush];
+    const strength = (current: number) => (madeSculpt.brush === "remove" ? Math.min(current, MADE_REMOVE_MOST) : current);
+    if (sculptToolRef.current?.shapeId === id) { setSculptTool((current) => (current ? { ...current, tool, strength: strength(current.strength) } : current)); return; }
     const shape = shapesRef.current.find((candidate) => candidate.id === id);
     if (!shape) return;
     if (sculptToolRef.current) { flushSculptRef.current(); setSculptTool(null); }
     madeSculptOpen.current = id;
-    madeSculptOpenBrush.current = madeSculpt.brush;
     window.setTimeout(() => { openSculpt(shape); setSculptTool((current) => (current && current.shapeId === id ? { ...current, tool, strength: strength(current.strength) } : current)); }, 0);
   }, [studioMadeSculpt, madeSculpt?.slot, madeSculpt?.brush]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -23659,7 +23652,7 @@ export function LayerlingEditor({
             active: madeSculpt?.slot ?? null,
             brush: madeSculpt?.brush ?? "smooth",
             onPick: (slot) => setMadeSculpt((current) => (slot ? { slot, brush: current?.brush ?? "smooth" } : null)),
-            onBrush: (brush: MadeBrush) => setMadeSculpt((current) => (current ? { ...current, brush } : current)),
+            onBrush: (brush) => setMadeSculpt((current) => (current ? { ...current, brush } : current)),
           } : undefined}
           onDone={() => setDentalStudio(null)}
           editing={Boolean(dentalStudio.editing?.length)}
@@ -23758,7 +23751,7 @@ export function LayerlingEditor({
           symmetry={sculptTool.symmetry}
           onRefine={(refine) => { storeSculptRefine(refine); setSculptTool((current) => current ? { ...current, refine } : current); }}
           onSymmetry={(symmetry) => setSculptTool((current) => current ? { ...current, symmetry } : current)}
-          onStrength={(strength) => setSculptTool((current) => current ? { ...current, strength: Math.max(0.01, Math.min(studioMadeSculpt && madeSculpt?.brush === "remove" ? MADE_REMOVE_MOST : studioMadeSculpt && madeSculpt?.brush === "blend" ? MADE_BLEND_MOST : 1, Math.round(strength * 100) / 100)) } : current)}
+          onStrength={(strength) => setSculptTool((current) => current ? { ...current, strength: Math.max(0.01, Math.min(studioMadeSculpt && madeSculpt?.brush === "remove" ? MADE_REMOVE_MOST : 1, Math.round(strength * 100) / 100)) } : current)}
           onSelection={(action) => (action === "delete" && sculptTool.trim ? deleteTrimSelection() : applySculptSelection(action))}
           autoDelete={trimAutoDelete}
           onAutoDelete={(on) => { setTrimAutoDelete(on); try { window.localStorage.setItem("pare3d.trimAutoDelete", on ? "1" : "0"); } catch { /* this visit */ } }}
