@@ -1016,9 +1016,8 @@
 .studio-label-field input { width: 100%; box-sizing: border-box; min-height: 42px; padding: 8px 12px; color: #111827; background: #ffffff; border: 1px solid #c9ced6; border-radius: 10px; font-size: 14px; }
 .studio-label-field input:focus { outline: none; border-color: var(--studio-teal, #2f7d6d); box-shadow: 0 0 0 3px rgba(47, 125, 109, 0.15); }
 
-/* Build 106: the models made - no panel on the right; the 3D view takes the width. */
-.layerling-editor.studio-shell-on.studio-made { --studio-right-w: calc(-1 * var(--studio-gap)); }
-.studio-shell-on.studio-made .dental-studio-panel.studio-framed { display: none !important; }
+/* Build 106: the models made. Build 127 (Rakesh): the right panel stays, so Finishing touches (Smooth,
+   Add, Remove, Blend seam) is reachable; the right side-tab still collapses it for a full-width review. */
 
 /* Build 106: the sliders in the studio frame - one clean value pill riding the track (the number's own box
    inside the pill made it look doubled), the frame's green for the track and the pill. */
