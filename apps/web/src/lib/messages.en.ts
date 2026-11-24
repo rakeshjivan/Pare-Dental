@@ -5705,6 +5705,8 @@ export const MESSAGES_EN = {
   "made.touch.smoothHint": "Brush on to even the surface out.",
   "made.touch.addHint": "Brush on to build the surface up.",
   "made.touch.removeHint": "Brush on to take the surface down - a little at a time, so it never reaches through the model's wall.",
+  "made.touch.blend": "Blend seam",
+  "made.touch.blendHint": "Brush along the join between the scan and the base to smooth it. The teeth and the flat base are protected.",
   "made.touchDone": "Done",
   "studio.repairNotSound": "{name} is not a closed, sound solid and could not be repaired without changing its shape - check it in your slicer before printing.",
   "waxup.veneer.title": "Teeth made as",
