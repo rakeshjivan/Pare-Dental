@@ -10531,8 +10531,11 @@ export function LayerlingEditor({
     }, 30);
   }, [sculptTool]); // eslint-disable-line react-hooks/exhaustive-deps
   // The tool belongs to its part: picking another closes it.
+  // Build 127 (Rakesh): except a made model's finishing brush, which is chosen from the Finishing touches panel
+  // (the model itself is not selected), so the made-sculpt effect owns it instead of the selection.
   useEffect(() => {
-    if (sculptTool && !sculptTool.busy && !(selectedIds.length === 1 && selectedIds[0] === sculptTool.shapeId)) { flushSculptRef.current(); setSculptTool(null); }
+    const madeTool = dentalStudioRef.current?.stage === "made" && Boolean(sculptTool && dentalStudioRef.current?.made?.includes(sculptTool.shapeId));
+    if (sculptTool && !sculptTool.busy && !madeTool && !(selectedIds.length === 1 && selectedIds[0] === sculptTool.shapeId)) { flushSculptRef.current(); setSculptTool(null); }
   }, [sculptTool, selectedIds]);
   useEffect(() => { if (!sculptTool) { sculptState.current?.live.dispose(); sculptState.current = null; sculptFrozenKept.current = null; } }, [sculptTool]);
   const sculptOpen = Boolean(sculptTool);
