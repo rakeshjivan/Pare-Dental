@@ -246,12 +246,15 @@ export default function SmileGuidePage() {
     ctx.controls.target.copy(center); ctx.controls.update();
   }, [scan]);
 
-  // Seeding disables orbit so a click plants a seed instead of rotating.
-  useEffect(() => { const ctx = threeRef.current; if (ctx) ctx.controls.enabled = !seeding; }, [seeding]);
-
-  const onCanvasClick = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
-    const ctx = threeRef.current;
-    if (!ctx || !seeding || !scan || result) return;
+  // Orbit stays on at all times. A press-and-release that didn't drag is a seed click; a drag rotates.
+  const downRef = useRef<{ x: number; y: number } | null>(null);
+  const onPointerDown = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+    downRef.current = { x: event.clientX, y: event.clientY };
+  }, []);
+  const onPointerUp = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+    const ctx = threeRef.current; const down = downRef.current; downRef.current = null;
+    if (!ctx || !down || !seeding || !scan || result) return;
+    if (Math.hypot(event.clientX - down.x, event.clientY - down.y) > 6) return; // a drag = orbit, not a seed
     const rect = event.currentTarget.getBoundingClientRect();
     const ndc = new THREE.Vector2(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
     ctx.raycaster.setFromCamera(ndc, ctx.camera);
@@ -305,7 +308,7 @@ export default function SmileGuidePage() {
   return (
     <main style={{ display: "flex", height: "100dvh", fontFamily: "system-ui", color: "#1b2733" }}>
       <section style={{ flex: 1, position: "relative", background: "radial-gradient(circle at 50% 35%, #223246, #0c141d)" }}>
-        <canvas ref={canvasRef} onClick={onCanvasClick} style={{ width: "100%", height: "100%", display: "block", cursor: seeding ? "crosshair" : "grab" }} />
+        <canvas ref={canvasRef} onPointerDown={onPointerDown} onPointerUp={onPointerUp} style={{ width: "100%", height: "100%", display: "block", cursor: seeding ? "crosshair" : "grab" }} />
         <div style={{ position: "absolute", left: 16, top: 16, color: "#cde", fontSize: 13, maxWidth: 360, lineHeight: 1.4 }}>
           <strong>Smile Guide</strong> &mdash; preview. {status}
         </div>
@@ -319,7 +322,7 @@ export default function SmileGuidePage() {
 
         <div style={{ opacity: scan ? 1 : 0.45, pointerEvents: scan ? "auto" : "none" }}>
           <label style={{ display: "block", fontWeight: 600, fontSize: 13, marginBottom: 6 }}>2. Seed the teeth</label>
-          <button type="button" onClick={() => { setSeeding((s) => !s); setResult(null); }} style={btn(seeding)}>{seeding ? "Seeding on - click each tooth" : "Seed teeth"}</button>
+          <button type="button" onClick={() => { setSeeding((s) => !s); setResult(null); }} style={btn(seeding)}>{seeding ? "Seeding on - click a tooth (drag to rotate)" : "Seed teeth"}</button>
           <div style={{ fontSize: 12, color: "#5a6b7b", margin: "8px 0 4px" }}>{seeds.length ? `${seeds.length} tooth${seeds.length > 1 ? "" : ""} seeded` : "No teeth seeded yet."}</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
             {seeds.map((s) => (
