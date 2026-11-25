@@ -1454,6 +1454,9 @@ function placeWholeArch(lib: LibEntry[], libMesial: Map<number, THREE.Vector3>, 
  */
 export type FitOptions = { /** Build 107: each tooth from its zenith to its incisal mark exactly (the dots as the dentist placed them), no smile-design heights. */ exact?: boolean; minWax?: number; lengthen?: number; blend?: boolean; ideal?: number; red?: number; centralRatio?: number; arcDepth?: number; /** Build 102: each tooth's own adjustment (by FDI number), applied before the contacts and the margin. */ adjust?: Record<number, ToothAdjust>; /** Build 103: tilt each tooth about its edge so its cervical third stands over the patient's (default on). */ alignCervical?: boolean; /** Build 103: the set placed as one arch, keeping its own arch form (default on); false: each tooth fitted to its own. */ wholeArch?: boolean };
 export function placeOnTeeth(set: LibrarySet, scan: Mesh, normals: ArrayLike<number>, crowns: PatientCrown[], all: PatientCrown[], arch: "upper" | "lower", options: FitOptions = {}): PlacedTooth[] {
+  // Build 132: start a fresh record of which teeth fell back from the full emergence blend to the cruder
+  // blendToMargin, and why - surfaced so the blend quality is diagnosable per build instead of invisible.
+  emergenceFallbacks.length = 0;
   const minWax = options.minWax ?? MIN_WAX;
   // Build 94: the smile designed on the anterior teeth, and how far towards it the teeth go (0 = the patient's teeth, 1 = the design).
   const ideal = Math.max(0, Math.min(1, options.ideal ?? 0));

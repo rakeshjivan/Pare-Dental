@@ -83,7 +83,7 @@ import { moveContact } from "@/lib/waxContacts";
 import { contactColors, type BiteContactStats } from "@/lib/biteContacts";
 import { adaptWaxInBackground, biteHingeInBackground, recycleMeshWorkers, waxContactsInBackground } from "@/lib/meshJobs";
 import { alignToPlate, bridgeChoice, expandConnected, extrudeChoice, invertConnected, optimizeBoundary, shrinkChoice, smoothChoice } from "@/lib/meshEditTools";
-import { scanInArchFrame, adjustMatrix, isIdentityAdjust, mirrorAdjust, setMoveAdjust, waxedNeighbourSides, ARC_DEPTH_DEFAULT, SMILE_LATERAL_STEP, CENTRAL_RATIO, contralateral, crownCutter, imtFirstInjection, moveFrame, nudgeMatrix, rigidMoveBetween, type ToothNudge, type ToothAdjust, fdiNumber, fdiKind, parseObj, splitShells, librarySet, type WaxLandmarks, TOOTH_MARK_ORDER, type ToothMarks } from "@/lib/dentalWaxup";
+import { scanInArchFrame, adjustMatrix, isIdentityAdjust, mirrorAdjust, setMoveAdjust, waxedNeighbourSides, ARC_DEPTH_DEFAULT, SMILE_LATERAL_STEP, CENTRAL_RATIO, contralateral, crownCutter, imtFirstInjection, moveFrame, nudgeMatrix, rigidMoveBetween, type ToothNudge, type ToothAdjust, fdiNumber, fdiKind, parseObj, splitShells, librarySet, emergenceFallbacks, type WaxLandmarks, TOOTH_MARK_ORDER, type ToothMarks } from "@/lib/dentalWaxup";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { WaxupPointOverlay, rayHit, rayGrid, rayHitGrid, type RayGrid } from "./workplane/WaxupPointOverlay";
 import { ANCHOR_ORDER, ARCH_DOT_ORDER, ARCH_STEP, LATERAL_SHORTER, archCurvePoints, canineOf, marksFromAnchors, type ToothAnchors } from "@/lib/waxArchDots";
@@ -13651,6 +13651,9 @@ export function LayerlingEditor({
   };
   const marginWhy = useRef<Record<number, string>>({});
   useEffect(() => { (window as unknown as { layerlingMarginWhy?: () => unknown }).layerlingMarginWhy = () => ({ ...marginWhy.current, on: waxupRef.current.marginOn, lines: Object.fromEntries(Object.entries(waxupRef.current.margins ?? {}).map(([k, v]) => [k, Object.keys(v?.lines ?? {})])) }); }, []);
+  // Build 132: after a build, which teeth used the full emergence blend vs fell back to the cruder one, and why -
+  // so the wax-to-natural blend is diagnosable on real cases (the geometry is sophisticated; the lever is the fallbacks).
+  useEffect(() => { (window as unknown as { layerlingEmergence?: () => unknown }).layerlingEmergence = () => (emergenceFallbacks.length ? { fellBack: emergenceFallbacks.map((f) => `${f.fdi}: ${f.reason}`) } : "all teeth got the full emergence blend"); }, []);
   /*
    * Build 129 (Rakesh): automatic gingival margins. The tooth finder (a network) was removed at build 277, so the
    * auto-margin path (foundMarginFor) had no labels. This asks the desktop app's own Node server to segment the
