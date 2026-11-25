@@ -13,6 +13,7 @@
 //  - /__designs (runtime 5): the designs themselves, one file each in the app's data folder, so they
 //    are not held in the browser engine's storage, whose quota ran out on a Mac (build 32).
 import { createServer } from "node:http";
+import { segmentLabels } from "./native/segmentScan.mjs";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
@@ -28,7 +29,9 @@ const port = Number(process.env.PORT || 47187);
 // to the browser's storage), so the update manifest's minRuntime stays 4.
 // 6 (build 70): /__send-to-slicer and /__slicers. App files fall back to /__send-to-bambu (or a
 // download) on an older server, so minRuntime stays 4.
-const RUNTIME_VERSION = 6;
+// 7 (build 129): /__segment runs tooth segmentation server-side. App files fall back (manual margins, or no
+// auto-seg) on an older server, so minRuntime stays 4.
+const RUNTIME_VERSION = 7;
 const RELEASES_API = process.env.PARE3D_RELEASES_API || "https://api.github.com/repos/rakeshjivan/pare-dental/releases/latest";
 // Build 103: a test build (its app files carry pare-preview.txt) follows the test builds, never the
 // public release - which would take features in testing away - and the newest of them wins.
@@ -763,6 +766,19 @@ createServer(async (req, res) => {
   }
   if (path === "/__files" || path.startsWith("/__files/")) {
     await handleFiles(req, res, url);
+    return;
+  }
+  // Build 129: tooth segmentation, server-side (the browser can't do it well). POST the scan's triangle soup in
+  // the arch frame as raw float32 (9 per triangle); returns per-triangle FDI-ish labels for the margin pipeline.
+  if (path === "/__segment") {
+    if (req.method !== "POST") { json(res, 405, { error: "POST only" }); return; }
+    try {
+      const body = await readBody(req);
+      const soup = new Float32Array(body.buffer, body.byteOffset, Math.floor(body.byteLength / 4));
+      const q = (k, d) => { const v = Number(url.searchParams.get(k)); return Number.isFinite(v) ? v : d; };
+      const { fdi, teeth } = segmentLabels(soup, { groove: q("groove", 0.4), markerRadius: q("markerRadius", 3.5), mergeDist: q("mergeDist", 5.5), arch: url.searchParams.get("arch") || "upper" });
+      json(res, 200, { ok: true, runtime: RUNTIME_VERSION, triangles: Math.floor(soup.length / 9), fdi: Buffer.from(fdi.buffer, fdi.byteOffset, fdi.byteLength).toString("base64"), teeth: teeth.map((t) => ({ id: t.id, centre: t.centre, area: t.area })) });
+    } catch (e) { json(res, 500, { error: String((e && e.message) || e) }); }
     return;
   }
   if (path === "/__send-to-bambu") {

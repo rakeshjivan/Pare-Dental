@@ -84,6 +84,103 @@ function floodTooth(topo: Topo, seedTri: number, seed: [number, number, number],
   return out;
 }
 
+function triAreaAt(scan: ArrayLike<number>, t: number): number {
+  const b = t * 9;
+  const ax = scan[b + 3] - scan[b], ay = scan[b + 4] - scan[b + 1], az = scan[b + 5] - scan[b + 2];
+  const bx = scan[b + 6] - scan[b], by = scan[b + 7] - scan[b + 1], bz = scan[b + 8] - scan[b + 2];
+  const cx = ay * bz - az * by, cy = az * bx - ax * bz, cz = ax * by - ay * bx;
+  return 0.5 * Math.hypot(cx, cy, cz);
+}
+
+/*
+ * Automatic segmentation (no clicks): union every triangle to its neighbours across non-crease edges, so the
+ * surface splits into regions bounded by the concave margin/contact grooves. Tiny regions (scanner fissures,
+ * noise) are merged into the neighbour they share the most border with; the one huge region (palate + gum) and
+ * anything still too large is dropped; what's left in the tooth-size band is a tooth. Teeth are numbered around
+ * the arch. Orientation-independent - it reads the geometry, no canonical pose needed.
+ */
+function autoSegment(topo: Topo, scan: ArrayLike<number>, block: number, minArea: number, maxArea: number): Uint8Array {
+  const T = topo.tri;
+  const parent = new Int32Array(T);
+  for (let i = 0; i < T; i += 1) parent[i] = i;
+  const find = (x: number): number => { let r = x; while (parent[r] !== r) r = parent[r]; while (parent[x] !== r) { const n = parent[x]; parent[x] = r; x = n; } return r; };
+  const union = (a: number, b: number) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; };
+  for (let t = 0; t < T; t += 1) for (let i = 0; i < 3; i += 1) { const u = topo.nbr[t * 3 + i]; if (u > t && topo.crease[t * 3 + i] <= block) union(t, u); }
+
+  const triA = new Float64Array(T);
+  const area = new Map<number, number>();
+  for (let t = 0; t < T; t += 1) { const a = triAreaAt(scan, t); triA[t] = a; const r = find(t); area.set(r, (area.get(r) ?? 0) + a); }
+
+  // shared-border counts between neighbouring regions, for merging small fragments.
+  const border = new Map<number, Map<number, number>>();
+  const addB = (a: number, b: number) => { let m = border.get(a); if (!m) { m = new Map(); border.set(a, m); } m.set(b, (m.get(b) ?? 0) + 1); };
+  for (let t = 0; t < T; t += 1) for (let i = 0; i < 3; i += 1) { const u = topo.nbr[t * 3 + i]; if (u <= t) continue; const rt = find(t), ru = find(u); if (rt !== ru) { addB(rt, ru); addB(ru, rt); } }
+
+  for (let pass = 0; pass < 4; pass += 1) {
+    let changed = false;
+    const roots = [...area.keys()].filter((r) => find(r) === r && (area.get(r) ?? 0) < minArea).sort((a, b) => (area.get(a)! - area.get(b)!));
+    for (const r of roots) {
+      if (find(r) !== r || (area.get(r) ?? 0) >= minArea) continue;
+      const m = border.get(r); if (!m) continue;
+      let best = -1, bestC = 0;
+      for (const [nb, c] of m) { const rn = find(nb); if (rn === r) continue; if (c > bestC) { bestC = c; best = rn; } }
+      if (best < 0) continue;
+      parent[r] = best;
+      area.set(best, (area.get(best) ?? 0) + (area.get(r) ?? 0)); area.set(r, 0);
+      const mb = border.get(best) ?? new Map<number, number>();
+      for (const [nb, c] of m) { const rn = find(nb); if (rn !== best) mb.set(rn, (mb.get(rn) ?? 0) + c); }
+      border.set(best, mb);
+      changed = true;
+    }
+    if (!changed) break;
+  }
+
+  const finalArea = new Map<number, number>();
+  for (let t = 0; t < T; t += 1) { const r = find(t); finalArea.set(r, (finalArea.get(r) ?? 0) + triA[t]); }
+  let gumRoot = -1, gumA = -1;
+  for (const [r, a] of finalArea) if (a > gumA) { gumA = a; gumRoot = r; }
+  const toothRoots = [...finalArea.entries()].filter(([r, a]) => r !== gumRoot && a >= minArea && a <= maxArea).map(([r]) => r);
+
+  // number teeth around the arch, in the plane perpendicular to the average occlusal normal.
+  const up = averageNormalPage(scan);
+  let ex: [number, number, number] = Math.abs(up[0]) > 0.9 ? [0, 1, 0] : [1, 0, 0];
+  const d = ex[0] * up[0] + ex[1] * up[1] + ex[2] * up[2];
+  let e1: [number, number, number] = [ex[0] - d * up[0], ex[1] - d * up[1], ex[2] - d * up[2]];
+  const e1l = Math.hypot(e1[0], e1[1], e1[2]) || 1; e1 = [e1[0] / e1l, e1[1] / e1l, e1[2] / e1l];
+  const e2: [number, number, number] = [up[1] * e1[2] - up[2] * e1[1], up[2] * e1[0] - up[0] * e1[2], up[0] * e1[1] - up[1] * e1[0]];
+  const rootSet = new Set(toothRoots);
+  const sums = new Map<number, [number, number, number, number]>();
+  for (let t = 0; t < T; t += 1) {
+    const r = find(t); if (!rootSet.has(r)) continue;
+    const b = t * 9, bx = (scan[b] + scan[b + 3] + scan[b + 6]) / 3, by = (scan[b + 1] + scan[b + 4] + scan[b + 7]) / 3, bz = (scan[b + 2] + scan[b + 5] + scan[b + 8]) / 3;
+    const a = triA[t], s = sums.get(r) ?? [0, 0, 0, 0]; s[0] += bx * a; s[1] += by * a; s[2] += bz * a; s[3] += a; sums.set(r, s);
+  }
+  const arch: [number, number, number] = [0, 0, 0]; let aw = 0;
+  for (const s of sums.values()) { arch[0] += s[0]; arch[1] += s[1]; arch[2] += s[2]; aw += s[3]; }
+  if (aw > 0) { arch[0] /= aw; arch[1] /= aw; arch[2] /= aw; }
+  const ordered = toothRoots.map((r) => {
+    const s = sums.get(r)!; const cx = s[0] / s[3] - arch[0], cy = s[1] / s[3] - arch[1], cz = s[2] / s[3] - arch[2];
+    return { r, ang: Math.atan2(cx * e2[0] + cy * e2[1] + cz * e2[2], cx * e1[0] + cy * e1[1] + cz * e1[2]) };
+  }).sort((a, b) => a.ang - b.ang);
+  const idOfRoot = new Map<number, number>();
+  ordered.forEach((o, i) => idOfRoot.set(o.r, Math.min(250, i + 1)));
+
+  const labels = new Uint8Array(T);
+  for (let t = 0; t < T; t += 1) { const id = idOfRoot.get(find(t)); if (id) labels[t] = id; }
+  return labels;
+}
+
+/** Area-weighted average face normal of a soup (occlusal-ish up for the arch). Local copy to avoid an import cycle. */
+function averageNormalPage(scan: ArrayLike<number>): [number, number, number] {
+  let x = 0, y = 0, z = 0;
+  for (let i = 0; i + 8 < scan.length; i += 9) {
+    const ux = scan[i + 3] - scan[i], uy = scan[i + 4] - scan[i + 1], uz = scan[i + 5] - scan[i + 2];
+    const wx = scan[i + 6] - scan[i], wy = scan[i + 7] - scan[i + 1], wz = scan[i + 8] - scan[i + 2];
+    x += uy * wz - uz * wy; y += uz * wx - ux * wz; z += ux * wy - uy * wx;
+  }
+  const l = Math.hypot(x, y, z) || 1; return [x / l, y / l, z / l];
+}
+
 function colorsForScan(labels: Uint8Array, idOf: Map<number, number>): Float32Array {
   const out = new Float32Array(labels.length * 9);
   const gum = new THREE.Color("#d98b84");
@@ -118,31 +215,35 @@ export default function SmileGuidePage() {
   const [moves, setMoves] = useState<Map<number, ToothMove>>(new Map());
   const [result, setResult] = useState<SmileResult | null>(null);
   const [seeding, setSeeding] = useState(false);
+  const [autoLabels, setAutoLabels] = useState<Uint8Array | null>(null);
   const [honesty, setHonesty] = useState(true);
   const [status, setStatus] = useState<string>("");
 
-  const idOf = useMemo(() => new Map(seeds.map((s, i) => [s.id, i])), [seeds]);
-
-  // How eagerly a region stops at a crease (higher = stops at shallower grooves) and the most a tooth can span
-  // (mm) - both adjustable because real scans vary.
+  // Detail: how eagerly regions separate at a crease. Tooth size: scale of the tooth-area band for auto-seg.
   const [sensitivity, setSensitivity] = useState(0.5);
   const [toothSize, setToothSize] = useState(7);
 
   const topo = useMemo(() => (scan ? buildTopo(scan) : null), [scan]);
 
-  // Per-triangle FDI labels: each seed grows its own tooth from its clicked triangle, bounded by creases; the
-  // first seed to reach a triangle keeps it.
+  // Labels: automatic segmentation when present, else the manual seed fallback (click to add a tooth).
   const labels = useMemo(() => {
+    if (autoLabels) return autoLabels;
     const T = topo?.tri ?? 0;
     const out = new Uint8Array(T);
     if (!topo || !seeds.length) return out;
-    const block = 0.06 + (1 - sensitivity) * 0.5; // high sensitivity -> low block -> stops at shallow creases
+    const block = 0.06 + (1 - sensitivity) * 0.5;
     for (const s of seeds) {
       if (s.tri < 0 || s.tri >= T) continue;
       for (const t of floodTooth(topo, s.tri, s.point, toothSize, block)) if (out[t] === 0) out[t] = s.id;
     }
     return out;
-  }, [topo, seeds, sensitivity, toothSize]);
+  }, [autoLabels, topo, seeds, sensitivity, toothSize]);
+
+  const idOf = useMemo(() => {
+    const ids = [...new Set(Array.from(labels))].filter((x) => x).sort((a, b) => a - b);
+    return new Map(ids.map((id, i) => [id, i]));
+  }, [labels]);
+  const toothIds = useMemo(() => [...new Set(Array.from(labels))].filter((x) => x).sort((a, b) => a - b), [labels]);
 
   const selectedCount = useMemo(() => {
     if (selected == null) return 0;
@@ -180,8 +281,8 @@ export default function SmileGuidePage() {
       const soup = stlSoupOf(buffer);
       if (!soup || soup.length < 9) { setStatus(`Could not read ${file.name} as an STL.`); return; }
       setScan(soup);
-      setSeeds([]); setSelected(null); setMoves(new Map()); setResult(null); setSeeding(true);
-      setStatus(`Loaded ${file.name} - ${Math.floor(soup.length / 9).toLocaleString()} triangles. Seeding is on - click a tooth to isolate it, then move it with the sliders.`);
+      setSeeds([]); setSelected(null); setMoves(new Map()); setResult(null); setSeeding(false); setAutoLabels(null);
+      setStatus(`Loaded ${file.name} - ${Math.floor(soup.length / 9).toLocaleString()} triangles. Press "Auto-segment teeth".`);
     } catch {
       setStatus(`Could not read ${file.name}.`);
     }
@@ -253,21 +354,29 @@ export default function SmileGuidePage() {
   }, []);
   const onPointerUp = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     const ctx = threeRef.current; const down = downRef.current; downRef.current = null;
-    if (!ctx || !down || !seeding || !scan || result) return;
-    if (Math.hypot(event.clientX - down.x, event.clientY - down.y) > 6) return; // a drag = orbit, not a seed
+    if (!ctx || !down || !scan || result) return;
+    if (!autoLabels && !seeding) return;
+    if (Math.hypot(event.clientX - down.x, event.clientY - down.y) > 6) return; // a drag = orbit, not a pick
     const rect = event.currentTarget.getBoundingClientRect();
     const ndc = new THREE.Vector2(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
     ctx.raycaster.setFromCamera(ndc, ctx.camera);
     const hit = ctx.raycaster.intersectObject(ctx.mesh, false)[0];
     if (!hit || hit.faceIndex == null) return;
-    const p: [number, number, number] = [hit.point.x, hit.point.y, hit.point.z];
     const tri = hit.faceIndex;
-    setSeeds((prev) => {
-      const id = prev.length + 1;
-      setSelected(id);
-      return [...prev, { id, tri, point: p }];
-    });
-  }, [seeding, scan, result]);
+    if (autoLabels) { const id = autoLabels[tri]; if (id) setSelected(id); return; } // click selects the tooth under the cursor
+    const p: [number, number, number] = [hit.point.x, hit.point.y, hit.point.z];
+    setSeeds((prev) => { const id = prev.length + 1; setSelected(id); return [...prev, { id, tri, point: p }]; });
+  }, [autoLabels, seeding, scan, result]);
+
+  const autoSeg = useCallback(() => {
+    if (!topo || !scan) { setStatus("Load a scan first."); return; }
+    const block = 0.06 + (1 - sensitivity) * 0.5;
+    const minA = Math.max(4, toothSize * 1.2), maxA = toothSize * toothSize * 4;
+    const lab = autoSegment(topo, scan, block, minA, maxA);
+    const n = new Set(Array.from(lab).filter((x) => x)).size;
+    setAutoLabels(lab); setSeeds([]); setSelected(null); setResult(null); setSeeding(false);
+    setStatus(n ? `Auto-segmented ${n} teeth. Click a tooth to select it, then move it with the sliders.` : "No teeth found - adjust Detail / Tooth size and try again.");
+  }, [topo, scan, sensitivity, toothSize]);
 
   const updateMove = useCallback((id: number, patch: Partial<ToothMove>) => {
     setMoves((prev) => {
@@ -321,28 +430,31 @@ export default function SmileGuidePage() {
         <input type="file" accept=".stl" onChange={(e) => { const f = e.currentTarget.files?.[0]; if (f) loadFile(f); e.currentTarget.value = ""; }} style={{ marginBottom: 18, fontSize: 12 }} />
 
         <div style={{ opacity: scan ? 1 : 0.45, pointerEvents: scan ? "auto" : "none" }}>
-          <label style={{ display: "block", fontWeight: 600, fontSize: 13, marginBottom: 6 }}>2. Seed the teeth</label>
-          <button type="button" onClick={() => { setSeeding((s) => !s); setResult(null); }} style={btn(seeding)}>{seeding ? "Seeding on - click a tooth (drag to rotate)" : "Seed teeth"}</button>
-          <div style={{ fontSize: 12, color: "#5a6b7b", margin: "8px 0 4px" }}>{seeds.length ? `${seeds.length} tooth${seeds.length > 1 ? "" : ""} seeded` : "No teeth seeded yet."}</div>
+          <label style={{ display: "block", fontWeight: 600, fontSize: 13, marginBottom: 6 }}>2. Auto-segment the teeth</label>
+          <button type="button" onClick={autoSeg} style={btn(true)}>Auto-segment teeth</button>
+          <div style={{ fontSize: 12, color: "#5a6b7b", margin: "8px 0 4px" }}>{toothIds.length ? `${toothIds.length} teeth found - click one to select` : "No teeth yet - press Auto-segment."}</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
-            {seeds.map((s) => (
-              <button key={s.id} type="button" onClick={() => setSelected(s.id)} style={chip(selected === s.id)}>Tooth {s.id}</button>
+            {toothIds.map((id) => (
+              <button key={id} type="button" onClick={() => setSelected(id)} style={chip(selected === id)}>Tooth {id}</button>
             ))}
           </div>
-          {seeds.length ? <button type="button" onClick={() => { setSeeds([]); setSelected(null); setMoves(new Map()); setResult(null); }} style={linkBtn}>Clear teeth</button> : null}
+          {toothIds.length || seeds.length ? <button type="button" onClick={() => { setAutoLabels(null); setSeeds([]); setSelected(null); setMoves(new Map()); setResult(null); }} style={linkBtn}>Clear</button> : null}
 
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed #d7e0e8" }}>
-            <div style={{ fontSize: 11, color: "#7a8a99", marginBottom: 8 }}>If a region spills onto the gum or a neighbour, lower these; if it stops short, raise them.</div>
+            <div style={{ fontSize: 11, color: "#7a8a99", marginBottom: 8 }}>If teeth merge together, raise Detail. If a tooth is split or missing, lower Detail or raise Tooth size. Then press Auto-segment again.</div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
               <span style={{ width: 70, fontSize: 12, color: "#5a6b7b" }}>Detail</span>
-              <input type="range" min={0} max={1} step={0.05} value={sensitivity} onChange={(e) => { setSensitivity(Number(e.currentTarget.value)); setResult(null); }} style={{ flex: 1 }} />
+              <input type="range" min={0} max={1} step={0.05} value={sensitivity} onChange={(e) => setSensitivity(Number(e.currentTarget.value))} style={{ flex: 1 }} />
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 70, fontSize: 12, color: "#5a6b7b" }}>Tooth size</span>
-              <input type="range" min={3} max={12} step={0.5} value={toothSize} onChange={(e) => { setToothSize(Number(e.currentTarget.value)); setResult(null); }} style={{ flex: 1 }} />
+              <input type="range" min={3} max={12} step={0.5} value={toothSize} onChange={(e) => setToothSize(Number(e.currentTarget.value))} style={{ flex: 1 }} />
               <span style={{ width: 40, fontSize: 12, textAlign: "right" }}>{toothSize.toFixed(1)}mm</span>
             </div>
-            {selected != null ? <div style={{ fontSize: 12, color: selectedCount ? "#2f7d43" : "#b04a3a", marginTop: 8 }}>Tooth {selected}: {selectedCount.toLocaleString()} triangles segmented{selectedCount ? "" : " - click on the tooth, or raise Detail/Tooth size"}</div> : null}
+            <div style={{ marginTop: 10 }}>
+              <button type="button" onClick={() => { setSeeding((s) => !s); }} style={{ ...linkBtn, fontSize: 11 }}>{seeding ? "Manual add: on - click a missed tooth" : "A tooth missed? Add one manually"}</button>
+            </div>
+            {selected != null ? <div style={{ fontSize: 12, color: selectedCount ? "#2f7d43" : "#b04a3a", marginTop: 8 }}>Tooth {selected}: {selectedCount.toLocaleString()} triangles</div> : null}
           </div>
 
           {selected != null ? (
