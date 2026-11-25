@@ -13252,9 +13252,11 @@ export function LayerlingEditor({
       curves.push({ points: marginCurveOf(arch.shape, back, line, line.length >= 3), color: 0x1f8fe0, radius: MARGIN_TUBE });
       for (const p of line) put(new THREE.Vector3(...p).applyMatrix4(back).toArray() as [number, number, number], 0x1f8fe0, 0.4);
     }
-    // Build 114: the margins the tooth finder found (teeth with no margin drawn), in green.
+    // Build 114/129: the automatic margins (teeth with no margin drawn), in green. Shown whenever segmentation
+    // data is present (foundMarginFor returns null when it isn't), so the server auto-margins appear without the
+    // old marginOn toggle.
     const toInput = waxArchInput(arch.shape);
-    if (toInput && waxupRef.current.marginOn) for (const fdi of marginTeethOf(arch.slot)) {
+    if (toInput) for (const fdi of marginTeethOf(arch.slot)) {
       if (lines[fdi] || pick?.fdi === fdi) continue;
       const found = foundMarginFor(fdi, arch.shape, toInput);
       if (found) curves.push({ points: found.region.line, color: 0x2fb6a0, radius: MARGIN_TUBE * 0.7 });

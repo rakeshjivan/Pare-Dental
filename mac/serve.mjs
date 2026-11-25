@@ -775,7 +775,7 @@ createServer(async (req, res) => {
     try {
       const body = await readBody(req);
       const soup = new Float32Array(body.buffer, body.byteOffset, Math.floor(body.byteLength / 4));
-      const q = (k, d) => { const v = Number(url.searchParams.get(k)); return Number.isFinite(v) ? v : d; };
+      const q = (k, d) => { const s = url.searchParams.get(k); if (s === null || s === "") return d; const v = Number(s); return Number.isFinite(v) ? v : d; };
       const { fdi, teeth } = segmentLabels(soup, { groove: q("groove", 0.4), markerRadius: q("markerRadius", 3.5), mergeDist: q("mergeDist", 5.5), arch: url.searchParams.get("arch") || "upper" });
       json(res, 200, { ok: true, runtime: RUNTIME_VERSION, triangles: Math.floor(soup.length / 9), fdi: Buffer.from(fdi.buffer, fdi.byteOffset, fdi.byteLength).toString("base64"), teeth: teeth.map((t) => ({ id: t.id, centre: t.centre, area: t.area })) });
     } catch (e) { json(res, 500, { error: String((e && e.message) || e) }); }
