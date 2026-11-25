@@ -12315,7 +12315,7 @@ export function LayerlingEditor({
   const [waxup, setWaxup] = useState<WaxupState>({ slot: "upper", setName: null, teeth: 0, picking: null, lengthen: 0, centralRatio: CENTRAL_RATIO, arcDepth: null, arcUsed: null, proportions: "natural", builtIn: [], builtInCredit: null, setId: null, busy: false, placed: [], alternate: false, error: null, landmarks: null, guessed: false, marks: [], teethShown: true, fit: "teeth", ghost: 1, ideal: 1, red: null, checks: null, adjust: {}, stage: "position", setMove: { width: 0, depth: 0, midline: 0, height: 0 }, setScale: 1, setCurve: 0, chain: true, restrict: "free", moveAll: false, locks: {}, manual: true, toothMarks: {}, anchors: {}, archDots: { upper: [], lower: [] }, lateralShorter: LATERAL_SHORTER, autoMarked: [], markTeeth: null, toothPick: null, archLine: true, archCurve: 1, archFollow: true, contacts: { on: false, busy: false, occlusal: 0.1, adapting: false, note: null, opposing: false }, occlusion: { ready: false, busy: false, raise: 0, scheme: "canine", guidance: 30, bennett: 15, result: null }, bite: { raise: 0, busy: false, hinge: null }, gum: { mode: "follow", keep: {} }, erase: {}, margins: {}, marginPick: null, boundaries: {}, boundaryPick: null, /* Build 118: Keep & erase, with the library palatal, is the one way of working - the margin line is no longer offered. */ marginOn: false, smile: {}, archMarks: {}, archMarkPick: null, reduce: {}, proud: {} });
   // Build 94: the teeth found on each scan (by its part id): each scan triangle's FDI (as the studio
   // reads the scan), the teeth, the landmarks from them, and the teeth chosen for the wax-up.
-  type FoundTeeth = { key: string; input: Float32Array; fdi: Uint8Array; teeth: ScanTeeth["teeth"]; landmarks: WaxLandmarks | null; chosen: number[] };
+  type FoundTeeth = { key: string; input: Float32Array; fdi: Uint8Array; teeth: ScanTeeth["teeth"]; landmarks: WaxLandmarks | null; /** Build 132: the nine arch marks from segmentation (arch frame), computed once here so segArchMarks only reads them - recomputing on every findArchMarks froze the Mark step. */ marks?: [number, number, number][] | null; chosen: number[] };
   const [waxFound, setWaxFound] = useState<Record<string, FoundTeeth>>({});
   /** Build 101: Wax-up Studio's Undo records a step through this (the function is defined below, with the stacks). */
   const waxRecordRef = useRef<(coalesce?: boolean) => void>(() => {});
@@ -12739,9 +12739,8 @@ export function LayerlingEditor({
   // autoArchMarks. Preferred over the geometric heuristic; null when segmentation isn't ready or can't place
   // all nine confidently, so the heuristic / manual marking remains the fallback.
   const segArchMarks = (arch: NonNullable<ReturnType<typeof waxArch>>): ReturnType<typeof autoArchMarks> => {
-    const seg = waxFoundRef.current[arch.shape.id];
-    if (!seg) return null;
-    try { const m = archMarksFromSegmentation(seg.input, { fdi: seg.fdi, teeth: seg.teeth, seconds: 0 }, arch.slot); return m ? { marks: m, score: 999, dips: new Array(7).fill(0) } : null; } catch { return null; }
+    const m = waxFoundRef.current[arch.shape.id]?.marks;
+    return m ? { marks: m, score: 999, dips: new Array(7).fill(0) } : null;
   };
   const findArchMarks = useCallback((thenClick: boolean) => {
     const arch = waxArch();
@@ -13686,8 +13685,10 @@ export function LayerlingEditor({
       if (!teeth.length) return;
       // Midline (centrals' incisal corners) + canine tips, in the arch frame; null if a central or canine is missing.
       const landmarks = landmarksFromTeeth(soup, { fdi, teeth, seconds: 0 }, arch.slot);
+      // Build 132: the nine arch marks, computed once here (not on every findArchMarks call, which was freezing Mark).
+      const marks = archMarksFromSegmentation(soup, { fdi, teeth, seconds: 0 }, arch.slot);
       const key = `auto|${shapeVersionKey(arch.shape)}`;
-      setWaxFound((prev) => (prev[id] ? prev : { ...prev, [id]: { key, input: soup, fdi, teeth, landmarks, chosen: [] } }));
+      setWaxFound((prev) => (prev[id] ? prev : { ...prev, [id]: { key, input: soup, fdi, teeth, landmarks, marks, chosen: [] } }));
     } catch { /* best-effort; manual margin tool remains the fallback */ }
     finally { autoMarginBusy.current.delete(id); }
   }, [waxArch]);
