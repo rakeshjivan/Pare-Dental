@@ -21824,7 +21824,7 @@ export function LayerlingEditor({
   const waxToothSelected = Boolean(dentalStudio?.waxStudio && selectedIds.length === 1 && shapes.some((shape) => shape.id === selectedIds[0] && shape.dental === "wax" && shape.waxTooth && !shape.hidden));
   // Build 106: Model Builder's frame is for looking at the case: no handles, gimbal or guides on a picked scan.
   // Build 107: and Wax-up's Import step the same - the scans are looked at and trimmed there, not moved.
-  const handlesAway = Boolean(sculptTool) || waxToothSelected || (studioShellOn && (!dentalStudio?.waxStudio || studioWaxStep === "scans" || studioWaxStep === "trim" || studioWaxStep === "bite" || studioWaxStep === "keep" || studioWaxStep === "margin" || studioWaxStep === "teeth" || studioWaxStep === "set" || studioWaxStep === "gum"));
+  const handlesAway = Boolean(sculptTool) || waxToothSelected || (studioShellOn && (!dentalStudio?.waxStudio || studioWaxStep === "scans" || studioWaxStep === "trim" || studioWaxStep === "mark" || studioWaxStep === "bite" || studioWaxStep === "keep" || studioWaxStep === "margin" || studioWaxStep === "teeth" || studioWaxStep === "set" || studioWaxStep === "gum"));
   // Build 110: each wax tooth shown with its erase.
   // Build 116: the wax shown erased (to the margins and paint) only once the teeth are placed - from Keep & erase on.
   // While they are being positioned the whole library teeth are shown, and nothing is worked out as they move.
