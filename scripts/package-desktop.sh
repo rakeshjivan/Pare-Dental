@@ -57,6 +57,9 @@ else
   cp "$ROOT/mac/Pare3D" "$APP/MacOS/" && chmod +x "$APP/MacOS/Pare3D"
 fi
 cp "$ROOT/mac/serve.mjs" "$ROOT/mac/AppIcon.icns" "$ROOT/mac/NOTICE.txt" "$APP/Resources/"
+# serve.mjs imports ./native/segmentScan.mjs (the /__segment tooth segmenter) - it must ship alongside,
+# or the server crashes on startup ("the server did not answer") and nothing loads.
+mkdir -p "$APP/Resources/native" && cp "$ROOT/mac/native/segmentScan.mjs" "$APP/Resources/native/"
 cp "$ROOT/LICENSE" "$APP/Resources/LICENSE.txt"
 cp "$(fetch_bun bun-darwin-aarch64)/bun" "$APP/Resources/bun-arm64"
 cp "$(fetch_bun bun-darwin-x64)/bun" "$APP/Resources/bun-x64"
@@ -75,6 +78,7 @@ fi
 WIN="$WORK/win/Pare Dental"
 mkdir -p "$WIN"
 cp "$ROOT/mac/serve.mjs" "$ROOT/mac/launch.mjs" "$ROOT/mac/NOTICE.txt" "$WIN/"
+mkdir -p "$WIN/native" && cp "$ROOT/mac/native/segmentScan.mjs" "$WIN/native/"
 cp "$ROOT/mac/Pare Dental.vbs" "$WIN/Pare Dental (browser).vbs"
 cp "$ROOT/windows/READ ME FIRST.txt" "$WIN/"
 if command -v dotnet >/dev/null 2>&1; then
@@ -95,6 +99,7 @@ copy_app "$WIN/app"
 LNX="$WORK/linux/Pare Dental"
 mkdir -p "$LNX"
 cp "$ROOT/mac/serve.mjs" "$ROOT/mac/NOTICE.txt" "$ROOT/linux/paredental" "$ROOT/linux/paredental.png" "$ROOT/linux/READ ME FIRST.txt" "$LNX/"
+mkdir -p "$LNX/native" && cp "$ROOT/mac/native/segmentScan.mjs" "$LNX/native/"
 cp "$ROOT/LICENSE" "$LNX/LICENSE.txt"
 cp "$(fetch_bun bun-linux-x64)/bun" "$LNX/bun-x64"
 cp "$(fetch_bun bun-linux-aarch64)/bun" "$LNX/bun-arm64"
