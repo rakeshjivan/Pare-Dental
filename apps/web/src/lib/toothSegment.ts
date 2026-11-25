@@ -472,6 +472,33 @@ export function archMarksFromSegmentation(soup: Float32Array, map: ToothMap, arc
   return marks.every((m) => m) ? (marks as [number, number, number][]) : null;
 }
 
+/**
+ * Build 132: the tooth's gingival margin as one ordered, smoothed closed loop (N points), from the gum
+ * boundary of the segmentation labels - the replacement for the unordered boundary-edge cloud. The gum
+ * boundary runs the facial and palatal cervical arcs (it breaks at the interproximal, where the tooth meets
+ * its neighbour, not gum); the points are ordered by angle around the tooth's long axis (+Z occlusal in the
+ * arch frame), the interproximal gaps bridged, and the loop smoothed once. Null when the gum boundary is too
+ * sparse to order confidently, so the raw cloud / manual margin stays the fallback. Validated on real uppers:
+ * clean cervical loops ~25-38 mm.
+ */
+export function marginLoop(soup: ArrayLike<number>, fdi: ArrayLike<number>, target: number, N = 48): [number, number, number][] | null {
+  const key = (o: number) => `${Math.round(soup[o] * 1e3)},${Math.round(soup[o + 1] * 1e3)},${Math.round(soup[o + 2] * 1e3)}`;
+  const edges = new Map<string, { oa: number; ob: number; tooth: number; gum: number }>();
+  for (let t = 0; t < fdi.length; t += 1) { const lab = fdi[t]; for (let k = 0; k < 3; k += 1) { const oa = t * 9 + k * 3, ob = t * 9 + ((k + 1) % 3) * 3; const ka = key(oa), kb = key(ob); const e = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`; let x = edges.get(e); if (!x) { x = { oa, ob, tooth: 0, gum: 0 }; edges.set(e, x); } if (lab === target) x.tooth += 1; else if (lab === 0) x.gum += 1; } }
+  const pts: [number, number, number][] = [];
+  let cx = 0, cy = 0;
+  for (const e of edges.values()) if (e.tooth >= 1 && e.gum >= 1) { const p: [number, number, number] = [(soup[e.oa] + soup[e.ob]) / 2, (soup[e.oa + 1] + soup[e.ob + 1]) / 2, (soup[e.oa + 2] + soup[e.ob + 2]) / 2]; pts.push(p); cx += p[0]; cy += p[1]; }
+  if (pts.length < 8) return null;
+  cx /= pts.length; cy /= pts.length;
+  const bins: ([number, number, number, number] | null)[] = Array.from({ length: N }, () => null);
+  for (const p of pts) { const a = Math.atan2(p[1] - cy, p[0] - cx); const bi = ((Math.floor((a + Math.PI) / (2 * Math.PI) * N)) % N + N) % N; const c = bins[bi]; if (!c) bins[bi] = [p[0], p[1], p[2], 1]; else { c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; c[3] += 1; } }
+  let filled = 0; const avg: ([number, number, number] | null)[] = bins.map((b) => { if (!b) return null; filled += 1; return [b[0] / b[3], b[1] / b[3], b[2] / b[3]]; });
+  if (filled < N * 0.38) return null;
+  for (let i = 0; i < N; i += 1) if (!avg[i]) { let l = -1, r = -1; for (let s = 1; s < N; s += 1) { if (avg[(i - s + N) % N]) { l = (i - s + N) % N; break; } } for (let s = 1; s < N; s += 1) { if (avg[(i + s) % N]) { r = (i + s) % N; break; } } const a = avg[l]!, b = avg[r]!; avg[i] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]; }
+  const loop = avg as [number, number, number][];
+  return loop.map((p, i) => { const a = loop[(i - 1 + N) % N], b = loop[(i + 1) % N]; return [(a[0] + 2 * p[0] + b[0]) / 4, (a[1] + 2 * p[1] + b[1]) / 4, (a[2] + 2 * p[2] + b[2]) / 4] as [number, number, number]; });
+}
+
 /** A point moved by a matrix, as a tuple. */
 export const movePoint = (p: [number, number, number], m: THREE.Matrix4) => new THREE.Vector3(...p).applyMatrix4(m).toArray() as [number, number, number];
 

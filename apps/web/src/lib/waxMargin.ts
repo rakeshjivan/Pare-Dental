@@ -453,7 +453,7 @@ export function pastMargin(line: MarginLine, c: ArrayLike<number>, nc: ArrayLike
  * and the line itself. A wax vertex whose nearest point on the patient's surface is outside the margin is erased;
  * inside, within MARGIN_BAND of the line, it eases down onto the tooth so the wax meets it at the margin.
  */
-export type ClosedMargin = { surface: NearestSurface; inside: Uint8Array; line: Vec3[]; gum?: Vec3[]; /** Build 116: the gum alone (no tooth), to push wax under. */ gumSurface?: NearestSurface; /** Build 116: each triangle of `surface` that is gum (not a tooth); without it, everything outside is taken as gum. */ onGum?: Uint8Array };
+export type ClosedMargin = { surface: NearestSurface; inside: Uint8Array; line: Vec3[]; /** Build 132: the gingival margin as one ordered, smoothed closed loop (lib/toothSegment marginLoop) - the clean line to draw, in place of the unordered `line` cloud. */ loop?: Vec3[]; gum?: Vec3[]; /** Build 116: the gum alone (no tooth), to push wax under. */ gumSurface?: NearestSurface; /** Build 116: each triangle of `surface` that is gum (not a tooth); without it, everything outside is taken as gum. */ onGum?: Uint8Array };
 /**
  * Build 116: the wax's cervical taper - how thick (mm, above the patient's tooth) the wax may be at a distance d
  * (mm) from the gum margin, on the tooth. Measured on a professional anterior wax-up: about 0.06 mm within 0.25 mm

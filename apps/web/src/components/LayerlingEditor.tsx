@@ -68,7 +68,7 @@ import { smallestRoundingRadius, type MeshRoundMode } from "@/lib/meshRound";
 import { analyseDentalInBackground, biteContactsInBackground, stopMeshJobs, checkFitInBackground, dentalAreaInBackground, makeDentalStudioInBackground, type DentalMakeProgress, remeshInBackground, roundMeshInBackground, textureMeshInBackground, trimDentalScanInBackground, waxupInBackground, occlusionInBackground } from "@/lib/meshJobs";
 import { AVERAGE_ARTICULATOR, openedLowerPose } from "@/lib/waxOcclusion";
 import { PIN_MAX, PIN_STEP } from "@/lib/dentalArticulator";
-import { toothColour, transferLabels, numberByArch, landmarksFromTeeth, archMarksFromSegmentation, type ScanTeeth, type FoundTooth } from "@/lib/toothSegment";
+import { toothColour, transferLabels, numberByArch, landmarksFromTeeth, archMarksFromSegmentation, marginLoop, type ScanTeeth, type FoundTooth } from "@/lib/toothSegment";
 import { smoothOpenEdges, smoothOpenEdgesOf } from "@/lib/edgeSmooth";
 import { transformSoup, cleanStlBinary, stlBinaryOf, stlSoupOf } from "@/lib/dentalMesh";
 import { WAX_SET_FORMS } from "@/lib/waxSetForms";
@@ -13279,7 +13279,7 @@ export function LayerlingEditor({
       if (lines[fdi] || pick?.fdi === fdi) continue;
       let found: ReturnType<typeof foundMarginFor> = null;
       try { found = foundMarginFor(fdi, arch.shape, toInput); } catch { found = null; }
-      if (found) curves.push({ points: found.region.line, color: 0x2fb6a0, radius: MARGIN_TUBE * 0.7 });
+      if (found) curves.push({ points: found.region.loop ?? found.region.line, color: 0x2fb6a0, radius: MARGIN_TUBE * 0.7, ...(found.region.loop ? { closed: true } : {}) });
     }
     if (pick) {
       const scene = pick.points.map((p) => new THREE.Vector3(...p).applyMatrix4(back).toArray() as [number, number, number]);
@@ -13639,7 +13639,11 @@ export function LayerlingEditor({
       const box = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
       for (let t = 0; t < labels.labels.length; t += 1) if (labels.labels[t] === fdi) for (let k = 0; k < 9; k += 1) { const v = world[t * 9 + k], j = k % 3; if (v - 8 < box[j]) box[j] = v - 8; if (v + 8 > box[j + 3]) box[j + 3] = v + 8; }
       region = Number.isFinite(box[0]) ? marginFromLabels(world, labels.labels, fdi, box) : null;
-      marginWhy.current[fdi] = region ? `found: ${region.line.length} margin points` : "found: none";
+      // Build 132: attach the ordered, smoothed gingival loop. It is computed in the arch frame (found.input,
+      // +Z occlusal) where the angular ordering is valid, then brought to world so the margin draws as one
+      // clean line rather than the unordered boundary cloud.
+      if (region) { const li = marginLoop(found.input, found.fdi, fdi); if (li) { const back = toInput.clone().invert(); region.loop = li.map((p) => new THREE.Vector3(...p).applyMatrix4(back).toArray() as [number, number, number]); } }
+      marginWhy.current[fdi] = region ? `found: ${region.line.length} margin points${region.loop ? `, loop ${region.loop.length}` : ""}` : "found: none";
       if (marginRegions.current.size > 40) marginRegions.current.clear();
       marginRegions.current.set(key, region);
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contactBetween, archMarksFromSegmentation } from "@/lib/toothSegment";
+import { contactBetween, archMarksFromSegmentation, marginLoop } from "@/lib/toothSegment";
 
 // A minimal two-tooth soup: label 11 occupies x<0, label 21 occupies x>0, meeting at x=0.
 // Each "tooth" is a grid of small triangles so the contact code has >20 corners per label.
@@ -46,5 +46,13 @@ describe("archMarksFromSegmentation (build 132)", () => {
     ];
     // No laterals/canines, so the lateral contacts and canine tips are missing → null (heuristic fallback).
     expect(archMarksFromSegmentation(soup, { fdi, teeth, seconds: 0 }, "upper")).toBeNull();
+  });
+});
+
+describe("marginLoop (build 132)", () => {
+  it("returns null when the gum boundary is too sparse (validated on real scans in Node)", () => {
+    // Two touching tooth labels, no gum (label 0) anywhere → no gum boundary → null.
+    const { soup, fdi } = twoTeeth(0);
+    expect(marginLoop(soup, fdi, 11)).toBeNull();
   });
 });
