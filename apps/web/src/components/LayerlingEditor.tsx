@@ -68,7 +68,7 @@ import { smallestRoundingRadius, type MeshRoundMode } from "@/lib/meshRound";
 import { analyseDentalInBackground, biteContactsInBackground, stopMeshJobs, checkFitInBackground, dentalAreaInBackground, makeDentalStudioInBackground, type DentalMakeProgress, remeshInBackground, roundMeshInBackground, textureMeshInBackground, trimDentalScanInBackground, waxupInBackground, occlusionInBackground } from "@/lib/meshJobs";
 import { AVERAGE_ARTICULATOR, openedLowerPose } from "@/lib/waxOcclusion";
 import { PIN_MAX, PIN_STEP } from "@/lib/dentalArticulator";
-import { toothColour, transferLabels, numberByArch, type ScanTeeth, type FoundTooth } from "@/lib/toothSegment";
+import { toothColour, transferLabels, numberByArch, landmarksFromTeeth, type ScanTeeth, type FoundTooth } from "@/lib/toothSegment";
 import { smoothOpenEdges, smoothOpenEdgesOf } from "@/lib/edgeSmooth";
 import { transformSoup, cleanStlBinary, stlBinaryOf, stlSoupOf } from "@/lib/dentalMesh";
 import { WAX_SET_FORMS } from "@/lib/waxSetForms";
@@ -13652,10 +13652,16 @@ export function LayerlingEditor({
       const numbered = numberByArch(data.teeth.map((tth) => ({ centre: tth.centre, area: tth.area })), arch.slot);
       const seqToFdi = new Map<number, number>(); data.teeth.forEach((tth, i) => seqToFdi.set(tth.id, numbered[i]?.fdi ?? 0));
       const fdi = new Uint8Array(seq.length); for (let i = 0; i < seq.length; i += 1) { const n = seqToFdi.get(seq[i]); if (n) fdi[i] = n; }
-      const teeth: FoundTooth[] = data.teeth.map((tth, i) => ({ fdi: numbered[i]?.fdi ?? 0, centre: tth.centre, top: tth.centre, area: tth.area, confidence: 1, agreed: true })).filter((tth) => tth.fdi > 0);
+      // Build 132: each tooth's cusp/incisal tip is its highest point in the arch frame (+Z occlusal) - the
+      // landmark builder uses it for the canine tips and the incisal midline. Centroid is wrong for a tip.
+      const topOf = new Map<number, [number, number, number]>();
+      for (let t = 0; t < fdi.length; t += 1) { const n = fdi[t]; if (!n) continue; for (let k = 0; k < 3; k += 1) { const o = t * 9 + k * 3; const cur = topOf.get(n); if (!cur || soup[o + 2] > cur[2]) topOf.set(n, [soup[o], soup[o + 1], soup[o + 2]]); } }
+      const teeth: FoundTooth[] = data.teeth.map((tth, i) => { const n = numbered[i]?.fdi ?? 0; return { fdi: n, centre: tth.centre, top: topOf.get(n) ?? tth.centre, area: tth.area, confidence: 1, agreed: true }; }).filter((tth) => tth.fdi > 0);
       if (!teeth.length) return;
+      // Midline (centrals' incisal corners) + canine tips, in the arch frame; null if a central or canine is missing.
+      const landmarks = landmarksFromTeeth(soup, { fdi, teeth, seconds: 0 }, arch.slot);
       const key = `auto|${shapeVersionKey(arch.shape)}`;
-      setWaxFound((prev) => (prev[id] ? prev : { ...prev, [id]: { key, input: soup, fdi, teeth, landmarks: null, chosen: [] } }));
+      setWaxFound((prev) => (prev[id] ? prev : { ...prev, [id]: { key, input: soup, fdi, teeth, landmarks, chosen: [] } }));
     } catch { /* best-effort; manual margin tool remains the fallback */ }
     finally { autoMarginBusy.current.delete(id); }
   }, [waxArch]);
