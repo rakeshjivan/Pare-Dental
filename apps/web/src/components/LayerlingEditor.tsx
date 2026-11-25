@@ -13660,7 +13660,15 @@ export function LayerlingEditor({
     finally { autoMarginBusy.current.delete(id); }
   }, [waxArch]);
   // On reaching the margin step, fetch automatic margins once per arch if none are present yet.
-  useEffect(() => { if (marginStep) void autoFindMargins(); }, [marginStep, autoFindMargins]);
+  // Build 132: segment right after Trim, not lazily at Margins, so Mark, Margins and the fit all read one
+  // cached pass. autoFindMargins is idempotent per scan (waxFoundRef guard), so firing on each post-Trim
+  // step is cheap - it runs the fetch once and returns early thereafter.
+  const afterTrim = Boolean(dentalStudio?.waxStudio) && studioWaxStep !== "scans" && studioWaxStep !== "trim";
+  useEffect(() => { if (afterTrim) void autoFindMargins(); }, [afterTrim, autoFindMargins]);
+  // Re-segment after any trim: clear the cached labels while on the Trim step, so leaving it re-runs
+  // /__segment on the current (possibly re-trimmed) mesh instead of serving a stale result.
+  const waxTrimStep = Boolean(dentalStudio?.waxStudio) && studioWaxStep === "trim";
+  useEffect(() => { if (waxTrimStep) { setWaxFound({}); autoMarginBusy.current.clear(); } }, [waxTrimStep]);
   /** A wax tooth's frame in the scene, its axes unit length. */
   const toothAxesOf = (tooth: WorkplaneShape): ToothAxes | null => {
     const toWorld = tooth.waxTooth ? localToWorld(tooth) : null;
@@ -15869,7 +15877,7 @@ export function LayerlingEditor({
     const studio = dentalStudio;
     // Build 131: not during the margin step - there the plain scan surface must show (with the green auto-margins
     // over it), not the flat per-tooth colour overlay, which also replaces/hides the scan mesh.
-    if (!studio?.waxStudio || !waxup.teethShown || marginStep) { toothOverlay.current = null; if (!biteMap?.on) window.layerlingColorOverlay?.(null); return; }
+    if (!studio?.waxStudio || !waxup.teethShown || marginStep || archMarkStep) { toothOverlay.current = null; if (!biteMap?.on) window.layerlingColorOverlay?.(null); return; }
     const items: Array<{ shapeId: string; positions: Float32Array; colors: Float32Array }> = [];
     for (const slot of ["upper", "lower"] as const) {
       const id = studio.slots[slot];
@@ -15905,7 +15913,7 @@ export function LayerlingEditor({
     }
     toothOverlay.current = items.length ? items : null;
     if (!biteMap?.on) window.layerlingColorOverlay?.(toothOverlay.current);
-  }, [dentalStudio?.waxStudio, dentalStudio?.slots.upper, dentalStudio?.slots.lower, waxFound, waxup.teethShown, marginStep, shapes, dentalHidden, biteMap?.on]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dentalStudio?.waxStudio, dentalStudio?.slots.upper, dentalStudio?.slots.lower, waxFound, waxup.teethShown, marginStep, archMarkStep, shapes, dentalHidden, biteMap?.on]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 94: the occlusion of the wax-up at the opened bite (both arches), in the worker.
   // Build 101: which wax the occlusion was worked out for - Make works it out again when the wax has changed since.
   // Build 105: the wax teeth against the opposing arch and each other, in the studio's bite frame:
