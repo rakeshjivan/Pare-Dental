@@ -9883,6 +9883,8 @@ export function WorkplaneViewport({
       clearOverlay();
       if (!state || !items) return;
       for (const item of items) {
+        // Build 131: never hide the original scan for an empty or non-finite overlay - that would blank the model.
+        if (item.positions.length < 9 || !Number.isFinite(item.positions[0]) || item.positions.length !== item.colors.length) continue;
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute("position", new THREE.BufferAttribute(item.positions, 3));
         geometry.setAttribute("color", new THREE.BufferAttribute(item.colors, 3));

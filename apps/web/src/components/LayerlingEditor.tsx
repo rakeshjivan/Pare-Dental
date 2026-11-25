@@ -13258,7 +13258,8 @@ export function LayerlingEditor({
     const toInput = waxArchInput(arch.shape);
     if (toInput) for (const fdi of marginTeethOf(arch.slot)) {
       if (lines[fdi] || pick?.fdi === fdi) continue;
-      const found = foundMarginFor(fdi, arch.shape, toInput);
+      let found: ReturnType<typeof foundMarginFor> = null;
+      try { found = foundMarginFor(fdi, arch.shape, toInput); } catch { found = null; }
       if (found) curves.push({ points: found.region.line, color: 0x2fb6a0, radius: MARGIN_TUBE * 0.7 });
     }
     if (pick) {
@@ -15866,7 +15867,9 @@ export function LayerlingEditor({
   const toothPaint = useRef(new Map<string, { key: string; fdi: Uint8Array }>());
   useEffect(() => {
     const studio = dentalStudio;
-    if (!studio?.waxStudio || !waxup.teethShown) { toothOverlay.current = null; if (!biteMap?.on) window.layerlingColorOverlay?.(null); return; }
+    // Build 131: not during the margin step - there the plain scan surface must show (with the green auto-margins
+    // over it), not the flat per-tooth colour overlay, which also replaces/hides the scan mesh.
+    if (!studio?.waxStudio || !waxup.teethShown || marginStep) { toothOverlay.current = null; if (!biteMap?.on) window.layerlingColorOverlay?.(null); return; }
     const items: Array<{ shapeId: string; positions: Float32Array; colors: Float32Array }> = [];
     for (const slot of ["upper", "lower"] as const) {
       const id = studio.slots[slot];
@@ -15902,7 +15905,7 @@ export function LayerlingEditor({
     }
     toothOverlay.current = items.length ? items : null;
     if (!biteMap?.on) window.layerlingColorOverlay?.(toothOverlay.current);
-  }, [dentalStudio?.waxStudio, dentalStudio?.slots.upper, dentalStudio?.slots.lower, waxFound, waxup.teethShown, shapes, dentalHidden, biteMap?.on]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dentalStudio?.waxStudio, dentalStudio?.slots.upper, dentalStudio?.slots.lower, waxFound, waxup.teethShown, marginStep, shapes, dentalHidden, biteMap?.on]); // eslint-disable-line react-hooks/exhaustive-deps
   // Build 94: the occlusion of the wax-up at the opened bite (both arches), in the worker.
   // Build 101: which wax the occlusion was worked out for - Make works it out again when the wax has changed since.
   // Build 105: the wax teeth against the opposing arch and each other, in the studio's bite frame:
