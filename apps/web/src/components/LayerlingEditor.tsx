@@ -68,7 +68,7 @@ import { smallestRoundingRadius, type MeshRoundMode } from "@/lib/meshRound";
 import { analyseDentalInBackground, biteContactsInBackground, stopMeshJobs, checkFitInBackground, dentalAreaInBackground, makeDentalStudioInBackground, type DentalMakeProgress, remeshInBackground, roundMeshInBackground, textureMeshInBackground, trimDentalScanInBackground, waxupInBackground, occlusionInBackground } from "@/lib/meshJobs";
 import { AVERAGE_ARTICULATOR, openedLowerPose } from "@/lib/waxOcclusion";
 import { PIN_MAX, PIN_STEP } from "@/lib/dentalArticulator";
-import { toothColour, transferLabels, type ScanTeeth } from "@/lib/toothSegment";
+import { toothColour, transferLabels, numberTeeth, type ScanTeeth, type FoundTooth } from "@/lib/toothSegment";
 import { smoothOpenEdges, smoothOpenEdgesOf } from "@/lib/edgeSmooth";
 import { transformSoup, cleanStlBinary, stlBinaryOf, stlSoupOf } from "@/lib/dentalMesh";
 import { WAX_SET_FORMS } from "@/lib/waxSetForms";
@@ -13625,6 +13625,39 @@ export function LayerlingEditor({
   };
   const marginWhy = useRef<Record<number, string>>({});
   useEffect(() => { (window as unknown as { layerlingMarginWhy?: () => unknown }).layerlingMarginWhy = () => ({ ...marginWhy.current, on: waxupRef.current.marginOn, lines: Object.fromEntries(Object.entries(waxupRef.current.margins ?? {}).map(([k, v]) => [k, Object.keys(v?.lines ?? {})])) }); }, []);
+  /*
+   * Build 129 (Rakesh): automatic gingival margins. The tooth finder (a network) was removed at build 277, so the
+   * auto-margin path (foundMarginFor) had no labels. This asks the desktop app's own Node server to segment the
+   * arch (POST /__segment), turns the labels into the same FoundTeeth the finder gave, and puts them in waxFound -
+   * reviving automatic margins with no change to the margin or placement code. Best-effort: on a web host or an
+   * older server there is no endpoint, the fetch fails, and the hand margin tool is the fallback as before.
+   */
+  const autoMarginBusy = useRef(new Set<string>());
+  const autoFindMargins = useCallback(async () => {
+    const arch = waxArch();
+    if (!arch) return;
+    const id = arch.shape.id, soup = arch.scan;
+    if (autoMarginBusy.current.has(id) || waxFoundRef.current[id]) return;
+    autoMarginBusy.current.add(id);
+    try {
+      const body = soup.buffer.slice(soup.byteOffset, soup.byteOffset + soup.byteLength);
+      const res = await fetch(`/__segment?arch=${arch.slot}`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body });
+      if (!res.ok) return;
+      const data = await res.json() as { ok?: boolean; fdi?: string; teeth?: Array<{ id: number; centre: [number, number, number]; area: number }> };
+      if (!data.ok || !data.fdi || !data.teeth?.length) return;
+      const bin = atob(data.fdi); const seq = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i += 1) seq[i] = bin.charCodeAt(i);
+      const numbered = numberTeeth(data.teeth.map((tth) => ({ centre: tth.centre, votes: new Float64Array(16), area: tth.area })), arch.slot);
+      const seqToFdi = new Map<number, number>(); data.teeth.forEach((tth, i) => seqToFdi.set(tth.id, numbered[i]?.fdi ?? 0));
+      const fdi = new Uint8Array(seq.length); for (let i = 0; i < seq.length; i += 1) { const n = seqToFdi.get(seq[i]); if (n) fdi[i] = n; }
+      const teeth: FoundTooth[] = data.teeth.map((tth, i) => ({ fdi: numbered[i]?.fdi ?? 0, centre: tth.centre, top: tth.centre, area: tth.area, confidence: 1, agreed: numbered[i]?.agreed ?? false })).filter((tth) => tth.fdi > 0);
+      if (!teeth.length) return;
+      const key = `auto|${shapeVersionKey(arch.shape)}`;
+      setWaxFound((prev) => (prev[id] ? prev : { ...prev, [id]: { key, input: soup, fdi, teeth, landmarks: null, chosen: [] } }));
+    } catch { /* best-effort; manual margin tool remains the fallback */ }
+    finally { autoMarginBusy.current.delete(id); }
+  }, [waxArch]);
+  // On reaching the margin step, fetch automatic margins once per arch if none are present yet.
+  useEffect(() => { if (marginStep) void autoFindMargins(); }, [marginStep, autoFindMargins]);
   /** A wax tooth's frame in the scene, its axes unit length. */
   const toothAxesOf = (tooth: WorkplaneShape): ToothAxes | null => {
     const toWorld = tooth.waxTooth ? localToWorld(tooth) : null;
