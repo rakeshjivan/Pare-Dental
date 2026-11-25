@@ -68,7 +68,7 @@ import { smallestRoundingRadius, type MeshRoundMode } from "@/lib/meshRound";
 import { analyseDentalInBackground, biteContactsInBackground, stopMeshJobs, checkFitInBackground, dentalAreaInBackground, makeDentalStudioInBackground, type DentalMakeProgress, remeshInBackground, roundMeshInBackground, textureMeshInBackground, trimDentalScanInBackground, waxupInBackground, occlusionInBackground } from "@/lib/meshJobs";
 import { AVERAGE_ARTICULATOR, openedLowerPose } from "@/lib/waxOcclusion";
 import { PIN_MAX, PIN_STEP } from "@/lib/dentalArticulator";
-import { toothColour, transferLabels, numberTeeth, type ScanTeeth, type FoundTooth } from "@/lib/toothSegment";
+import { toothColour, transferLabels, numberByArch, type ScanTeeth, type FoundTooth } from "@/lib/toothSegment";
 import { smoothOpenEdges, smoothOpenEdgesOf } from "@/lib/edgeSmooth";
 import { transformSoup, cleanStlBinary, stlBinaryOf, stlSoupOf } from "@/lib/dentalMesh";
 import { WAX_SET_FORMS } from "@/lib/waxSetForms";
@@ -13648,10 +13648,10 @@ export function LayerlingEditor({
       const data = await res.json() as { ok?: boolean; fdi?: string; teeth?: Array<{ id: number; centre: [number, number, number]; area: number }> };
       if (!data.ok || !data.fdi || !data.teeth?.length) return;
       const bin = atob(data.fdi); const seq = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i += 1) seq[i] = bin.charCodeAt(i);
-      const numbered = numberTeeth(data.teeth.map((tth) => ({ centre: tth.centre, votes: new Float64Array(16), area: tth.area })), arch.slot);
+      const numbered = numberByArch(data.teeth.map((tth) => ({ centre: tth.centre, area: tth.area })), arch.slot);
       const seqToFdi = new Map<number, number>(); data.teeth.forEach((tth, i) => seqToFdi.set(tth.id, numbered[i]?.fdi ?? 0));
       const fdi = new Uint8Array(seq.length); for (let i = 0; i < seq.length; i += 1) { const n = seqToFdi.get(seq[i]); if (n) fdi[i] = n; }
-      const teeth: FoundTooth[] = data.teeth.map((tth, i) => ({ fdi: numbered[i]?.fdi ?? 0, centre: tth.centre, top: tth.centre, area: tth.area, confidence: 1, agreed: numbered[i]?.agreed ?? false })).filter((tth) => tth.fdi > 0);
+      const teeth: FoundTooth[] = data.teeth.map((tth, i) => ({ fdi: numbered[i]?.fdi ?? 0, centre: tth.centre, top: tth.centre, area: tth.area, confidence: 1, agreed: true })).filter((tth) => tth.fdi > 0);
       if (!teeth.length) return;
       const key = `auto|${shapeVersionKey(arch.shape)}`;
       setWaxFound((prev) => (prev[id] ? prev : { ...prev, [id]: { key, input: soup, fdi, teeth, landmarks: null, chosen: [] } }));

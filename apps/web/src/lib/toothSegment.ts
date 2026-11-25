@@ -307,6 +307,47 @@ export function numberTeeth(teeth: Array<{ centre: [number, number, number]; vot
   return out;
 }
 
+/**
+ * Number the teeth from arch geometry alone - no network votes. For the server segmenter, which
+ * gives clean tooth shapes but no per-number probabilities: numberTeeth's Viterbi over vote-shares
+ * degenerates when every share is equal (all teeth collapse to one position), so it cannot be used
+ * with empty votes. Here the midline is derived from the arch's own shape: the teeth sweep a
+ * horseshoe, the one wide angular gap is the posterior opening between the last molars, and the
+ * midline runs opposite its centre - so it always falls between the two central incisors, never on
+ * a tooth. Each tooth's signed angle from the midline gives its side; its rank from the midline
+ * outward gives its position (1 central ... 8 third molar). Left/right follows the canonical input
+ * frame, as in numberTeeth: the upper is turned over, so the patient's right sits at +x.
+ */
+export function numberByArch(teeth: Array<{ centre: [number, number, number]; area: number }>, arch: "upper" | "lower"): Array<{ fdi: number }> {
+  if (!teeth.length) return [];
+  const cx = teeth.reduce((s, t) => s + t.centre[0], 0) / teeth.length;
+  const cy = teeth.reduce((s, t) => s + t.centre[1], 0) / teeth.length;
+  const ang = teeth.map((t) => Math.atan2(t.centre[0] - cx, -(t.centre[1] - cy)));
+  const order = teeth.map((_, i) => i).sort((a, b) => ang[a] - ang[b]);
+  // The widest wrap-around gap between neighbouring teeth: the arch's posterior opening.
+  let gapAt = order.length - 1, gapSize = -Infinity;
+  for (let k = 0; k < order.length; k += 1) {
+    const a = ang[order[k]];
+    const b = ang[order[(k + 1) % order.length]] + (k === order.length - 1 ? 2 * Math.PI : 0);
+    if (b - a > gapSize) { gapSize = b - a; gapAt = k; }
+  }
+  const a = ang[order[gapAt]];
+  const b = ang[order[(gapAt + 1) % order.length]] + (gapAt === order.length - 1 ? 2 * Math.PI : 0);
+  // The midline runs opposite the gap's centre, wrapped to (-PI, PI].
+  let mid = (a + b) / 2 + Math.PI;
+  while (mid > Math.PI) mid -= 2 * Math.PI;
+  while (mid <= -Math.PI) mid += 2 * Math.PI;
+  const rel = ang.map((x) => { let d = x - mid; while (d > Math.PI) d -= 2 * Math.PI; while (d <= -Math.PI) d += 2 * Math.PI; return d; });
+  const out: Array<{ fdi: number }> = teeth.map(() => ({ fdi: 0 }));
+  for (const sign of [1, -1]) {
+    const side = teeth.map((_, i) => i).filter((i) => sign * rel[i] > 0).sort((p, q) => sign * rel[p] - sign * rel[q]).slice(0, 8);
+    const right = arch === "upper" ? sign > 0 : sign < 0;
+    const quadrant = arch === "upper" ? (right ? 1 : 2) : right ? 4 : 3;
+    side.forEach((ti, pos) => { out[ti] = { fdi: quadrant * 10 + pos + 1 }; });
+  }
+  return out;
+}
+
 /** What finding the teeth gives: each full-scan triangle's FDI number (0 gum), and the teeth. */
 export type ToothMap = { fdi: Uint8Array; teeth: FoundTooth[]; seconds: number };
 
