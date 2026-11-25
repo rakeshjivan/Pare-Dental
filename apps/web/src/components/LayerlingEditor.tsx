@@ -68,7 +68,7 @@ import { smallestRoundingRadius, type MeshRoundMode } from "@/lib/meshRound";
 import { analyseDentalInBackground, biteContactsInBackground, stopMeshJobs, checkFitInBackground, dentalAreaInBackground, makeDentalStudioInBackground, type DentalMakeProgress, remeshInBackground, roundMeshInBackground, textureMeshInBackground, trimDentalScanInBackground, waxupInBackground, occlusionInBackground } from "@/lib/meshJobs";
 import { AVERAGE_ARTICULATOR, openedLowerPose } from "@/lib/waxOcclusion";
 import { PIN_MAX, PIN_STEP } from "@/lib/dentalArticulator";
-import { toothColour, transferLabels, numberByArch, landmarksFromTeeth, type ScanTeeth, type FoundTooth } from "@/lib/toothSegment";
+import { toothColour, transferLabels, numberByArch, landmarksFromTeeth, archMarksFromSegmentation, type ScanTeeth, type FoundTooth } from "@/lib/toothSegment";
 import { smoothOpenEdges, smoothOpenEdgesOf } from "@/lib/edgeSmooth";
 import { transformSoup, cleanStlBinary, stlBinaryOf, stlSoupOf } from "@/lib/dentalMesh";
 import { WAX_SET_FORMS } from "@/lib/waxSetForms";
@@ -12735,11 +12735,19 @@ export function LayerlingEditor({
     for (let i = 0; i + 2 < scan.length; i += 3) if (Math.abs(scan[i] - p.x) < MARK_ON_SCAN && Math.abs(scan[i + 1] - p.y) < MARK_ON_SCAN && Math.abs(scan[i + 2] - p.z) < MARK_ON_SCAN) return true;
     return false;
   });
+  // Build 132: the nine arch marks from the post-Trim segmentation (accurate), in the scan's own frame like
+  // autoArchMarks. Preferred over the geometric heuristic; null when segmentation isn't ready or can't place
+  // all nine confidently, so the heuristic / manual marking remains the fallback.
+  const segArchMarks = (arch: NonNullable<ReturnType<typeof waxArch>>): ReturnType<typeof autoArchMarks> => {
+    const seg = waxFoundRef.current[arch.shape.id];
+    if (!seg) return null;
+    try { const m = archMarksFromSegmentation(seg.input, { fdi: seg.fdi, teeth: seg.teeth, seconds: 0 }, arch.slot); return m ? { marks: m, score: 999, dips: new Array(7).fill(0) } : null; } catch { return null; }
+  };
   const findArchMarks = useCallback((thenClick: boolean) => {
     const arch = waxArch();
     if (!arch) return;
-    let found: ReturnType<typeof autoArchMarks> = null;
-    try { found = autoArchMarks(arch.scan, arch.slot); } catch { found = null; }
+    let found: ReturnType<typeof autoArchMarks> = segArchMarks(arch);
+    if (!found) try { found = autoArchMarks(arch.scan, arch.slot); } catch { found = null; }
     // For the checks: the scan taken as unreadable (as one trimmed back to the front teeth is).
     if ((window as unknown as { layerlingNoAutoMarks?: boolean }).layerlingNoAutoMarks) found = null;
     const current = waxupRef.current;
@@ -12846,8 +12854,8 @@ export function LayerlingEditor({
       // never takes away what an earlier one gave.
       if (!arch || waxMarksTried.current.has(arch.shape.id)) return;
       waxMarksTried.current.add(arch.shape.id);
-      let found: ReturnType<typeof autoArchMarks> = null;
-      try { found = autoArchMarks(arch.scan, arch.slot); } catch { found = null; }
+      let found: ReturnType<typeof autoArchMarks> = segArchMarks(arch);
+      if (!found) try { found = autoArchMarks(arch.scan, arch.slot); } catch { found = null; }
       // In the scan file's own coordinates: those are kept through trimming, where its place in the scene is not -
       // nor the turn given to the coordinates handed to the studio, which is judged from the scan's spans (a scan
       // trimmed to its front teeth is no longer flattest along the vertical).
@@ -12856,6 +12864,17 @@ export function LayerlingEditor({
     }, 400);
     return () => window.clearTimeout(timer);
   }, [dentalStudio?.waxStudio, dentalStudio?.analysis, dentalStudio?.slots.upper, dentalStudio?.slots.lower, waxup.slot, studioWaxStep]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Build 132: the auto-finder runs ~150ms after reaching Mark, before the post-Trim segmentation (~1.3s) has
+  // landed, so it would fall back to the heuristic. Re-run it once per scan when segmentation arrives, so the
+  // accurate marks take over - but not while the dentist is mid-placement.
+  const segMarksApplied = useRef(new Set<string>());
+  useEffect(() => {
+    if (!archMarkStep) return;
+    const id = dentalStudio?.slots[waxup.slot];
+    if (!id || !waxFound[id] || segMarksApplied.current.has(id) || waxupRef.current.archMarkPick !== null) return;
+    segMarksApplied.current.add(id);
+    findArchMarks(false);
+  }, [archMarkStep, waxFound, waxup.slot, dentalStudio?.slots.upper, dentalStudio?.slots.lower]); // eslint-disable-line react-hooks/exhaustive-deps
   const archMarksNow = waxup.archMarks?.[waxup.slot];
   useEffect(() => {
     if (!archMarkStep) return;

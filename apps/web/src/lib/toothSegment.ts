@@ -436,45 +436,40 @@ export function contactBetween(soup: ArrayLike<number>, fdi: ArrayLike<number>, 
 }
 
 /**
- * Build 132: seed the Mark step from segmentation. For each anterior tooth (canine to canine) it finds the
- * three anchors the wax-up uses - the mesial and distal interproximal contacts, and the facial cervical point
- * (the most-facial vertex in the tooth's gingival third) - plus the arch dots [midline, right canine tip,
- * left canine tip]. In the soup's own (arch) frame. A tooth is included only when all three anchors are
- * confidently found, so a missing or poorly-segmented tooth is left for the clinician rather than guessed.
- * The visible contact dots render from these via marksFromAnchors. Not yet wired to the live Mark state - the
- * import-time finder it replaces is swapped separately.
+ * Build 132: the nine Mark points from segmentation, in the order lib/waxArchMarks uses - the seven
+ * canine-to-canine contacts from the patient's right (13|14, 13|12, 12|11, 11|21 midline, 21|22, 22|23,
+ * 23|24) then the two canine tips (13, 23) - in the soup's own (arch) frame, the same frame autoArchMarks
+ * returns. A canine's distal mark falls back to the canine's distal-most point when its neighbour (14/24) is
+ * trimmed off. Null when any of the nine can't be confidently found, so the geometric heuristic / manual
+ * marking stays the fallback. Validated on real uppers: contacts at gap 0.00 mm, shared contacts identical
+ * from either tooth.
  */
-export function marksFromSegmentation(soup: Float32Array, map: ToothMap, arch: "upper" | "lower"): {
-  anchors: Record<number, { cervical: [number, number, number]; mesial: [number, number, number]; distal: [number, number, number] }>;
-  archDots: [[number, number, number], [number, number, number], [number, number, number]] | null;
-} {
+export function archMarksFromSegmentation(soup: Float32Array, map: ToothMap, arch: "upper" | "lower"): [number, number, number][] | null {
   const q = arch === "upper" ? [1, 2] : [4, 3];
-  const anteriors = [q[0] * 10 + 3, q[0] * 10 + 2, q[0] * 10 + 1, q[1] * 10 + 1, q[1] * 10 + 2, q[1] * 10 + 3];
-  let cx = 0, cy = 0; for (const t of map.teeth) { cx += t.centre[0]; cy += t.centre[1]; } if (map.teeth.length) { cx /= map.teeth.length; cy /= map.teeth.length; }
-  // Facial cervical point: the tooth's most-facial vertex (greatest radius from the arch centre) in its
-  // gingival third (lowest 35% of its height, occlusal being +Z in the arch frame).
-  const cervicalOf = (n: number): [number, number, number] | null => {
-    let zmin = Infinity, zmax = -Infinity;
-    for (let t = 0; t < map.fdi.length; t += 1) if (map.fdi[t] === n) for (let k = 0; k < 3; k += 1) { const z = soup[t * 9 + k * 3 + 2]; if (z < zmin) zmin = z; if (z > zmax) zmax = z; }
-    if (!Number.isFinite(zmin)) return null;
-    const zCut = zmin + (zmax - zmin) * 0.35;
-    let best: [number, number, number] | null = null, bestR = -Infinity;
-    for (let t = 0; t < map.fdi.length; t += 1) if (map.fdi[t] === n) for (let k = 0; k < 3; k += 1) { const o = t * 9 + k * 3; if (soup[o + 2] > zCut) continue; const r = Math.hypot(soup[o] - cx, soup[o + 1] - cy); if (r > bestR) { bestR = r; best = [soup[o], soup[o + 1], soup[o + 2]]; } }
+  const c = (a: number, b: number) => contactBetween(soup, map.fdi, a, b);
+  const top = (n: number) => map.teeth.find((t) => t.fdi === n)?.top ?? null;
+  const midline = c(q[0] * 10 + 1, q[1] * 10 + 1);
+  // A canine's distal mark: its contact with the next tooth, or (if that tooth is trimmed off) the canine's
+  // own point farthest from the midline in the occlusal plane.
+  const distal = (canine: number, neighbour: number): [number, number, number] | null => {
+    const ct = c(canine, neighbour); if (ct) return ct;
+    if (!midline) return null;
+    let best: [number, number, number] | null = null, bestD = -Infinity;
+    for (let t = 0; t < map.fdi.length; t += 1) if (map.fdi[t] === canine) for (let k = 0; k < 3; k += 1) { const o = t * 9 + k * 3; const d = Math.hypot(soup[o] - midline[0], soup[o + 1] - midline[1]); if (d > bestD) { bestD = d; best = [soup[o], soup[o + 1], soup[o + 2]]; } }
     return best;
   };
-  const anchors: Record<number, { cervical: [number, number, number]; mesial: [number, number, number]; distal: [number, number, number] }> = {};
-  for (const fdi of anteriors) {
-    const unit = fdi % 10, quad = Math.floor(fdi / 10);
-    const mesialFdi = unit === 1 ? (quad === q[0] ? q[1] * 10 + 1 : q[0] * 10 + 1) : fdi - 1;
-    const distalFdi = fdi + 1;
-    const mesial = contactBetween(soup, map.fdi, fdi, mesialFdi), distal = contactBetween(soup, map.fdi, fdi, distalFdi), cervical = cervicalOf(fdi);
-    if (mesial && distal && cervical) anchors[fdi] = { cervical, mesial, distal };
-  }
-  const midline = contactBetween(soup, map.fdi, q[0] * 10 + 1, q[1] * 10 + 1);
-  const top = (n: number) => map.teeth.find((t) => t.fdi === n)?.top ?? null;
-  const t13 = top(q[0] * 10 + 3), t23 = top(q[1] * 10 + 3);
-  const archDots: [[number, number, number], [number, number, number], [number, number, number]] | null = midline && t13 && t23 ? [midline, t13, t23] : null;
-  return { anchors, archDots };
+  const marks: ([number, number, number] | null)[] = [
+    distal(q[0] * 10 + 3, q[0] * 10 + 4),   // 13 distal (13|14)
+    c(q[0] * 10 + 3, q[0] * 10 + 2),         // 13|12
+    c(q[0] * 10 + 2, q[0] * 10 + 1),         // 12|11
+    midline,                                 // 11|21 midline
+    c(q[1] * 10 + 1, q[1] * 10 + 2),         // 21|22
+    c(q[1] * 10 + 2, q[1] * 10 + 3),         // 22|23
+    distal(q[1] * 10 + 3, q[1] * 10 + 4),   // 23 distal (23|24)
+    top(q[0] * 10 + 3),                      // 13 tip
+    top(q[1] * 10 + 3),                      // 23 tip
+  ];
+  return marks.every((m) => m) ? (marks as [number, number, number][]) : null;
 }
 
 /** A point moved by a matrix, as a tuple. */

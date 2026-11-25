@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contactBetween, marksFromSegmentation } from "@/lib/toothSegment";
+import { contactBetween, archMarksFromSegmentation } from "@/lib/toothSegment";
 
 // A minimal two-tooth soup: label 11 occupies x<0, label 21 occupies x>0, meeting at x=0.
 // Each "tooth" is a grid of small triangles so the contact code has >20 corners per label.
@@ -37,17 +37,14 @@ describe("contactBetween (build 132)", () => {
   });
 });
 
-describe("marksFromSegmentation (build 132)", () => {
-  it("builds the midline arch dot from the two centrals and omits incomplete teeth", () => {
+describe("archMarksFromSegmentation (build 132)", () => {
+  it("returns null when the nine marks can't all be found (only centrals present)", () => {
     const { soup, fdi } = twoTeeth(0);
     const teeth = [
       { fdi: 11, centre: [-1, 0, 10] as [number, number, number], top: [-1, 0, 20] as [number, number, number], area: 100, confidence: 1, agreed: true },
       { fdi: 21, centre: [1, 0, 10] as [number, number, number], top: [1, 0, 20] as [number, number, number], area: 100, confidence: 1, agreed: true },
     ];
-    const { anchors, archDots } = marksFromSegmentation(soup, { fdi, teeth, seconds: 0 }, "upper");
-    // Only centrals present (no canines), so archDots (which needs canine tips) is null...
-    expect(archDots).toBeNull();
-    // ...and no anterior gets all three anchors (no distal neighbours), so none are seeded.
-    expect(Object.keys(anchors).length).toBe(0);
+    // No laterals/canines, so the lateral contacts and canine tips are missing → null (heuristic fallback).
+    expect(archMarksFromSegmentation(soup, { fdi, teeth, seconds: 0 }, "upper")).toBeNull();
   });
 });
