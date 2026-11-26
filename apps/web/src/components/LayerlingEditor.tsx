@@ -1690,6 +1690,22 @@ const MESH_SIMPLIFY_MIN_TRIANGLES = 500;
  * crown's detail (sub-10-micron corners), so the surface and margin stay accurate while every step turns and reads fast. */
 const DENTAL_SCAN_MAX_TRIANGLES = 150_000;
 
+/** Build 133: the Mark-step perf readout, on its own so its 500ms refresh never re-renders the editor. */
+function MarkPerfOverlay() {
+  const [, setTick] = useState(0);
+  useEffect(() => { const t = window.setInterval(() => setTick((n) => (n + 1) % 1e6), 500); return () => window.clearInterval(t); }, []);
+  const entries = markSlowEntries();
+  return (
+    <div style={{ position: "fixed", left: 8, bottom: 8, zIndex: 99999, width: 380, maxHeight: 280, overflow: "auto", background: "rgba(10,12,16,0.9)", color: "#e5e7eb", font: "11px/1.4 ui-monospace, monospace", padding: "8px 10px", borderRadius: 8, pointerEvents: "none", whiteSpace: "pre-wrap" }}>
+      <div style={{ fontWeight: 700, marginBottom: 4, color: "#67e8f9" }}>Mark perf diag (build 53)</div>
+      {lastProgress() ? <div style={{ color: "#fde68a" }}>Last progress: {lastProgress()}</div> : null}
+      {stuckPhase() ? <div style={{ color: "#fca5a5" }}>Stuck last reload: {stuckPhase()}</div> : null}
+      {entries.length === 0 ? <div style={{ opacity: 0.7 }}>no slow blocks yet (≥25ms)</div>
+        : entries.map((e, i) => <div key={i} style={e.label.startsWith("(froze") ? { color: "#fca5a5" } : undefined}>{e.ms > 0 ? `${String(e.ms).padStart(5)}ms · ` : "   ·  "}{e.label}</div>)}
+    </div>
+  );
+}
+
 function offersMeshSimplify(shape: WorkplaneShape | null | undefined) {
   return Boolean(shape?.importedMesh && shape.groupOperation !== "bundle" && shape.importedMesh.triangleCount >= MESH_SIMPLIFY_MIN_TRIANGLES);
 }
@@ -12889,15 +12905,9 @@ export function LayerlingEditor({
   };
   // Build 278: on the Mark step, the marks drawn on the scan - contacts teal, the midline blue, canine tips orange.
   const archMarkStep = Boolean(dentalStudio?.waxStudio) && studioWaxStep === "mark";
-  // Build 133: diagnostic - watch the main thread on the Mark step and show the readout on screen (no dev console here).
-  const [perfTick, setPerfTick] = useState(0);
+  // Build 133: diagnostic - watch the main thread on the Mark step. The on-screen readout is its own tiny component
+  // (MarkPerfOverlay) so its refresh never re-renders this editor.
   useEffect(() => { watchLongTasks(); watchFreezes(); }, []);
-  useEffect(() => {
-    if (!dentalStudio?.waxStudio) return;
-    const timer = window.setInterval(() => setPerfTick((n) => (n + 1) % 1_000_000), 500);
-    return () => window.clearInterval(timer);
-  }, [dentalStudio?.waxStudio]);
-  void perfTick;
   // Build 317: the marks are looked for as soon as an arch is in the Wax-up Studio (before it is trimmed), and kept.
   useEffect(() => {
     if (!dentalStudio?.waxStudio || !dentalStudio.analysis) return;
@@ -23345,15 +23355,7 @@ export function LayerlingEditor({
         <WaxMarkDrag marks={(archMarksNow ?? []).flatMap((point, i) => (point ? [{ id: `arch-${i}`, point }] : []))} surfaceAt={(x, y) => markSurfaceAt(x, y)} onMove={(id, point) => moveArchMark(id, point, false)} onDrop={(id, point) => moveArchMark(id, point, true)} />
       ) : null}
       {archMarkStep && archMarksNow?.some(Boolean) ? <ArchMarkLabels marks={archMarksNow} /> : null}
-      {dentalStudio?.waxStudio ? (
-        <div style={{ position: "fixed", left: 8, bottom: 8, zIndex: 99999, width: 380, maxHeight: 280, overflow: "auto", background: "rgba(10,12,16,0.9)", color: "#e5e7eb", font: "11px/1.4 ui-monospace, monospace", padding: "8px 10px", borderRadius: 8, pointerEvents: "none", whiteSpace: "pre-wrap" }}>
-          <div style={{ fontWeight: 700, marginBottom: 4, color: "#67e8f9" }}>Mark perf diag (build 52)</div>
-          {lastProgress() ? <div style={{ color: "#fde68a" }}>Last progress: {lastProgress()}</div> : null}
-          {stuckPhase() ? <div style={{ color: "#fca5a5" }}>Stuck last reload: {stuckPhase()}</div> : null}
-          {markSlowEntries().length === 0 ? <div style={{ opacity: 0.7 }}>no slow blocks yet (≥25ms)</div>
-            : markSlowEntries().map((e, i) => <div key={i} style={e.label.startsWith("(froze") ? { color: "#fca5a5" } : undefined}>{e.ms > 0 ? `${String(e.ms).padStart(5)}ms · ` : "   ·  "}{e.label}</div>)}
-        </div>
-      ) : null}
+      {dentalStudio?.waxStudio ? <MarkPerfOverlay /> : null}
       {dentalStudio && waxup.picking !== null ? (
         <WaxupPointOverlay hint={t(WAXUP_LANDMARKS[waxup.picking])} onPick={pickWaxPoint} onCancel={stopWaxPicking} />
       ) : null}
