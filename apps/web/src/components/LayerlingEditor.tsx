@@ -343,7 +343,7 @@ import type { AlignAxis, AlignTarget, GridSize, ParametricSource, ProjectAsset, 
 import { type Vec3, type MeshData, type ShapeUpdatePatch, MIN_SHAPE_DIMENSION, resetManifoldRuntime, cleanModelDimension, getManifoldRuntime, meshForShape, meshReachAlong, appendMeshData, formatTriangleCount, boundsForShapes, boundsForCuboids, meshAabb, boundsForPositions } from "@/lib/editorMeshCore";
 import { planCutConnectors, type CutConnectorPlan, cloneAsGroupChild, withClosedHolesNote, splitShapesByPlane, unionOverlappingExportMeshes, exportBodiesWithLooseHoles, formatSectionOffset, SECTION_SEEN_FROM_KEYS, expandBundles, visibleExportShapes, multicolorExportSolids, exportFaceColors, colorSeparatedExportMeshes, canIntersectShapes, buildIntersectionShapeFromSelection, groupedShape, quaternionForShape, rotationFromQuaternion, cleanShapePatch, restoreGroupedChildren, restoreGroupedChildrenForEdges, buildGroupedShapeFromSelection } from "@/lib/editorBooleans";
 import { meshPartCount } from "@/lib/meshPartCount";
-import { timeMark, watchLongTasks, watchFreezes, note, markSlowEntries, stuckPhase } from "@/lib/markPerf";
+import { timeMark, watchLongTasks, watchFreezes, note, progress, lastProgress, markSlowEntries, stuckPhase } from "@/lib/markPerf";
 import { articulateShapesOffThread, buildGroupedShapeOffThread, lidForShapesOffThread, exportMeshesTo3mfOffThread, exportSolidVolumeOffThread, simplifyTrianglePositionsOffThread, splitShapesByPlaneOffThread, subscribeGeometryBusy, warmGeometryWorker } from "@/lib/geometryWorker";
 import { buildSketchLoftFromSelection, canSketchLoft } from "@/lib/sketchLoft";
 import { handleViewArrowKey } from "@/lib/viewArrowKeys";
@@ -12786,8 +12786,10 @@ export function LayerlingEditor({
   const findArchMarks = useCallback((thenClick: boolean) => {
     const arch = waxArch();
     if (!arch) return;
+    progress("findArchMarks: start");
     let found: ReturnType<typeof autoArchMarks> = segArchMarks(arch);
     if (!found) found = autoArchMarksCached(arch);
+    progress(`findArchMarks: found=${found ? "yes" : "no"}`);
     // For the checks: the scan taken as unreadable (as one trimmed back to the front teeth is).
     if ((window as unknown as { layerlingNoAutoMarks?: boolean }).layerlingNoAutoMarks) found = null;
     const current = waxupRef.current;
@@ -12820,11 +12822,13 @@ export function LayerlingEditor({
     waxRecord();
     const next = { ...current, slot: arch.slot, archMarks: { ...(current.archMarks ?? {}), [arch.slot]: marks }, archMarkPick: null, picking: null, error: null, archMarksAuto: { ...current.archMarksAuto, [arch.slot]: "found" as const } };
     waxupRef.current = next;
+    progress("findArchMarks: applying marks setWaxup");
     setWaxup(next);
     archMarkView.current = null;
     setDentalHidden([]);
     setSelectedIds([]);
-    window.setTimeout(() => showDentalView(arch.slot, "front"), 50);
+    progress("findArchMarks: scheduling showDentalView");
+    window.setTimeout(() => { progress("showDentalView: start"); showDentalView(arch.slot, "front"); progress("showDentalView: done"); }, 50);
   }, [waxArch, startArchMarks]); // eslint-disable-line react-hooks/exhaustive-deps
   const stopArchMarks = useCallback(() => {
     archMarkView.current = null;
@@ -12934,7 +12938,9 @@ export function LayerlingEditor({
       colors.push(i >= ARCH_MARK_GUM ? 0xec4899 : i === 3 ? 0x2563eb : i >= ARCH_MARK_CONTACTS ? 0xf59e0b : 0x0a786c);
       sizes.push(i === waxup.archMarkPick ? 1.4 : 1);
     });
+    progress(`markDots effect: ${points.length} dots`);
     window.layerlingMarkDots?.(points.length ? points : null, 0.4, { colors, sizes });
+    progress(`markDots applied: ${points.length} dots`);
     return () => { window.layerlingMarkDots?.(null); };
   }, [archMarkStep, archMarksNow, waxup.archMarkPick]);
   // Build 310 (Rakesh: mid-buccal marks on the gingival, each tooth snapping to them): once the nine marks are there,
@@ -12953,6 +12959,7 @@ export function LayerlingEditor({
     if (waxGumKey.current === key) return;
     const timer = window.setTimeout(() => {
       waxGumKey.current = key;
+      progress("gum effect: start");
       try {
         const all = waxupRef.current.archMarks?.[arch.slot] as Array<[number, number, number] | null>;
         if (nextArchMark(all) !== null) return;
@@ -12978,7 +12985,9 @@ export function LayerlingEditor({
         if (!changed) return;
         const state = { ...waxupRef.current, archMarks: { ...(waxupRef.current.archMarks ?? {}), [arch.slot]: next } };
         waxupRef.current = state;
+        progress("gum effect: applying setWaxup");
         setWaxup(state);
+        progress("gum effect: done");
       } catch { /* the teeth are laid without gum marks, as before */ }
     }, 400);
     return () => { window.clearTimeout(timer); };
@@ -23338,7 +23347,8 @@ export function LayerlingEditor({
       {archMarkStep && archMarksNow?.some(Boolean) ? <ArchMarkLabels marks={archMarksNow} /> : null}
       {dentalStudio?.waxStudio ? (
         <div style={{ position: "fixed", left: 8, bottom: 8, zIndex: 99999, width: 380, maxHeight: 280, overflow: "auto", background: "rgba(10,12,16,0.9)", color: "#e5e7eb", font: "11px/1.4 ui-monospace, monospace", padding: "8px 10px", borderRadius: 8, pointerEvents: "none", whiteSpace: "pre-wrap" }}>
-          <div style={{ fontWeight: 700, marginBottom: 4, color: "#67e8f9" }}>Mark perf diag (build 51)</div>
+          <div style={{ fontWeight: 700, marginBottom: 4, color: "#67e8f9" }}>Mark perf diag (build 52)</div>
+          {lastProgress() ? <div style={{ color: "#fde68a" }}>Last progress: {lastProgress()}</div> : null}
           {stuckPhase() ? <div style={{ color: "#fca5a5" }}>Stuck last reload: {stuckPhase()}</div> : null}
           {markSlowEntries().length === 0 ? <div style={{ opacity: 0.7 }}>no slow blocks yet (≥25ms)</div>
             : markSlowEntries().map((e, i) => <div key={i} style={e.label.startsWith("(froze") ? { color: "#fca5a5" } : undefined}>{e.ms > 0 ? `${String(e.ms).padStart(5)}ms · ` : "   ·  "}{e.label}</div>)}

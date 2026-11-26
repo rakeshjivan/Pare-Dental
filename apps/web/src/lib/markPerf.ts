@@ -40,6 +40,16 @@ export function stuckPhase(): string | null {
 }
 export function clearStuckPhase(): void { endPhase(); }
 
+const PROGRESS_KEY = "pareMarkProgress";
+/** A persistent progress marker - the furthest point execution reached. Never cleared, so after a hard freeze and a
+ * force-quit, the last marker names the step reached before the lock-up (which a timing block can't catch). */
+export function progress(label: string): void {
+  try { window.localStorage.setItem(PROGRESS_KEY, `${label} @ ${new Date().toLocaleTimeString()}`); } catch { /* storage off */ }
+}
+export function lastProgress(): string | null {
+  try { return window.localStorage.getItem(PROGRESS_KEY); } catch { return null; }
+}
+
 /** Times a synchronous block; records it when it runs long, and leaves a breadcrumb in case it hangs for good. */
 export function timeMark<T>(label: string, fn: () => T): T {
   const t0 = performance.now();
