@@ -12767,11 +12767,25 @@ export function LayerlingEditor({
     const m = waxFoundRef.current[arch.shape.id]?.marks;
     return m ? { marks: m, score: 999, dips: new Array(7).fill(0) } : null;
   };
+  // Build 133 (Rakesh: the Mark freeze - autoArchMarks took ~1.3s and ran on every findArchMarks call, from several
+  // triggers, when the segmentation marks weren't cached). The geometric heuristic depends only on the scan and the
+  // arch, both fixed for a given shape, so it is computed at most once per shape and reused - the freeze was the
+  // repeat, not the one run. Keyed by shape id, which changes when the arch is re-trimmed (so a trim re-reads it once).
+  const autoMarksCache = useRef(new Map<string, ReturnType<typeof autoArchMarks>>());
+  const autoArchMarksCached = (arch: NonNullable<ReturnType<typeof waxArch>>): ReturnType<typeof autoArchMarks> => {
+    const key = arch.shape.id;
+    const hit = autoMarksCache.current.get(key);
+    if (hit !== undefined) return hit;
+    let res: ReturnType<typeof autoArchMarks> = null;
+    try { res = timeMark(`autoArchMarks once (${Math.round((arch.scan.length / 9) / 1000)}k)`, () => autoArchMarks(arch.scan, arch.slot)); } catch { res = null; }
+    autoMarksCache.current.set(key, res);
+    return res;
+  };
   const findArchMarks = useCallback((thenClick: boolean) => {
     const arch = waxArch();
     if (!arch) return;
-    let found: ReturnType<typeof autoArchMarks> = timeMark("findArchMarks: segArchMarks", () => segArchMarks(arch));
-    if (!found) try { found = timeMark("findArchMarks: autoArchMarks", () => autoArchMarks(arch.scan, arch.slot)); } catch { found = null; }
+    let found: ReturnType<typeof autoArchMarks> = segArchMarks(arch);
+    if (!found) found = autoArchMarksCached(arch);
     // For the checks: the scan taken as unreadable (as one trimmed back to the front teeth is).
     if ((window as unknown as { layerlingNoAutoMarks?: boolean }).layerlingNoAutoMarks) found = null;
     const current = waxupRef.current;
@@ -12888,7 +12902,7 @@ export function LayerlingEditor({
       if (!arch || waxMarksTried.current.has(arch.shape.id)) return;
       waxMarksTried.current.add(arch.shape.id);
       let found: ReturnType<typeof autoArchMarks> = segArchMarks(arch);
-      if (!found) try { found = autoArchMarks(arch.scan, arch.slot); } catch { found = null; }
+      if (!found) found = autoArchMarksCached(arch);
       // In the scan file's own coordinates: those are kept through trimming, where its place in the scene is not -
       // nor the turn given to the coordinates handed to the studio, which is judged from the scan's spans (a scan
       // trimmed to its front teeth is no longer flattest along the vertical).
