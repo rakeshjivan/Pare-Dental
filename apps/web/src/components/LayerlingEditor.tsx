@@ -12315,7 +12315,7 @@ export function LayerlingEditor({
   const [waxup, setWaxup] = useState<WaxupState>({ slot: "upper", setName: null, teeth: 0, picking: null, lengthen: 0, centralRatio: CENTRAL_RATIO, arcDepth: null, arcUsed: null, proportions: "natural", builtIn: [], builtInCredit: null, setId: null, busy: false, placed: [], alternate: false, error: null, landmarks: null, guessed: false, marks: [], teethShown: true, fit: "teeth", ghost: 1, ideal: 1, red: null, checks: null, adjust: {}, stage: "position", setMove: { width: 0, depth: 0, midline: 0, height: 0 }, setScale: 1, setCurve: 0, chain: true, restrict: "free", moveAll: false, locks: {}, manual: true, toothMarks: {}, anchors: {}, archDots: { upper: [], lower: [] }, lateralShorter: LATERAL_SHORTER, autoMarked: [], markTeeth: null, toothPick: null, archLine: true, archCurve: 1, archFollow: true, contacts: { on: false, busy: false, occlusal: 0.1, adapting: false, note: null, opposing: false }, occlusion: { ready: false, busy: false, raise: 0, scheme: "canine", guidance: 30, bennett: 15, result: null }, bite: { raise: 0, busy: false, hinge: null }, gum: { mode: "follow", keep: {} }, erase: {}, margins: {}, marginPick: null, boundaries: {}, boundaryPick: null, /* Build 118: Keep & erase, with the library palatal, is the one way of working - the margin line is no longer offered. */ marginOn: false, smile: {}, archMarks: {}, archMarkPick: null, reduce: {}, proud: {} });
   // Build 94: the teeth found on each scan (by its part id): each scan triangle's FDI (as the studio
   // reads the scan), the teeth, the landmarks from them, and the teeth chosen for the wax-up.
-  type FoundTeeth = { key: string; input: Float32Array; fdi: Uint8Array; teeth: ScanTeeth["teeth"]; landmarks: WaxLandmarks | null; /** Build 132: the nine arch marks from segmentation (arch frame), computed once here so segArchMarks only reads them - recomputing on every findArchMarks froze the Mark step. */ marks?: [number, number, number][] | null; chosen: number[] };
+  type FoundTeeth = { key: string; input: Float32Array; fdi: Uint8Array; teeth: ScanTeeth["teeth"]; landmarks: WaxLandmarks | null; /** Build 132: the nine arch marks from segmentation (arch frame), computed once here so segArchMarks only reads them - recomputing on every findArchMarks froze the Mark step. */ marks?: [number, number, number][] | null; /** Build 133: a decimated copy of the scan (~80k triangles, input frame) for the per-entry gingival read on the Mark step - crownMargins on the full 512k scan locked the thread. */ coarse?: Float32Array | null; chosen: number[] };
   const [waxFound, setWaxFound] = useState<Record<string, FoundTeeth>>({});
   /** Build 101: Wax-up Studio's Undo records a step through this (the function is defined below, with the stacks). */
   const waxRecordRef = useRef<(coalesce?: boolean) => void>(() => {});
@@ -12914,7 +12914,9 @@ export function LayerlingEditor({
           frame = { up: dir(0, 0, 1), out: dir(0, -1, 0) };
         } catch { frame = frameFromMarks(all.slice(0, ARCH_MARK_GUM) as Array<[number, number, number]>); }
         if (!frame) return;
-        const read = crownMargins(transformSoup(arch.scan, back), { contacts: all.slice(0, 7) as Array<[number, number, number]>, up: frame.up, out: frame.out }).gum;
+        // Build 133: read the gum line off the decimated copy when it is ready (the full 512k scan locked the thread here).
+        const scanForGum = waxFoundRef.current[arch.shape.id]?.coarse ?? arch.scan;
+        const read = crownMargins(transformSoup(scanForGum, back), { contacts: all.slice(0, 7) as Array<[number, number, number]>, up: frame.up, out: frame.out }).gum;
         const next = [...all];
         while (next.length < ARCH_MARK_GUM + ARCH_MARK_GUMS) next.push(null);
         let changed = false;
@@ -13687,8 +13689,13 @@ export function LayerlingEditor({
       const landmarks = landmarksFromTeeth(soup, { fdi, teeth, seconds: 0 }, arch.slot);
       // Build 132: the nine arch marks, computed once here (not on every findArchMarks call, which was freezing Mark).
       const marks = archMarksFromSegmentation(soup, { fdi, teeth, seconds: 0 }, arch.slot);
+      // Build 133: a decimated copy of the scan for the Mark step's gingival read (crownMargins). On a 512k-triangle
+      // scan the full read locked the thread as Mark opened; ~80k gives the same gum line. Off-thread, so segmentation
+      // never waits on it - null until it lands, and crownMargins falls back to the full scan for the first pass.
+      let coarse: Float32Array | null = null;
+      try { if (soup.length / 9 > 80_000) coarse = Float32Array.from((await simplifyTrianglePositionsOffThread(soup, 80_000)).positions); } catch { coarse = null; }
       const key = `auto|${shapeVersionKey(arch.shape)}`;
-      setWaxFound((prev) => (prev[id] ? prev : { ...prev, [id]: { key, input: soup, fdi, teeth, landmarks, marks, chosen: [] } }));
+      setWaxFound((prev) => (prev[id] ? prev : { ...prev, [id]: { key, input: soup, fdi, teeth, landmarks, marks, coarse, chosen: [] } }));
     } catch { /* best-effort; manual margin tool remains the fallback */ }
     finally { autoMarginBusy.current.delete(id); }
   }, [waxArch]);

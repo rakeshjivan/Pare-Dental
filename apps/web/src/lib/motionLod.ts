@@ -18,6 +18,12 @@ export const MOTION_LOD_FROM = 150_000;
 /** The light mesh's share of the whole one's triangles, and the fewest it is given. */
 export const MOTION_LOD_SHARE = 0.2;
 export const MOTION_LOD_LEAST = 60_000;
+/**
+ * Build 133 (Rakesh: Trim and Mark lag on a 512k-triangle scan): a share alone left a half-million-triangle scan's
+ * light copy at ~100k - still heavy to turn. The light copy is capped here, so however dense the scan, the moving
+ * draw is this many triangles at most. 80k turns smoothly and, smooth-shaded, cannot be told from the whole scan.
+ */
+export const MOTION_LOD_CAP = 80_000;
 /** How long after the last movement the whole mesh comes back, ms. */
 export const MOTION_LOD_SETTLE_MS = 260;
 
@@ -43,7 +49,7 @@ function cornersOf(geometry: THREE.BufferGeometry): Float32Array {
 /** The light geometry for a whole one: made here, once, in the same place and with smooth shading. */
 async function make(full: THREE.BufferGeometry): Promise<THREE.BufferGeometry | null> {
   const triangles = trianglesOf(full);
-  const made = await simplifyTrianglePositions(cornersOf(full), Math.max(MOTION_LOD_LEAST, Math.round(triangles * MOTION_LOD_SHARE)));
+  const made = await simplifyTrianglePositions(cornersOf(full), Math.min(MOTION_LOD_CAP, Math.max(MOTION_LOD_LEAST, Math.round(triangles * MOTION_LOD_SHARE))));
   if (made.triangleCount < 4 || made.triangleCount > triangles * 0.8) return null;
   const positions = Float32Array.from(made.positions);
   const light = new THREE.BufferGeometry();

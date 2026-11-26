@@ -5128,9 +5128,10 @@ export function WorkplaneViewport({
         applyMotionLod(state.scene, lodMoving);
         motionLodLow = lodMoving;
       }
-      // The light copies are made when nothing moves - looked for on any frame drawn then (the one that brings the
-      // whole scans back among them: the view is only drawn when something changes).
-      if (!lodMoving && state.dentalView && now - motionLodLooked > 1000) {
+      // The light copies are looked for on any frame drawn. Build 133 (Rakesh: a 512k scan stayed laggy because the
+      // light copy was only sought while still - so turning the scan non-stop, it never got built): it is sought
+      // while moving too. prepareMotionLod builds one at a time on an idle callback, so this never adds to a frame.
+      if (state.dentalView && now - motionLodLooked > 1000) {
         motionLodLooked = now;
         prepareMotionLod(state.scene);
       }
