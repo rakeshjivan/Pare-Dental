@@ -343,7 +343,7 @@ import type { AlignAxis, AlignTarget, GridSize, ParametricSource, ProjectAsset, 
 import { type Vec3, type MeshData, type ShapeUpdatePatch, MIN_SHAPE_DIMENSION, resetManifoldRuntime, cleanModelDimension, getManifoldRuntime, meshForShape, meshReachAlong, appendMeshData, formatTriangleCount, boundsForShapes, boundsForCuboids, meshAabb, boundsForPositions } from "@/lib/editorMeshCore";
 import { planCutConnectors, type CutConnectorPlan, cloneAsGroupChild, withClosedHolesNote, splitShapesByPlane, unionOverlappingExportMeshes, exportBodiesWithLooseHoles, formatSectionOffset, SECTION_SEEN_FROM_KEYS, expandBundles, visibleExportShapes, multicolorExportSolids, exportFaceColors, colorSeparatedExportMeshes, canIntersectShapes, buildIntersectionShapeFromSelection, groupedShape, quaternionForShape, rotationFromQuaternion, cleanShapePatch, restoreGroupedChildren, restoreGroupedChildrenForEdges, buildGroupedShapeFromSelection } from "@/lib/editorBooleans";
 import { meshPartCount } from "@/lib/meshPartCount";
-import { timeMark, watchLongTasks, markSlowEntries, stuckPhase } from "@/lib/markPerf";
+import { timeMark, watchLongTasks, watchFreezes, note, markSlowEntries, stuckPhase } from "@/lib/markPerf";
 import { articulateShapesOffThread, buildGroupedShapeOffThread, lidForShapesOffThread, exportMeshesTo3mfOffThread, exportSolidVolumeOffThread, simplifyTrianglePositionsOffThread, splitShapesByPlaneOffThread, subscribeGeometryBusy, warmGeometryWorker } from "@/lib/geometryWorker";
 import { buildSketchLoftFromSelection, canSketchLoft } from "@/lib/sketchLoft";
 import { handleViewArrowKey } from "@/lib/viewArrowKeys";
@@ -11641,10 +11641,12 @@ export function LayerlingEditor({
         const done = new Map<string, WorkplaneShape>();
         for (const shape of heavy) {
           try {
+            const before = Math.round((shape.importedMesh!.triangleCount ?? 0) / 1000);
             const res = await simplifyTrianglePositionsOffThread(shape.importedMesh!.positions, DENTAL_SCAN_MAX_TRIANGLES);
             const simplified = simplifiedMeshShape(shape, res.positions);
-            if (simplified) done.set(shape.id, simplified);
-          } catch { /* this scan stays at full resolution; the studio still opens */ }
+            if (simplified) { done.set(shape.id, simplified); note(`open decimate ${before}k -> ${Math.round((res.positions.length / 9) / 1000)}k`); }
+            else note(`open decimate: no simpler mesh (${before}k)`);
+          } catch (e) { note(`open decimate FAILED: ${String((e as Error)?.message ?? e).slice(0, 40)}`); }
         }
         if (done.size) commitShapes(shapesRef.current.map((shape) => done.get(shape.id) ?? shape), selectedIdsRef.current, t("dental.scanOptimised"));
       } finally { analyseDentalStudio(base); }
@@ -12885,7 +12887,7 @@ export function LayerlingEditor({
   const archMarkStep = Boolean(dentalStudio?.waxStudio) && studioWaxStep === "mark";
   // Build 133: diagnostic - watch the main thread on the Mark step and show the readout on screen (no dev console here).
   const [perfTick, setPerfTick] = useState(0);
-  useEffect(() => { watchLongTasks(); }, []);
+  useEffect(() => { watchLongTasks(); watchFreezes(); }, []);
   useEffect(() => {
     if (!dentalStudio?.waxStudio) return;
     const timer = window.setInterval(() => setPerfTick((n) => (n + 1) % 1_000_000), 500);
@@ -13719,10 +13721,11 @@ export function LayerlingEditor({
     autoMarginBusy.current.add(id);
     try {
       const body = soup.buffer.slice(soup.byteOffset, soup.byteOffset + soup.byteLength);
-      const res = await fetch(`/__segment?arch=${arch.slot}`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body });
-      if (!res.ok) return;
+      const res = await fetch(`/__segment?arch=${arch.slot}`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body }).catch((e) => { note(`segment fetch threw: ${String((e as Error)?.message ?? e).slice(0, 40)}`); throw e; });
+      if (!res.ok) { note(`segment HTTP ${res.status} (no endpoint?)`); return; }
       const data = await res.json() as { ok?: boolean; fdi?: string; teeth?: Array<{ id: number; centre: [number, number, number]; area: number }> };
-      if (!data.ok || !data.fdi || !data.teeth?.length) return;
+      if (!data.ok || !data.fdi || !data.teeth?.length) { note(`segment returned no teeth (ok=${data.ok})`); return; }
+      note(`segment ok: ${data.teeth.length} teeth`);
       const bin = atob(data.fdi); const seq = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i += 1) seq[i] = bin.charCodeAt(i);
       const numbered = numberByArch(data.teeth.map((tth) => ({ centre: tth.centre, area: tth.area })), arch.slot);
       const seqToFdi = new Map<number, number>(); data.teeth.forEach((tth, i) => seqToFdi.set(tth.id, numbered[i]?.fdi ?? 0));
@@ -13741,7 +13744,13 @@ export function LayerlingEditor({
       // scan the full read locked the thread as Mark opened; ~80k gives the same gum line. Off-thread, so segmentation
       // never waits on it - null until it lands, and crownMargins falls back to the full scan for the first pass.
       let coarse: Float32Array | null = null;
-      try { if (soup.length / 9 > 80_000) coarse = Float32Array.from((await simplifyTrianglePositionsOffThread(soup, 80_000)).positions); } catch { coarse = null; }
+      try {
+        if (soup.length / 9 > 80_000) {
+          const simp = await simplifyTrianglePositionsOffThread(soup, 80_000);
+          coarse = Float32Array.from(simp.positions);
+          note(`coarse decimate ${Math.round(soup.length / 9 / 1000)}k -> ${Math.round((coarse.length / 9) / 1000)}k`);
+        }
+      } catch (e) { coarse = null; note(`coarse decimate FAILED: ${String((e as Error)?.message ?? e).slice(0, 40)}`); }
       const key = `auto|${shapeVersionKey(arch.shape)}`;
       setWaxFound((prev) => (prev[id] ? prev : { ...prev, [id]: { key, input: soup, fdi, teeth, landmarks, marks, coarse, chosen: [] } }));
     } catch { /* best-effort; manual margin tool remains the fallback */ }
@@ -23329,10 +23338,10 @@ export function LayerlingEditor({
       {archMarkStep && archMarksNow?.some(Boolean) ? <ArchMarkLabels marks={archMarksNow} /> : null}
       {dentalStudio?.waxStudio ? (
         <div style={{ position: "fixed", left: 8, bottom: 8, zIndex: 99999, width: 380, maxHeight: 280, overflow: "auto", background: "rgba(10,12,16,0.9)", color: "#e5e7eb", font: "11px/1.4 ui-monospace, monospace", padding: "8px 10px", borderRadius: 8, pointerEvents: "none", whiteSpace: "pre-wrap" }}>
-          <div style={{ fontWeight: 700, marginBottom: 4, color: "#67e8f9" }}>Mark perf diag (build 49)</div>
+          <div style={{ fontWeight: 700, marginBottom: 4, color: "#67e8f9" }}>Mark perf diag (build 51)</div>
           {stuckPhase() ? <div style={{ color: "#fca5a5" }}>Stuck last reload: {stuckPhase()}</div> : null}
           {markSlowEntries().length === 0 ? <div style={{ opacity: 0.7 }}>no slow blocks yet (≥25ms)</div>
-            : markSlowEntries().map((e, i) => <div key={i}>{String(e.ms).padStart(5)}ms · {e.label}</div>)}
+            : markSlowEntries().map((e, i) => <div key={i} style={e.label.startsWith("(froze") ? { color: "#fca5a5" } : undefined}>{e.ms > 0 ? `${String(e.ms).padStart(5)}ms · ` : "   ·  "}{e.label}</div>)}
         </div>
       ) : null}
       {dentalStudio && waxup.picking !== null ? (

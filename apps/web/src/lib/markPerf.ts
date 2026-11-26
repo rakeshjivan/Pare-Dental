@@ -18,6 +18,12 @@ export function recordSlow(label: string, ms: number): void {
   if (SLOW.length > KEEP) SLOW.length = KEEP;
 }
 
+/** A status line (not a timing) that is always kept - e.g. whether segmentation succeeded. */
+export function note(label: string): void {
+  SLOW.unshift({ label, ms: 0, at: Date.now() });
+  if (SLOW.length > KEEP) SLOW.length = KEEP;
+}
+
 const PHASE_KEY = "pareMarkPhase";
 
 /** A breadcrumb written before a block runs and cleared after. If the block hangs the thread for good, the breadcrumb
@@ -47,6 +53,23 @@ export function markSlowEntries(): ReadonlyArray<MarkSlow> {
 
 export function clearMarkSlow(): void {
   SLOW.length = 0;
+}
+
+let watchingFrames = false;
+/** Watches the gap between animation frames. Any stall (the main thread blocked, from any cause - a heavy op, a render
+ * loop, a drag) shows up as a gap, so this catches a freeze the wrapped blocks and the longtask observer miss. */
+export function watchFreezes(): void {
+  if (watchingFrames || typeof requestAnimationFrame === "undefined") return;
+  watchingFrames = true;
+  let last = performance.now();
+  const tick = () => {
+    const now = performance.now();
+    const gap = now - last;
+    last = now;
+    if (gap >= 150) recordSlow("(froze - thread stalled)", gap);
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 
 let observing = false;
