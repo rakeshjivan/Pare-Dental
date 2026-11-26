@@ -1697,7 +1697,7 @@ function MarkPerfOverlay() {
   const entries = markSlowEntries();
   return (
     <div style={{ position: "fixed", left: 8, bottom: 8, zIndex: 99999, width: 380, maxHeight: 280, overflow: "auto", background: "rgba(10,12,16,0.9)", color: "#e5e7eb", font: "11px/1.4 ui-monospace, monospace", padding: "8px 10px", borderRadius: 8, pointerEvents: "none", whiteSpace: "pre-wrap" }}>
-      <div style={{ fontWeight: 700, marginBottom: 4, color: "#67e8f9" }}>Mark perf diag (build 53)</div>
+      <div style={{ fontWeight: 700, marginBottom: 4, color: "#67e8f9" }}>Mark perf diag (build 54)</div>
       {lastProgress() ? <div style={{ color: "#fde68a" }}>Last progress: {lastProgress()}</div> : null}
       {stuckPhase() ? <div style={{ color: "#fca5a5" }}>Stuck last reload: {stuckPhase()}</div> : null}
       {entries.length === 0 ? <div style={{ opacity: 0.7 }}>no slow blocks yet (≥25ms)</div>

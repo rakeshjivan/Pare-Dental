@@ -11,7 +11,7 @@
  */
 import * as THREE from "three";
 import { computeImportedBoundsTree, smoothNormals } from "@/lib/importedMeshDisplay";
-import { simplifyTrianglePositions } from "@/lib/meshSimplify";
+import { simplifyTrianglePositionsOffThread } from "@/lib/geometryWorker";
 
 /** A mesh of at least this many triangles is drawn light while moving. */
 export const MOTION_LOD_FROM = 150_000;
@@ -49,7 +49,9 @@ function cornersOf(geometry: THREE.BufferGeometry): Float32Array {
 /** The light geometry for a whole one: made here, once, in the same place and with smooth shading. */
 async function make(full: THREE.BufferGeometry): Promise<THREE.BufferGeometry | null> {
   const triangles = trianglesOf(full);
-  const made = await simplifyTrianglePositions(cornersOf(full), Math.min(MOTION_LOD_CAP, Math.max(MOTION_LOD_LEAST, Math.round(triangles * MOTION_LOD_SHARE))));
+  // Build 133 (Rakesh: the Mark step ran at ~1fps - this simplify was the per-frame main-thread block). Off the main
+  // thread, so building the light copy never freezes the view, however large the scan.
+  const made = await simplifyTrianglePositionsOffThread(cornersOf(full), Math.min(MOTION_LOD_CAP, Math.max(MOTION_LOD_LEAST, Math.round(triangles * MOTION_LOD_SHARE))));
   if (made.triangleCount < 4 || made.triangleCount > triangles * 0.8) return null;
   const positions = Float32Array.from(made.positions);
   const light = new THREE.BufferGeometry();

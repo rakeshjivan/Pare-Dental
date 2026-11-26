@@ -191,6 +191,7 @@ export type { LayFlatPick } from "@/components/workplane/viewportPicking";
 import { fastEdgesGeometry } from "@/lib/fastEdgesGeometry";
 import { buildImportedMeshGeometry, computeImportedBoundsTree, putGeometryOnBase, takePreparedImportedMeshGeometry } from "@/lib/importedMeshDisplay";
 import { applyMotionLod, describeMotionLod, MOTION_LOD_SETTLE_MS, prepareMotionLod } from "@/lib/motionLod";
+import { recordSlow } from "@/lib/markPerf";
 import { RENDER_LAYER_HELPERS, sharedOverlayLineMaterial, sharedShapeGeometryCache, sharedEdgesGeometryCache, sharedShapeMaterialCache, type PointCardOffset, type ShapeRenderRecord, type ThreeState, type MoveDimensionSession, type NoteOverlayState, type TapePoint, type TapeAttachment, type TapeEdgeAttachment, type TapeModel, type TapeOverlayState, type TapeCandidate, type RotationHandleSide, type RotationHandleSides, type DragItem, quaternionForShape, projectToScreen, syncMoveDimensionWorldLines, syncTransformGuideWorldLines, tapeShapeDimensions, tapePointWorld, tapeEdgeWorldPoints, tapeSegmentWorldPoints, tapeMovableShapeId, syncTapeOverlay, syncNoteOverlay, NoteOverlay, TapeOverlay, type RulerDimensionOverlayItem, type RulerDimensionOverlayState, syncRulerDimensionOverlay, RulerDimensionOverlay, type CornerRulerInstance, type CornerRulerOverlayState, syncCornerRulerToolOverlay, CornerRulerToolOverlay, syncOriginDimensionWorldLines, shapeCenter, shapeLocalExtents, projectShapeExtent, projectShapesExtent, type OriginDimensionFrame, setObjectRenderLayer, freezeStaticObjectMatrices, formatMeasure, findShapeObject, trimSharedShapeGeometryCache, releaseSharedShapeGeometry, trimSharedShapeMaterialCache, releaseSharedShapeMaterials, disposeMaterialResource, disposeChildren, disposeObject } from "@/components/workplane/ViewportOverlays";
 
 const WORKPLANE_WIDTH = 200;
@@ -5152,6 +5153,7 @@ export function WorkplaneViewport({
       // Build 87: a frame where only the sculpted surface changed leaves the overlays (handles, measures,
       // notes) as they were - the camera has not moved, and recomputing a dozen of them every stroke frame
       // cost time and garbage for nothing.
+      const overlayStart = performance.now();
       if (!(strokeOnly && !controlsChanged && !turning && !cameraSettled) && (controlsChanged || cameraSettled || state.needsRender || now - state.lastOverlaySync > 96)) {
         const previewShapes = previewShapesForDrag(shapesRef.current, dragRef.current);
         syncTransformOverlay(
@@ -5193,10 +5195,13 @@ export function WorkplaneViewport({
         );
         state.lastOverlaySync = now;
       }
+      recordSlow("frame: overlay sync", performance.now() - overlayStart);
       const renderStart = performance.now();
       fitCameraDepthRange(state.camera, state.controls.target);
       renderFrame(state);
       const frameMs = performance.now() - renderStart;
+      recordSlow("frame: renderFrame draw", frameMs);
+      if (turning) recordSlow("frame: camera still turning", 26);
       const perf = perfRef.current;
       perf.frameMs = frameMs;
       perf.maxFrameMs = Math.max(perf.maxFrameMs, frameMs);
