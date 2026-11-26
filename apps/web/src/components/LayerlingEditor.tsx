@@ -343,6 +343,7 @@ import type { AlignAxis, AlignTarget, GridSize, ParametricSource, ProjectAsset, 
 import { type Vec3, type MeshData, type ShapeUpdatePatch, MIN_SHAPE_DIMENSION, resetManifoldRuntime, cleanModelDimension, getManifoldRuntime, meshForShape, meshReachAlong, appendMeshData, formatTriangleCount, boundsForShapes, boundsForCuboids, meshAabb, boundsForPositions } from "@/lib/editorMeshCore";
 import { planCutConnectors, type CutConnectorPlan, cloneAsGroupChild, withClosedHolesNote, splitShapesByPlane, unionOverlappingExportMeshes, exportBodiesWithLooseHoles, formatSectionOffset, SECTION_SEEN_FROM_KEYS, expandBundles, visibleExportShapes, multicolorExportSolids, exportFaceColors, colorSeparatedExportMeshes, canIntersectShapes, buildIntersectionShapeFromSelection, groupedShape, quaternionForShape, rotationFromQuaternion, cleanShapePatch, restoreGroupedChildren, restoreGroupedChildrenForEdges, buildGroupedShapeFromSelection } from "@/lib/editorBooleans";
 import { meshPartCount } from "@/lib/meshPartCount";
+import { timeMark, watchLongTasks, markSlowEntries, stuckPhase } from "@/lib/markPerf";
 import { articulateShapesOffThread, buildGroupedShapeOffThread, lidForShapesOffThread, exportMeshesTo3mfOffThread, exportSolidVolumeOffThread, simplifyTrianglePositionsOffThread, splitShapesByPlaneOffThread, subscribeGeometryBusy, warmGeometryWorker } from "@/lib/geometryWorker";
 import { buildSketchLoftFromSelection, canSketchLoft } from "@/lib/sketchLoft";
 import { handleViewArrowKey } from "@/lib/viewArrowKeys";
@@ -12769,8 +12770,8 @@ export function LayerlingEditor({
   const findArchMarks = useCallback((thenClick: boolean) => {
     const arch = waxArch();
     if (!arch) return;
-    let found: ReturnType<typeof autoArchMarks> = segArchMarks(arch);
-    if (!found) try { found = autoArchMarks(arch.scan, arch.slot); } catch { found = null; }
+    let found: ReturnType<typeof autoArchMarks> = timeMark("findArchMarks: segArchMarks", () => segArchMarks(arch));
+    if (!found) try { found = timeMark("findArchMarks: autoArchMarks", () => autoArchMarks(arch.scan, arch.slot)); } catch { found = null; }
     // For the checks: the scan taken as unreadable (as one trimmed back to the front teeth is).
     if ((window as unknown as { layerlingNoAutoMarks?: boolean }).layerlingNoAutoMarks) found = null;
     const current = waxupRef.current;
@@ -12868,6 +12869,15 @@ export function LayerlingEditor({
   };
   // Build 278: on the Mark step, the marks drawn on the scan - contacts teal, the midline blue, canine tips orange.
   const archMarkStep = Boolean(dentalStudio?.waxStudio) && studioWaxStep === "mark";
+  // Build 133: diagnostic - watch the main thread on the Mark step and show the readout on screen (no dev console here).
+  const [perfTick, setPerfTick] = useState(0);
+  useEffect(() => { watchLongTasks(); }, []);
+  useEffect(() => {
+    if (!dentalStudio?.waxStudio) return;
+    const timer = window.setInterval(() => setPerfTick((n) => (n + 1) % 1_000_000), 500);
+    return () => window.clearInterval(timer);
+  }, [dentalStudio?.waxStudio]);
+  void perfTick;
   // Build 317: the marks are looked for as soon as an arch is in the Wax-up Studio (before it is trimmed), and kept.
   useEffect(() => {
     if (!dentalStudio?.waxStudio || !dentalStudio.analysis) return;
@@ -12940,7 +12950,7 @@ export function LayerlingEditor({
         if (!frame) return;
         // Build 133: read the gum line off the decimated copy when it is ready (the full 512k scan locked the thread here).
         const scanForGum = waxFoundRef.current[arch.shape.id]?.coarse ?? arch.scan;
-        const read = crownMargins(transformSoup(scanForGum, back), { contacts: all.slice(0, 7) as Array<[number, number, number]>, up: frame.up, out: frame.out }).gum;
+        const read = timeMark(`gum crownMargins (${Math.round((scanForGum.length / 9) / 1000)}k)`, () => crownMargins(transformSoup(scanForGum, back), { contacts: all.slice(0, 7) as Array<[number, number, number]>, up: frame.up, out: frame.out }).gum);
         const next = [...all];
         while (next.length < ARCH_MARK_GUM + ARCH_MARK_GUMS) next.push(null);
         let changed = false;
@@ -13710,9 +13720,9 @@ export function LayerlingEditor({
       const teeth: FoundTooth[] = data.teeth.map((tth, i) => { const n = numbered[i]?.fdi ?? 0; return { fdi: n, centre: tth.centre, top: topOf.get(n) ?? tth.centre, area: tth.area, confidence: 1, agreed: true }; }).filter((tth) => tth.fdi > 0);
       if (!teeth.length) return;
       // Midline (centrals' incisal corners) + canine tips, in the arch frame; null if a central or canine is missing.
-      const landmarks = landmarksFromTeeth(soup, { fdi, teeth, seconds: 0 }, arch.slot);
+      const landmarks = timeMark(`landmarksFromTeeth (${Math.round((soup.length / 9) / 1000)}k)`, () => landmarksFromTeeth(soup, { fdi, teeth, seconds: 0 }, arch.slot));
       // Build 132: the nine arch marks, computed once here (not on every findArchMarks call, which was freezing Mark).
-      const marks = archMarksFromSegmentation(soup, { fdi, teeth, seconds: 0 }, arch.slot);
+      const marks = timeMark(`archMarksFromSegmentation (${Math.round((soup.length / 9) / 1000)}k)`, () => archMarksFromSegmentation(soup, { fdi, teeth, seconds: 0 }, arch.slot));
       // Build 133: a decimated copy of the scan for the Mark step's gingival read (crownMargins). On a 512k-triangle
       // scan the full read locked the thread as Mark opened; ~80k gives the same gum line. Off-thread, so segmentation
       // never waits on it - null until it lands, and crownMargins falls back to the full scan for the first pass.
@@ -23303,6 +23313,14 @@ export function LayerlingEditor({
         <WaxMarkDrag marks={(archMarksNow ?? []).flatMap((point, i) => (point ? [{ id: `arch-${i}`, point }] : []))} surfaceAt={(x, y) => markSurfaceAt(x, y)} onMove={(id, point) => moveArchMark(id, point, false)} onDrop={(id, point) => moveArchMark(id, point, true)} />
       ) : null}
       {archMarkStep && archMarksNow?.some(Boolean) ? <ArchMarkLabels marks={archMarksNow} /> : null}
+      {dentalStudio?.waxStudio ? (
+        <div style={{ position: "fixed", left: 8, bottom: 8, zIndex: 99999, width: 380, maxHeight: 280, overflow: "auto", background: "rgba(10,12,16,0.9)", color: "#e5e7eb", font: "11px/1.4 ui-monospace, monospace", padding: "8px 10px", borderRadius: 8, pointerEvents: "none", whiteSpace: "pre-wrap" }}>
+          <div style={{ fontWeight: 700, marginBottom: 4, color: "#67e8f9" }}>Mark perf diag (build 49)</div>
+          {stuckPhase() ? <div style={{ color: "#fca5a5" }}>Stuck last reload: {stuckPhase()}</div> : null}
+          {markSlowEntries().length === 0 ? <div style={{ opacity: 0.7 }}>no slow blocks yet (≥25ms)</div>
+            : markSlowEntries().map((e, i) => <div key={i}>{String(e.ms).padStart(5)}ms · {e.label}</div>)}
+        </div>
+      ) : null}
       {dentalStudio && waxup.picking !== null ? (
         <WaxupPointOverlay hint={t(WAXUP_LANDMARKS[waxup.picking])} onPick={pickWaxPoint} onCancel={stopWaxPicking} />
       ) : null}
