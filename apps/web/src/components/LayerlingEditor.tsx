@@ -1685,6 +1685,9 @@ function offersCylinderWrap(shape: WorkplaneShape | null | undefined) {
 
 /** Simplifying is for meshes dense enough to be worth it; a plate from an SVG has nothing to give. */
 const MESH_SIMPLIFY_MIN_TRIANGLES = 500;
+/** Build 133: the triangle ceiling a dental arch scan is decimated to as a case opens. ~150k is several times a
+ * crown's detail (sub-10-micron corners), so the surface and margin stay accurate while every step turns and reads fast. */
+const DENTAL_SCAN_MAX_TRIANGLES = 150_000;
 
 function offersMeshSimplify(shape: WorkplaneShape | null | undefined) {
   return Boolean(shape?.importedMesh && shape.groupOperation !== "bundle" && shape.importedMesh.triangleCount >= MESH_SIMPLIFY_MIN_TRIANGLES);
@@ -11623,7 +11626,28 @@ export function LayerlingEditor({
     const chosen = selectedShapes.filter((shape) => candidates.some((candidate) => candidate.id === shape.id));
     const pool = (chosen.length ? chosen : candidates).slice(0, 4);
     const { slots, rolesChosen } = guessDentalSlots(pool);
-    analyseDentalStudio({ ...freshDentalState(slots, rolesChosen), ...(wax ? { waxStudio: { flow: "waxup" as const, arches: slots.upper || !slots.lower ? "upper" as const : "lower" as const, chosen: false } } : {}) });
+    const base = { ...freshDentalState(slots, rolesChosen), ...(wax ? { waxStudio: { flow: "waxup" as const, arches: slots.upper || !slots.lower ? "upper" as const : "lower" as const, chosen: false } } : {}) };
+    // Build 133 (Rakesh): intraoral scanners export at full density - 300k-500k+ triangles an arch, several times
+    // what a crown's detail needs. Every studio step (turning the scan, segmenting, reading the gum line, the models)
+    // then drags. Decimated once to ~150k as the case opens, the scan turns smoothly and reads fast; meshopt collapses
+    // edges without moving a single corner, so the surface stays where it was (sub-10-micron) and the margin is intact.
+    // Only scans well above the ceiling are touched, once (idempotent: reopening sees them already small).
+    const heavy = pool.filter((shape) => (shape.importedMesh?.triangleCount ?? 0) > DENTAL_SCAN_MAX_TRIANGLES * 1.1);
+    if (!heavy.length) { analyseDentalStudio(base); return; }
+    setDentalStudio(base); // the analysing panel shows at once while the scans are decimated
+    void (async () => {
+      try {
+        const done = new Map<string, WorkplaneShape>();
+        for (const shape of heavy) {
+          try {
+            const res = await simplifyTrianglePositionsOffThread(shape.importedMesh!.positions, DENTAL_SCAN_MAX_TRIANGLES);
+            const simplified = simplifiedMeshShape(shape, res.positions);
+            if (simplified) done.set(shape.id, simplified);
+          } catch { /* this scan stays at full resolution; the studio still opens */ }
+        }
+        if (done.size) commitShapes(shapesRef.current.map((shape) => done.get(shape.id) ?? shape), selectedIdsRef.current, t("dental.scanOptimised"));
+      } finally { analyseDentalStudio(base); }
+    })();
   }, [analyseDentalStudio, dentalCandidates, editDentalDesign, leaveDentalEdit, selectedShapes]);
   // Build 86: Dental Studio opens on Meshmixer's dark background, so scans read as they do there from the
   // start (the switch at the top of the window changes it back).

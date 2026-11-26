@@ -4627,6 +4627,7 @@ export const MESSAGES_EN = {
   "dental.scanSide": "Side by side",
   "dental.changeView": "Change view",
   "dental.scanOcclusion": "In occlusion",
+  "dental.scanOptimised": "Optimised the scan for a smoother studio (the surface is unchanged).",
   "dental.layoutSideDone": "Laid the scans out side by side.",
   "dental.layoutOcclusionDone": "Put the scans in occlusion.",
   "dental.restore": "Original scans",
